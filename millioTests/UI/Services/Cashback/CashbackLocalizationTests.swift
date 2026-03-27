@@ -7,7 +7,26 @@ import Foundation
 import Testing
 @testable import millio
 
+@Suite(.serialized)
 struct CashbackLocalizationTests {
+    @Test("Каталог кешбэк-категорий возвращает разные локализованные имена для en и ru")
+    func cashbackCategoriesExposeLocaleSpecificNames() {
+        let checks: [CashbackCategory] = [
+            .supermarket,
+            .education
+        ]
+
+        for category in checks {
+            let metadata = CashbackCategoryCatalog.metadata(for: category)
+            let english = metadata.localizedDisplayName(locale: Locale(identifier: "en"))
+            let russian = metadata.localizedDisplayName(locale: Locale(identifier: "ru"))
+
+            #expect(!english.isEmpty)
+            #expect(!russian.isEmpty)
+            #expect(english != russian)
+        }
+    }
+
     @Test("Системные категории кешбэка резолвятся через локализованный каталог")
     func cashbackCategoriesAreLocalized() {
         let checks: [CashbackCategory] = [

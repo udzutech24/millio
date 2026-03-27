@@ -3,7 +3,8 @@
 //  millio
 //
 //  Переиспользуемый компонент графика для финансовых данных.
-//  Поддерживает интерактивный выбор точки, аннотации и плавные анимации.
+//  График строится в более нативном для Apple стиле:
+//  плавная линия, мягкая заливка и аккуратный фокус на выбранной точке.
 //
 
 import SwiftUI
@@ -110,6 +111,15 @@ struct FinanceChartContainerView: View {
     /// Колбэк при выборе точки
     let onSelectPoint: ((Date, Double)?) -> Void
 
+    private var interpolationMethod: InterpolationMethod {
+        switch FinanceChartStyle.curve {
+        case .monotone:
+            return .monotone
+        case .catmullRom:
+            return .catmullRom
+        }
+    }
+
     // MARK: - Приватные методы
 
     /// Найти ближайший индекс точки по дате
@@ -158,12 +168,13 @@ struct FinanceChartContainerView: View {
                     yStart: .value(FinancesL10n.tr("finances.chart.axis.low"), niceY.lower),
                     yEnd: .value(FinancesL10n.tr("finances.chart.axis.total"), item.value)
                 )
-                .interpolationMethod(.catmullRom)
+                .interpolationMethod(interpolationMethod)
                 .foregroundStyle(
                     LinearGradient(
                         colors: [
-                            seriesColor.opacity(0.28),
-                            seriesColor.opacity(0.10),
+                            seriesColor.opacity(FinanceChartStyle.areaTopOpacity),
+                            seriesColor.opacity(FinanceChartStyle.areaMiddleOpacity),
+                            seriesColor.opacity(FinanceChartStyle.areaBottomOpacity),
                             Color.clear
                         ],
                         startPoint: .top,
@@ -176,9 +187,21 @@ struct FinanceChartContainerView: View {
                     x: .value(FinancesL10n.tr("finances.chart.axis.date"), item.date),
                     y: .value(FinancesL10n.tr("finances.chart.axis.total"), item.value)
                 )
-                .interpolationMethod(.catmullRom)
-                .lineStyle(StrokeStyle(lineWidth: 2.0, lineJoin: .round))
+                .interpolationMethod(interpolationMethod)
+                .lineStyle(
+                    StrokeStyle(
+                        lineWidth: FinanceChartStyle.lineWidth,
+                        lineCap: .round,
+                        lineJoin: .round
+                    )
+                )
                 .foregroundStyle(seriesColor)
+                .shadow(
+                    color: seriesColor.opacity(0.18),
+                    radius: FinanceChartStyle.lineShadowRadius,
+                    x: 0,
+                    y: FinanceChartStyle.lineShadowYOffset
+                )
             }
         }
         .chartPlotStyle { plotArea in
@@ -279,7 +302,28 @@ struct FinanceChartContainerView: View {
                         // Точка на графике
                         Circle()
                             .fill(seriesColor)
-                            .frame(width: 8, height: 8)
+                            .overlay {
+                                Circle()
+                                    .stroke(Color.white.opacity(0.95), lineWidth: FinanceChartStyle.selectionRingLineWidth)
+                            }
+                            .shadow(
+                                color: seriesColor.opacity(0.35),
+                                radius: FinanceChartStyle.selectionShadowRadius,
+                                x: 0,
+                                y: 2
+                            )
+                            .frame(
+                                width: FinanceChartStyle.selectionOuterDiameter,
+                                height: FinanceChartStyle.selectionOuterDiameter
+                            )
+                            .position(x: xPos + plotFrame.minX, y: yPos + plotFrame.minY)
+
+                        Circle()
+                            .fill(Color.white.opacity(0.96))
+                            .frame(
+                                width: FinanceChartStyle.selectionInnerDiameter,
+                                height: FinanceChartStyle.selectionInnerDiameter
+                            )
                             .position(x: xPos + plotFrame.minX, y: yPos + plotFrame.minY)
 
                         // Bubble с информацией

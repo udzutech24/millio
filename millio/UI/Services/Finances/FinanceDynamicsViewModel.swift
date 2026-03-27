@@ -206,6 +206,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private var eventSubscriptionID: UUID?
     private var selectionUpdateTask: Task<Void, Never>?
     private var backgroundTasks: [UUID: Task<Void, Never>] = [:]
+    private var chartUpdateRevision: Int = 0
     
     // Кэши для оптимизации производительности
     var cardsCache: [String: Card] = [:]
@@ -312,6 +313,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         for task in tasks {
             task.cancel()
         }
+    }
+
+    private func nextChartUpdateRevision() -> Int {
+        chartUpdateRevision += 1
+        return chartUpdateRevision
+    }
+
+    private func isCurrentChartUpdateRevision(_ revision: Int) -> Bool {
+        revision == chartUpdateRevision && !Task.isCancelled
     }
     
     private func subscribeToEvents() {
@@ -508,10 +518,16 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         state.isLoading = false
     }
 
-    private func loadGroupsSnapshot() -> [FinanceGroup] {
+    private func loadGroupsSnapshot(forceStoreFetch: Bool = false) -> [FinanceGroup] {
         let currentGroups = financeViewModel.state.groups
-        guard currentGroups.isEmpty else { return currentGroups }
+        if !forceStoreFetch, !currentGroups.isEmpty {
+            return currentGroups
+        }
 
+        return fetchGroupsFromStore()
+    }
+
+    private func fetchGroupsFromStore() -> [FinanceGroup] {
         let descriptor = FetchDescriptor<FinanceGroup>()
         let ungroupedName = FinanceSystemGroups.ungroupedName
         let groups = (try? modelContext.fetch(descriptor)) ?? []
@@ -526,6 +542,54 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 guard group.name == ungroupedName else { return true }
                 return !(group.accounts?.isEmpty ?? true)
             }
+    }
+
+    private func reloadChartDataDependencies() {
+        state.groups = fetchGroupsFromStore()
+
+        let cardDescriptor = FetchDescriptor<Card>()
+        state.availableCards = (try? modelContext.fetch(cardDescriptor)) ?? []
+
+        let creditDescriptor = FetchDescriptor<Credit>()
+        state.availableCredits = (try? modelContext.fetch(creditDescriptor)) ?? []
+
+        let investmentDescriptor = FetchDescriptor<Investment>()
+        state.availableInvestments = (try? modelContext.fetch(investmentDescriptor)) ?? []
+
+        rebuildCaches()
+        loadCashflowTransactions()
+    }
+
+    private func fetchAccountsSnapshot() -> [FinanceAccount] {
+        let descriptor = FetchDescriptor<FinanceAccount>()
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+
+    private func fallbackAccountsForCalculation() -> [FinanceAccount] {
+        let groupsByID = Dictionary(uniqueKeysWithValues: state.groups.map { ($0.groupUniqueID, $0) })
+        let selectedGroupIDs = state.selectedGroupIDs
+        let selectedAccountIDs = state.selectedAccountIDs
+
+        let accounts = fetchAccountsSnapshot().filter { account in
+            if !selectedGroupIDs.isEmpty {
+                guard let group = account.group else { return false }
+                if groupsByID[group.groupUniqueID] == nil || !selectedGroupIDs.contains(group.groupUniqueID) {
+                    return false
+                }
+            }
+
+            if !selectedAccountIDs.isEmpty && !selectedAccountIDs.contains(account.accountUniqueID) {
+                return false
+            }
+
+            return true
+        }
+
+        if state.showArchivedAccounts {
+            return accounts
+        }
+
+        return accounts.filter { !isAccountArchived($0) }
     }
     
     /// Перестроить кэши для оптимизации производительности
@@ -600,13 +664,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     func updateChartData() {
         state.currencyConversionWarning = nil
+        let revision = nextChartUpdateRevision()
         scheduleBackgroundTask { viewModel in
+            guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
             await viewModel.prefetchHistoricalRatesForCurrentSelection()
-            if Task.isCancelled { return }
-            await viewModel.updateChartDataAsync()
-            if Task.isCancelled { return }
+            guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
+            await viewModel.updateChartDataAsync(expectedRevision: revision)
+            guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
             await viewModel.updateCurrentBalanceAndDelta()
-            if Task.isCancelled { return }
+            guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
             await viewModel.updateDynamicsBreakdown()
         }
     }
@@ -808,7 +874,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     /// Обновить список динамики
     func updateDynamicsBreakdown() async {
         let accounts = getAccountsForCalculation()
-        let (startDate, endDate) = resolvedPeriodDates(for: accounts)
+        let requestedPeriod = getPeriodDates()
+        let startDate = requestedPeriod.start
+        let endDate = requestedPeriod.end
         
         var breakdown: [DynamicsBreakdownItem] = []
         
@@ -864,14 +932,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             return (index, nil)
                         }
                         let accountCardIDs = Set(accountCardIDsArray)
-                        let groupPeriod = self.resolvedPeriodDates(
-                            for: filteredAccounts,
-                            basePeriod: (startDate, endDate)
-                        )
 
                         async let startBalanceTask = self.calculateBalanceAtDate(
                             accounts: filteredAccounts,
-                            date: groupPeriod.start,
+                            date: startDate,
                             accountCardIDs: accountCardIDs,
                             debtAsNegative: true,
                             includeInitialBeforeCreation: false
@@ -941,14 +1005,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         guard let account = currentAccounts.first(where: { $0.accountUniqueID == accountUniqueID }) else {
                             return (index, nil)
                         }
-                        let accountPeriod = self.resolvedPeriodDates(
-                            for: [account],
-                            basePeriod: (startDate, endDate)
-                        )
 
                         async let startBalanceTask = self.calculateBalanceAtDate(
                             accounts: [account],
-                            date: accountPeriod.start,
+                            date: startDate,
                             accountCardIDs: accountCardIDs,
                             debtAsNegative: false,
                             includeInitialBeforeCreation: false
@@ -1026,51 +1086,68 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
     }
     
-    func updateChartDataAsync() async {
-        let accounts = getAccountsForCalculation()
+    func updateChartDataAsync(expectedRevision: Int? = nil) async {
+        let revision = expectedRevision ?? nextChartUpdateRevision()
+        guard isCurrentChartUpdateRevision(revision) else { return }
+
+        var accounts = getAccountsForCalculation()
+        if accounts.isEmpty {
+            reloadChartDataDependencies()
+            accounts = getAccountsForCalculation()
+        }
+        if accounts.isEmpty {
+            accounts = fallbackAccountsForCalculation()
+        }
         let period = resolvedPeriodDates(for: accounts)
+        guard isCurrentChartUpdateRevision(revision) else { return }
+        state.periodStartDate = period.start
+        state.periodEndDate = period.end
         
         // Строим данные графика в зависимости от режима
         let useNetTotals = shouldUseNetTotals()
         switch state.dynamicsMode {
         case .aggregated:
             // Все счета в одну линию
-            state.chartData = await buildTimeSeriesData(
+            let chartData = await buildTimeSeriesData(
                 accounts: accounts,
                 startDate: period.start,
                 endDate: period.end,
                 label: String(localized: "finances.dynamics.chart.total_label"),
                 debtAsNegative: useNetTotals
             )
+            guard isCurrentChartUpdateRevision(revision) else { return }
+            state.chartData = chartData
             
         case .byAccounts:
             // Каждый счет - отдельная линия
             var allDataPoints: [ChartDataPoint] = []
             for account in accounts {
-                let accountPeriod = resolvedPeriodDates(for: [account], basePeriod: period)
                 let accountData = await buildTimeSeriesData(
                     accounts: [account],
-                    startDate: accountPeriod.start,
-                    endDate: accountPeriod.end,
+                    startDate: period.start,
+                    endDate: period.end,
                     label: getAccountInfoForDynamics(account: account)?.name ?? String(localized: "finances.dynamics.chart.account_fallback"),
                     debtAsNegative: false
                 )
                 allDataPoints.append(contentsOf: accountData)
             }
+            guard isCurrentChartUpdateRevision(revision) else { return }
             state.chartData = allDataPoints
             
         case .singleAccount(let accountID):
             // Один выбранный счет
             if let account = accounts.first(where: { $0.accountUniqueID == accountID }) {
-                let accountPeriod = resolvedPeriodDates(for: [account], basePeriod: period)
-                state.chartData = await buildTimeSeriesData(
+                let chartData = await buildTimeSeriesData(
                     accounts: [account],
-                    startDate: accountPeriod.start,
-                    endDate: accountPeriod.end,
+                    startDate: period.start,
+                    endDate: period.end,
                     label: getAccountInfoForDynamics(account: account)?.name ?? String(localized: "finances.dynamics.chart.account_fallback"),
                     debtAsNegative: false
                 )
+                guard isCurrentChartUpdateRevision(revision) else { return }
+                state.chartData = chartData
             } else {
+                guard isCurrentChartUpdateRevision(revision) else { return }
                 state.chartData = []
             }
         }
@@ -1653,6 +1730,32 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 
                 accountCurrency = credit.currency
                 shouldInclude = true
+
+                let creditTransactions = transactionsByCreditCache[credit.creditUniqueID] ?? []
+                let effectiveCreationDate = creditTransactions
+                    .map(\.transactionDate)
+                    .min()
+                    .map { min(credit.createdAt, $0) } ?? credit.createdAt
+
+                if date < effectiveCreationDate {
+                    if includeInitialBeforeCreation {
+                        if shouldInclude {
+                            let converted = await convertAmount(
+                                value: credit.initialRemainingAmount,
+                                from: accountCurrency,
+                                to: state.displayCurrency,
+                                at: date
+                            )
+                            let isLiability = debtAsNegative && isLiabilityAccount(account)
+                            if isLiability {
+                                totalBalance -= abs(converted)
+                            } else {
+                                totalBalance += converted
+                            }
+                        }
+                    }
+                    continue
+                }
                 
                 // Рассчитываем остаток долга на нужную дату с учетом транзакций корректировки
                 accountBalance = await calculateCreditRemainingAmount(
@@ -2295,7 +2398,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
 
     private func orderedAccounts(in group: FinanceGroup) -> [FinanceAccount] {
-        let accounts = group.accounts ?? []
+        let accounts = hydratedAccounts(in: group)
         if group.usesManualAccountOrdering {
             return accounts.sorted { lhs, rhs in
                 if lhs.order != rhs.order {
@@ -2312,6 +2415,22 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 return lhsAmount > rhsAmount
             }
             return lhs.createdAt < rhs.createdAt
+        }
+    }
+
+    private func hydratedAccounts(in group: FinanceGroup) -> [FinanceAccount] {
+        let relationAccounts = group.accounts ?? []
+        if !relationAccounts.isEmpty {
+            return relationAccounts
+        }
+
+        // SwiftData relations are occasionally stale right after test/setup inserts.
+        // Fall back to the store so chart building never silently collapses to zero accounts.
+        let descriptor = FetchDescriptor<FinanceAccount>()
+        let fetchedAccounts = (try? modelContext.fetch(descriptor)) ?? []
+        return fetchedAccounts.filter { account in
+            account.group?.persistentModelID == group.persistentModelID
+                || account.group?.groupUniqueID == group.groupUniqueID
         }
     }
 

@@ -50,6 +50,10 @@ enum SubscriptionContent {
 /// Важный инвариант: закреплённый снизу CTA добавляется через `safeAreaInset`, поэтому
 /// ScrollView не должен дополнительно резервировать под него отдельную большую "подушку".
 /// Иначе нижняя legal-секция визуально проваливается вверх, а между ней и CTA появляется дыра.
+///
+/// Отдельно держим hero и блок выбора плана на комфортной дистанции: на компактных экранах
+/// карточки с большими радиусами особенно чувствительны к слишком плотному стеку и быстро
+/// начинают выглядеть налезающими друг на друга.
 enum SubscriptionLayoutPolicy {
     static let horizontalPadding: CGFloat = 20
     static let topContentPadding: CGFloat = 12
@@ -60,23 +64,21 @@ enum SubscriptionLayoutPolicy {
     static let ctaBottomPadding: CGFloat = 8
 
     struct Metrics {
-        let topSectionHeight: CGFloat
         let topSectionSpacing: CGFloat
-        let sectionSpacing: CGFloat
         let heroHeight: CGFloat
         let heroCornerRadius: CGFloat
         let heroHorizontalPadding: CGFloat
         let heroVerticalPadding: CGFloat
-        let heroContentSpacing: CGFloat
+        let heroLayoutSpacing: CGFloat
         let heroTitleSpacing: CGFloat
         let heroTextSpacing: CGFloat
-        let heroArtTopPadding: CGFloat
         let crownGlowSize: CGFloat
         let crownWidth: CGFloat
         let crownHeight: CGFloat
         let eyebrowFontSize: CGFloat
         let heroTitleFontSize: CGFloat
         let heroSubtitleFontSize: CGFloat
+        let sectionSpacing: CGFloat
         let planSectionSpacing: CGFloat
         let planEyebrowFontSize: CGFloat
         let planSubtitleFontSize: CGFloat
@@ -111,27 +113,24 @@ enum SubscriptionLayoutPolicy {
     static func metrics(containerSize: CGSize) -> Metrics {
         let compactHeight = containerSize.height <= 760
         let wideScreen = containerSize.height >= 900
-        let topSectionHeight = min(max(containerSize.height * 0.46, 328), 430)
-        let heroHeight = min(max(containerSize.height * 0.27, 214), 278)
+        let heroHeight: CGFloat = compactHeight ? 136 : (wideScreen ? 156 : 146)
 
         return Metrics(
-            topSectionHeight: topSectionHeight,
-            topSectionSpacing: compactHeight ? 12 : 14,
-            sectionSpacing: compactHeight ? 18 : 22,
+            topSectionSpacing: compactHeight ? 24 : 28,
             heroHeight: heroHeight,
             heroCornerRadius: wideScreen ? 36 : 32,
             heroHorizontalPadding: compactHeight ? 18 : 20,
-            heroVerticalPadding: compactHeight ? 14 : 16,
-            heroContentSpacing: compactHeight ? 10 : 12,
-            heroTitleSpacing: compactHeight ? 10 : 12,
-            heroTextSpacing: compactHeight ? 7 : 8,
-            heroArtTopPadding: compactHeight ? 0 : 2,
-            crownGlowSize: compactHeight ? 84 : 94,
-            crownWidth: compactHeight ? 76 : 86,
-            crownHeight: compactHeight ? 60 : 68,
+            heroVerticalPadding: compactHeight ? 16 : 18,
+            heroLayoutSpacing: compactHeight ? 16 : 18,
+            heroTitleSpacing: compactHeight ? 6 : 8,
+            heroTextSpacing: 5,
+            crownGlowSize: compactHeight ? 104 : 116,
+            crownWidth: compactHeight ? 92 : 102,
+            crownHeight: compactHeight ? 74 : 82,
             eyebrowFontSize: 11,
-            heroTitleFontSize: compactHeight ? 31 : 34,
-            heroSubtitleFontSize: compactHeight ? 14 : 15,
+            heroTitleFontSize: compactHeight ? 27 : 30,
+            heroSubtitleFontSize: compactHeight ? 13 : 14,
+            sectionSpacing: compactHeight ? 18 : 22,
             planSectionSpacing: 10,
             planEyebrowFontSize: 13,
             planSubtitleFontSize: 13,

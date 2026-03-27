@@ -50,6 +50,7 @@ struct InvestmentState {
 // MARK: - Market Data Draft
 
 struct InvestmentMarketData: Equatable {
+    var assetID: String? = nil
     var symbol: String?
     var exchange: String?
     var quoteLookupKey: String?
@@ -448,7 +449,10 @@ final class InvestmentViewModel: ViewModelProtocol {
             return
         }
 
-        if let identity = MarketAssetIdentityResolver.resolve(
+        if let assetID = marketData?.assetID?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !assetID.isEmpty {
+            investment.assetID = assetID
+        } else if let identity = MarketAssetIdentityResolver.resolve(
             category: category,
             symbol: marketData?.symbol,
             exchange: marketData?.exchange,

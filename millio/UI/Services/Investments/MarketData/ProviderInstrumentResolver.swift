@@ -17,6 +17,29 @@ struct ProviderInstrumentResolver {
         return uniqueQuoteSymbols(mappedSymbols + legacySymbols)
     }
 
+    func preferredRefreshSymbol(for investment: Investment) -> String? {
+        if let mapped = preferredMappedRefreshSymbol(for: investment) {
+            return mapped
+        }
+
+        if let canonicalKey = normalizedCanonicalLookupKey(
+            investment.marketQuoteLookupKey,
+            exchange: investment.marketExchange
+        ) {
+            return canonicalKey
+        }
+
+        guard let rawSymbol = normalizedStoredValue(investment.marketSymbol) else {
+            return nil
+        }
+
+        let canonicalKey = MarketInstrumentIdentity.canonicalQuoteLookupKey(
+            symbol: rawSymbol,
+            exchange: investment.marketExchange
+        )
+        return canonicalKey.isEmpty ? rawSymbol : canonicalKey
+    }
+
     private func mappedQuoteLookupSymbols(for investment: Investment) -> [String] {
         guard let assetID = investment.assetID?.trimmingCharacters(in: .whitespacesAndNewlines),
               !assetID.isEmpty else {
@@ -42,10 +65,21 @@ struct ProviderInstrumentResolver {
         }
     }
 
+    private func preferredMappedRefreshSymbol(for investment: Investment) -> String? {
+        let rawSymbol = normalizedStoredValue(investment.marketSymbol)
+
+        return mappedQuoteLookupSymbols(for: investment)
+            .first { candidate in
+                guard let rawSymbol else { return true }
+                return candidate != rawSymbol
+            }
+    }
+
     private func legacyQuoteLookupSymbols(for investment: Investment) -> [String] {
-        let canonicalKey = investment.marketQuoteLookupKey?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
+        let canonicalKey = normalizedCanonicalLookupKey(
+            investment.marketQuoteLookupKey,
+            exchange: investment.marketExchange
+        )
         let rawSymbol = investment.marketSymbol?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .uppercased() ?? ""
@@ -53,11 +87,41 @@ struct ProviderInstrumentResolver {
             return canonicalKey.map { [$0] } ?? []
         }
 
+        let primaryCanonicalKey = MarketInstrumentIdentity.canonicalQuoteLookupKey(
+            symbol: rawSymbol,
+            exchange: investment.marketExchange
+        )
         let fallbacks = MarketInstrumentIdentity.fallbackQuoteLookupKeys(
             symbol: rawSymbol,
             exchange: investment.marketExchange
         )
-        return uniqueQuoteSymbols(([canonicalKey].compactMap { $0 }) + fallbacks)
+        return uniqueQuoteSymbols(
+            [canonicalKey, primaryCanonicalKey].compactMap { candidate in
+                guard let candidate else { return nil }
+                return candidate.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            } + fallbacks
+        )
+    }
+
+    private func normalizedCanonicalLookupKey(_ rawValue: String?, exchange: String?) -> String? {
+        let normalized = rawValue?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        guard let normalized, !normalized.isEmpty else { return nil }
+
+        let canonical = MarketInstrumentIdentity.canonicalQuoteLookupKey(
+            symbol: normalized,
+            exchange: exchange
+        )
+        return canonical.isEmpty ? normalized : canonical
+    }
+
+    private func normalizedStoredValue(_ rawValue: String?) -> String? {
+        let normalized = rawValue?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        guard let normalized, !normalized.isEmpty else { return nil }
+        return normalized
     }
 
     private func fetchMappings(for assetID: String) -> [AssetProviderMapping] {

@@ -33,6 +33,14 @@ struct FinancesView: View {
     @State private var showMassTickerImportSheet: Bool = false
     @State private var showQuickNavigationPopover: Bool = false
     private let currentRoute: AppRoute = .finances
+
+    private var isDailyAuditDebugOnlyEnabled: Bool {
+#if DEBUG
+        true
+#else
+        false
+#endif
+    }
     
     var body: some View {
         Group {
@@ -112,11 +120,13 @@ struct FinancesView: View {
         .sheet(isPresented: $showFinanceSettingsSheet) {
             if let viewModel {
                 FinancesSettingsSheet(
+                    isDailyAuditAvailable: isDailyAuditDebugOnlyEnabled,
                     onOpenSavingsGoal: {
                         showFinanceSettingsSheet = false
                         viewModel.handle(.showSavingsGoalSheet)
                     },
                     onOpenDailyAudit: {
+                        guard isDailyAuditDebugOnlyEnabled else { return }
                         showFinanceSettingsSheet = false
                         showBalanceAuditSheetFromSettings = true
                     },
@@ -128,7 +138,7 @@ struct FinancesView: View {
             }
         }
         .sheet(isPresented: $showBalanceAuditSheetFromSettings) {
-            if let viewModel {
+            if isDailyAuditDebugOnlyEnabled, let viewModel {
                 FinanceBalanceAuditSheet(
                     financeViewModel: viewModel,
                     modelContext: modelContext
@@ -201,6 +211,7 @@ private struct FinancesContentViewInternal: View {
 
 private struct FinancesSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
+    let isDailyAuditAvailable: Bool
     let onOpenSavingsGoal: () -> Void
     let onOpenDailyAudit: () -> Void
     let onOpenMassTickerImport: () -> Void
@@ -233,16 +244,18 @@ private struct FinancesSettingsSheet: View {
                     }
                     .buttonStyle(.plain)
 
-                    Button {
-                        onOpenDailyAudit()
-                    } label: {
-                        settingsRow(
-                            title: String(localized: "finances.settings.daily_audit.title"),
-                            subtitle: String(localized: "finances.settings.daily_audit.subtitle"),
-                            icon: "list.clipboard"
-                        )
+                    if isDailyAuditAvailable {
+                        Button {
+                            onOpenDailyAudit()
+                        } label: {
+                            settingsRow(
+                                title: String(localized: "finances.settings.daily_audit.title"),
+                                subtitle: String(localized: "finances.settings.daily_audit.subtitle"),
+                                icon: "list.clipboard"
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
 
                     Spacer()
                 }
@@ -320,6 +333,7 @@ private struct FinancesMainTabView: View {
     @Binding var selectedTab: FinancesTab
     @State private var draggedGroupID: String?
     @State private var isEmptyIntroHidden: Bool = FinancesEmptyStateIntroPrefs().isHidden()
+    @State private var isRefreshActionOverlayPresented: Bool = false
     
     var body: some View {
         mainContent
@@ -373,6 +387,13 @@ private struct FinancesMainTabView: View {
                     )
                 }
             }
+
+            FinanceRefreshActionOverlay(
+                isPresented: isRefreshActionOverlayPresented,
+                isLoading: viewModel.state.isLoadingRates,
+                onSelect: handleRefreshAction(_:),
+                onDismiss: { isRefreshActionOverlayPresented = false }
+            )
         }
     }
     
@@ -522,20 +543,9 @@ private struct FinancesMainTabView: View {
     }
 
     private var refreshMenu: some View {
-        Menu {
-            Button("finances.main.refresh_quotes") {
-                Task {
-                    await viewModel.refreshCurrencyQuotes()
-                }
-            }
-            .disabled(viewModel.state.isLoadingRates)
-
-            Button("finances.main.refresh_stocks") {
-                Task {
-                    await viewModel.refreshStockPrices()
-                }
-            }
-            .disabled(viewModel.state.isLoadingRates)
+        Button {
+            guard viewModel.state.isLoadingRates == false else { return }
+            isRefreshActionOverlayPresented = true
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -562,9 +572,23 @@ private struct FinancesMainTabView: View {
                 }
             }
         }
+        .buttonStyle(.plain)
         .accessibilityLabel(viewModel.state.isLoadingRates
             ? String(localized: "finances.common.refreshing")
             : String(localized: "finances.common.refresh"))
+    }
+
+    private func handleRefreshAction(_ action: FinanceRefreshAction) {
+        isRefreshActionOverlayPresented = false
+
+        Task {
+            switch action {
+            case .quotes:
+                await viewModel.refreshCurrencyQuotes()
+            case .stocks:
+                await viewModel.refreshStockPrices()
+            }
+        }
     }
 
     private func headerActionButton(systemName: String, action: @escaping () -> Void) -> some View {

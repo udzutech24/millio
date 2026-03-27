@@ -341,6 +341,9 @@ final class FinanceLifecycleHarness {
             }
         }()
         cashflowViewModel.handle(.deleteTransaction(transaction, recalculate: recalculate))
+        // Delete-with-recalculation is scheduled onto a Task; yield once so polling
+        // observes real progress instead of racing the executor startup.
+        await Task.yield()
         try await waitUntil(timeoutNanoseconds: 5_000_000_000) {
             let descriptor = FetchDescriptor<CashflowTransaction>()
             let storedTransactions = (try? self.modelContext.fetch(descriptor)) ?? []
@@ -590,6 +593,7 @@ final class FinanceLifecycleHarness {
     ) async throws {
         let start = DispatchTime.now().uptimeNanoseconds
         while DispatchTime.now().uptimeNanoseconds - start < timeoutNanoseconds {
+            await Task.yield()
             if condition() {
                 return
             }

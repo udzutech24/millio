@@ -1853,11 +1853,12 @@ private struct CashflowCategorySelectionSheet: View {
 
     @State private var searchText: String = ""
     @State private var showEditorSheet: Bool = false
-    @State private var showDeleteAlert: Bool = false
     @State private var editorMode: CashflowCategoryEditorMode = .create
     @State private var editorName: String = ""
     @State private var editorIcon: String = CashflowCustomCategory.defaultIcon
-    @State private var pendingDeleteRaw: String?
+    @State private var pendingDeletePreview: CashflowCategoryDeletionPreview?
+    @State private var pendingUndoAction: CashflowCategoryMutationUndoAction?
+    @State private var undoDismissTask: Task<Void, Never>?
 
     private var title: String {
         kind == .income
@@ -1939,8 +1940,7 @@ private struct CashflowCategorySelectionSheet: View {
                                         }
                                         if viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind) {
                                             Button(String(localized: "cashflow.history.detail.delete"), role: .destructive) {
-                                                pendingDeleteRaw = option.rawValue
-                                                showDeleteAlert = true
+                                                presentDeleteCategoryFlow(for: option)
                                             }
                                         }
                                     }
@@ -1992,19 +1992,35 @@ private struct CashflowCategorySelectionSheet: View {
                     .foregroundStyle(AppColors.textPrimary)
                 }
             }
-            .alert(String(localized: "cashflow.editor.delete_category.title"), isPresented: $showDeleteAlert) {
-                Button(String(localized: "cashflow.common.cancel"), role: .cancel) {
-                    pendingDeleteRaw = nil
-                }
-                Button(String(localized: "cashflow.history.detail.delete"), role: .destructive) {
-                    guard let raw = pendingDeleteRaw else { return }
-                    if viewModel.deleteCategory(rawValue: raw, kind: kind), selectedRaw == raw {
-                        selectedRaw = fallbackRaw
+            .sheet(item: $pendingDeletePreview) { preview in
+                CashflowCategoryDeletionSheet(viewModel: viewModel, preview: preview) { targetRaw in
+                    guard let undoAction = viewModel.performCategoryRemoval(
+                        rawValue: preview.rawValue,
+                        kind: preview.kind,
+                        targetRawValue: targetRaw
+                    ) else {
+                        return
                     }
-                    pendingDeleteRaw = nil
+
+                    if selectedRaw == preview.rawValue {
+                        selectedRaw = targetRaw
+                    }
+                    presentUndoAction(undoAction)
+                    pendingDeletePreview = nil
                 }
-            } message: {
-                Text("cashflow.editor.delete_category.message")
+            }
+            .overlay(alignment: .bottom) {
+                if let pendingUndoAction {
+                    CashflowCategoryUndoBanner(action: pendingUndoAction) {
+                        guard viewModel.undoCategoryMutation(pendingUndoAction) else { return }
+                        if selectedRaw == pendingUndoAction.targetOption.rawValue {
+                            selectedRaw = pendingUndoAction.sourceOption.rawValue
+                        }
+                        dismissUndoAction()
+                    } onDismiss: {
+                        dismissUndoAction()
+                    }
+                }
             }
             .fullScreenCover(isPresented: $showEditorSheet) {
                 CashflowCategoryEditorSheet(
@@ -2018,6 +2034,29 @@ private struct CashflowCategorySelectionSheet: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+    }
+
+    private func presentDeleteCategoryFlow(for option: CashflowCategoryOption) {
+        pendingDeletePreview = viewModel.categoryDeletionPreview(
+            rawValue: option.rawValue,
+            kind: kind
+        )
+    }
+
+    private func presentUndoAction(_ action: CashflowCategoryMutationUndoAction) {
+        undoDismissTask?.cancel()
+        pendingUndoAction = action
+        undoDismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            guard !Task.isCancelled else { return }
+            pendingUndoAction = nil
+        }
+    }
+
+    private func dismissUndoAction() {
+        undoDismissTask?.cancel()
+        undoDismissTask = nil
+        pendingUndoAction = nil
     }
 
     private func openCreateSheet() {

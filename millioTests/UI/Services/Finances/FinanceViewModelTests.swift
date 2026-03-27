@@ -49,16 +49,19 @@ actor MockMarketDataClient: MarketDataClientProtocol {
     var quotesBySymbol: [String: AssetSummary?]
     var errorsBySymbol: [String: Error]
     var latestPriceRequests: [String]
+    var overrideFetchQuotes: [AssetSummary]?
 
     init(
         pricesBySymbol: [String: Double?] = [:],
         quotesBySymbol: [String: AssetSummary?] = [:],
-        errorsBySymbol: [String: Error] = [:]
+        errorsBySymbol: [String: Error] = [:],
+        overrideFetchQuotes: [AssetSummary]? = nil
     ) {
         self.pricesBySymbol = pricesBySymbol
         self.quotesBySymbol = quotesBySymbol
         self.errorsBySymbol = errorsBySymbol
         self.latestPriceRequests = []
+        self.overrideFetchQuotes = overrideFetchQuotes
     }
 
     func searchSymbols(query: String, outputSize: Int) async throws -> [TwelveDataSymbol] {
@@ -103,6 +106,14 @@ actor MockMarketDataClient: MarketDataClientProtocol {
     }
 
     func fetchQuotes(symbols: [String]) async throws -> [AssetSummary] {
+        if let overrideFetchQuotes {
+            for s in symbols {
+                let key = s.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+                latestPriceRequests.append(key)
+            }
+            return overrideFetchQuotes
+        }
+
         var result: [AssetSummary] = []
         for s in symbols {
             let key = s.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
@@ -1509,7 +1520,7 @@ struct FinanceViewModelTests {
         #expect(viewModel.state.isLoadingRates == false)
     }
 
-    @Test("Ручное обновление акций показывает, какие тикеры не обновились")
+    @Test("Ручное обновление акций показывает мягкое cache-first сообщение без ticker dump")
     func testRefreshStockPricesShowsFailedSymbolsNotification() async throws {
         let modelContext = try createTestModelContext()
 
@@ -1554,20 +1565,16 @@ struct FinanceViewModelTests {
         await viewModel.refreshStockPrices()
 
         #expect(viewModel.state.showRefreshIssue)
-        #expect(viewModel.state.refreshIssueMessage?.contains("TSLA") == true)
-        // При батче один запрос на [AAPL, TSLA]; при падении запроса оба тикера попадают в сообщение
         #expect(
-            viewModel.state.refreshIssueMessage?.localizedLowercase.contains("сет") == true
-                || viewModel.state.refreshIssueMessage?.localizedLowercase.contains("network") == true
+            viewModel.state.refreshIssueMessage == MarketDataErrorPresentation.degradedRefreshMessage(locale: .current)
         )
         #expect(
-            viewModel.state.refreshIssueMessage?.localizedLowercase.contains("провайдера") == false
-                && viewModel.state.refreshIssueMessage?.localizedLowercase.contains("provider") == false
+            viewModel.state.refreshIssueMessage?.contains("TSLA") == false
         )
     }
 
-    @Test("Обновление акций пробует fallback форматы для market symbol")
-    func testRefreshStockPricesUsesFallbackSymbols() async throws {
+    @Test("Обновление акций использует один request symbol для market identity")
+    func testRefreshStockPricesUsesSingleRequestSymbol() async throws {
         let modelContext = try createTestModelContext()
 
         let spy = Investment(
@@ -1585,8 +1592,8 @@ struct FinanceViewModelTests {
 
         let marketClient = MockMarketDataClient(
             quotesBySymbol: [
-                "SPY.US": makeMarketQuote(
-                    symbol: "SPY.US",
+                "SPY": makeMarketQuote(
+                    symbol: "SPY",
                     canonicalSymbol: "SPY",
                     providerSymbol: "SPY",
                     exchange: "NYSE",
@@ -1606,13 +1613,61 @@ struct FinanceViewModelTests {
         await viewModel.refreshStockPrices()
 
         let requests = await marketClient.latestPriceRequests
-        #expect(requests == ["NYSE:SPY", "SPY", "SPY.US"])
+        #expect(requests == ["SPY"])
         #expect(abs((spy.lastKnownUnitPrice ?? 0) - 677.03) < 0.0001)
         #expect(spy.marketQuoteLookupKey == "SPY")
         #expect(viewModel.state.showRefreshIssue == false)
     }
 
-    @Test("Stale котировка обновляет цену без refresh ошибки")
+    @Test("Обновление акций сопоставляет quote по canonical keys даже если backend вернул другой alias")
+    func testRefreshStockPricesMatchesReturnedCanonicalAlias() async throws {
+        let modelContext = try createTestModelContext()
+
+        let qqq = Investment(
+            name: "QQQ",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100,
+            currency: "USD"
+        )
+        qqq.marketSymbol = "NASDAQ:QQQ"
+        qqq.marketExchange = "NASDAQ"
+        qqq.marketQuantity = 1
+        qqq.lastKnownUnitPrice = 100
+        modelContext.insert(qqq)
+        try modelContext.save()
+
+        let marketClient = MockMarketDataClient(
+            overrideFetchQuotes: [
+                makeMarketQuote(
+                    symbol: "QQQ",
+                    canonicalSymbol: "QQQ",
+                    providerSymbol: "QQQ",
+                    exchange: "NASDAQ",
+                    price: 512.42,
+                    resolutionStatus: .fresh
+                )
+            ]
+        )
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            marketDataClient: marketClient,
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        await viewModel.refreshStockPrices()
+
+        let requests = await marketClient.latestPriceRequests
+        #expect(requests == ["QQQ"])
+        #expect(abs((qqq.lastKnownUnitPrice ?? 0) - 512.42) < 0.0001)
+        #expect(qqq.marketQuoteLookupKey == "QQQ")
+        #expect(viewModel.state.showRefreshIssue == false)
+    }
+
+
+    @Test("Stale котировка обновляет цену без refresh ошибки независимо от request alias")
     func testRefreshStockPricesTreatsStaleQuoteAsDegradedSuccess() async throws {
         let modelContext = try createTestModelContext()
 
@@ -1623,16 +1678,17 @@ struct FinanceViewModelTests {
             amount: 100,
             currency: "USD"
         )
-        gld.marketSymbol = "GLD.US"
+        gld.marketSymbol = "GLD"
+        gld.marketExchange = "NYSE"
         gld.marketQuantity = 1
         gld.lastKnownUnitPrice = 100
         modelContext.insert(gld)
         try modelContext.save()
 
         let marketClient = MockMarketDataClient(
-            quotesBySymbol: [
-                "GLD.US": makeMarketQuote(
-                    symbol: "GLD.US",
+            overrideFetchQuotes: [
+                makeMarketQuote(
+                    symbol: "GLD",
                     canonicalSymbol: "GLD",
                     providerSymbol: "GLD",
                     exchange: "NYSE",
@@ -1652,13 +1708,16 @@ struct FinanceViewModelTests {
 
         await viewModel.refreshStockPrices()
 
+        let requests = await marketClient.latestPriceRequests
+        #expect(requests == ["GLD"] || requests == ["GLD.US"])
         #expect(abs((gld.lastKnownUnitPrice ?? 0) - 301.5) < 0.0001)
         #expect(gld.marketQuoteLookupKey == "GLD")
         #expect(viewModel.state.showRefreshIssue == false)
+        #expect(viewModel.state.refreshIssueMessage == nil)
     }
 
-    @Test("Provider error показывает отдельную refresh ошибку")
-    func testRefreshStockPricesSeparatesProviderErrors() async throws {
+    @Test("Provider error показывает мягкое human сообщение без ticker dump")
+    func testRefreshStockPricesSoftensProviderErrors() async throws {
         let modelContext = try createTestModelContext()
 
         let pall = Investment(
@@ -1699,14 +1758,11 @@ struct FinanceViewModelTests {
         let message = viewModel.state.refreshIssueMessage ?? ""
 
         #expect(viewModel.state.showRefreshIssue)
-        #expect(message.contains("PALL.US"))
-        #expect(
-            message.localizedLowercase.contains("провайдера")
-                || message.localizedLowercase.contains("provider")
-        )
+        #expect(message == MarketDataErrorPresentation.degradedRefreshMessage(locale: .current))
+        #expect(message.contains("PALL") == false)
     }
 
-    @Test("Ошибки авторизации обновления акций показываются отдельно от provider error")
+    @Test("Ошибки авторизации обновления акций показывают human-safe сообщение без ticker dump")
     func testRefreshStockPricesSeparatesAuthErrors() async throws {
         let modelContext = try createTestModelContext()
 
@@ -1717,7 +1773,8 @@ struct FinanceViewModelTests {
             amount: 100,
             currency: "USD"
         )
-        qqq.marketSymbol = "NASDAQ:QQQ"
+        qqq.marketSymbol = "QQQ"
+        qqq.marketExchange = "NASDAQ"
         qqq.marketQuantity = 1
         qqq.lastKnownUnitPrice = 100
         modelContext.insert(qqq)
@@ -1725,7 +1782,7 @@ struct FinanceViewModelTests {
 
         let marketClient = MockMarketDataClient(
             errorsBySymbol: [
-                "NASDAQ:QQQ": MarketAPIClientError.unauthorized(requestId: "req-auth-1")
+                "QQQ": MarketAPIClientError.unauthorized(requestId: "req-auth-1")
             ]
         )
         let viewModel = FinanceViewModel(
@@ -1739,20 +1796,18 @@ struct FinanceViewModelTests {
         await viewModel.refreshStockPrices()
 
         let message = viewModel.state.refreshIssueMessage ?? ""
+        let supportedMessages = Set([
+            MarketDataErrorPresentation.message(for: .authError, locale: .current),
+            MarketDataErrorPresentation.degradedRefreshMessage(locale: .current)
+        ])
 
         #expect(viewModel.state.showRefreshIssue)
-        #expect(message.contains("NASDAQ:QQQ"))
-        #expect(
-            message.localizedLowercase.contains("автор") || message.localizedLowercase.contains("auth")
-        )
-        #expect(
-            message.localizedLowercase.contains("провайдера") == false
-                && message.localizedLowercase.contains("provider") == false
-        )
+        #expect(supportedMessages.contains(message))
+        #expect(message.contains("QQQ") == false)
     }
 
-    @Test("Котировка без цены показывает отдельную refresh ошибку")
-    func testRefreshStockPricesSeparatesPriceUnavailable() async throws {
+    @Test("Котировка без цены показывает мягкое degraded сообщение")
+    func testRefreshStockPricesSoftensPriceUnavailable() async throws {
         let modelContext = try createTestModelContext()
 
         let sivr = Investment(
@@ -1793,11 +1848,54 @@ struct FinanceViewModelTests {
         let message = viewModel.state.refreshIssueMessage ?? ""
 
         #expect(viewModel.state.showRefreshIssue)
-        #expect(message.contains("NYSE:SIVR"))
-        #expect(
-            message.localizedLowercase.contains("нет текущей цены")
-                || message.localizedLowercase.contains("current price unavailable")
+        #expect(message == MarketDataErrorPresentation.degradedRefreshMessage(locale: .current))
+    }
+
+    @Test("Повторный ручной refresh не запускает повторный quote request во время cooldown")
+    func testRefreshStockPricesCooldownPreventsRepeatedRefreshRequests() async throws {
+        let modelContext = try createTestModelContext()
+        let spy = Investment(
+            name: "SPY",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100,
+            currency: "USD"
         )
+        spy.marketSymbol = "SPY.US"
+        spy.marketQuoteLookupKey = "SPY"
+        spy.marketQuantity = 1
+        modelContext.insert(spy)
+        try modelContext.save()
+
+        var now = Date(timeIntervalSince1970: 1_000)
+        let marketClient = MockMarketDataClient(
+            quotesBySymbol: [
+                "SPY": makeMarketQuote(
+                    symbol: "SPY",
+                    canonicalSymbol: "SPY",
+                    providerSymbol: "SPY",
+                    exchange: "NYSE",
+                    price: 650,
+                    resolutionStatus: .fresh
+                )
+            ]
+        )
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            marketDataClient: marketClient,
+            now: { now },
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        await viewModel.refreshStockPrices()
+        await viewModel.refreshStockPrices()
+        now = now.addingTimeInterval(16)
+        await viewModel.refreshStockPrices()
+
+        let requests = await marketClient.latestPriceRequests
+        #expect(requests == ["SPY", "SPY"])
     }
 
     @Test("Обновление акций предпочитает provider mapping для assetID-first инструмента")
@@ -1886,6 +1984,63 @@ struct FinanceViewModelTests {
         viewModel.handle(.loadAccounts)
 
         #expect(qqq.marketQuoteLookupKey == "QQQ")
+    }
+
+    @Test("Загрузка финансов не перезаписывает уже сохраненный quote lookup key legacy alias-ом")
+    func testLoadAccountsPreservesExistingMarketQuoteLookupKey() throws {
+        let modelContext = try createTestModelContext()
+
+        let spy = Investment(
+            name: "SPY",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100,
+            currency: "USD"
+        )
+        spy.marketSymbol = "SPY.US"
+        spy.marketQuoteLookupKey = "SPY"
+        modelContext.insert(spy)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            marketDataClient: MockMarketDataClient(),
+            skipInitialLoad: true
+        )
+
+        viewModel.handle(.loadAccounts)
+
+        #expect(spy.marketQuoteLookupKey == "SPY")
+    }
+
+    @Test("Загрузка финансов не канонизирует provider-style US symbol до первого успешного refresh")
+    func testLoadAccountsKeepsProviderStyleUSSymbolWithoutStoredLookupKey() throws {
+        let modelContext = try createTestModelContext()
+
+        let gld = Investment(
+            name: "Gold",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100,
+            currency: "USD"
+        )
+        gld.marketSymbol = "GLD.US"
+        gld.marketExchange = nil
+        gld.marketQuoteLookupKey = nil
+        modelContext.insert(gld)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            marketDataClient: MockMarketDataClient(),
+            skipInitialLoad: true
+        )
+
+        viewModel.handle(.loadAccounts)
+
+        #expect(gld.marketQuoteLookupKey == nil)
     }
 
     @Test("Быстрое редактирование кредитной карты обновляет лимит, долг и создает корректировку")

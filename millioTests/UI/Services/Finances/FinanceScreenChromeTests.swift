@@ -17,4 +17,18 @@ struct FinanceScreenChromeTests {
         #expect(FinanceScreenChrome.fabDiameter == 56)
         #expect(FinanceScreenChrome.fabIconSize == 20)
     }
+
+    @Test("Refresh action sheet использует отдельную финансовую палитру и стабильный радиус")
+    func refreshSheetChromeStaysStable() {
+        #expect(FinanceScreenChrome.actionSheetCornerRadius == 24)
+    }
+
+    @Test("Refresh overlay actions остаются предсказуемыми для UI")
+    func refreshOverlayActionsStayMapped() {
+        #expect(FinanceRefreshAction.allCases.count == 2)
+        #expect(FinanceRefreshAction.quotes.titleKey == "finances.main.refresh_quotes")
+        #expect(FinanceRefreshAction.quotes.iconName == "dollarsign.arrow.circlepath")
+        #expect(FinanceRefreshAction.stocks.titleKey == "finances.main.refresh_stocks")
+        #expect(FinanceRefreshAction.stocks.iconName == "chart.line.uptrend.xyaxis.circle")
+    }
 }

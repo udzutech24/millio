@@ -316,6 +316,9 @@ final class FinanceViewModel: ViewModelProtocol {
     private var allCardByID: [String: Card] = [:]
     private var allCreditByID: [String: Credit] = [:]
     private var allInvestmentByID: [String: Investment] = [:]
+    private var lastManualStockRefreshAt: Date?
+
+    private static let manualStockRefreshCooldown: TimeInterval = 15
     
     private var storedSavingsGoalEnabled: Bool {
         get { defaults.bool(forKey: "finance_savings_goal_enabled") }
@@ -750,10 +753,21 @@ final class FinanceViewModel: ViewModelProtocol {
         var requiresSave = false
 
         for investment in investments where investment.isMarketPriced {
+            let existingLookupKey = investment.marketQuoteLookupKey?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .uppercased() ?? ""
+            if !existingLookupKey.isEmpty {
+                continue
+            }
+
             let rawSymbol = investment.marketSymbol?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .uppercased() ?? ""
             guard !rawSymbol.isEmpty else { continue }
+            if investment.marketExchange?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false &&
+                rawSymbol.hasSuffix(".US") {
+                continue
+            }
 
             let normalizedKey = MarketInstrumentIdentity.canonicalQuoteLookupKey(
                 symbol: rawSymbol,
@@ -2010,6 +2024,13 @@ final class FinanceViewModel: ViewModelProtocol {
     func refreshStockPrices() async {
         state.isLoadingRates = true
         defer { state.isLoadingRates = false }
+        let now = nowProvider()
+        if let lastManualStockRefreshAt,
+           now.timeIntervalSince(lastManualStockRefreshAt) < Self.manualStockRefreshCooldown {
+            AppLogger.log(.info, category: "Finance", "Skipping manual stock refresh due to cooldown")
+            return
+        }
+        lastManualStockRefreshAt = now
         let issues = await refreshStockPrices(forceRefresh: true)
         presentRefreshIssueIfNeeded(message: stockRefreshIssueMessage(for: issues))
     }
@@ -2039,7 +2060,7 @@ final class FinanceViewModel: ViewModelProtocol {
         var seenSymbols: Set<String> = []
 
         for stock in activeStocks {
-            let lookupSymbols = stockQuoteLookupSymbols(for: stock)
+            let lookupSymbols = stockQuoteRequestSymbols(for: stock)
             guard !lookupSymbols.isEmpty else {
                 issues.notFoundSymbols.insert(stock.name.trimmingCharacters(in: .whitespacesAndNewlines))
                 continue
@@ -2064,8 +2085,32 @@ final class FinanceViewModel: ViewModelProtocol {
             let chunk = Array(allSymbolsOrdered[chunkStart ..< min(chunkStart + Self.quoteBatchSize, allSymbolsOrdered.count)])
             do {
                 let quotes = try await marketDataClient.fetchQuotes(symbols: chunk)
-                for (symbol, quote) in zip(chunk, quotes) {
-                    quotesBySymbol[symbol] = quote
+                var matchedRequestedSymbols: Set<String> = []
+
+                for quote in quotes {
+                    let keys = quote.quoteLookupKeys
+                    for key in keys {
+                        quotesBySymbol[key] = quote
+                    }
+                    matchedRequestedSymbols.formUnion(chunk.filter { keys.contains($0) })
+                }
+
+                let unmatchedRequestedSymbols = chunk.filter { matchedRequestedSymbols.contains($0) == false }
+                if quotes.count != chunk.count || !unmatchedRequestedSymbols.isEmpty {
+                    let requestedSymbolsLine = chunk.joined(separator: ",")
+                    let unmatchedSymbolsLine = unmatchedRequestedSymbols.joined(separator: ",")
+                    let returnedSummary = quotes.map { quote in
+                        let canonical = quote.canonicalSymbol ?? "nil"
+                        let provider = quote.providerSymbol ?? "nil"
+                        let exchange = quote.exchange ?? "nil"
+                        return "\(quote.symbol){status=\(quote.resolutionStatus.rawValue),canonical=\(canonical),provider=\(provider),exchange=\(exchange)}"
+                    }
+                    .joined(separator: ",")
+                    AppLogger.log(
+                        .warning,
+                        category: "Finance",
+                        "Quote batch mismatch requested=\(requestedSymbolsLine) returnedCount=\(quotes.count) unmatched=\(unmatchedSymbolsLine) returned=\(returnedSummary)"
+                    )
                 }
             } catch {
                 let issueCategory = stockRefreshIssueCategory(for: error)
@@ -2209,31 +2254,21 @@ final class FinanceViewModel: ViewModelProtocol {
 
     private func stockRefreshIssueMessage(for issues: StockRefreshIssues) -> String? {
         guard issues.hasIssues else { return nil }
+        let hasOnlyAuthErrors =
+            !issues.authErrorSymbols.isEmpty &&
+            issues.notFoundSymbols.isEmpty &&
+            issues.priceUnavailableSymbols.isEmpty &&
+            issues.providerErrorSymbols.isEmpty &&
+            issues.networkErrorSymbols.isEmpty &&
+            issues.httpErrorSymbols.isEmpty &&
+            issues.decodingErrorSymbols.isEmpty &&
+            issues.clientErrorSymbols.isEmpty
 
-        let notFoundSymbols = issues.notFoundSymbols.sorted()
-        let priceUnavailableSymbols = issues.priceUnavailableSymbols.sorted()
-        let providerErrorSymbols = issues.providerErrorSymbols.sorted()
-        let authErrorSymbols = issues.authErrorSymbols.sorted()
-        let networkErrorSymbols = issues.networkErrorSymbols.sorted()
-        let httpErrorSymbols = issues.httpErrorSymbols.sorted()
-        let decodingErrorSymbols = issues.decodingErrorSymbols.sorted()
-        let clientErrorSymbols = issues.clientErrorSymbols.sorted()
-        var parts: [String] = []
-
-        if !notFoundSymbols.isEmpty {
-            let label = MarketDataErrorPresentation.listLabel(for: .notFound, locale: .current)
-            parts.append("\(label): \(notFoundSymbols.joined(separator: ", "))")
+        if hasOnlyAuthErrors {
+            return MarketDataErrorPresentation.message(for: .authError, locale: .current)
         }
 
-        appendStockRefreshSymbols(priceUnavailableSymbols, category: .priceUnavailable, to: &parts)
-        appendStockRefreshSymbols(providerErrorSymbols, category: .providerError, to: &parts)
-        appendStockRefreshSymbols(authErrorSymbols, category: .authError, to: &parts)
-        appendStockRefreshSymbols(networkErrorSymbols, category: .networkError, to: &parts)
-        appendStockRefreshSymbols(httpErrorSymbols, category: .httpError, to: &parts)
-        appendStockRefreshSymbols(decodingErrorSymbols, category: .decodeError, to: &parts)
-        appendStockRefreshSymbols(clientErrorSymbols, category: .clientError, to: &parts)
-
-        return parts.joined(separator: ". ")
+        return MarketDataErrorPresentation.degradedRefreshMessage(locale: .current)
     }
 
     private func appendStockRefreshSymbols(
@@ -2275,8 +2310,12 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
 
-    private func stockQuoteLookupSymbols(for investment: Investment) -> [String] {
-        ProviderInstrumentResolver(modelContext: modelContext).quoteLookupSymbols(for: investment)
+    private func stockQuoteRequestSymbols(for investment: Investment) -> [String] {
+        guard let symbol = ProviderInstrumentResolver(modelContext: modelContext)
+            .preferredRefreshSymbol(for: investment) else {
+            return []
+        }
+        return [symbol]
     }
 
     private func stockDisplaySymbol(_ investment: Investment) -> String {

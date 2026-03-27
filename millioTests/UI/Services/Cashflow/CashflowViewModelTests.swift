@@ -1100,7 +1100,7 @@ extension CashflowViewModelTests {
         #expect(viewModel.expenseCategoryDisplayName(for: custom.rawValue) == "Рабочие поездки")
 
         let deleted = viewModel.deleteCustomCategory(rawValue: custom.rawValue, kind: .expense)
-        #expect(deleted)
+        #expect(deleted != nil)
         #expect(transaction.expenseCategoryRaw == ExpenseCategory.other.rawValue)
 
         viewModel.handle(.loadTransactions)
@@ -1109,6 +1109,193 @@ extension CashflowViewModelTests {
                 $0.title == ExpenseCategory.other.displayName && abs($0.convertedAmount - 300) < 0.01
             })
         }
+    }
+
+    @Test("Preview удаления категории показывает связанные суммы и лимиты, а удаление умеет перенести данные в выбранную категорию")
+    func testDeleteCategoryPreviewAndCustomTargetMigration() throws {
+        let modelContext = try createTestModelContext()
+        let isolated = makeIsolatedDefaults()
+        defer { isolated.defaults.removePersistentDomain(forName: isolated.suiteName) }
+
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 5)) ?? Date()
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in (start: 0, end: 0) },
+            defaults: isolated.defaults
+        )
+
+        guard let custom = viewModel.createCustomCategory(kind: .expense, name: "Командировки", icon: "airplane") else {
+            Issue.record("Expected custom category")
+            return
+        }
+
+        let transaction = CashflowTransaction(
+            transactionType: .expense,
+            amount: 1_250,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            expenseCategoryRaw: custom.rawValue
+        )
+        let descriptor = BudgetPeriodDescriptor(
+            type: .month,
+            startDate: fixedNow,
+            endDate: fixedNow,
+            anchorYear: 2026,
+            anchorMonth: 3
+        )
+        let plan = BudgetPlan(
+            categoryKind: .expense,
+            descriptor: descriptor,
+            currencyCode: "RUB",
+            totalLimitAmount: 5_000,
+            isCategoryBudgetingEnabled: true
+        )
+        let sourceLimit = BudgetCategoryLimit(
+            budgetID: plan.budgetID,
+            categoryKind: .expense,
+            categoryRawValue: custom.rawValue,
+            limitAmount: 700
+        )
+        let targetLimit = BudgetCategoryLimit(
+            budgetID: plan.budgetID,
+            categoryKind: .expense,
+            categoryRawValue: ExpenseCategory.groceries.rawValue,
+            limitAmount: 300
+        )
+
+        modelContext.insert(plan)
+        modelContext.insert(sourceLimit)
+        modelContext.insert(targetLimit)
+        modelContext.insert(transaction)
+        try modelContext.save()
+
+        viewModel.setCategoryPinned(rawValue: custom.rawValue, kind: .expense, isPinned: true)
+        viewModel.rememberBulkExpenseCategory(categoryRaw: custom.rawValue, for: "Aeroflot")
+
+        let preview = try #require(
+            viewModel.categoryDeletionPreview(rawValue: custom.rawValue, kind: .expense)
+        )
+        #expect(preview.linkedTransactionCount == 1)
+        #expect(preview.linkedBudgetLimitCount == 1)
+        #expect(preview.totalsByCurrency == [
+            CashflowCategoryDeletionAmountSummary(currency: "RUB", amount: 1_250)
+        ])
+        #expect(preview.availableTargetOptions.contains(where: { $0.rawValue == ExpenseCategory.groceries.rawValue }))
+
+        let deleted = viewModel.deleteCategory(
+            rawValue: custom.rawValue,
+            kind: .expense,
+            targetRawValue: ExpenseCategory.groceries.rawValue
+        )
+
+        #expect(deleted)
+        #expect(transaction.expenseCategoryRaw == ExpenseCategory.groceries.rawValue)
+        #expect(viewModel.isCategoryPinned(rawValue: ExpenseCategory.groceries.rawValue, kind: .expense))
+        #expect(viewModel.learnedBulkExpenseCategoryRaw(for: "Aeroflot") == ExpenseCategory.groceries.rawValue)
+
+        let remainingLimits = try modelContext.fetch(FetchDescriptor<BudgetCategoryLimit>())
+        #expect(remainingLimits.count == 1)
+        #expect(remainingLimits[0].categoryRawValue == ExpenseCategory.groceries.rawValue)
+        #expect(remainingLimits[0].limitAmount == 1_000)
+    }
+
+    @Test("Удаление категории не позволяет выбрать ее же как целевую")
+    func testDeleteCategoryRejectsSelfAsTarget() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        let deleted = viewModel.deleteCategory(
+            rawValue: ExpenseCategory.shopping.rawValue,
+            kind: .expense,
+            targetRawValue: ExpenseCategory.shopping.rawValue
+        )
+
+        #expect(!deleted)
+    }
+
+    @Test("Undo после удаления кастомной категории восстанавливает категорию и связанные данные")
+    func testUndoCustomCategoryDeletionRestoresState() throws {
+        let modelContext = try createTestModelContext()
+        let isolated = makeIsolatedDefaults()
+        defer { isolated.defaults.removePersistentDomain(forName: isolated.suiteName) }
+
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 7)) ?? Date()
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in (start: 0, end: 0) },
+            defaults: isolated.defaults
+        )
+
+        guard let custom = viewModel.createCustomCategory(kind: .expense, name: "Фототехника", icon: "camera.fill") else {
+            Issue.record("Expected custom category")
+            return
+        }
+
+        let transaction = CashflowTransaction(
+            transactionType: .expense,
+            amount: 500,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            expenseCategoryRaw: custom.rawValue
+        )
+        modelContext.insert(transaction)
+        try modelContext.save()
+
+        viewModel.setCategoryPinned(rawValue: custom.rawValue, kind: .expense, isPinned: true)
+        viewModel.rememberBulkExpenseCategory(categoryRaw: custom.rawValue, for: "Photo Store")
+
+        let action = try #require(
+            viewModel.performCategoryRemoval(
+                rawValue: custom.rawValue,
+                kind: .expense,
+                targetRawValue: ExpenseCategory.groceries.rawValue
+            )
+        )
+
+        #expect(transaction.expenseCategoryRaw == ExpenseCategory.groceries.rawValue)
+        #expect(viewModel.undoCategoryMutation(action))
+        #expect(transaction.expenseCategoryRaw == custom.rawValue)
+        #expect(viewModel.categoryOptions(for: .expense, includeHiddenSystem: true).contains(where: { $0.rawValue == custom.rawValue }))
+        #expect(viewModel.isCategoryPinned(rawValue: custom.rawValue, kind: .expense))
+        #expect(viewModel.learnedBulkExpenseCategoryRaw(for: "Photo Store") == custom.rawValue)
+    }
+
+    @Test("Undo после архивации системной категории возвращает видимость и транзакции")
+    func testUndoSystemCategoryArchiveRestoresState() throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 8)) ?? Date()
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in (start: 0, end: 0) }
+        )
+
+        let transaction = CashflowTransaction(
+            transactionType: .expense,
+            amount: 850,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            expenseCategoryRaw: ExpenseCategory.shopping.rawValue
+        )
+        modelContext.insert(transaction)
+        try modelContext.save()
+
+        let action = try #require(
+            viewModel.performCategoryRemoval(
+                rawValue: ExpenseCategory.shopping.rawValue,
+                kind: .expense,
+                targetRawValue: ExpenseCategory.other.rawValue
+            )
+        )
+
+        #expect(transaction.expenseCategoryRaw == ExpenseCategory.other.rawValue)
+        #expect(!viewModel.categoryOptions(for: .expense).contains(where: { $0.rawValue == ExpenseCategory.shopping.rawValue }))
+
+        #expect(viewModel.undoCategoryMutation(action))
+        #expect(transaction.expenseCategoryRaw == ExpenseCategory.shopping.rawValue)
+        #expect(viewModel.categoryOptions(for: .expense).contains(where: { $0.rawValue == ExpenseCategory.shopping.rawValue }))
     }
 
     @Test("Редактирование кастомной категории обновляет имя и иконку")

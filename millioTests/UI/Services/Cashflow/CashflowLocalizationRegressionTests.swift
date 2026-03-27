@@ -6,10 +6,116 @@
 //
 
 import Foundation
+import SwiftData
 import Testing
 @testable import millio
 
+@Suite(.serialized)
 struct CashflowLocalizationRegressionTests {
+    @Test("Hidden system override keeps category localized after app language switch")
+    @MainActor
+    func hiddenSystemOverrideUsesCurrentAppLanguage() throws {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+
+        let schema = Schema([
+            CashflowTransaction.self,
+            CashflowCustomCategory.self,
+            CashflowSystemCategoryOverride.self,
+            Card.self,
+            FinanceGroup.self,
+            FinanceAccount.self,
+            HistoricalRate.self
+        ])
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        let context = container.mainContext
+
+        LanguageManager.shared.setLanguage(.russian)
+        let baseRussianName = ExpenseCategory.groceries.displayName
+        let override = CashflowSystemCategoryOverride(
+            kind: .expense,
+            categoryRaw: ExpenseCategory.groceries.rawValue,
+            name: baseRussianName,
+            icon: ExpenseCategory.groceries.icon,
+            isHidden: true
+        )
+        context.insert(override)
+        try context.save()
+
+        let viewModel = CashflowViewModel(modelContext: context)
+
+        LanguageManager.shared.setLanguage(.english)
+        let option = viewModel.categoryOption(for: ExpenseCategory.groceries.rawValue, kind: .expense)
+
+        #expect(baseRussianName == "Продукты")
+        #expect(option.displayName == "Groceries")
+    }
+
+    @Test("Legacy Russian system override names are treated as system names after language switch")
+    @MainActor
+    func legacyRussianSystemOverrideNamesAreLocalized() throws {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+
+        let schema = Schema([
+            CashflowTransaction.self,
+            CashflowCustomCategory.self,
+            CashflowSystemCategoryOverride.self,
+            Card.self,
+            FinanceGroup.self,
+            FinanceAccount.self,
+            HistoricalRate.self
+        ])
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        let context = container.mainContext
+
+        LanguageManager.shared.setLanguage(.russian)
+
+        let legacyServiceOverride = CashflowSystemCategoryOverride(
+            kind: .expense,
+            categoryRaw: ExpenseCategory.carService.rawValue,
+            name: "Сервис",
+            icon: ExpenseCategory.carService.icon,
+            isHidden: true
+        )
+        let legacyGroceriesOverride = CashflowSystemCategoryOverride(
+            kind: .expense,
+            categoryRaw: ExpenseCategory.groceries.rawValue,
+            name: "Супермаркеты",
+            icon: ExpenseCategory.groceries.icon,
+            isHidden: true
+        )
+        let legacyUtilitiesOverride = CashflowSystemCategoryOverride(
+            kind: .expense,
+            categoryRaw: ExpenseCategory.utilities.rawValue,
+            name: "ЖКХ и коммунальные",
+            icon: ExpenseCategory.utilities.icon,
+            isHidden: true
+        )
+        context.insert(legacyServiceOverride)
+        context.insert(legacyGroceriesOverride)
+        context.insert(legacyUtilitiesOverride)
+        try context.save()
+
+        let viewModel = CashflowViewModel(modelContext: context)
+
+        LanguageManager.shared.setLanguage(.english)
+
+        let groceries = viewModel.categoryOption(for: ExpenseCategory.groceries.rawValue, kind: .expense)
+        let service = viewModel.categoryOption(for: ExpenseCategory.carService.rawValue, kind: .expense)
+        let utilities = viewModel.categoryOption(for: ExpenseCategory.utilities.rawValue, kind: .expense)
+
+        #expect(groceries.displayName == "Groceries")
+        #expect(service.displayName == "Car service")
+        #expect(utilities.displayName == "Utilities")
+    }
+
     @Test("Russian locale contains localized Cashflow labels")
     func russianLocaleHasCashflowTranslations() {
         let locale = Locale(identifier: "ru_RU")

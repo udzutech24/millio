@@ -36,7 +36,7 @@ struct ExpenseCategoryMetadata: Equatable {
     let icon: String
     let aliases: [String]
 
-    func localizedDisplayName(locale: Locale = .autoupdatingCurrent) -> String {
+    func localizedDisplayName(locale: Locale = AppLocalization.currentAppLocale) -> String {
         ExpenseCategoryCatalog.preferredLanguageCode(for: locale) == "ru"
             ? displayNameRU
             : displayNameEN

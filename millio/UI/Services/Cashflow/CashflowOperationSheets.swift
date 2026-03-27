@@ -56,6 +56,285 @@ enum CashflowCategorySheetBootstrap {
     }
 }
 
+struct CashflowCategoryDeletionSheet: View {
+    @ObservedObject var viewModel: CashflowViewModel
+    let preview: CashflowCategoryDeletionPreview
+    let onDelete: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedTargetRaw: String
+
+    init(
+        viewModel: CashflowViewModel,
+        preview: CashflowCategoryDeletionPreview,
+        onDelete: @escaping (String) -> Void
+    ) {
+        self.viewModel = viewModel
+        self.preview = preview
+        self.onDelete = onDelete
+        _selectedTargetRaw = State(initialValue: preview.suggestedTargetOption.rawValue)
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    sourceCategoryRow
+                } header: {
+                    Text(
+                        String(
+                            localized: "cashflow.category.delete.review.header",
+                            defaultValue: "Delete review",
+                            comment: "Header for delete category review section"
+                        )
+                    )
+                } footer: {
+                    Text(impactSummaryText)
+                }
+
+                Section {
+                    Picker(
+                        String(
+                            localized: "cashflow.category.delete.target.title",
+                            defaultValue: "Move linked data to",
+                            comment: "Picker title for category delete target"
+                        ),
+                        selection: $selectedTargetRaw
+                    ) {
+                        ForEach(preview.availableTargetOptions) { option in
+                            HStack(spacing: 10) {
+                                CashflowCategoryIconView(
+                                    icon: option.icon,
+                                    fontSize: 16,
+                                    fontWeight: .semibold,
+                                    tint: AnyShapeStyle(AppColors.textPrimary)
+                                )
+                                Text(option.displayName)
+                            }
+                            .tag(option.rawValue)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                } footer: {
+                    Text(
+                        String(
+                            localized: "cashflow.category.delete.target.footer",
+                            defaultValue: "Transactions, budget limits, pins, and merchant mappings will be remapped to the selected category.",
+                            comment: "Footer explaining what is remapped during category deletion"
+                        )
+                    )
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(GradientBackground())
+            .navigationTitle(
+                destructiveActionTitle
+            )
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "cashflow.common.cancel")) {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(
+                        destructiveConfirmTitle,
+                        role: .destructive
+                    ) {
+                        onDelete(selectedTargetRaw)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var sourceCategoryRow: some View {
+        HStack(spacing: 12) {
+            CashflowCategoryIconView(
+                icon: preview.sourceOption.icon,
+                fontSize: 20,
+                fontWeight: .semibold,
+                tint: AnyShapeStyle(AppColors.textPrimary)
+            )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(preview.sourceOption.displayName)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                Text(categoryTypeText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+
+            Spacer()
+        }
+        .listRowBackground(Color.white.opacity(0.04))
+    }
+
+    private var categoryTypeText: String {
+        if preview.sourceOption.isCustom {
+            return String(
+                localized: "cashflow.category.delete.kind.custom",
+                defaultValue: "Custom category",
+                comment: "Delete category subtitle for custom category"
+            )
+        }
+
+        return String(
+            localized: "cashflow.category.delete.kind.system",
+            defaultValue: "System category will be hidden after migration",
+            comment: "Delete category subtitle for system category"
+        )
+    }
+
+    private var destructiveActionTitle: String {
+        if preview.sourceOption.isCustom {
+            return String(
+                localized: "cashflow.category.actions.delete",
+                defaultValue: "Delete",
+                comment: "Delete category action title"
+            )
+        }
+
+        return String(
+            localized: "cashflow.category.actions.archive",
+            defaultValue: "Archive",
+            comment: "Archive system category action title"
+        )
+    }
+
+    private var destructiveConfirmTitle: String {
+        if preview.sourceOption.isCustom {
+            return String(
+                localized: "cashflow.category.delete.confirm",
+                defaultValue: "Delete category",
+                comment: "Confirm button title for category delete flow"
+            )
+        }
+
+        return String(
+            localized: "cashflow.category.archive.confirm",
+            defaultValue: "Archive category",
+            comment: "Confirm button title for system category archive flow"
+        )
+    }
+
+    private var impactSummaryText: String {
+        let transactionText = String.localizedStringWithFormat(
+            String(
+                localized: "cashflow.category.delete.transactions.summary",
+                defaultValue: "%d linked transactions",
+                comment: "Summary of linked transactions for category deletion"
+            ),
+            preview.linkedTransactionCount
+        )
+        let budgetText = String.localizedStringWithFormat(
+            String(
+                localized: "cashflow.category.delete.budgets.summary",
+                defaultValue: "%d linked budget limits",
+                comment: "Summary of linked budget limits for category deletion"
+            ),
+            preview.linkedBudgetLimitCount
+        )
+        let totalsText = preview.totalsByCurrency.isEmpty
+            ? String(
+                localized: "cashflow.category.delete.amounts.empty",
+                defaultValue: "No transaction amounts linked to this category.",
+                comment: "Delete category summary when there are no linked transaction amounts"
+            )
+            : preview.totalsByCurrency
+                .map { "\($0.amount.formatted(.number.precision(.fractionLength(0...2)))) \($0.currency)" }
+                .joined(separator: ", ")
+
+        return [transactionText, budgetText, totalsText].joined(separator: " • ")
+    }
+}
+
+struct CashflowCategoryUndoBanner: View {
+    let action: CashflowCategoryMutationUndoAction
+    let onUndo: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Button(String(localized: "Undo")) {
+                onUndo()
+            }
+            .font(.system(size: 14, weight: .bold))
+            .foregroundStyle(AppColors.brandPrimary)
+
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.black.opacity(0.82))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private var title: String {
+        action.isArchive
+            ? String(
+                localized: "cashflow.category.undo.archive.title",
+                defaultValue: "Category archived",
+                comment: "Undo banner title after archiving a category"
+            )
+            : String(
+                localized: "cashflow.category.undo.delete.title",
+                defaultValue: "Category deleted",
+                comment: "Undo banner title after deleting a category"
+            )
+    }
+
+    private var subtitle: String {
+        let targetName = action.targetOption.displayName
+        if action.isArchive {
+            return String(
+                localized: "cashflow.category.undo.archive.subtitle",
+                defaultValue: "Linked data moved to %@.",
+                comment: "Undo banner subtitle after archiving a category"
+            ).replacingOccurrences(of: "%@", with: targetName)
+        }
+
+        return String(
+            localized: "cashflow.category.undo.delete.subtitle",
+            defaultValue: "Deleted category data moved to %@.",
+            comment: "Undo banner subtitle after deleting a category"
+        ).replacingOccurrences(of: "%@", with: targetName)
+    }
+}
+
 /// Единая политика сетки категорий для экранов создания дохода/расхода.
 /// На узких экранах обе сетки переключаются на 3 колонки, чтобы размещение
 /// категорий в доходах и расходах оставалось консистентным. Для расходов с
@@ -242,11 +521,12 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var newCategoryIcon: String = CashflowCustomCategory.defaultIcon
     @State private var showCategoryEditorSheet: Bool = false
     @State private var showCategoryActionsDialog: Bool = false
-    @State private var showDeleteCategoryAlert: Bool = false
     @State private var categoryEditorMode: CashflowCategoryEditorMode = .create
     @State private var categoryEditorName: String = ""
     @State private var categoryEditorIcon: String = CashflowCustomCategory.defaultIcon
-    @State private var pendingDeleteCategoryRaw: String?
+    @State private var pendingCategoryDeletionPreview: CashflowCategoryDeletionPreview?
+    @State private var pendingCategoryUndoAction: CashflowCategoryMutationUndoAction?
+    @State private var categoryUndoDismissTask: Task<Void, Never>?
     @State private var pendingActionCategory: CashflowCategoryOption?
     @State private var categoryGridWidth: CGFloat = UIScreen.main.bounds.width
     @State private var highlightedCategoryRaw: String?
@@ -459,29 +739,29 @@ private struct CashflowCategoryTransactionSheet: View {
                             closeCategoryActions()
                             openCategoryEditor(for: option)
                         },
+                        deleteActionTitle: destructiveActionTitle(for: option),
+                        deleteActionIcon: destructiveActionIcon(for: option),
                         onDelete: viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind.categoryKind) ? {
-                            pendingDeleteCategoryRaw = option.rawValue
                             closeCategoryActions()
-                            showDeleteCategoryAlert = true
+                            presentDeleteCategoryFlow(for: option)
                         } : nil,
                         onDismiss: closeCategoryActions
                     )
                 }
             }
-            .alert(String(localized: "cashflow.operation.delete_category.title"), isPresented: $showDeleteCategoryAlert) {
-                Button(String(localized: "cashflow.common.cancel"), role: .cancel) {
-                    pendingDeleteCategoryRaw = nil
+            .sheet(item: $pendingCategoryDeletionPreview) { preview in
+                CashflowCategoryDeletionSheet(viewModel: viewModel, preview: preview) { targetRaw in
+                    handleCategoryDeletion(preview: preview, targetRaw: targetRaw)
                 }
-                Button(String(localized: "cashflow.category.actions.delete"), role: .destructive) {
-                    guard let raw = pendingDeleteCategoryRaw else { return }
-                    if viewModel.deleteCategory(rawValue: raw, kind: kind.categoryKind),
-                       selectedCategory?.rawValue == raw {
-                        selectedCategory = nil
+            }
+            .overlay(alignment: .bottom) {
+                if let pendingCategoryUndoAction {
+                    CashflowCategoryUndoBanner(action: pendingCategoryUndoAction) {
+                        handleUndoCategoryDeletion()
+                    } onDismiss: {
+                        dismissUndoCategoryDeletion()
                     }
-                    pendingDeleteCategoryRaw = nil
                 }
-            } message: {
-                Text("cashflow.operation.delete_category.message")
             }
             .onAppear {
                 CashflowCategorySheetBootstrap.prepare(viewModel: viewModel)
@@ -1301,6 +1581,71 @@ private struct CashflowCategoryTransactionSheet: View {
         pendingActionCategory = nil
     }
 
+    private func destructiveActionTitle(for option: CashflowCategoryOption) -> String {
+        option.isCustom
+            ? String(localized: "cashflow.category.actions.delete")
+            : String(
+                localized: "cashflow.category.actions.archive",
+                defaultValue: "Archive",
+                comment: "Archive system category action title"
+            )
+    }
+
+    private func destructiveActionIcon(for option: CashflowCategoryOption) -> String {
+        option.isCustom ? "trash" : "archivebox"
+    }
+
+    private func presentDeleteCategoryFlow(for option: CashflowCategoryOption) {
+        pendingCategoryDeletionPreview = viewModel.categoryDeletionPreview(
+            rawValue: option.rawValue,
+            kind: kind.categoryKind
+        )
+    }
+
+    private func handleCategoryDeletion(preview: CashflowCategoryDeletionPreview, targetRaw: String) {
+        guard let undoAction = viewModel.performCategoryRemoval(
+            rawValue: preview.rawValue,
+            kind: preview.kind,
+            targetRawValue: targetRaw
+        ) else {
+            return
+        }
+
+        if selectedCategory?.rawValue == preview.rawValue {
+            selectedCategory = viewModel.categoryOption(for: targetRaw, kind: preview.kind)
+        }
+        pendingCategoryDeletionPreview = nil
+        presentUndoCategoryDeletion(undoAction)
+    }
+
+    private func presentUndoCategoryDeletion(_ action: CashflowCategoryMutationUndoAction) {
+        categoryUndoDismissTask?.cancel()
+        pendingCategoryUndoAction = action
+        categoryUndoDismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            guard !Task.isCancelled else { return }
+            pendingCategoryUndoAction = nil
+        }
+    }
+
+    private func dismissUndoCategoryDeletion() {
+        categoryUndoDismissTask?.cancel()
+        categoryUndoDismissTask = nil
+        pendingCategoryUndoAction = nil
+    }
+
+    private func handleUndoCategoryDeletion() {
+        guard let action = pendingCategoryUndoAction else { return }
+        guard viewModel.undoCategoryMutation(action) else { return }
+        if selectedCategory?.rawValue == action.targetOption.rawValue {
+            selectedCategory = viewModel.categoryOption(
+                for: action.sourceOption.rawValue,
+                kind: action.kind
+            )
+        }
+        dismissUndoCategoryDeletion()
+    }
+
     private func handleCategoryEditorSave(name: String, icon: String) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
@@ -1635,11 +1980,12 @@ private struct CashflowCategorySettingsSheet: View {
     @State private var searchText: String = ""
     @State private var showActionsDialog: Bool = false
     @State private var showEditorSheet: Bool = false
-    @State private var showDeleteAlert: Bool = false
     @State private var editorMode: CashflowCategoryEditorMode = .create
     @State private var editorName: String = ""
     @State private var editorIcon: String = CashflowCustomCategory.defaultIcon
-    @State private var pendingDeleteRaw: String?
+    @State private var pendingDeletePreview: CashflowCategoryDeletionPreview?
+    @State private var pendingUndoAction: CashflowCategoryMutationUndoAction?
+    @State private var undoDismissTask: Task<Void, Never>?
     @State private var pendingActionCategory: CashflowCategoryOption?
 
     private var systemOptions: [CashflowCategoryOption] {
@@ -1743,26 +2089,44 @@ private struct CashflowCategorySettingsSheet: View {
                         closeSettingsCategoryActions()
                         openEditSheet(for: option)
                     },
+                    deleteActionTitle: option.isCustom
+                        ? String(localized: "cashflow.category.actions.delete")
+                        : String(
+                            localized: "cashflow.category.actions.archive",
+                            defaultValue: "Archive",
+                            comment: "Archive system category action title"
+                        ),
+                    deleteActionIcon: option.isCustom ? "trash" : "archivebox",
                     onDelete: viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind.categoryKind) ? {
-                        pendingDeleteRaw = option.rawValue
                         closeSettingsCategoryActions()
-                        showDeleteAlert = true
+                        presentDeleteCategoryFlow(for: option)
                     } : nil,
                     onDismiss: closeSettingsCategoryActions
                 )
             }
         }
-        .alert(String(localized: "cashflow.editor.delete_category.title"), isPresented: $showDeleteAlert) {
-            Button(String(localized: "cashflow.common.cancel"), role: .cancel) {
-                pendingDeleteRaw = nil
+        .sheet(item: $pendingDeletePreview) { preview in
+            CashflowCategoryDeletionSheet(viewModel: viewModel, preview: preview) { targetRaw in
+                guard let undoAction = viewModel.performCategoryRemoval(
+                    rawValue: preview.rawValue,
+                    kind: preview.kind,
+                    targetRawValue: targetRaw
+                ) else {
+                    return
+                }
+                presentUndoAction(undoAction)
+                pendingDeletePreview = nil
             }
-            Button(String(localized: "cashflow.category.actions.delete"), role: .destructive) {
-                guard let raw = pendingDeleteRaw else { return }
-                _ = viewModel.deleteCategory(rawValue: raw, kind: kind.categoryKind)
-                pendingDeleteRaw = nil
+        }
+        .overlay(alignment: .bottom) {
+            if let pendingUndoAction {
+                CashflowCategoryUndoBanner(action: pendingUndoAction) {
+                    guard viewModel.undoCategoryMutation(pendingUndoAction) else { return }
+                    dismissUndoAction()
+                } onDismiss: {
+                    dismissUndoAction()
+                }
             }
-        } message: {
-            Text("cashflow.editor.delete_category.message")
         }
         .fullScreenCover(isPresented: $showEditorSheet) {
             CashflowCategoryEditorSheet(
@@ -1868,6 +2232,29 @@ private struct CashflowCategorySettingsSheet: View {
     private func closeSettingsCategoryActions() {
         showActionsDialog = false
         pendingActionCategory = nil
+    }
+
+    private func presentDeleteCategoryFlow(for option: CashflowCategoryOption) {
+        pendingDeletePreview = viewModel.categoryDeletionPreview(
+            rawValue: option.rawValue,
+            kind: kind.categoryKind
+        )
+    }
+
+    private func presentUndoAction(_ action: CashflowCategoryMutationUndoAction) {
+        undoDismissTask?.cancel()
+        pendingUndoAction = action
+        undoDismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            guard !Task.isCancelled else { return }
+            pendingUndoAction = nil
+        }
+    }
+
+    private func dismissUndoAction() {
+        undoDismissTask?.cancel()
+        undoDismissTask = nil
+        pendingUndoAction = nil
     }
 
     private func visibilityText(isVisible: Bool, canHide: Bool) -> String {

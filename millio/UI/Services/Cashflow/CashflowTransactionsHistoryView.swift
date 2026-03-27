@@ -243,11 +243,20 @@ func cashflowHistoryPrimaryTitle(
 }
 
 private func cashflowHistoryPresentationLocale(from locale: Locale) -> Locale {
-    let currentIdentifier = Locale.autoupdatingCurrent.identifier
-    guard locale.identifier == currentIdentifier else {
+    let appLocale = LanguageManager.shared.currentLanguage.locale
+    guard let appLocale else { return locale }
+
+    let localeIdentifier = locale.identifier.lowercased()
+    let currentIdentifiers = Set([
+        Locale.autoupdatingCurrent.identifier.lowercased(),
+        Locale.current.identifier.lowercased()
+    ])
+
+    guard currentIdentifiers.contains(localeIdentifier) else {
         return locale
     }
-    return LanguageManager.shared.currentLanguage.locale ?? locale
+
+    return appLocale
 }
 
 func cashflowHistoryAccountLabel(

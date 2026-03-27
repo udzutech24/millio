@@ -37,6 +37,7 @@ struct InvestmentEditorView: View {
     @State private var currencySearchText: String = ""
 
     @State private var marketSymbol: String = ""
+    @State private var marketAssetID: String?
     @State private var marketExchange: String?
     @State private var marketQuoteLookupKey: String?
     @State private var marketMICCode: String?
@@ -49,12 +50,14 @@ struct InvestmentEditorView: View {
     @State private var showMarketSearchSheet: Bool = false
     @State private var isRefreshingPrice: Bool = false
     @State private var marketErrorMessage: String?
+    @State private var lastMarketRefreshAt: Date?
     @State private var showPaywallAlert = false
     @State private var paywallMessage = ""
     @State private var showCryptoProAlert = false
     @State private var showDeleteConfirmation = false
 
     private let marketDataClient: MarketDataClientProtocol
+    private let marketRefreshCooldown: TimeInterval = 10
 
     init(
         viewModel: InvestmentViewModel,
@@ -193,6 +196,7 @@ struct InvestmentEditorView: View {
                     isFavorite = editing.isFavorite
 
                     marketSymbol = editing.marketSymbol ?? ""
+                    marketAssetID = editing.assetID
                     marketExchange = editing.marketExchange
                     marketQuoteLookupKey = editing.marketQuoteLookupKey
                     marketMICCode = editing.marketMICCode
@@ -704,13 +708,23 @@ struct InvestmentEditorView: View {
     }
 
     private func refreshLatestPrice(forceRefresh: Bool) {
-        let lookupKey = marketQuoteLookupKey ?? MarketInstrumentIdentity.canonicalQuoteLookupKey(
-            symbol: marketSymbol,
-            exchange: marketExchange
-        )
-        guard !lookupKey.isEmpty else {
+        guard let identity = MarketSymbolIdentity(
+            marketSymbol: marketSymbol,
+            exchange: marketExchange,
+            quoteLookupKey: marketQuoteLookupKey,
+            assetID: marketAssetID
+        ) else {
             return
         }
+
+        let now = Date()
+        if forceRefresh,
+           let lastMarketRefreshAt,
+           now.timeIntervalSince(lastMarketRefreshAt) < marketRefreshCooldown {
+            AppLogger.log(.info, category: "Finance", "Skipping editor quote refresh due to cooldown symbol=\(identity.requestedSymbol)")
+            return
+        }
+        lastMarketRefreshAt = now
 
         Task {
             await MainActor.run {
@@ -726,7 +740,7 @@ struct InvestmentEditorView: View {
 
             do {
                 let latestQuote = try await marketDataClient.latestQuote(
-                    symbol: lookupKey,
+                    symbol: identity.requestedSymbol,
                     forceRefresh: forceRefresh
                 )
 
@@ -745,9 +759,10 @@ struct InvestmentEditorView: View {
 
                         lastKnownUnitPrice = latestPrice
                         lastKnownPriceUpdatedAt = latestQuote.updatedAtDate ?? Date()
-                        marketQuoteLookupKey = latestQuote.canonicalQuoteLookupKey
+                        let updatedIdentity = identity.updating(with: latestQuote)
+                        marketQuoteLookupKey = updatedIdentity.canonicalSymbol
                         marketMICCode = latestQuote.micCode ?? marketMICCode
-                        marketProviderRaw = latestQuote.providerSymbol == nil ? marketProviderRaw : "market-backend"
+                        marketProviderRaw = updatedIdentity.providerSymbol == nil ? marketProviderRaw : "market-backend"
                     case .notFound:
                         marketErrorMessage = MarketDataErrorPresentation.message(for: .notFound)
                         return
@@ -775,6 +790,7 @@ struct InvestmentEditorView: View {
 
     private func applySelectedMarketSymbol(_ symbol: TwelveDataSymbol) {
         marketSymbol = symbol.symbol
+        marketAssetID = nil
         marketExchange = symbol.exchange
         marketQuoteLookupKey = symbol.canonicalQuoteLookupKey
         marketMICCode = symbol.micCode
@@ -790,6 +806,7 @@ struct InvestmentEditorView: View {
 
     private func clearMarketState() {
         marketSymbol = ""
+        marketAssetID = nil
         marketExchange = nil
         marketQuoteLookupKey = nil
         marketMICCode = nil
@@ -859,6 +876,7 @@ struct InvestmentEditorView: View {
             let lockedSymbol = viewModel.state.editingInvestment?.marketSymbol
 
             marketData = InvestmentMarketData(
+                assetID: marketAssetID,
                 symbol: isEditingMarketAssetWithLockedIdentity ? lockedSymbol : (marketSymbol.isEmpty ? nil : marketSymbol),
                 exchange: marketExchange,
                 quoteLookupKey: marketQuoteLookupKey,

@@ -8,6 +8,10 @@
 import Foundation
 
 enum AppLocalization {
+    static var currentAppLocale: Locale {
+        LanguageManager.shared.currentLanguage.locale ?? Locale.autoupdatingCurrent
+    }
+
     /// Resolves a localized string for an explicit locale, independent of app-wide language overrides.
     static func string(_ key: String, locale: Locale, fallback: String? = nil, bundle: Bundle = .main) -> String {
         let languageCode = preferredLanguageCode(from: locale)

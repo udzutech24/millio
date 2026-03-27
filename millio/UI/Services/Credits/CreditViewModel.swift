@@ -311,8 +311,9 @@ final class CreditViewModel: ViewModelProtocol {
         state.debtByCurrency = debtByCurrency
         state.monthlyPaymentsByCurrency = monthlyPaymentsByCurrency
         
-        // Конвертируем общий долг и платежи в выбранную валюту
-        Task {
+        // Держим QoS явным, чтобы тесты и UI не ловили priority inversion warning
+        // при пересчете агрегатов сразу после синхронного изменения состояния.
+        Task(priority: .userInitiated) { @MainActor in
             await calculateTotalDebt()
             await calculateTotalMonthlyPayments()
         }

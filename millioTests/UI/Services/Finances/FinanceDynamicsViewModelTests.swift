@@ -118,6 +118,21 @@ struct FinanceDynamicsViewModelTests {
         return context
     }
 
+    private func waitUntil(
+        timeoutNanoseconds: UInt64 = 2_000_000_000,
+        intervalNanoseconds: UInt64 = 10_000_000,
+        condition: @escaping @MainActor () -> Bool
+    ) async {
+        let start = DispatchTime.now().uptimeNanoseconds
+        while DispatchTime.now().uptimeNanoseconds - start < timeoutNanoseconds {
+            await Task.yield()
+            if condition() {
+                return
+            }
+            try? await Task.sleep(nanoseconds: intervalNanoseconds)
+        }
+    }
+
     @Test("Период 1 день маппится на один день")
     func testDayPeriodMapsToSingleDay() {
         #expect(DynamicsPeriod.day.rawValue == "1D")
@@ -931,6 +946,63 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(balanceWithFlag - 5000) < 0.01)
     }
 
+    @Test("Долг до создания кредита не попадает в динамику")
+    func testBalanceBeforeCreditCreationIsZero() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let createdAt = calendar.date(byAdding: .day, value: -5, to: Date()) ?? Date()
+        let beforeCreation = calendar.date(byAdding: .day, value: -10, to: Date()) ?? Date()
+
+        let credit = Credit(
+            name: "Новый кредит",
+            amount: 600_001,
+            interestRate: 0,
+            monthlyPayment: 0,
+            startDate: createdAt,
+            termMonths: 12,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer
+        )
+        credit.createdAt = createdAt
+        credit.updatedAt = createdAt
+        credit.initialRemainingAmount = 600_001
+        credit.hasInitialRemainingAmount = true
+        credit.remainingAmount = 600_001
+        modelContext.insert(credit)
+
+        let group = FinanceGroup(name: "Кредиты", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
+        account.group = group
+        account.createdAt = createdAt
+        account.updatedAt = createdAt
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let balanceBeforeCreation = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: beforeCreation,
+            accountCardIDs: [],
+            debtAsNegative: true,
+            includeInitialBeforeCreation: false
+        )
+        #expect(abs(balanceBeforeCreation) < 0.01)
+    }
+
     @Test("Старт графика не включает счет до его создания")
     func testTimeSeriesStartDoesNotBackfillBalanceBeforeAccountCreation() async throws {
         let modelContext = try createTestModelContext()
@@ -1038,8 +1110,66 @@ struct FinanceDynamicsViewModelTests {
         #expect(period.end == now)
     }
 
-    @Test("Breakdown по акциям не показывает ноль на старте, если позиция создана в пределах периода")
-    func testInvestmentBreakdownUsesInvestmentCreationDateAsStart() async throws {
+    @Test("Годовой период динамики клипуется к первой дате реальных данных")
+    func testYearPeriodUsesFirstRealDataDateForChartState() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let now = Date()
+        let createdAt = calendar.date(byAdding: .day, value: -20, to: now) ?? now
+
+        let credit = Credit(
+            name: "Поздний кредит",
+            amount: 600_001,
+            interestRate: 0,
+            monthlyPayment: 0,
+            startDate: createdAt,
+            termMonths: 12,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer
+        )
+        credit.createdAt = createdAt
+        credit.updatedAt = createdAt
+        credit.initialRemainingAmount = 600_001
+        credit.hasInitialRemainingAmount = true
+        credit.remainingAmount = 600_001
+        modelContext.insert(credit)
+
+        let group = FinanceGroup(name: "Кредиты", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
+        account.group = group
+        account.createdAt = createdAt
+        account.updatedAt = createdAt
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        dynamicsViewModel.state.groups = [group]
+        dynamicsViewModel.state.period = .year
+
+        await dynamicsViewModel.updateChartDataAsync()
+        await waitUntil {
+            dynamicsViewModel.state.chartData.isEmpty == false
+        }
+
+        #expect(dynamicsViewModel.state.periodStartDate >= createdAt)
+        #expect((dynamicsViewModel.state.chartData.first?.date ?? .distantPast) >= createdAt)
+    }
+
+    @Test("Breakdown по акциям использует общий старт периода и показывает ноль до появления позиции")
+    func testInvestmentBreakdownUsesSharedPeriodStart() async throws {
         let modelContext = try createTestModelContext()
         let calendar = Calendar.current
         let now = Date()
@@ -1088,12 +1218,12 @@ struct FinanceDynamicsViewModelTests {
         await dynamicsViewModel.updateDynamicsBreakdown()
 
         let item = try #require(dynamicsViewModel.state.dynamicsBreakdown.first)
-        #expect(abs(item.startValue - 1_184_517) < 0.01)
+        #expect(abs(item.startValue) < 0.01)
         #expect(abs(item.endValue - 1_184_517) < 0.01)
     }
 
-    @Test("Breakdown по группе не показывает ноль на старте, если группа состоит из новой инвестиции")
-    func testInvestmentGroupBreakdownUsesInvestmentCreationDateAsStart() async throws {
+    @Test("Breakdown по группе использует общий старт периода и показывает ноль до появления позиции")
+    func testInvestmentGroupBreakdownUsesSharedPeriodStart() async throws {
         let modelContext = try createTestModelContext()
         let calendar = Calendar.current
         let now = Date()
@@ -1143,7 +1273,7 @@ struct FinanceDynamicsViewModelTests {
 
         let item = try #require(dynamicsViewModel.state.dynamicsBreakdown.first)
         #expect(item.name == "Металлы")
-        #expect(abs(item.startValue - 836_881) < 0.01)
+        #expect(abs(item.startValue) < 0.01)
         #expect(abs(item.endValue - 836_881) < 0.01)
     }
 

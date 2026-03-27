@@ -17,6 +17,171 @@ struct FinancesSectionHeader: View {
     }
 }
 
+enum FinanceRefreshAction: CaseIterable {
+    case quotes
+    case stocks
+
+    var titleKey: String {
+        switch self {
+        case .quotes:
+            return "finances.main.refresh_quotes"
+        case .stocks:
+            return "finances.main.refresh_stocks"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .quotes:
+            return "dollarsign.arrow.circlepath"
+        case .stocks:
+            return "chart.line.uptrend.xyaxis.circle"
+        }
+    }
+
+    var tintColor: Color {
+        switch self {
+        case .quotes:
+            return FinanceScreenChrome.refreshQuotesTint
+        case .stocks:
+            return FinanceScreenChrome.refreshStocksTint
+        }
+    }
+
+    var accessibilityIdentifier: String {
+        switch self {
+        case .quotes:
+            return "finances.refresh_overlay.quotes"
+        case .stocks:
+            return "finances.refresh_overlay.stocks"
+        }
+    }
+}
+
+struct FinanceRefreshActionOverlay: View {
+    let isPresented: Bool
+    let isLoading: Bool
+    let onSelect: (FinanceRefreshAction) -> Void
+    let onDismiss: () -> Void
+
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            if isPresented {
+                Color.black.opacity(0.58)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onDismiss)
+                    .transition(.opacity)
+
+                FinancesGlassCard(
+                    accentColor: FinanceScreenChrome.refreshOverlayAccent,
+                    cornerRadius: FinanceScreenChrome.actionSheetCornerRadius,
+                    contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)
+                ) {
+                    VStack(spacing: 12) {
+                        Capsule()
+                            .fill(Color.white.opacity(0.16))
+                            .frame(width: 38, height: 5)
+
+                        HStack(spacing: 12) {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.white.opacity(0.06))
+                                .frame(width: 44, height: 44)
+                                .overlay {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 20, weight: .semibold))
+                                        .foregroundStyle(FinanceScreenChrome.refreshOverlayAccent)
+                                }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(FinancesL10n.text(
+                                    locale: locale,
+                                    ru: "Обновить котировки",
+                                    en: "Refresh market data"
+                                ))
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(AppColors.textPrimary)
+
+                                Text(FinancesL10n.text(
+                                    locale: locale,
+                                    ru: "Выберите, что нужно подтянуть: валюты или акции.",
+                                    en: "Choose whether to refresh currencies or equity prices"
+                                ))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            }
+
+                            Spacer(minLength: 0)
+                        }
+
+                        VStack(spacing: 8) {
+                            ForEach(FinanceRefreshAction.allCases, id: \.titleKey) { action in
+                                refreshActionButton(for: action)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .frame(maxWidth: 598)
+                .padding(.bottom, 8)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: isPresented)
+        .allowsHitTesting(isPresented)
+    }
+
+    private func refreshActionButton(for action: FinanceRefreshAction) -> some View {
+        Button {
+            onSelect(action)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: action.iconName)
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 20)
+
+                Text(LocalizedStringKey(action.titleKey))
+                    .font(.system(size: 16, weight: .semibold))
+
+                Spacer()
+
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(action.tintColor)
+                }
+            }
+            .foregroundStyle(isLoading ? AppColors.textSecondary : action.tintColor)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.055),
+                                Color.white.opacity(0.035)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(action.tintColor.opacity(0.18), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+        .accessibilityIdentifier(action.accessibilityIdentifier)
+    }
+}
+
 struct FinancesGlassCard<Content: View>: View {
     let accentColor: Color
     let cornerRadius: CGFloat

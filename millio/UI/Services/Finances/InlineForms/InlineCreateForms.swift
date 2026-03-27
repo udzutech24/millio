@@ -1095,6 +1095,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
     @State private var marketSymbol: String = ""
+    @State private var marketAssetID: String?
     @State private var marketExchange: String?
     @State private var marketQuoteLookupKey: String?
     @State private var marketMICCode: String?
@@ -1105,6 +1106,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @State private var lastKnownUnitPrice: Double?
     @State private var lastKnownPriceUpdatedAt: Date?
     @State private var marketProviderRaw: String?
+    @State private var lastMarketRefreshAt: Date?
     @State private var showMarketSearchSheet: Bool = false
     @State private var isRefreshingPrice: Bool = false
     @State private var marketErrorMessage: String?
@@ -1167,6 +1169,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             let effectiveAmount = positionTotal ?? parseNumber(amountText) ?? 0.0
             let effectiveCurrency = (marketCurrency?.isEmpty == false) ? marketCurrency! : selectedCurrency
             let marketData = InvestmentMarketData(
+                assetID: marketAssetID,
                 symbol: marketSymbol.isEmpty ? nil : marketSymbol,
                 exchange: marketExchange,
                 quoteLookupKey: marketQuoteLookupKey,
@@ -1687,6 +1690,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         selectedPriority = editing.priority
         isFavorite = editing.isFavorite
         marketSymbol = editing.marketSymbol ?? ""
+        marketAssetID = editing.assetID
         marketExchange = editing.marketExchange
         marketQuoteLookupKey = editing.marketQuoteLookupKey
         marketMICCode = editing.marketMICCode
@@ -1715,13 +1719,23 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     }
     
     private func refreshLatestPrice(forceRefresh: Bool) {
-        let lookupKey = marketQuoteLookupKey ?? MarketInstrumentIdentity.canonicalQuoteLookupKey(
-            symbol: marketSymbol,
-            exchange: marketExchange
-        )
-        guard !lookupKey.isEmpty else {
+        guard let identity = MarketSymbolIdentity(
+            marketSymbol: marketSymbol,
+            exchange: marketExchange,
+            quoteLookupKey: marketQuoteLookupKey,
+            assetID: marketAssetID
+        ) else {
             return
         }
+
+        let now = Date()
+        if forceRefresh,
+           let lastMarketRefreshAt,
+           now.timeIntervalSince(lastMarketRefreshAt) < 10 {
+            AppLogger.log(.info, category: "Finance", "Skipping inline quote refresh due to cooldown symbol=\(identity.requestedSymbol)")
+            return
+        }
+        lastMarketRefreshAt = now
         
         Task {
             await MainActor.run {
@@ -1737,7 +1751,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             
             do {
                 let latestQuote = try await marketDataClient.latestQuote(
-                    symbol: lookupKey,
+                    symbol: identity.requestedSymbol,
                     forceRefresh: forceRefresh
                 )
                 
@@ -1756,9 +1770,10 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
 
                         lastKnownUnitPrice = latestPrice
                         lastKnownPriceUpdatedAt = latestQuote.updatedAtDate ?? Date()
-                        marketQuoteLookupKey = latestQuote.canonicalQuoteLookupKey
+                        let updatedIdentity = identity.updating(with: latestQuote)
+                        marketQuoteLookupKey = updatedIdentity.canonicalSymbol
                         marketMICCode = latestQuote.micCode ?? marketMICCode
-                        marketProviderRaw = latestQuote.providerSymbol == nil ? marketProviderRaw : "market-backend"
+                        marketProviderRaw = updatedIdentity.providerSymbol == nil ? marketProviderRaw : "market-backend"
                     case .notFound:
                         marketErrorMessage = MarketDataErrorPresentation.message(for: .notFound)
                         return
@@ -1787,6 +1802,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     private func applySelectedMarketSymbol(_ symbol: TwelveDataSymbol) {
         marketSymbol = symbol.symbol
+        marketAssetID = nil
         marketExchange = symbol.exchange
         marketQuoteLookupKey = symbol.canonicalQuoteLookupKey
         marketMICCode = symbol.micCode
@@ -1803,6 +1819,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     private func clearMarketState() {
         marketSymbol = ""
+        marketAssetID = nil
         marketExchange = nil
         marketQuoteLookupKey = nil
         marketMICCode = nil

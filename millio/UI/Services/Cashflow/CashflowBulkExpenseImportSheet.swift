@@ -2345,7 +2345,7 @@ struct CashflowBulkExpenseImportSheet: View {
             }
         )
 
-        saveMessage = "Распознано \(screenshotPreviewRows.count) строк. Проверь их перед переносом в категории."
+        saveMessage = "Распознано \(screenshotPreviewRows.count) строк. Проверь их перед переносом в категории"
         errorMessage = nil
         isSaveDismissed = false
         isErrorDismissed = false

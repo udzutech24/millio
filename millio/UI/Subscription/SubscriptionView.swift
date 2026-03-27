@@ -92,7 +92,6 @@ struct SubscriptionView: View {
             header(metrics: metrics)
             plansCard(metrics: metrics)
         }
-        .frame(minHeight: metrics.topSectionHeight, alignment: .top)
     }
 
     private var subscriptionBackground: some View {
@@ -177,12 +176,9 @@ struct SubscriptionView: View {
                         .stroke(Color.white.opacity(0.14), lineWidth: 1)
                 )
 
-            VStack(spacing: metrics.heroContentSpacing) {
-                Spacer(minLength: 0)
+            HStack(spacing: metrics.heroLayoutSpacing) {
+                heroArtwork(metrics: metrics)
                 heroTitleBlock(metrics: metrics)
-                if !SubscriptionContent.heroHighlights.isEmpty {
-                    heroHighlightsRow
-                }
             }
             .padding(.horizontal, metrics.heroHorizontalPadding)
             .padding(.vertical, metrics.heroVerticalPadding)
@@ -190,49 +186,50 @@ struct SubscriptionView: View {
         .frame(height: metrics.heroHeight)
     }
 
-    private func heroTitleBlock(metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
-        VStack(spacing: metrics.heroTitleSpacing) {
-            ZStack {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [Color(hex: "70C7FF").opacity(0.38), .clear],
-                            center: .center,
-                            startRadius: 4,
-                            endRadius: 58
-                        )
+    private func heroArtwork(metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color(hex: "70C7FF").opacity(0.38), .clear],
+                        center: .center,
+                        startRadius: 6,
+                        endRadius: metrics.crownGlowSize * 0.5
                     )
-                    .frame(width: metrics.crownGlowSize, height: metrics.crownGlowSize)
+                )
+                .frame(width: metrics.crownGlowSize, height: metrics.crownGlowSize)
 
-                Image("crown")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: metrics.crownWidth, height: metrics.crownHeight)
-            }
-            .padding(.top, metrics.heroArtTopPadding)
-
-            VStack(spacing: metrics.heroTextSpacing) {
-                Text("subscription.hero.eyebrow")
-                    .font(.system(size: metrics.eyebrowFontSize, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.6))
-                    .textCase(.uppercase)
-                    .tracking(1.4)
-
-                Text("subscription.hero.title")
-                    .font(.system(size: metrics.heroTitleFontSize, weight: .black, design: .rounded))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-
-                Text("subscription.hero.subtitle")
-                    .font(.system(size: metrics.heroSubtitleFontSize, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.7))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Image("crown")
+                .resizable()
+                .scaledToFit()
+                .frame(width: metrics.crownWidth, height: metrics.crownHeight)
         }
+        .frame(width: metrics.crownGlowSize, height: metrics.crownGlowSize)
+    }
+
+    private func heroTitleBlock(metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
+        VStack(alignment: .leading, spacing: metrics.heroTitleSpacing) {
+            Text("subscription.hero.eyebrow")
+                .font(.system(size: metrics.eyebrowFontSize, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.6))
+                .textCase(.uppercase)
+                .tracking(1.4)
+
+            Text("subscription.hero.title")
+                .font(.system(size: metrics.heroTitleFontSize, weight: .black, design: .rounded))
+                .foregroundStyle(AppColors.textPrimary)
+                .multilineTextAlignment(.leading)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+
+            Text("subscription.hero.subtitle")
+                .font(.system(size: metrics.heroSubtitleFontSize, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.7))
+                .multilineTextAlignment(.leading)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var heroStatBackground: some View {

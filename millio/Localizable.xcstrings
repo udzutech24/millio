@@ -732,40 +732,6 @@
         }
       }
     },
-    "backup.auto_toggle.subtitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keeps one auto backup per day and replaces the previous one"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Хранит одну автокопию в сутки и заменяет предыдущую"
-          }
-        }
-      }
-    },
-    "backup.auto_toggle.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Daily auto backup"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Автокопия раз в сутки"
-          }
-        }
-      }
-    },
     "backup.actions.create.primary.first" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -800,23 +766,6 @@
         }
       }
     },
-    "backup.actions.create.subtitle.requirements" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn on backup and iCloud first"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Сначала включите резервное копирование и iCloud"
-          }
-        }
-      }
-    },
     "backup.actions.create.subtitle.limit" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -830,6 +779,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Достигнут максимум ручных версий: %lld, удалите одну старую версию, чтобы сохранить новую"
+          }
+        }
+      }
+    },
+    "backup.actions.create.subtitle.requirements" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn on backup and iCloud first"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сначала включите резервное копирование и iCloud"
           }
         }
       }
@@ -953,6 +919,40 @@
         }
       }
     },
+    "backup.auto_toggle.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keeps one auto backup per day and replaces the previous one"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хранит одну автокопию в сутки и заменяет предыдущую"
+          }
+        }
+      }
+    },
+    "backup.auto_toggle.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daily auto backup"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Автокопия раз в сутки"
+          }
+        }
+      }
+    },
     "backup.dashboard.subtitle.last_backup_format" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1038,6 +1038,23 @@
         }
       }
     },
+    "backup.dashboard.trust.detail.passphrase" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recommended, the same passphrase lets you restore on another device"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рекомендуется: одна и та же кодовая фраза позволит восстановиться на другом устройстве"
+          }
+        }
+      }
+    },
     "backup.dashboard.trust.title.device" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1051,6 +1068,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Защита: только этот iPhone"
+          }
+        }
+      }
+    },
+    "backup.dashboard.trust.title.passphrase" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protection: passphrase"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Защита: кодовая фраза"
           }
         }
       }
@@ -1208,40 +1242,6 @@
         }
       }
     },
-    "backup.dashboard.trust.detail.passphrase" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recommended, the same passphrase lets you restore on another device"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Рекомендуется: одна и та же кодовая фраза позволит восстановиться на другом устройстве"
-          }
-        }
-      }
-    },
-    "backup.dashboard.trust.title.passphrase" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Protection: passphrase"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Защита: кодовая фраза"
-          }
-        }
-      }
-    },
     "backup.limit.reached.action.delete_oldest" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1344,23 +1344,6 @@
         }
       }
     },
-    "backup.protection.headline.passphrase" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Best for moving to a new device"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Лучший выбор для перехода на новое устройство"
-          }
-        }
-      }
-    },
     "backup.protection.headline.device" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1374,6 +1357,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Быстрее всего, но только для этого iPhone"
+          }
+        }
+      }
+    },
+    "backup.protection.headline.passphrase" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Best for moving to a new device"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Лучший выбор для перехода на новое устройство"
           }
         }
       }
@@ -4626,6 +4626,23 @@
         }
       }
     },
+    "cashflow.category.actions.archive" : {
+      "comment" : "Archive system category action title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Архивировать"
+          }
+        }
+      }
+    },
     "cashflow.category.actions.delete" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4711,6 +4728,176 @@
         }
       }
     },
+    "cashflow.category.archive.confirm" : {
+      "comment" : "Confirm button title for system category archive flow",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive category"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Архивировать категорию"
+          }
+        }
+      }
+    },
+    "cashflow.category.delete.amounts.empty" : {
+      "comment" : "Delete category summary when there are no linked transaction amounts",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No transaction amounts linked to this category."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "К этой категории не привязаны суммы транзакций."
+          }
+        }
+      }
+    },
+    "cashflow.category.delete.budgets.summary" : {
+      "comment" : "Summary of linked budget limits for category deletion",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d linked budget limits"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d связанных бюджетных лимитов"
+          }
+        }
+      }
+    },
+    "cashflow.category.delete.confirm" : {
+      "comment" : "Confirm button title for category delete flow",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete category"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить категорию"
+          }
+        }
+      }
+    },
+    "cashflow.category.delete.kind.custom" : {
+      "comment" : "Delete category subtitle for custom category",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom category"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пользовательская категория"
+          }
+        }
+      }
+    },
+    "cashflow.category.delete.kind.system" : {
+      "comment" : "Delete category subtitle for system category",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System category will be hidden after migration"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Системная категория будет скрыта после переноса"
+          }
+        }
+      }
+    },
+    "cashflow.category.delete.review.header" : {
+      "comment" : "Header for delete category review section",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete review"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверка удаления"
+          }
+        }
+      }
+    },
+    "cashflow.category.delete.target.footer" : {
+      "comment" : "Footer explaining what is remapped during category deletion",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transactions, budget limits, pins, and merchant mappings will be remapped to the selected category."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Транзакции, бюджетные лимиты, закрепления и привязки продавцов будут перенесены в выбранную категорию."
+          }
+        }
+      }
+    },
+    "cashflow.category.delete.target.title" : {
+      "comment" : "Picker title for category delete target",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move linked data to"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перенести связанные данные в"
+          }
+        }
+      }
+    },
+    "cashflow.category.delete.transactions.summary" : {
+      "comment" : "Summary of linked transactions for category deletion",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d linked transactions"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d связанных транзакций"
+          }
+        }
+      }
+    },
     "cashflow.category.hint_accessibility_format" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4741,6 +4928,74 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Настройки категорий"
+          }
+        }
+      }
+    },
+    "cashflow.category.undo.archive.subtitle" : {
+      "comment" : "Undo banner subtitle after archiving a category",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linked data moved to %@."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Связанные данные перенесены в %@."
+          }
+        }
+      }
+    },
+    "cashflow.category.undo.archive.title" : {
+      "comment" : "Undo banner title after archiving a category",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Category archived"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Категория архивирована"
+          }
+        }
+      }
+    },
+    "cashflow.category.undo.delete.subtitle" : {
+      "comment" : "Undo banner subtitle after deleting a category",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deleted category data moved to %@."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные удалённой категории перенесены в %@."
+          }
+        }
+      }
+    },
+    "cashflow.category.undo.delete.title" : {
+      "comment" : "Undo banner title after deleting a category",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Category deleted"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Категория удалена"
           }
         }
       }
@@ -5398,6 +5653,7 @@
       }
     },
     "cashflow.editor.delete_category.message" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5414,6 +5670,7 @@
       }
     },
     "cashflow.editor.delete_category.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6780,6 +7037,7 @@
       }
     },
     "cashflow.operation.delete_category.message" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6796,6 +7054,7 @@
       }
     },
     "cashflow.operation.delete_category.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12928,6 +13187,23 @@
         }
       }
     },
+    "finances.dynamics.market.current_price_with_currency" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current price, %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текущая цена, %@"
+          }
+        }
+      }
+    },
     "finances.dynamics.market.instrument_info" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13213,6 +13489,91 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Динамика"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.celebration.badge" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Position updated"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Позиция обновлена"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.celebration.buy.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You bought %@ for %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы купили %@ на %@"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.celebration.buy.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Purchase complete"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Покупка выполнена"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.celebration.sell.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You sold %@ for %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы продали %@ на %@"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.celebration.sell.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sale complete"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Продажа выполнена"
           }
         }
       }
@@ -13553,91 +13914,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Сделка"
-          }
-        }
-      }
-    },
-    "finances.dynamics.trade.celebration.badge" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Position updated"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Позиция обновлена"
-          }
-        }
-      }
-    },
-    "finances.dynamics.trade.celebration.buy.subtitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You bought %@ for %@"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Вы купили %@ на %@"
-          }
-        }
-      }
-    },
-    "finances.dynamics.trade.celebration.buy.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Purchase complete"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Покупка выполнена"
-          }
-        }
-      }
-    },
-    "finances.dynamics.trade.celebration.sell.subtitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You sold %@ for %@"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Вы продали %@ на %@"
-          }
-        }
-      }
-    },
-    "finances.dynamics.trade.celebration.sell.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sale complete"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Продажа выполнена"
           }
         }
       }
@@ -17400,6 +17676,22 @@
         }
       }
     },
+    "monetization.cashflow.bulk_expense_screenshot.pro_only" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expense import from bank screenshots is available in PRO."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Импорт расходов из банковских скриншотов доступен в PRO."
+          }
+        }
+      }
+    },
     "monetization.crypto.pro_message" : {
       "localizations" : {
         "en" : {
@@ -17477,22 +17769,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Free-план: до %lld продуктов в финансах. Оформите PRO, чтобы добавить больше."
-          }
-        }
-      }
-    },
-    "monetization.cashflow.bulk_expense_screenshot.pro_only" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Expense import from bank screenshots is available in PRO."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Импорт расходов из банковских скриншотов доступен в PRO."
           }
         }
       }
@@ -21278,7 +21554,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Безлимит категорий кешбэка"
+            "value" : "Безлимитные категории кешбэка"
           }
         }
       }
@@ -21289,13 +21565,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save more than 10 cashback categories every month"
+            "value" : "Track every category you use, not just the first 10"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сохраняйте больше 10 категорий кешбэка каждый месяц"
+            "value" : "Отслеживайте все категории, которыми пользуетесь, а не только первые 10"
           }
         }
       }
@@ -21306,13 +21582,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cashback from screenshot"
+            "value" : "Cashback import from screenshots"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Кешбэк со скриншота"
+            "value" : "Импорт кешбэка со скриншотов"
           }
         }
       }
@@ -21323,13 +21599,47 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Import cashback categories from a bank screenshot in seconds"
+            "value" : "Pull cashback categories from screenshots instead of adding them manually"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Импортируйте категории кешбэка с банковского скриншота за секунды"
+            "value" : "Загружайте категории кешбэка со скриншотов вместо ручного добавления"
+          }
+        }
+      }
+    },
+    "subscription.features.cashflow_expense_screenshot" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expense import from screenshots"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Импорт расходов со скриншотов"
+          }
+        }
+      }
+    },
+    "subscription.features.cashflow_expense_screenshot.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save hours by turning bank screenshots into Cashflow entries"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Экономьте часы, превращая банковские скриншоты в записи для Кэшфлоу"
           }
         }
       }
@@ -21374,13 +21684,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Charts in Finance and Cashflow"
+            "value" : "Advanced charts and analytics"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Графики в Финансах и Кэшфлоу"
+            "value" : "Расширенные графики и аналитика"
           }
         }
       }
@@ -21391,47 +21701,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open charts, trends and full-screen analytics in Finance and Cashflow"
+            "value" : "Spot trends faster with full-screen charts in Finance and Cashflow"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Открывайте графики, тренды и полноэкранную аналитику в Финансах и Кэшфлоу"
-          }
-        }
-      }
-    },
-    "subscription.features.cashflow_expense_screenshot" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Expense screenshots in Cashflow"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Скриншоты расходов в Кэшфлоу"
-          }
-        }
-      }
-    },
-    "subscription.features.cashflow_expense_screenshot.detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Import a month's expenses from bank screenshots in minutes and save them to Cashflow without adding each transaction one by one"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "За несколько минут импортируйте расходы за месяц по банковским скриншотам и сохраните их в Кэшфлоу без добавления каждой операции по отдельности"
+            "value" : "Быстрее замечайте тренды с полноэкранными графиками в Финансах и Кэшфлоу"
           }
         }
       }
@@ -21476,13 +21752,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unlimited products in Finance"
+            "value" : "Unlimited Finance accounts"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Безлимит продуктов в Финансах"
+            "value" : "Безлимитные счета в Финансах"
           }
         }
       }
@@ -21493,13 +21769,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add more than 10 cards, credits and investments"
+            "value" : "Track all your cards, credits and investments in one place"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Добавляйте больше 10 карт, кредитов и инвестиций"
+            "value" : "Следите за всеми картами, кредитами и инвестициями в одном месте"
           }
         }
       }
@@ -21595,13 +21871,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What you unlock"
+            "value" : "Everything you get with PRO"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Что открывает PRO"
+            "value" : "Все, что вы получаете с PRO"
           }
         }
       }
@@ -22742,6 +23018,9 @@
           }
         }
       }
+    },
+    "Undo" : {
+
     },
     "Unpin category" : {
 

@@ -30,6 +30,30 @@ struct CashflowBulkExpenseMerchantCategoryPrefs {
         defaults.set(values, forKey: storageKey)
     }
 
+    func remapCategory(from sourceRaw: String, to targetRaw: String) {
+        guard sourceRaw != targetRaw else { return }
+
+        var values = mappings()
+        var didChange = false
+
+        for (key, value) in values where value == sourceRaw {
+            values[key] = targetRaw
+            didChange = true
+        }
+
+        if didChange {
+            defaults.set(values, forKey: storageKey)
+        }
+    }
+
+    func mappingsSnapshot() -> [String: String] {
+        mappings()
+    }
+
+    func replaceMappings(_ values: [String: String]) {
+        defaults.set(values, forKey: storageKey)
+    }
+
     private func mappings() -> [String: String] {
         defaults.dictionary(forKey: storageKey) as? [String: String] ?? [:]
     }

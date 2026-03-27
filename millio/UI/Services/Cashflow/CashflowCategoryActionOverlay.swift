@@ -17,6 +17,8 @@ struct CashflowCategoryActionOverlay: View {
     let secondaryActionIcon: String?
     let onSecondaryAction: (() -> Void)?
     let onEdit: () -> Void
+    let deleteActionTitle: String?
+    let deleteActionIcon: String?
     let onDelete: (() -> Void)?
     let onDismiss: () -> Void
 
@@ -95,8 +97,8 @@ struct CashflowCategoryActionOverlay: View {
 
                             if let onDelete {
                                 actionButton(
-                                    title: String(localized: "cashflow.category.actions.delete"),
-                                    systemImage: "trash",
+                                    title: deleteActionTitle ?? String(localized: "cashflow.category.actions.delete"),
+                                    systemImage: deleteActionIcon ?? "trash",
                                     tint: AppColors.error,
                                     action: onDelete
                                 )

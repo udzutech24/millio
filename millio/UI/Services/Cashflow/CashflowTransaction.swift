@@ -173,7 +173,7 @@ enum IncomeCategory: String, Codable, CaseIterable {
         localizedDisplayName()
     }
 
-    func localizedDisplayName(locale: Locale = .autoupdatingCurrent) -> String {
+    func localizedDisplayName(locale: Locale = AppLocalization.currentAppLocale) -> String {
         switch self {
         case .salary: return localizedName(locale: locale, ru: "Зарплата", en: "Salary")
         case .freelance: return localizedName(locale: locale, ru: "Фриланс", en: "Freelance")
@@ -190,7 +190,7 @@ enum IncomeCategory: String, Codable, CaseIterable {
         }
     }
 
-    static func matchesSearch(rawValue: String, query: String, locale: Locale = .autoupdatingCurrent) -> Bool {
+    static func matchesSearch(rawValue: String, query: String, locale: Locale = AppLocalization.currentAppLocale) -> Bool {
         let normalizedQuery = normalizeSearchQuery(query)
         guard !normalizedQuery.isEmpty else { return true }
         guard let category = IncomeCategory(rawValue: rawValue) else { return false }

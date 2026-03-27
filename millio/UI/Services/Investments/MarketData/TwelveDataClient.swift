@@ -238,6 +238,49 @@ struct AssetSummary: Codable, Equatable, Sendable {
 
         return MarketInstrumentIdentity.canonicalQuoteLookupKey(symbol: symbol, exchange: exchange)
     }
+
+    var quoteLookupKeys: [String] {
+        var candidates: [String] = [
+            symbol,
+            canonicalQuoteLookupKey
+        ]
+
+        if let canonicalSymbol,
+           !canonicalSymbol.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            candidates.append(canonicalSymbol)
+            candidates.append(
+                contentsOf: MarketInstrumentIdentity.fallbackQuoteLookupKeys(
+                    symbol: canonicalSymbol,
+                    exchange: exchange
+                )
+            )
+        }
+
+        if let providerSymbol,
+           !providerSymbol.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            candidates.append(providerSymbol)
+            candidates.append(
+                contentsOf: MarketInstrumentIdentity.fallbackQuoteLookupKeys(
+                    symbol: providerSymbol,
+                    exchange: exchange
+                )
+            )
+        }
+
+        candidates.append(
+            contentsOf: MarketInstrumentIdentity.fallbackQuoteLookupKeys(
+                symbol: symbol,
+                exchange: exchange
+            )
+        )
+
+        var seen: Set<String> = []
+        return candidates.compactMap { candidate in
+            let normalized = candidate.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !normalized.isEmpty, seen.insert(normalized).inserted else { return nil }
+            return normalized
+        }
+    }
 }
 
 struct ChartPoint: Codable, Equatable, Sendable {
@@ -382,6 +425,10 @@ actor MarketQuoteCacheStore {
     private let ttl: TimeInterval
     private var searchCache: [String: CacheEntry<[TwelveDataSymbol]>] = [:]
     private var quoteCache: [String: CacheEntry<AssetSummary>] = [:]
+    private var assetSummaryCache: [String: CacheEntry<AssetSummary>] = [:]
+    private var assetDetailsCache: [String: CacheEntry<AssetDetailsSnapshot>] = [:]
+    private var watchlistCache: CacheEntry<WatchlistResponse>?
+    private var watchlistSnapshotCache: CacheEntry<WatchlistSnapshot>?
 
     init(ttl: TimeInterval) {
         self.ttl = ttl
@@ -409,6 +456,54 @@ actor MarketQuoteCacheStore {
 
     func setQuote(_ value: AssetSummary, for key: String) {
         quoteCache[key] = CacheEntry(createdAt: Date(), value: value)
+    }
+
+    func assetSummary(for key: String) -> AssetSummary? {
+        guard let entry = assetSummaryCache[key], Date().timeIntervalSince(entry.createdAt) < ttl else {
+            assetSummaryCache[key] = nil
+            return nil
+        }
+        return entry.value
+    }
+
+    func setAssetSummary(_ value: AssetSummary, for key: String) {
+        assetSummaryCache[key] = CacheEntry(createdAt: Date(), value: value)
+    }
+
+    func assetDetails(for key: String) -> AssetDetailsSnapshot? {
+        guard let entry = assetDetailsCache[key], Date().timeIntervalSince(entry.createdAt) < ttl else {
+            assetDetailsCache[key] = nil
+            return nil
+        }
+        return entry.value
+    }
+
+    func setAssetDetails(_ value: AssetDetailsSnapshot, for key: String) {
+        assetDetailsCache[key] = CacheEntry(createdAt: Date(), value: value)
+    }
+
+    func watchlist() -> WatchlistResponse? {
+        guard let watchlistCache, Date().timeIntervalSince(watchlistCache.createdAt) < ttl else {
+            self.watchlistCache = nil
+            return nil
+        }
+        return watchlistCache.value
+    }
+
+    func setWatchlist(_ value: WatchlistResponse) {
+        watchlistCache = CacheEntry(createdAt: Date(), value: value)
+    }
+
+    func watchlistSnapshot() -> WatchlistSnapshot? {
+        guard let watchlistSnapshotCache, Date().timeIntervalSince(watchlistSnapshotCache.createdAt) < ttl else {
+            self.watchlistSnapshotCache = nil
+            return nil
+        }
+        return watchlistSnapshotCache.value
+    }
+
+    func setWatchlistSnapshot(_ value: WatchlistSnapshot) {
+        watchlistSnapshotCache = CacheEntry(createdAt: Date(), value: value)
     }
 }
 
@@ -556,23 +651,51 @@ final class MarketAPIClient: MarketDataClientProtocol, @unchecked Sendable {
             return []
         }
 
-        let quotes: [AssetSummary] = try await authorizedRequest(
-            path: "market/quotes",
-            method: "GET",
-            queryItems: [URLQueryItem(name: "symbols", value: normalizedSymbols.joined(separator: ","))]
-        )
-        // Кэшируем по запрошенному символу (порядок ответа бэкенда совпадает с порядком запроса)
-        for (symbol, quote) in zip(normalizedSymbols, quotes) {
-            await cacheStore.setQuote(quote, for: symbol)
+        // Backend now owns tracked symbol refresh, so we reuse fresh client cache entries
+        // and only ask for symbols that are currently missing from the local cache.
+        var quotesByRequestedSymbol: [String: AssetSummary] = [:]
+        var missingSymbols: [String] = []
+
+        for symbol in normalizedSymbols {
+            if let cached = await cacheStore.quote(for: symbol) {
+                quotesByRequestedSymbol[symbol] = cached
+            } else {
+                missingSymbols.append(symbol)
+            }
         }
-        return quotes
+
+        if !missingSymbols.isEmpty {
+            let fetchedQuotes: [AssetSummary] = try await authorizedRequest(
+                path: "market/quotes",
+                method: "GET",
+                queryItems: [URLQueryItem(name: "symbols", value: missingSymbols.joined(separator: ","))]
+            )
+
+            for quote in fetchedQuotes {
+                for key in quote.quoteLookupKeys {
+                    await cacheStore.setQuote(quote, for: key)
+                    if missingSymbols.contains(key) {
+                        quotesByRequestedSymbol[key] = quote
+                    }
+                }
+            }
+        }
+
+        return normalizedSymbols.compactMap { quotesByRequestedSymbol[$0] }
     }
 
     func assetSummary(symbol: String) async throws -> AssetSummary {
-        try await authorizedRequest(
-            path: "market/assets/\(encodedPathComponent(normalizedSymbol(symbol)))/summary",
+        let symbolKey = normalizedSymbol(symbol)
+        if let cached = await cacheStore.assetSummary(for: symbolKey) {
+            return cached
+        }
+
+        let response: AssetSummary = try await authorizedRequest(
+            path: "market/assets/\(encodedPathComponent(symbolKey))/summary",
             method: "GET"
         )
+        await cacheStore.setAssetSummary(response, for: symbolKey)
+        return response
     }
 
     func assetChart(symbol: String, interval: String = "1day", outputSize: Int = 30) async throws -> ChartResponse {
@@ -587,19 +710,39 @@ final class MarketAPIClient: MarketDataClientProtocol, @unchecked Sendable {
     }
 
     func assetDetails(symbol: String, interval: String = "1day") async throws -> AssetDetailsSnapshot {
-        try await authorizedRequest(
-            path: "market/assets/\(encodedPathComponent(normalizedSymbol(symbol)))/details",
+        let symbolKey = normalizedSymbol(symbol)
+        let cacheKey = "\(symbolKey)|\(interval)"
+        if let cached = await cacheStore.assetDetails(for: cacheKey) {
+            return cached
+        }
+
+        let response: AssetDetailsSnapshot = try await authorizedRequest(
+            path: "market/assets/\(encodedPathComponent(symbolKey))/details",
             method: "GET",
             queryItems: [URLQueryItem(name: "interval", value: interval)]
         )
+        await cacheStore.setAssetDetails(response, for: cacheKey)
+        return response
     }
 
     func watchlist() async throws -> WatchlistResponse {
-        try await authorizedRequest(path: "market/watchlist", method: "GET")
+        if let cached = await cacheStore.watchlist() {
+            return cached
+        }
+
+        let response: WatchlistResponse = try await authorizedRequest(path: "market/watchlist", method: "GET")
+        await cacheStore.setWatchlist(response)
+        return response
     }
 
     func watchlistSnapshot() async throws -> WatchlistSnapshot {
-        try await authorizedRequest(path: "market/watchlist/snapshot", method: "GET")
+        if let cached = await cacheStore.watchlistSnapshot() {
+            return cached
+        }
+
+        let response: WatchlistSnapshot = try await authorizedRequest(path: "market/watchlist/snapshot", method: "GET")
+        await cacheStore.setWatchlistSnapshot(response)
+        return response
     }
 
     func addToWatchlist(symbol: String) async throws -> WatchlistMutationResponse {

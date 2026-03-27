@@ -40,7 +40,7 @@ final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
         self.splashPreferences = splashPreferences
         self.calendar = calendar
         self.nowProvider = nowProvider
-        let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        let isRunningTests = AppRuntimeEnvironment.current().isAnyTesting
         let resolvedDuration = minimumLaunchDuration ?? (isRunningTests ? 0 : Self.defaultMinimumLaunchDurationSeconds)
         self.minimumLaunchDurationNanoseconds = UInt64(max(0, resolvedDuration) * 1_000_000_000)
     }

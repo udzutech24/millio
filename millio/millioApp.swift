@@ -16,10 +16,8 @@ private enum EarlyFirebaseBootstrap {
 
     static func ensureConfigured() {
         guard !didConfigure else { return }
-        let environment = ProcessInfo.processInfo.environment
-        let isTestLaunch = environment["XCTestConfigurationFilePath"] != nil
-            || environment["MILLIO_UI_TEST_MODE"] == "1"
-        guard !isTestLaunch else { return }
+        let environment = AppRuntimeEnvironment.current()
+        guard !environment.isAnyTesting else { return }
         didConfigure = true
 
         if FirebaseApp.app() == nil {
@@ -67,14 +65,24 @@ struct millioApp: App {
     @State private var appRefreshCoordinator = AppRefreshCoordinator()
     private let appLockCoordinator = AppLockLifecycleCoordinator()
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "App")
+    private let runtimeEnvironment: AppRuntimeEnvironment
 
     init() {
+        let runtimeEnvironment = AppRuntimeEnvironment.current()
+        self.runtimeEnvironment = runtimeEnvironment
         EarlyFirebaseBootstrap.ensureConfigured()
         Self.registerFeatures()
         let initialScope = DataScope.guest
         _activeScopeStoreExistedBeforeBinding = State(initialValue: Self.storeExists(for: initialScope))
         _activeDataScope = State(initialValue: initialScope)
         _activeModelContainer = State(initialValue: Self.makeModelContainer(for: initialScope))
+        if runtimeEnvironment.isUITesting {
+            let appState = AppState()
+            appState.isGuestModeEnabled = true
+            appState.isAppLocked = false
+            appState.lifecycle = .onboarding
+            _appState = State(initialValue: appState)
+        }
     }
 
     var body: some Scene {
@@ -106,6 +114,7 @@ struct millioApp: App {
                 .environment(\.appRefreshCoordinator, appRefreshCoordinator)
                 .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
                 .task {
+                    guard !runtimeEnvironment.isUITesting else { return }
                     await startupCoordinator.runColdStartIfNeeded {
                         await initializeColdStart(using: container)
                     }
@@ -115,6 +124,7 @@ struct millioApp: App {
                     appLockCoordinator.handleWillResignActive(appState: appState)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                    guard !runtimeEnvironment.isUITesting else { return }
                     Task { @MainActor in
                         await appRefreshCoordinator.refreshSubscriptionIfNeeded(
                             reason: .appDidBecomeActive,

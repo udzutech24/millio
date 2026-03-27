@@ -496,7 +496,7 @@ private struct FinanceDynamicsContentView: View {
             let quantityTitle = marketQuantityTitle(for: investment)
             let quantityValue = "\(marketNumber(investment.marketQuantity ?? 0, digits: 8)) \(marketQuantityUnit(for: investment))"
             let currentPriceTitle = FinancesL10n.format(
-                "finances.dynamics.trade.price_with_currency",
+                "finances.dynamics.market.current_price_with_currency",
                 investmentCurrency
             )
             let currentPriceValue = money(investment.lastKnownUnitPrice ?? 0, currency: investmentCurrency)
@@ -1955,7 +1955,7 @@ private struct FinanceDynamicsContentView: View {
             }
 
             // Период
-            let (startDate, endDate) = viewModel.getPeriodDates()
+            let (startDate, endDate) = displayedPeriodDates
             let sameYear = Calendar.current.component(.year, from: startDate) == Calendar.current.component(.year, from: endDate)
             let startFormat: Date.FormatStyle = sameYear ? .dateTime.day().month(.abbreviated) : .dateTime.day().month(.abbreviated).year()
             let endFormat: Date.FormatStyle = .dateTime.day().month(.abbreviated).year()
@@ -2424,7 +2424,7 @@ private struct FinanceDynamicsContentView: View {
         let points = viewModel.state.chartData
         let values = points.map { $0.value }
         let niceY = NiceYScale.make(values: values)
-        let (startDate, endDate) = viewModel.getPeriodDates()
+        let (startDate, endDate) = displayedPeriodDates
         let xDomain = startDate...endDate
 
         let seriesColor = Color(red: 0.47, green: 0.69, blue: 1.0)
@@ -2513,6 +2513,15 @@ private struct FinanceDynamicsContentView: View {
             }
         }
         .presentationDetents([.large])
+    }
+
+    private var displayedPeriodDates: (start: Date, end: Date) {
+        let stateStart = viewModel.state.periodStartDate
+        let stateEnd = viewModel.state.periodEndDate
+        if stateEnd >= stateStart {
+            return (stateStart, stateEnd)
+        }
+        return viewModel.getPeriodDates()
     }
 
     private var displayCurrencyInfoMessage: String {
@@ -2989,22 +2998,9 @@ private struct FinanceDynamicsContentView: View {
     // MARK: - Total Row
 
     private var totalRow: DynamicsBreakdownItem? {
-        guard !viewModel.state.dynamicsBreakdown.isEmpty else { return nil }
-        let startSum = viewModel.state.dynamicsBreakdown.reduce(0) { $0 + $1.startValue }
-        let endSum = viewModel.state.dynamicsBreakdown.reduce(0) { $0 + $1.endValue }
-        let delta = endSum - startSum
-        let percent: Double = abs(startSum) > 0.01 ? (delta / abs(startSum)) * 100 : 0
-        return DynamicsBreakdownItem(
-            id: "total",
-            name: String(localized: "finances.dynamics.chart.total_label"),
-            startValue: startSum,
-            endValue: endSum,
-            delta: delta,
-            deltaPercent: percent,
-            icon: nil,
-            accountType: nil,
-            isCreditCard: false,
-            isArchived: false
+        FinanceDynamicsPresentation.totalRow(
+            from: viewModel.state.dynamicsBreakdown,
+            viewMode: viewModel.state.viewMode
         )
     }
 

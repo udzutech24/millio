@@ -33,6 +33,21 @@ struct CashflowCategoryPinPrefs {
         defaults.set(Array(values).sorted(), forKey: storageKey(for: kind))
     }
 
+    func remap(categoryRaw sourceRaw: String, to targetRaw: String, kind: CashflowCategoryKind) {
+        guard sourceRaw != targetRaw else { return }
+
+        var values = pinnedRawValues(for: kind)
+        let sourceWasPinned = values.remove(sourceRaw) != nil
+        if sourceWasPinned {
+            values.insert(targetRaw)
+        }
+        defaults.set(Array(values).sorted(), forKey: storageKey(for: kind))
+    }
+
+    func replacePinnedRawValues(_ values: Set<String>, kind: CashflowCategoryKind) {
+        defaults.set(Array(values).sorted(), forKey: storageKey(for: kind))
+    }
+
     private func storageKey(for kind: CashflowCategoryKind) -> String {
         "cashflow.category_pins.\(kind.rawValue)"
     }

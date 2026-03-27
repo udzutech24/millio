@@ -14,6 +14,7 @@ enum FinanceScreenChrome {
     static let sectionCornerRadius: CGFloat = 20
     static let groupRowCornerRadius: CGFloat = 20
     static let controlCornerRadius: CGFloat = 12
+    static let actionSheetCornerRadius: CGFloat = 24
     static let headerControlSide: CGFloat = 36
     static let fabDiameter: CGFloat = 56
     static let fabIconSize: CGFloat = 20
@@ -24,6 +25,13 @@ enum FinanceScreenChrome {
     static var accentColor: Color {
         AppColors.financesGradient.first ?? .cyan
     }
+
+    /// Локальный accent для действий обновления.
+    /// Не меняем глобальную finances-палитру приложения, чтобы не словить регрессии
+    /// на других экранах ради одного popover.
+    static let refreshOverlayAccent = Color(hex: "159A6C")
+    static let refreshQuotesTint = Color(hex: "2FC08A")
+    static let refreshStocksTint = Color(hex: "D7B45A")
 
     static var surfaceFillGradient: LinearGradient {
         LinearGradient(
@@ -107,4 +115,3 @@ struct FinanceChromeCardBackground: View {
             )
     }
 }
-

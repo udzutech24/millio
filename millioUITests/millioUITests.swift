@@ -9,6 +9,12 @@ import XCTest
 
 final class millioUITests: XCTestCase {
 
+    private func makeApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["MILLIO_UI_TEST_MODE"] = "1"
+        return app
+    }
+
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.
 
@@ -25,8 +31,7 @@ final class millioUITests: XCTestCase {
     @MainActor
     func testExample() throws {
         // UI tests must launch the application that they test.
-        let app = XCUIApplication()
-        app.launchEnvironment["MILLIO_UI_TEST_MODE"] = "1"
+        let app = makeApp()
         app.launch()
 
         // Use XCTAssert and related functions to verify your tests produce the correct results.
@@ -36,13 +41,10 @@ final class millioUITests: XCTestCase {
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
-            // `XCTApplicationLaunchMetric` expects a cold launch each iteration.
-            // If the app remains running between iterations, XCTest may record 0 metrics and fail the test.
-            let app = XCUIApplication()
-            app.launchEnvironment["MILLIO_UI_TEST_MODE"] = "1"
-            app.terminate()
+            // `XCTApplicationLaunchMetric` manages the app lifecycle itself between iterations.
+            // Manually terminating here can race XCTest teardown and make the metric flaky.
+            let app = makeApp()
             app.launch()
-            app.terminate()
         }
     }
 }

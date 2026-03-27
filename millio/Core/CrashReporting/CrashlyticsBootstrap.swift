@@ -9,8 +9,9 @@ struct CrashlyticsBootstrapEnvironment: Equatable {
     
     static func current() -> CrashlyticsBootstrapEnvironment {
         let env = ProcessInfo.processInfo.environment
-        let isUnitTesting = env["XCTestConfigurationFilePath"] != nil
-        let isUITesting = env["MILLIO_UI_TEST_MODE"] == "1"
+        let runtimeEnvironment = AppRuntimeEnvironment.current(environment: env)
+        let isUnitTesting = runtimeEnvironment.isUnitTesting
+        let isUITesting = runtimeEnvironment.isUITesting
         let overrideEnabled: Bool?
         if let raw = env["MILLIO_CRASHLYTICS_ENABLED"]?.lowercased() {
             if ["1", "true", "yes", "y"].contains(raw) {

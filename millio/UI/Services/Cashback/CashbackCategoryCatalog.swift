@@ -14,11 +14,26 @@ struct CashbackCategoryMetadata: Equatable {
     let icon: String
     let aliases: [String]
 
-    func localizedDisplayName(locale: Locale = .autoupdatingCurrent) -> String {
-        let languageCode = locale.identifier
-            .split(separator: "_")
-            .first
-            .map { String($0).lowercased() } ?? "en"
+    func localizedDisplayName(locale: Locale? = nil) -> String {
+        let languageCode: String
+        if let locale {
+            languageCode = locale.identifier
+                .split(separator: "_")
+                .first
+                .map { String($0).lowercased() } ?? "en"
+        } else {
+            switch LanguageManager.shared.currentLanguage {
+            case .russian:
+                languageCode = "ru"
+            case .english:
+                languageCode = "en"
+            case .system:
+                languageCode = AppLocalization.currentAppLocale.identifier
+                    .split(separator: "_")
+                    .first
+                    .map { String($0).lowercased() } ?? "en"
+            }
+        }
         return languageCode == "ru" ? displayNameRU : displayNameEN
     }
 }

@@ -12,6 +12,14 @@ enum MarketDataIssueCategory: String, Sendable {
 }
 
 enum MarketDataErrorPresentation {
+    static func degradedRefreshMessage(locale: Locale = .current) -> String {
+        FinancesL10n.text(
+            locale: locale,
+            ru: "Не удалось обновить часть котировок. Показываем последние доступные данные.",
+            en: "Some quotes could not be refreshed. Showing the latest available data."
+        )
+    }
+
     static func category(for quote: AssetSummary) -> MarketDataIssueCategory? {
         switch quote.resolutionStatus {
         case .fresh, .stale:
@@ -92,17 +100,17 @@ enum MarketDataErrorPresentation {
         case .priceUnavailable:
             return FinancesL10n.text(locale: locale, ru: "Нет текущей цены", en: "Current price unavailable")
         case .providerError:
-            return FinancesL10n.text(locale: locale, ru: "Ошибка провайдера котировок", en: "Quote provider error")
+            return degradedRefreshMessage(locale: locale)
         case .authError:
             return FinancesL10n.text(locale: locale, ru: "Ошибка авторизации backend котировок", en: "Quote backend auth error")
         case .networkError:
-            return FinancesL10n.text(locale: locale, ru: "Сетевая ошибка загрузки котировки", en: "Network error while loading quote")
+            return degradedRefreshMessage(locale: locale)
         case .httpError:
-            return FinancesL10n.text(locale: locale, ru: "HTTP ошибка backend котировок", en: "Quote backend HTTP error")
+            return degradedRefreshMessage(locale: locale)
         case .decodeError:
-            return FinancesL10n.text(locale: locale, ru: "Некорректный ответ backend котировок", en: "Invalid quote backend response")
+            return degradedRefreshMessage(locale: locale)
         case .clientError:
-            return FinancesL10n.text(locale: locale, ru: "Ошибка клиента котировок", en: "Quote client error")
+            return degradedRefreshMessage(locale: locale)
         }
     }
 
