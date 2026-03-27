@@ -91,6 +91,9 @@ enum ProfileMenuItemID: String, Identifiable {
     case trialDisabled
     case premiumDiagnostics
     case showOnboarding
+#if DEBUG
+    case adminStats
+#endif
 
     var id: String { rawValue }
 
@@ -130,6 +133,10 @@ enum ProfileMenuItemID: String, Identifiable {
             return "flag"
         case .showOnboarding:
             return "sparkles"
+#if DEBUG
+        case .adminStats:
+            return "chart.bar.xaxis"
+#endif
         }
     }
 
@@ -169,6 +176,10 @@ enum ProfileMenuItemID: String, Identifiable {
             return .purple
         case .showOnboarding:
             return .cyan
+#if DEBUG
+        case .adminStats:
+            return .teal
+#endif
         }
     }
 }
@@ -179,6 +190,19 @@ struct ProfileMenuSection: Identifiable, Equatable {
 }
 
 enum ProfileMenuStructure {
+    static let debugItems: [ProfileMenuItemID] = {
+        var items: [ProfileMenuItemID] = [
+            .premiumAccess,
+            .trialDisabled,
+            .premiumDiagnostics,
+            .showOnboarding
+        ]
+#if DEBUG
+        items.append(.adminStats)
+#endif
+        return items
+    }()
+
     // Keep section grouping in one place so screen order stays testable.
     static let sections: [ProfileMenuSection] = [
         ProfileMenuSection(
@@ -220,12 +244,7 @@ enum ProfileMenuStructure {
         ),
         ProfileMenuSection(
             id: .debug,
-            items: [
-                .premiumAccess,
-                .trialDisabled,
-                .premiumDiagnostics,
-                .showOnboarding
-            ]
+            items: debugItems
         ),
         ProfileMenuSection(
             id: .contacts,

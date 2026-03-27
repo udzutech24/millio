@@ -12,6 +12,7 @@ Millio — iOS-приложение с локальным хранением д�
 - `docs/BACKUP_RESTORE_SCHEMA.md` — backup/restore
 - `docs/SMART_DATA_RESET.md` — гибкая очистка данных
 - `docs/FINANCE_DATA_STORAGE.md` — хранение данных по финансам
+- `docs/DEBUG_ADMIN_STATS.md` — internal debug-only admin statistics screen
 - `CLAUDE.md` — проектные правила для ассистента
 
 ## Ключевые принципы

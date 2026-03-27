@@ -54,5 +54,20 @@ struct ProfileMenuStructureTests {
         #expect(ProfileMenuItemID.privacy.iconTone == .orange)
         #expect(ProfileMenuItemID.terms.iconTone == .blue)
         #expect(ProfileMenuItemID.contactUs.iconTone == .teal)
+#if DEBUG
+        #expect(ProfileMenuItemID.adminStats.iconSystemName == "chart.bar.xaxis")
+        #expect(ProfileMenuItemID.adminStats.iconTone == .teal)
+#endif
+    }
+
+    @Test("Debug section keeps admin stats entry in debug builds")
+    func testDebugSectionItems() throws {
+        let debugSection = try #require(ProfileMenuStructure.sections.first { $0.id == .debug })
+
+#if DEBUG
+        #expect(debugSection.items == [.premiumAccess, .trialDisabled, .premiumDiagnostics, .showOnboarding, .adminStats])
+#else
+        #expect(debugSection.items == [.premiumAccess, .trialDisabled, .premiumDiagnostics, .showOnboarding])
+#endif
     }
 }

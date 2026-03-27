@@ -15,19 +15,22 @@ final class DIContainer {
     let dataRepository: DataRepositoryProtocol
     let backupManager: BackupManagerProtocol
     let authService: any AuthServiceProtocol
+    let apiClientFactory: APIClientFactory
     
     init(
         appState: AppState,
         modelContainer: ModelContainer,
         dataRepository: DataRepositoryProtocol,
         backupManager: BackupManagerProtocol,
-        authService: any AuthServiceProtocol
+        authService: any AuthServiceProtocol,
+        apiClientFactory: APIClientFactory
     ) {
         self.appState = appState
         self.modelContainer = modelContainer
         self.dataRepository = dataRepository
         self.backupManager = backupManager
         self.authService = authService
+        self.apiClientFactory = apiClientFactory
     }
     
     @MainActor
@@ -68,7 +71,8 @@ final class DIContainer {
             modelContainer: modelContainer,
             dataRepository: dataRepository,
             backupManager: backupManager,
-            authService: authService
+            authService: authService,
+            apiClientFactory: apiClientFactory
         )
     }
 }

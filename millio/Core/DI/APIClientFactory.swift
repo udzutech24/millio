@@ -16,6 +16,19 @@ struct APIClientFactory {
         )
     }
 
+    func makeAdminStatsRepository(
+        authService: any AuthServiceProtocol,
+        session: URLSession = .shared
+    ) -> AdminStatsRepository {
+        AdminStatsRepository(
+            client: AdminStatsAPIClient(
+                authService: authService,
+                configurationProvider: authConfigurationProvider(),
+                session: session
+            )
+        )
+    }
+
     func authConfigurationProvider() -> @Sendable () throws -> AuthConfiguration {
         let configuration = runtime.authConfiguration
         return { configuration }

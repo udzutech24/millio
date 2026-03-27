@@ -29,6 +29,7 @@
 - `AuthDiagnosticsLogger` writes a safe client-side trace for the full auth flow.
 - `AuthErrorMapper` converts typed auth failures into user-facing messages without collapsing everything into one generic toast.
 - `MarketAPIClient` reuses the exact same runtime-selected backend base URL and gets Bearer tokens from `AuthService`.
+- `AdminStatsAPIClient` follows the same rule for the debug-only admin statistics screen.
 - `refreshToken` is stored in Keychain only, namespaced by backend base URL/region.
 - `accessToken` is kept in memory and renewed through `/auth/refresh`.
 - `lastKnownSession` stores only non-secret UI metadata (`AuthUser` + expiry) in `UserDefaults`, also namespaced by backend base URL/region.

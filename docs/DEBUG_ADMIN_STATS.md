@@ -1,0 +1,27 @@
+# Debug Admin Stats Screen
+
+- `AdminStatsDebugView` is an internal debug-only screen for backend admin statistics.
+- Entry point: unlocked Profile debug section in `DEBUG` builds only.
+- Data source:
+  - `GET /admin/stats/overview`
+  - `GET /admin/stats/symbols?limit=25`
+- Networking:
+  - reuses the runtime-selected backend from `APIClientFactory`
+  - uses the current authenticated user's Bearer access token via `AuthService`
+  - does not hardcode a separate base URL
+- Access model:
+  - the row is shown only for authenticated users inside the debug section
+  - backend remains the source of truth for ADMIN authorization
+  - `403` is rendered as an explicit "ADMIN access required" state instead of exposing data
+- UI states:
+  - loading
+  - success
+  - empty
+  - unauthorized
+  - forbidden
+  - network error
+  - generic error
+- Architecture:
+  - `AdminStatsAPIClient` handles authorized HTTP requests and backend error mapping
+  - `AdminStatsRepository` combines overview + symbols responses into one snapshot
+  - `AdminStatsDebugViewModel` owns async load/refresh state for SwiftUI

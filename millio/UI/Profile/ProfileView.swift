@@ -415,7 +415,8 @@ struct ProfileView: View {
 
     @ViewBuilder
     private func sectionContent(for sectionID: ProfileMenuSectionID) -> some View {
-        let items = ProfileMenuStructure.sections.first { $0.id == sectionID }?.items ?? []
+        let items = (ProfileMenuStructure.sections.first { $0.id == sectionID }?.items ?? [])
+            .filter(shouldDisplayMenuItem(_:))
 
         VStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.element) { index, item in
@@ -659,7 +660,29 @@ struct ProfileView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("profile.debugOnboardingButton")
+
+#if DEBUG
+        case .adminStats:
+            NavigationLink {
+                AdminStatsDebugView()
+            } label: {
+                settingsRow(item: .adminStats, title: "profile.admin_stats") {
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.adminStatsDebugLink")
+#endif
         }
+    }
+
+    private func shouldDisplayMenuItem(_ item: ProfileMenuItemID) -> Bool {
+#if DEBUG
+        if item == .adminStats {
+            return authManager.isAuthenticated
+        }
+#endif
+        return true
     }
 
     private func sendFeedback() {

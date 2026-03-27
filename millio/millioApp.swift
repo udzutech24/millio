@@ -47,6 +47,7 @@ struct millioApp: App {
     private struct AppDependencyBinding {
         let container: DIContainer
         let financeWarmupUseCase: FinanceStartupWarmupUseCase
+        let portfolioSymbolsSyncService: PortfolioSymbolsSyncService
     }
 
     @UIApplicationDelegateAdaptor(FirebaseAppDelegate.self) private var firebaseDelegate
@@ -54,6 +55,7 @@ struct millioApp: App {
     @State private var diContainer: DIContainer?
     @State private var lifecycleUseCase: AppLifecycleUseCase?
     @State private var financeStartupWarmupUseCase: FinanceStartupWarmupUseCase?
+    @State private var portfolioSymbolsSyncService: PortfolioSymbolsSyncService?
     @State private var authManager = AuthManager()
     @State private var toastCenter = ToastCenter()
     @State private var isBiometricUnlockInProgress = false
@@ -205,6 +207,15 @@ struct millioApp: App {
             authService: container.authService,
             configurationProvider: apiClientFactory.authConfigurationProvider()
         )
+        let portfolioSymbolsSyncService = PortfolioSymbolsSyncService(
+            snapshotProvider: InvestmentPortfolioHeldSymbolsProvider(modelContext: modelContainer.mainContext),
+            apiClient: PortfolioSymbolsAPIClient(
+                authService: container.authService,
+                configurationProvider: apiClientFactory.authConfigurationProvider()
+            ),
+            eventBus: EventBus.shared,
+            isAuthenticated: { self.authManager.isAuthenticated }
+        )
         let financeWarmupUseCase = FinanceStartupWarmupUseCase(
             modelContext: modelContainer.mainContext
         )
@@ -212,7 +223,8 @@ struct millioApp: App {
         logger.info("DIContainer.create finished in \(Double(DispatchTime.now().uptimeNanoseconds - diStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         return AppDependencyBinding(
             container: container,
-            financeWarmupUseCase: financeWarmupUseCase
+            financeWarmupUseCase: financeWarmupUseCase,
+            portfolioSymbolsSyncService: portfolioSymbolsSyncService
         )
     }
 
@@ -221,13 +233,19 @@ struct millioApp: App {
         _ binding: AppDependencyBinding,
         backendRuntime: BackendSessionRuntime
     ) {
+        portfolioSymbolsSyncService?.stop()
         diContainer = binding.container
         financeStartupWarmupUseCase = binding.financeWarmupUseCase
+        portfolioSymbolsSyncService = binding.portfolioSymbolsSyncService
+        portfolioSymbolsSyncService?.start()
         authManager.configure(service: binding.container.authService)
         authManager.configure(toastCenter: toastCenter)
         authManager.configure(authConfiguration: backendRuntime.authConfiguration)
         authManager.configure(onSessionChanged: { user in
             await synchronizeDataScope(with: user)
+            portfolioSymbolsSyncService?.handleAuthenticationStateChanged(
+                isAuthenticated: authManager.isAuthenticated
+            )
         })
         authManager.configure(onPostLoginBootstrap: { _ in })
     }
