@@ -37,9 +37,14 @@ struct ExpenseCategoryMetadata: Equatable {
     let aliases: [String]
 
     func localizedDisplayName(locale: Locale = AppLocalization.currentAppLocale) -> String {
-        ExpenseCategoryCatalog.preferredLanguageCode(for: locale) == "ru"
-            ? displayNameRU
-            : displayNameEN
+        switch ExpenseCategoryCatalog.preferredLanguageCode(for: locale) {
+        case "ru":
+            return displayNameRU
+        case "zh":
+            return ExpenseCategoryCatalog.chineseDisplayName(for: category) ?? displayNameEN
+        default:
+            return displayNameEN
+        }
     }
 }
 
@@ -337,6 +342,79 @@ enum ExpenseCategoryCatalog {
 
     private static let metadataByCategory = Dictionary(uniqueKeysWithValues: allMetadata.map { ($0.category, $0) })
     private static let metadataByRawValue = Dictionary(uniqueKeysWithValues: allMetadata.map { ($0.category.rawValue, $0) })
+
+    static func chineseDisplayName(for category: ExpenseCategory) -> String? {
+        switch category {
+        case .groceries:
+            return "商超购物"
+        case .dining:
+            return "外食"
+        case .transport:
+            return "交通"
+        case .taxi:
+            return "打车"
+        case .fuel:
+            return "加油"
+        case .carService:
+            return "汽车服务"
+        case .housing:
+            return "住房"
+        case .utilities:
+            return "水电煤"
+        case .telecom:
+            return "通信"
+        case .health:
+            return "健康"
+        case .pharmacy:
+            return "药房"
+        case .shopping:
+            return "购物"
+        case .clothing:
+            return "服饰"
+        case .electronics:
+            return "电子产品"
+        case .homeGoods:
+            return "家居用品"
+        case .education:
+            return "教育"
+        case .entertainment:
+            return "娱乐"
+        case .travel:
+            return "旅行"
+        case .subscriptions:
+            return "订阅"
+        case .pets:
+            return "宠物"
+        case .gifts:
+            return "礼物"
+        case .beauty:
+            return "美容"
+        case .insurance:
+            return "保险"
+        case .taxesFees:
+            return "税费"
+        case .transfers:
+            return "转账"
+        case .other:
+            return "其他"
+        case .cafe:
+            return "咖啡馆"
+        case .fastFood:
+            return "快餐"
+        case .coffeeShops:
+            return "咖啡店"
+        case .marketplaces:
+            return "电商平台"
+        case .bills:
+            return "账单"
+        case .pharmacies:
+            return "药店"
+        case .medicalServices:
+            return "医疗服务"
+        case .digitalServices:
+            return "数字服务"
+        }
+    }
 
     static func metadata(for category: ExpenseCategory) -> ExpenseCategoryMetadata {
         metadataByCategory[category] ?? fallbackMetadata

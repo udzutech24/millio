@@ -14,7 +14,7 @@ struct ConverterView: View {
     @State private var sharePreviewKeyboardHeight: CGFloat = 0
     @FocusState private var isShareDraftMessageFocused: Bool
     
-    private var decSep: String { Locale.current.decimalSeparator ?? "," }
+    private var decSep: String { ConverterL10n.decimalSeparator }
     
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var hSize
@@ -132,9 +132,9 @@ struct ConverterView: View {
         )) {
 #if os(iOS)
             if let img = viewModel.state.shareImage {
-                let shareSubject = viewModel.state.shareDraftTitle.isEmpty ? ConverterL10n.shareSheetDefaultSubject : viewModel.state.shareDraftTitle
+                let shareSubject = viewModel.shareDraftTitle
                 let shareText = preparedShareText(
-                    title: viewModel.state.shareDraftTitle,
+                    title: viewModel.shareDraftTitle,
                     message: viewModel.state.shareDraftMessage
                 )
                 ActivityView(
@@ -165,7 +165,7 @@ struct ConverterView: View {
         .premiumUpsellAlert(
             isPresented: $showCryptoProAlert,
             titleKey: "monetization.crypto.pro_title",
-            message: String(localized: "monetization.crypto.pro_message"),
+            message: .key("monetization.crypto.pro_message"),
             onSubscribe: { router.push(.subscription) }
         )
     }
@@ -490,7 +490,7 @@ struct ConverterView: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Быстрая навигация по мини-приложениям")
+                .accessibilityLabel(ConverterL10n.quickNavigationAccessibility)
                 .popover(isPresented: $showQuickNavigationPopover, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
                     MiniAppQuickNavigationPopover(
                         destinations: MiniAppNavigation.destinations(excluding: currentRoute)
@@ -668,7 +668,7 @@ struct ConverterView: View {
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary.opacity(0.85))
                     }
-                    Text("\(item.activeCode) • \(item.inputText)")
+                    Text("\(item.activeCode) • \(viewModel.localizedInputText(item.inputText))")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     Text(item.selectedCodes.joined(separator: " · "))
@@ -717,7 +717,7 @@ struct ConverterView: View {
                                     .frame(maxWidth: .infinity, alignment: .center)
 
                                 VStack(alignment: .leading, spacing: inputSpacing) {
-                                    Text(viewModel.state.shareDraftTitle)
+                                    Text(viewModel.shareDraftTitle)
                                         .font(.system(size: compactInput ? 14 : 15, weight: .semibold))
                                         .foregroundStyle(Color.white.opacity(0.94))
                                         .lineLimit(1)
@@ -819,10 +819,7 @@ struct ConverterView: View {
     }
 
     private func shareHistoryDateText(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: Locale.current.identifier)
-        formatter.dateFormat = "dd MMM • HH:mm"
-        return formatter.string(from: date)
+        ConverterL10n.shareTimestamp(for: date)
     }
 
 #if os(iOS)
@@ -1272,11 +1269,14 @@ struct ConverterView: View {
         )
         let appStoreURLText = AppStoreReviewLink.appURL?.absoluteString ?? "https://apps.apple.com/app/id\(AppStoreReviewLink.fallbackAppStoreID)"
         return ShareCardView(
-            locale: appState.selectedLanguage.locale ?? Locale.current,
+            locale: ConverterL10n.locale,
             dateString: shareData.dateString,
             rows: shareData.rows,
             highlightedCode: shareData.highlightedCode,
-            baseSummary: ConverterL10n.baseSummary(input: viewModel.state.inputText, code: viewModel.state.activeCode),
+            baseSummary: ConverterL10n.baseSummary(
+                input: viewModel.localizedInputText(viewModel.state.inputText),
+                code: viewModel.state.activeCode
+            ),
             appStoreURLText: appStoreURLText
         )
         .frame(width: cardSize.width, height: cardSize.height)
@@ -1315,11 +1315,14 @@ struct ConverterView: View {
         let appStoreURLText = AppStoreReviewLink.appURL?.absoluteString ?? "https://apps.apple.com/app/id\(AppStoreReviewLink.fallbackAppStoreID)"
 
         let card = ShareCardView(
-            locale: appState.selectedLanguage.locale ?? Locale.current,
+            locale: ConverterL10n.locale,
             dateString: shareData.dateString,
             rows: shareData.rows,
             highlightedCode: shareData.highlightedCode,
-            baseSummary: ConverterL10n.baseSummary(input: viewModel.state.inputText, code: viewModel.state.activeCode),
+            baseSummary: ConverterL10n.baseSummary(
+                input: viewModel.localizedInputText(viewModel.state.inputText),
+                code: viewModel.state.activeCode
+            ),
             appStoreURLText: appStoreURLText
         )
         .frame(width: size.width, height: size.height)

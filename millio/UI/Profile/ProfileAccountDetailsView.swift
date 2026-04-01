@@ -14,26 +14,69 @@ struct ProfileAccountDetailsView: View {
         static let buttonCornerRadius: CGFloat = 14
     }
 
-    private static let dateFormatter: DateFormatter = {
+    private static func formattedDate(_ date: Date, locale: Locale) -> String {
         let formatter = DateFormatter()
+        formatter.locale = locale
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
-        return formatter
-    }()
+        return formatter.string(from: date)
+    }
 
-    private let title = String(localized: "profile.auth.account_details", defaultValue: "Account details", comment: "Account details screen title")
-    private let connectedTitle = String(localized: "profile.auth.connected", defaultValue: "Signed in with Apple", comment: "Connected state title")
-    private let connectedSubtitle = String(localized: "profile.auth.connected.subtitle", defaultValue: "Account sync is enabled for this account. iCloud backup uses the current Apple account on this device.", comment: "Connected state subtitle")
-    private let logoutTitle = String(localized: "profile.auth.logout", defaultValue: "Sign out", comment: "Logout button")
-    private let emailMissingTitle = String(localized: "profile.auth.email_missing", defaultValue: "No email provided", comment: "Fallback email text")
-    private let guestTitle = String(localized: "profile.auth.guest.title", defaultValue: "Guest Mode", comment: "Guest mode title")
-    private let guestSubtitle = String(localized: "profile.auth.guest.subtitle", defaultValue: "Use Millio now and connect your Apple Account later.", comment: "Guest mode subtitle")
-    private let exitGuestTitle = String(localized: "profile.auth.exit_guest", defaultValue: "Leave Guest Mode", comment: "Exit guest mode button title")
-    private let signedOutTitle = String(localized: "profile.auth.not_signed_in", defaultValue: "Not signed in", comment: "Signed-out auth state title")
-    private let signedOutSubtitle = String(localized: "profile.auth.not_signed_in.subtitle", defaultValue: "Sign in with Apple to enable account sync. iCloud backup works separately.", comment: "Signed-out auth state subtitle")
-    private let nameTitle = String(localized: "profile.auth.name", defaultValue: "Name", comment: "Account detail field title for name")
-    private let emailTitle = String(localized: "profile.auth.email", defaultValue: "Email", comment: "Account detail field title for email")
-    private let lastLoginTitle = String(localized: "profile.auth.last_login", defaultValue: "Last sign-in", comment: "Account detail field title for last login")
+    private var localizationLocale: Locale {
+        AppLocalization.currentAppLocale
+    }
+
+    private var title: String {
+        String(localized: "profile.auth.account_details", defaultValue: "Account details", comment: "Account details screen title")
+    }
+
+    private var connectedTitle: String {
+        String(localized: "profile.auth.connected", defaultValue: "Signed in with Apple", comment: "Connected state title")
+    }
+
+    private var connectedSubtitle: String {
+        String(localized: "profile.auth.connected.subtitle", defaultValue: "Account sync is enabled for this account. iCloud backup uses the current Apple account on this device.", comment: "Connected state subtitle")
+    }
+
+    private var logoutTitle: String {
+        String(localized: "profile.auth.logout", defaultValue: "Sign out", comment: "Logout button")
+    }
+
+    private var emailMissingTitle: String {
+        String(localized: "profile.auth.email_missing", defaultValue: "No email provided", comment: "Fallback email text")
+    }
+
+    private var guestTitle: String {
+        String(localized: "profile.auth.guest.title", defaultValue: "Guest Mode", comment: "Guest mode title")
+    }
+
+    private var guestSubtitle: String {
+        String(localized: "profile.auth.guest.subtitle", defaultValue: "Use Millio now and connect your Apple Account later.", comment: "Guest mode subtitle")
+    }
+
+    private var exitGuestTitle: String {
+        String(localized: "profile.auth.exit_guest", defaultValue: "Leave Guest Mode", comment: "Exit guest mode button title")
+    }
+
+    private var signedOutTitle: String {
+        String(localized: "profile.auth.not_signed_in", defaultValue: "Not signed in", comment: "Signed-out auth state title")
+    }
+
+    private var signedOutSubtitle: String {
+        String(localized: "profile.auth.not_signed_in.subtitle", defaultValue: "Sign in with Apple to enable account sync. iCloud backup works separately.", comment: "Signed-out auth state subtitle")
+    }
+
+    private var nameTitle: String {
+        String(localized: "profile.auth.name", defaultValue: "Name", comment: "Account detail field title for name")
+    }
+
+    private var emailTitle: String {
+        String(localized: "profile.auth.email", defaultValue: "Email", comment: "Account detail field title for email")
+    }
+
+    private var lastLoginTitle: String {
+        String(localized: "profile.auth.last_login", defaultValue: "Last sign-in", comment: "Account detail field title for last login")
+    }
 
     var body: some View {
         ZStack {
@@ -71,7 +114,7 @@ struct ProfileAccountDetailsView: View {
 
                     if let lastLoginAt = user.lastLoginAt {
                         divider()
-                        detailsRow(title: lastLoginTitle, value: Self.dateFormatter.string(from: lastLoginAt))
+                        detailsRow(title: lastLoginTitle, value: Self.formattedDate(lastLoginAt, locale: localizationLocale))
                     }
                 }
             }

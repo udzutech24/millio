@@ -114,7 +114,13 @@ struct millioApp: App {
                 .modelContainer(container)
                 .environment(\.diContainer, diContainer)
                 .environment(\.appRefreshCoordinator, appRefreshCoordinator)
-                .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
+                .environment(
+                    \.locale,
+                    LocalizationSupport.resolvedLocale(
+                        for: appState.selectedLanguage,
+                        fallbackLocale: .current
+                    )
+                )
                 .task {
                     guard !runtimeEnvironment.isUITesting else { return }
                     await startupCoordinator.runColdStartIfNeeded {
@@ -576,7 +582,7 @@ struct millioApp: App {
         }
         isBiometricUnlockInProgress = true
         defer { isBiometricUnlockInProgress = false }
-        let success = await AppLockBiometricAuth.authenticate(reason: "Unlock access to app data")
+        let success = await AppLockBiometricAuth.authenticate(reason: AppLockBiometricAuth.authenticationReason())
         if success {
             appState.isAppLocked = false
         }

@@ -8,9 +8,9 @@
 import Foundation
 
 enum CashbackCardPresentation {
-    static func title(for card: Card) -> String {
+    static func title(for card: Card, locale: Locale = CashbackL10n.locale) -> String {
         card.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? String(localized: "Карта без названия")
+            ? CashbackL10n.text("cashback.card.unnamed", locale: locale, fallback: "Untitled card")
             : card.name
     }
 
@@ -25,8 +25,8 @@ enum CashbackCardPresentation {
         return parts.joined(separator: " • ")
     }
 
-    static func pickerDetail(for card: Card) -> String {
-        var parts = [detail(for: card)]
+    static func pickerDetail(for card: Card, locale: Locale = CashbackL10n.locale) -> String {
+        var parts = [detail(for: card, locale: locale)]
 
         let maskedNumber = maskedNumberText(for: card)
         if !maskedNumber.isEmpty {
@@ -53,11 +53,13 @@ enum CashbackCardPresentation {
         return parts.joined(separator: " • ")
     }
 
-    static func detail(for card: Card) -> String {
-        var parts = ["Баланс \(amountText(card.balance, currency: card.currency))"]
+    static func detail(for card: Card, locale: Locale = CashbackL10n.locale) -> String {
+        let balanceTitle = CashbackL10n.text("cashback.card.detail.balance", locale: locale, fallback: "Balance")
+        let limitTitle = CashbackL10n.text("cashback.card.detail.limit", locale: locale, fallback: "Limit")
+        var parts = ["\(balanceTitle) \(amountText(card.balance, currency: card.currency))"]
 
         if let creditLimit = card.creditLimit, card.cardType == .credit {
-            parts.append("Лимит \(amountText(creditLimit, currency: card.currency))")
+            parts.append("\(limitTitle) \(amountText(creditLimit, currency: card.currency))")
         }
 
         return parts.joined(separator: " • ")

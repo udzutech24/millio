@@ -214,7 +214,7 @@ struct DisplayCurrencySheet: View {
             .premiumUpsellAlert(
                 isPresented: $showCryptoProAlert,
                 titleKey: "monetization.crypto.pro_title",
-                message: String(localized: "monetization.crypto.pro_message"),
+                message: .key("monetization.crypto.pro_message"),
                 onSubscribe: { router.push(.subscription) }
             )
         }

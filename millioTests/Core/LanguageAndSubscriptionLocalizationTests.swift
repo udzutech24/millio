@@ -11,6 +11,7 @@ struct LanguageAndSubscriptionLocalizationTests {
         #expect(Language.system.displayName(for: locale) == "System")
         #expect(Language.english.displayName(for: locale) == "English")
         #expect(Language.russian.displayName(for: locale) == "Russian")
+        #expect(Language.simplifiedChinese.displayName(for: locale) == "Simplified Chinese")
     }
 
     @Test("Language display names are localized for Russian locale")
@@ -20,23 +21,44 @@ struct LanguageAndSubscriptionLocalizationTests {
         #expect(Language.system.displayName(for: locale) == "Системный")
         #expect(Language.english.displayName(for: locale) == "Английский")
         #expect(Language.russian.displayName(for: locale) == "Русский")
+        #expect(Language.simplifiedChinese.displayName(for: locale) == "Китайский (упрощенный)")
     }
 
-    @Test("Subscription errors are localized for English and Russian locales")
+    @Test("Language display names are localized for Simplified Chinese locale")
+    func testLanguageDisplayNamesInSimplifiedChinese() {
+        let locale = Locale(identifier: "zh-Hans")
+
+        #expect(Language.system.displayName(for: locale) == "跟随系统")
+        #expect(Language.english.displayName(for: locale) == "英语")
+        #expect(Language.russian.displayName(for: locale) == "俄语")
+        #expect(Language.simplifiedChinese.displayName(for: locale) == "简体中文")
+    }
+
+    @Test("Subscription errors are localized for release-ready locales")
     func testSubscriptionErrorLocalization() {
         let error = SubscriptionError.trialAlreadyUsed
 
         #expect(error.localizedDescription(for: Locale(identifier: "en")) == "Trial has already been used")
         #expect(error.localizedDescription(for: Locale(identifier: "ru")) == "Пробный период уже использован")
+        #expect(error.localizedDescription(for: Locale(identifier: "zh-Hans")) == "试用期已使用")
     }
 
-    @Test("Subscription per-month suffix is localized for English and Russian locales")
+    @Test("Subscription per-month suffix is localized for release-ready locales")
     func testSubscriptionPerMonthSuffixLocalization() {
         #expect(AppLocalization.string("subscription.plan.per_month_suffix", locale: Locale(identifier: "en")) == "/mo")
         #expect(AppLocalization.string("subscription.plan.per_month_suffix", locale: Locale(identifier: "ru")) == "/мес")
+        #expect(AppLocalization.string("subscription.plan.per_month_suffix", locale: Locale(identifier: "zh-Hans")) == "/月")
     }
 
-    @Test("Subscription yearly savings badge is localized for English and Russian locales")
+    @Test("Explicit region locales do not fall back to the development language")
+    func testExplicitRegionLocalesAvoidDevelopmentLanguageFallback() {
+        #expect(AppLocalization.string("cashflow.chart.title", locale: Locale(identifier: "en_US")) == "Income and Expenses")
+        #expect(AppLocalization.string("cashflow.chart.title", locale: Locale(identifier: "ru_RU")) == "Доходы и расходы")
+        #expect(AppLocalization.string("Salary", locale: Locale(identifier: "en_US")) == "Salary")
+        #expect(AppLocalization.string("Salary", locale: Locale(identifier: "ru_RU")) == "Зарплата")
+    }
+
+    @Test("Subscription yearly savings badge is localized for release-ready locales")
     func testSubscriptionYearlySavingsBadgeLocalization() {
         let englishFormat = AppLocalization.string(
             "subscription.plan.yearly.savings_format",
@@ -46,9 +68,57 @@ struct LanguageAndSubscriptionLocalizationTests {
             "subscription.plan.yearly.savings_format",
             locale: Locale(identifier: "ru")
         )
+        let chineseFormat = AppLocalization.string(
+            "subscription.plan.yearly.savings_format",
+            locale: Locale(identifier: "zh-Hans")
+        )
 
         #expect(String(format: englishFormat, locale: Locale(identifier: "en"), 30) == "Save 30%")
         #expect(String(format: russianFormat, locale: Locale(identifier: "ru"), 30) == "Экономия 30%")
+        #expect(String(format: chineseFormat, locale: Locale(identifier: "zh-Hans"), 30) == "立省 30%")
+    }
+
+    @Test("Subscription paywall copy is localized for Simplified Chinese")
+    func testSubscriptionPaywallCopyInSimplifiedChinese() {
+        let locale = Locale(identifier: "zh-Hans")
+
+        #expect(AppLocalization.string("subscription.navigation.title", locale: locale) == "订阅")
+        #expect(AppLocalization.string("subscription.hero.eyebrow", locale: locale) == "PRO 全部功能")
+        #expect(AppLocalization.string("subscription.plan.yearly.title", locale: locale) == "年度")
+        #expect(AppLocalization.string("subscription.plan.monthly.title", locale: locale) == "月度")
+        #expect(AppLocalization.string("subscription.features.title", locale: locale) == "PRO 全部权益")
+        #expect(AppLocalization.string("subscription.button.start_trial", locale: locale) == "开始试用（7天）")
+        #expect(AppLocalization.string("subscription.button.restore", locale: locale) == "恢复购买")
+    }
+
+    @Test("Legal titles follow the selected app locale for system Chinese")
+    func testLegalTitlesForSystemChinese() {
+        let links = ProfileLegalLinks.make(for: .system, fallbackLocale: Locale(identifier: "zh_Hans_CN"))
+
+        #expect(links.privacyTitle == "隐私政策")
+        #expect(links.termsTitle == "使用条款（EULA）")
+    }
+
+    @Test("Finance account and investment titles are localized for Russian locale")
+    func testFinanceTitlesInRussian() {
+        let locale = Locale(identifier: "ru")
+
+        #expect(FinanceAccountType.card.displayName(for: locale) == "Карта")
+        #expect(FinanceAccountType.credit.displayName(for: locale) == "Кредит")
+        #expect(FinanceAccountType.investment.displayName(for: locale) == "Актив")
+        #expect(InvestmentCategory.house.displayName(for: locale) == "Недвижимость")
+        #expect(InvestmentCategory.crypto.displayName(for: locale) == "Криптовалюта")
+    }
+
+    @Test("Finance account and investment titles are localized for English locale")
+    func testFinanceTitlesInEnglish() {
+        let locale = Locale(identifier: "en")
+
+        #expect(FinanceAccountType.card.displayName(for: locale) == "Card")
+        #expect(FinanceAccountType.credit.displayName(for: locale) == "Credit")
+        #expect(FinanceAccountType.investment.displayName(for: locale) == "Asset")
+        #expect(InvestmentCategory.house.displayName(for: locale) == "Real estate")
+        #expect(InvestmentCategory.crypto.displayName(for: locale) == "Cryptocurrency")
     }
 
 }

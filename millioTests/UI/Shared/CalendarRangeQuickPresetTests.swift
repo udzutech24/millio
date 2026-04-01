@@ -44,6 +44,16 @@ struct CalendarRangeQuickPresetTests {
         #expect(range.end == reference)
     }
 
+    @Test("Calendar range copy is localized for English, Russian, and Simplified Chinese")
+    func localizedTitles() {
+        #expect(CalendarRangeQuickPreset.today.title(locale: Locale(identifier: "en_US")) == "Today")
+        #expect(CalendarRangeQuickPreset.thisMonth.title(locale: Locale(identifier: "ru_RU")) == "Этот месяц")
+        #expect(CalendarRangeQuickPreset.yearToDate.title(locale: Locale(identifier: "zh_Hans_CN")) == "今年至今")
+        #expect(CalendarRangePickerCopy.sheetTitle(locale: Locale(identifier: "zh_Hans_CN")) == "选择时间范围")
+        #expect(CalendarRangePickerCopy.startDateLabel(locale: Locale(identifier: "ru_RU")) == "Дата начала")
+        #expect(CalendarRangePickerCopy.endDateLabel(locale: Locale(identifier: "en_US")) == "End date")
+    }
+
     private func makeDate(year: Int, month: Int, day: Int) -> Date {
         calendar.date(from: DateComponents(year: year, month: month, day: day))!
     }

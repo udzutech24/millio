@@ -14,9 +14,13 @@ enum CardType: String, Codable, CaseIterable {
     case credit = "credit"
     
     var displayName: String {
+        displayName(for: AppLocalization.currentAppLocale)
+    }
+
+    func displayName(for locale: Locale) -> String {
         switch self {
-        case .debit: return String(localized: "finances.card.type.debit")
-        case .credit: return String(localized: "finances.card.type.credit")
+        case .debit: return AppLocalization.string("finances.card.type.debit", locale: locale)
+        case .credit: return AppLocalization.string("finances.card.type.credit", locale: locale)
         }
     }
     
@@ -35,10 +39,14 @@ enum CardPriority: String, Codable, CaseIterable {
     case high = "high" // Высокий
     
     var displayName: String {
+        displayName(for: AppLocalization.currentAppLocale)
+    }
+
+    func displayName(for locale: Locale) -> String {
         switch self {
-        case .low: return String(localized: "finances.priority.low")
-        case .normal: return String(localized: "finances.priority.normal")
-        case .high: return String(localized: "finances.priority.high")
+        case .low: return AppLocalization.string("finances.priority.low", locale: locale)
+        case .normal: return AppLocalization.string("finances.priority.normal", locale: locale)
+        case .high: return AppLocalization.string("finances.priority.high", locale: locale)
         }
     }
     
@@ -65,16 +73,20 @@ enum Bank: String, Codable, CaseIterable {
     case other = "other"
     
     var displayName: String {
+        displayName(for: AppLocalization.currentAppLocale)
+    }
+
+    func displayName(for locale: Locale) -> String {
         switch self {
-        case .sberbank: return String(localized: "finances.bank.sberbank")
-        case .vtb: return String(localized: "finances.bank.vtb")
-        case .alfa: return String(localized: "finances.bank.alfa")
-        case .tinkoff: return String(localized: "finances.bank.tinkoff")
-        case .raiffeisen: return String(localized: "finances.bank.raiffeisen")
-        case .gazprombank: return String(localized: "finances.bank.gazprombank")
-        case .otkritie: return String(localized: "finances.bank.otkritie")
-        case .rosbank: return String(localized: "finances.bank.rosbank")
-        case .other: return String(localized: "finances.bank.other")
+        case .sberbank: return AppLocalization.string("finances.bank.sberbank", locale: locale)
+        case .vtb: return AppLocalization.string("finances.bank.vtb", locale: locale)
+        case .alfa: return AppLocalization.string("finances.bank.alfa", locale: locale)
+        case .tinkoff: return AppLocalization.string("finances.bank.tinkoff", locale: locale)
+        case .raiffeisen: return AppLocalization.string("finances.bank.raiffeisen", locale: locale)
+        case .gazprombank: return AppLocalization.string("finances.bank.gazprombank", locale: locale)
+        case .otkritie: return AppLocalization.string("finances.bank.otkritie", locale: locale)
+        case .rosbank: return AppLocalization.string("finances.bank.rosbank", locale: locale)
+        case .other: return AppLocalization.string("finances.bank.other", locale: locale)
         }
     }
     

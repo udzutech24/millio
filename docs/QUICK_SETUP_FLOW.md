@@ -13,9 +13,9 @@
 - Select app language.
 - Select primary currency.
 - Select up to 4 favorite currencies.
-- Quick setup filters language options by system locale:
-  - Russian system locale: `System`, `English`, `Russian`.
-  - Non-Russian system locale: `System`, `English`.
+- Quick setup exposes every release-ready app language:
+  - `System`, `English`, `Russian`, `Simplified Chinese`.
+- System locale is used only for recommendations, not to hide supported languages.
 - Quick setup prioritizes currencies by system locale:
   - Russian system locale: `RUB`, `USD`, `CNY`, `EUR`, `TRY`.
   - Non-Russian system locale: system currency first, then `USD`, `EUR`, `CNY`, `GBP`, `JPY`, `CHF`, `CAD`, `AUD` (without `RUB` in recommendations).
@@ -33,6 +33,7 @@
 - Choose product type first, then grouping, then save the initial product:
   - the chosen product type collapses into a compact summary card, same as grouping;
   - one-tap group presets are based on the same finance group templates as the main finance editor;
+  - this step reuses strings from both `quick_setup.*` and `finances.*`, so release-ready localization must be complete in both namespaces for `en`, `ru`, `zh-Hans`;
   - grouping chips keep a stable order: `Cards`, `Assets`, `Credits`, `Stocks`, then the remaining presets;
   - the grouping that best matches the selected product type is highlighted immediately as the recommended choice:
     - `Card` -> `Cards`

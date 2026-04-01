@@ -49,4 +49,15 @@ struct EntitlementDiagnosticsTests {
 
         #expect(items.allSatisfy { $0.isPremiumActive })
     }
+
+    @Test("Diagnostics copy follows the selected app language")
+    func testDiagnosticsLocalizedForSimplifiedChinese() {
+        let appState = AppState()
+        appState.selectedLanguage = .simplifiedChinese
+
+        let items = EntitlementDiagnostics.items(for: appState)
+
+        #expect(items.first(where: { $0.id == "finances.products" })?.title == "产品数量限制")
+        #expect(items.first(where: { $0.id == "cashflow.chart" })?.currentState == "Free 版不可用")
+    }
 }

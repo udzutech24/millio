@@ -15,6 +15,10 @@ struct AppLockScreenView: View {
     @State private var errorText: String?
     @State private var isBiometricBusy = false
 
+    private var locale: Locale {
+        AppLocalization.currentAppLocale
+    }
+
     var body: some View {
         ZStack {
             GradientBackground()
@@ -33,7 +37,7 @@ struct AppLockScreenView: View {
                         )
                     )
 
-                Text("Введите PIN-код")
+                Text(localized("profile.app_lock.screen.title", fallback: "Enter PIN code"))
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(AppColors.textPrimary)
 
@@ -142,7 +146,7 @@ struct AppLockScreenView: View {
             appState.isAppLocked = false
             enteredPin = ""
         } else {
-            errorText = "Неверный PIN"
+            errorText = localized("profile.app_lock.error.invalid_pin", fallback: "Incorrect PIN")
             enteredPin = ""
         }
     }
@@ -154,6 +158,10 @@ struct AppLockScreenView: View {
         if await tryBiometricUnlock() {
             appState.isAppLocked = false
         }
+    }
+
+    private func localized(_ key: String, fallback: String) -> String {
+        AppLocalization.string(key, locale: locale, fallback: fallback)
     }
 }
 

@@ -23,7 +23,7 @@ struct ProfilePremiumCard: View {
                         .lineLimit(1)
 
                     HStack(spacing: 6) {
-                        Text("profile.premium.details")
+                        Text(String(localized: "profile.premium.details"))
                             .font(.system(size: 15, weight: .semibold, design: .rounded))
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .bold))

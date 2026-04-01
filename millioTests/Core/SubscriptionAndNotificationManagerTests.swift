@@ -492,4 +492,38 @@ struct NotificationManagerTests {
         let bodies = fakeCenter.addedRequests.map(\.content.body).joined(separator: " | ")
         #expect(bodies.contains("запланирован"))
     }
+
+    @Test("Плановые cashflow напоминания используют выбранный язык приложения, включая zh-Hans")
+    func testScheduleCashflowRemindersUseResolvedAppLanguage() async throws {
+        let fakeCenter = FakeNotificationCenter()
+        let calendar = makeCalendarUTC()
+        let fixedNow = makeDate(month: 3, day: 10)
+        let suiteName = "NotificationManagerTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let manager = NotificationManager(
+            notificationCenter: fakeCenter,
+            now: { fixedNow },
+            calendar: calendar,
+            languageProvider: { .simplifiedChinese },
+            defaults: defaults
+        )
+
+        let plannedExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 100,
+            currency: "CNY",
+            transactionDate: makeDate(month: 3, day: 12),
+            cardID: nil
+        )
+
+        await manager.scheduleCashflowScheduledReminders(for: [plannedExpense])
+
+        let request = try #require(fakeCenter.addedRequests.first)
+        #expect(request.content.body.contains("提醒："))
+        #expect(request.content.body.contains("支出"))
+        #expect(!request.content.body.contains("Reminder:"))
+        #expect(!request.content.body.contains("Напоминание:"))
+    }
 }

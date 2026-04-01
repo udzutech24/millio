@@ -232,25 +232,20 @@ final class NotificationManager: NotificationManagerProtocol {
 
             let reminderDate = normalizedReminderDate(for: plannedDate)
             guard reminderDate > referenceNow, reminderDate <= horizonEnd else { return nil }
-
-            let kind: String = {
-                switch transaction.transactionType {
-                case .income: return languageProvider() == .russian ? "доход" : "income"
-                case .expense: return languageProvider() == .russian ? "расход" : "expense"
-                default: return ""
-                }
-            }()
-
-            let baseMessage: String = {
-                if languageProvider() == .russian {
-                    return transaction.isRecurringTemplate
-                    ? "Напоминание: регулярный \(kind) запланирован на \(formattedDate(reminderDate))."
-                    : "Напоминание: запланированный \(kind) на \(formattedDate(reminderDate))."
-                }
-                return transaction.isRecurringTemplate
-                ? "Reminder: recurring \(kind) is due on \(formattedDate(reminderDate))."
-                : "Reminder: planned \(kind) is due on \(formattedDate(reminderDate))."
-            }()
+            let reminderLanguage = LocalizationSupport.resolvedLanguage(
+                for: languageProvider(),
+                fallbackLocale: .autoupdatingCurrent
+            )
+            let localizationLocale = LocalizationSupport.resolvedLocale(
+                for: reminderLanguage,
+                fallbackLocale: .autoupdatingCurrent
+            )
+            let baseMessage = scheduledReminderMessage(
+                for: transaction,
+                reminderDate: reminderDate,
+                language: reminderLanguage,
+                locale: localizationLocale
+            )
 
             let identitySource = transaction.recurrenceSeriesID ?? transaction.transactionUniqueID
             let identifier = "\(Self.scheduledReminderIdentifierPrefix)|\(identitySource)|\(Int(reminderDate.timeIntervalSince1970))"
@@ -302,10 +297,58 @@ final class NotificationManager: NotificationManagerProtocol {
         return calendar.date(from: normalized) ?? plannedDate
     }
 
-    private func formattedDate(_ date: Date) -> String {
+    private func scheduledReminderMessage(
+        for transaction: CashflowTransaction,
+        reminderDate: Date,
+        language: Language,
+        locale: Locale
+    ) -> String {
+        let dateText = formattedDate(reminderDate, locale: locale)
+
+        switch language {
+        case .russian:
+            let kind: String = {
+                switch transaction.transactionType {
+                case .income: return "доход"
+                case .expense: return "расход"
+                default: return ""
+                }
+            }()
+
+            return transaction.isRecurringTemplate
+                ? "Напоминание: регулярный \(kind) запланирован на \(dateText)."
+                : "Напоминание: запланированный \(kind) на \(dateText)."
+        case .simplifiedChinese:
+            let kind: String = {
+                switch transaction.transactionType {
+                case .income: return "收入"
+                case .expense: return "支出"
+                default: return ""
+                }
+            }()
+
+            return transaction.isRecurringTemplate
+                ? "提醒：周期性\(kind)计划于\(dateText)。"
+                : "提醒：计划\(kind)时间为\(dateText)。"
+        case .system, .english:
+            let kind: String = {
+                switch transaction.transactionType {
+                case .income: return "income"
+                case .expense: return "expense"
+                default: return ""
+                }
+            }()
+
+            return transaction.isRecurringTemplate
+                ? "Reminder: recurring \(kind) is due on \(dateText)."
+                : "Reminder: planned \(kind) is due on \(dateText)."
+        }
+    }
+
+    private func formattedDate(_ date: Date, locale: Locale) -> String {
         let formatter = DateFormatter()
         formatter.calendar = calendar
-        formatter.locale = languageProvider() == .russian ? Locale(identifier: "ru_RU") : Locale(identifier: "en_US")
+        formatter.locale = locale
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         return formatter.string(from: date)

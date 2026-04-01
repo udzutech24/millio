@@ -193,7 +193,7 @@ struct FinanceGroupEditorView: View {
             .premiumUpsellAlert(
                 isPresented: $showCryptoProAlert,
                 titleKey: "monetization.crypto.pro_title",
-                message: String(localized: "monetization.crypto.pro_message"),
+                message: .key("monetization.crypto.pro_message"),
                 onSubscribe: { router.push(.subscription) }
             )
 
@@ -409,7 +409,7 @@ struct FinanceGroupEditorView: View {
                     }
 
                     if accounts.isEmpty {
-                        Text("finances.main.empty_products.title")
+                        Text(String(localized: "finances.main.empty_products.title"))
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -536,11 +536,10 @@ struct FinanceGroupEditorView: View {
     }
 
     private var colorSectionTitle: String {
-        let languageCode = Locale.current.language.languageCode?.identifier ?? Locale.current.identifier
-        if languageCode == "ru" {
-            return isColorPaletteExpanded ? "Скрыть палитру" : "Выбрать цвет"
-        }
-        return isColorPaletteExpanded ? "Hide palette" : "Choose color"
+        let key = isColorPaletteExpanded
+            ? "finances.group_editor.color.hide_palette"
+            : "finances.group_editor.color.show_palette"
+        return AppLocalization.string(key, locale: AppLocalization.currentAppLocale)
     }
 
     private func deleteGroup() {
@@ -578,19 +577,11 @@ struct FinanceGroupEditorView: View {
 
     private var deleteGroupConfirmationTitle: String {
         let groupName = currentEditingGroup?.name ?? String(localized: "finances.group.ungrouped")
-        let languageCode = Locale.current.language.languageCode?.identifier ?? Locale.current.identifier
-        if languageCode == "ru" {
-            return "Удалить группу «\(groupName)»?"
-        }
-        return "Delete group \"\(groupName)\"?"
+        return FinancesL10n.format("finances.dynamics.delete_group.confirm.title_format", groupName)
     }
 
     private var deleteGroupConfirmationMessage: String {
-        let languageCode = Locale.current.language.languageCode?.identifier ?? Locale.current.identifier
-        if languageCode == "ru" {
-            return "Это действие удалит группу и все продукты внутри неё. Подтвердите удаление."
-        }
-        return "This will delete the group and every product inside it. Please confirm the deletion."
+        FinancesL10n.tr("finances.dynamics.delete_group.confirm.message")
     }
 
     private func managementRow(title: String, systemImage: String, tint: Color) -> some View {

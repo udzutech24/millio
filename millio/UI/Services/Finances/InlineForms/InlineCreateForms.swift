@@ -13,12 +13,8 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     @Environment(AppRouter.self) private var router
     @Binding var name: String
     let allowsTypeSwitching: Bool
-    let selectedProductType: FinanceAccountType
-    let selectedInvestmentCategory: InvestmentCategory
-    let onProductTypeSelected: (FinanceAccountType) -> Void
-    let onProductTitleSelected: (String) -> Void
-    let onInvestmentPresetSelected: (FinanceAddAccountInvestmentPreset) -> Void
-    let onInvestmentCategorySelected: (InvestmentCategory) -> Void
+    let selectedProductTitle: String
+    let onOpenProductPicker: (() -> Void)?
     let onCardDataChanged: (Card) -> Void
     let groupSection: GroupSection
     
@@ -38,24 +34,16 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         viewModel: CardViewModel,
         name: Binding<String>,
         allowsTypeSwitching: Bool = true,
-        selectedProductType: FinanceAccountType,
-        selectedInvestmentCategory: InvestmentCategory,
-        onProductTypeSelected: @escaping (FinanceAccountType) -> Void,
-        onProductTitleSelected: @escaping (String) -> Void,
-        onInvestmentPresetSelected: @escaping (FinanceAddAccountInvestmentPreset) -> Void,
-        onInvestmentCategorySelected: @escaping (InvestmentCategory) -> Void,
+        selectedProductTitle: String,
+        onOpenProductPicker: (() -> Void)? = nil,
         onCardDataChanged: @escaping (Card) -> Void,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
         self.viewModel = viewModel
         self._name = name
         self.allowsTypeSwitching = allowsTypeSwitching
-        self.selectedProductType = selectedProductType
-        self.selectedInvestmentCategory = selectedInvestmentCategory
-        self.onProductTypeSelected = onProductTypeSelected
-        self.onProductTitleSelected = onProductTitleSelected
-        self.onInvestmentPresetSelected = onInvestmentPresetSelected
-        self.onInvestmentCategorySelected = onInvestmentCategorySelected
+        self.selectedProductTitle = selectedProductTitle
+        self.onOpenProductPicker = onOpenProductPicker
         self.onCardDataChanged = onCardDataChanged
         self.groupSection = groupSection()
         _card = State(initialValue: Card(
@@ -163,7 +151,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         .premiumUpsellAlert(
             isPresented: $showCryptoProAlert,
             titleKey: "monetization.crypto.pro_title",
-            message: String(localized: "monetization.crypto.pro_message"),
+            message: .key("monetization.crypto.pro_message"),
             onSubscribe: { router.push(.subscription) }
         )
     }
@@ -217,49 +205,8 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             FinancesSectionHeader(title: String(localized: "finances.add_account.section.type"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
-                    Menu {
-                        Button {
-                            onProductTitleSelected(FinanceAccountType.card.displayName)
-                            onInvestmentPresetSelected(.asset)
-                            onProductTypeSelected(.card)
-                        } label: {
-                            Label(FinanceAccountType.card.displayName, systemImage: FinanceAccountType.card.icon)
-                        }
-                        Button {
-                            onProductTitleSelected(String(localized: "finances.add_account.product.account"))
-                            onInvestmentPresetSelected(.account)
-                            onInvestmentCategorySelected(.other)
-                            onProductTypeSelected(.investment)
-                        } label: {
-                            Label(String(localized: "finances.add_account.product.account"), systemImage: "building.columns.fill")
-                        }
-
-                        Button {
-                            onProductTitleSelected(FinanceAccountType.credit.displayName)
-                            onInvestmentPresetSelected(.asset)
-                            onProductTypeSelected(.credit)
-                        } label: {
-                            Label(FinanceAccountType.credit.displayName, systemImage: FinanceAccountType.credit.icon)
-                        }
-                        Button {
-                            onProductTitleSelected(String(localized: "finances.account.type.investment"))
-                            onInvestmentPresetSelected(.asset)
-                            onInvestmentCategorySelected(.other)
-                            onProductTypeSelected(.investment)
-                        } label: {
-                            Label(String(localized: "finances.account.type.investment"), systemImage: FinanceAccountType.investment.icon)
-                        }
-
-                        ForEach(visibleInvestmentCategories, id: \.self) { category in
-                            Button {
-                                onProductTitleSelected(category.displayName)
-                                onInvestmentPresetSelected(.category)
-                                onInvestmentCategorySelected(category)
-                                onProductTypeSelected(.investment)
-                            } label: {
-                                Label(category.displayName, systemImage: category.icon)
-                            }
-                        }
+                    Button {
+                        onOpenProductPicker?()
                     } label: {
                         HStack(spacing: 12) {
                             Text(String(localized: "finances.add_account.product.type"))
@@ -269,7 +216,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                             Spacer()
 
                             HStack(spacing: 6) {
-                                Text(selectedProductTypeDisplayName)
+                                Text(selectedProductTitle)
                                     .font(.system(size: 16, weight: .regular))
                                     .foregroundStyle(
                                         LinearGradient(
@@ -289,7 +236,8 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                         .padding(.horizontal, 16)
                         .contentShape(Rectangle())
                     }
-                    .disabled(!allowsTypeSwitching)
+                    .buttonStyle(.plain)
+                    .disabled(!allowsTypeSwitching || onOpenProductPicker == nil)
 
                     FinancesRowDivider(leadingPadding: 16)
 
@@ -350,17 +298,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                 creditDebtText = AmountInputFormatter.plainString(from: debt)
             }
         }
-    }
-
-    private var selectedProductTypeDisplayName: String {
-        guard selectedProductType == .investment else {
-            return selectedProductType.displayName
-        }
-        return selectedInvestmentCategory.displayName
-    }
-
-    private var visibleInvestmentCategories: [InvestmentCategory] {
-        [.house, .stocks, .business, .debt, .crypto, .other]
     }
     
     private var balanceSection: some View {
@@ -732,7 +669,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         .premiumUpsellAlert(
             isPresented: $showCryptoProAlert,
             titleKey: "monetization.crypto.pro_title",
-            message: String(localized: "monetization.crypto.pro_message"),
+            message: .key("monetization.crypto.pro_message"),
             onSubscribe: { router.push(.subscription) }
         )
     }
@@ -1333,7 +1270,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         .premiumUpsellAlert(
             isPresented: $showCryptoProAlert,
             titleKey: "monetization.crypto.pro_title",
-            message: String(localized: "monetization.crypto.pro_message"),
+            message: .key("monetization.crypto.pro_message"),
             onSubscribe: { router.push(.subscription) }
         )
         .sheet(isPresented: $showMarketSearchSheet) {
@@ -1841,7 +1778,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: Locale.current.identifier)
+        formatter.locale = AppLocalization.currentAppLocale
         formatter.dateFormat = "dd.MM.yyyy HH:mm"
         return formatter.string(from: date)
     }

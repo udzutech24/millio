@@ -22,6 +22,10 @@ struct AppPinCodeSetupView: View {
     @State private var firstPin = ""
     @State private var errorText: String?
 
+    private var locale: Locale {
+        AppLocalization.currentAppLocale
+    }
+
     private enum Step {
         case verifyCurrent
         case enterNew
@@ -53,11 +57,15 @@ struct AppPinCodeSetupView: View {
                 }
                 .padding(.horizontal, 24)
             }
-            .navigationTitle(mode == .create ? "PIN code" : "Change PIN")
+            .navigationTitle(
+                mode == .create
+                    ? localized("profile.pin_setup.title.create", fallback: "PIN code")
+                    : localized("profile.pin_setup.title.change", fallback: "Change PIN code")
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Cancel") {
+                    Button(localized("common.cancel", fallback: "Cancel")) {
                         dismiss()
                     }
                 }
@@ -73,11 +81,11 @@ struct AppPinCodeSetupView: View {
     private var stepTitle: String {
         switch step {
         case .verifyCurrent:
-            return "Enter current PIN"
+            return localized("profile.pin_setup.step.verify_current", fallback: "Enter current PIN")
         case .enterNew:
-            return "Enter new PIN"
+            return localized("profile.pin_setup.step.enter_new", fallback: "Enter new PIN")
         case .confirmNew:
-            return "Re-enter new PIN"
+            return localized("profile.pin_setup.step.confirm_new", fallback: "Re-enter new PIN")
         }
     }
 
@@ -139,7 +147,7 @@ struct AppPinCodeSetupView: View {
         switch step {
         case .verifyCurrent:
             guard AppLockPinStore.shared.verify(pin: enteredPin) else {
-                errorText = "Current PIN is incorrect"
+                errorText = localized("profile.pin_setup.error.incorrect_current", fallback: "Current PIN is incorrect")
                 enteredPin = ""
                 return
             }
@@ -151,7 +159,7 @@ struct AppPinCodeSetupView: View {
             step = .confirmNew
         case .confirmNew:
             guard enteredPin == firstPin else {
-                errorText = "PIN codes do not match"
+                errorText = localized("profile.pin_setup.error.mismatch", fallback: "PIN codes do not match")
                 firstPin = ""
                 enteredPin = ""
                 step = .enterNew
@@ -162,12 +170,16 @@ struct AppPinCodeSetupView: View {
                 onSaved()
                 dismiss()
             } catch {
-                errorText = "Failed to save PIN"
+                errorText = localized("profile.pin_setup.error.save_failed", fallback: "Failed to save PIN")
                 firstPin = ""
                 enteredPin = ""
                 step = .enterNew
             }
         }
+    }
+
+    private func localized(_ key: String, fallback: String) -> String {
+        AppLocalization.string(key, locale: locale, fallback: fallback)
     }
 }
 

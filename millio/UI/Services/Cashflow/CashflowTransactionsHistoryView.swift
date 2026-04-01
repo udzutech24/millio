@@ -8,6 +8,22 @@
 import SwiftUI
 import SwiftData
 
+private func cashflowHistoryLocalizedText(
+    _ key: String,
+    locale: Locale,
+    ru: String,
+    en: String,
+    zhHans: String? = nil
+) -> String {
+    let localized = AppLocalization.string(key, locale: locale)
+    guard localized == key else { return localized }
+    return FinancesL10n.text(locale: locale, ru: ru, en: en, zhHans: zhHans)
+}
+
+private func cashflowHistoryTr(_ key: String, fallback: String? = nil) -> String {
+    AppLocalization.string(key, locale: AppLocalization.currentAppLocale, fallback: fallback)
+}
+
 func cashflowHistoryAmountText(_ amount: Double) -> String {
     let formatter = NumberFormatter()
     formatter.numberStyle = .decimal
@@ -46,14 +62,31 @@ func cashflowHistoryFormattedNumberText(
 func cashflowHistoryAssetChangeLines(
     for transaction: CashflowTransaction,
     currencyCode: String,
-    locale: Locale = .autoupdatingCurrent
+    locale: Locale = AppLocalization.currentAppLocale
 ) -> [String] {
     guard transaction.hasAssetChangeSnapshot else { return [] }
 
-    let isRussian = locale.identifier.lowercased().hasPrefix("ru")
-    let quantityTitle = isRussian ? "Кол-во" : "Qty"
-    let priceTitle = isRussian ? "Цена" : "Price"
-    let amountTitle = isRussian ? "Стоимость" : "Value"
+    let quantityTitle = cashflowHistoryLocalizedText(
+        "cashflow.history.asset_change.quantity",
+        locale: locale,
+        ru: "Кол-во",
+        en: "Qty",
+        zhHans: "数量"
+    )
+    let priceTitle = cashflowHistoryLocalizedText(
+        "cashflow.history.asset_change.price",
+        locale: locale,
+        ru: "Цена",
+        en: "Price",
+        zhHans: "价格"
+    )
+    let amountTitle = cashflowHistoryLocalizedText(
+        "cashflow.history.asset_change.value",
+        locale: locale,
+        ru: "Стоимость",
+        en: "Value",
+        zhHans: "价值"
+    )
     let epsilon = 0.0000001
 
     func appendLine(
@@ -105,7 +138,7 @@ func cashflowHistoryAssetChangeLines(
 func cashflowHistoryAssetChangeSummary(
     for transaction: CashflowTransaction,
     currencyCode: String,
-    locale: Locale = .autoupdatingCurrent
+    locale: Locale = AppLocalization.currentAppLocale
 ) -> String? {
     let lines = cashflowHistoryAssetChangeLines(
         for: transaction,
@@ -198,29 +231,40 @@ func cashflowHistorySettlementAccountContext(
 
 func cashflowHistoryPrimaryTitle(
     for transaction: CashflowTransaction,
-    locale: Locale = .autoupdatingCurrent
+    locale: Locale = AppLocalization.currentAppLocale
 ) -> String {
-    let resolvedLocale = cashflowHistoryPresentationLocale(from: locale)
     let trimmedNote = transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     guard !trimmedNote.isEmpty else { return transaction.transactionType.displayName }
 
     func localizedInvestmentTradeTitleIfNeeded() -> String? {
-        let buyTitles = [
-            AppLocalization.string("finances.transaction.note.investment_buy", locale: resolvedLocale),
-            AppLocalization.string("finances.transaction.note.investment_buy", locale: Locale(identifier: "ru_RU")),
-            AppLocalization.string("finances.transaction.note.investment_buy", locale: Locale(identifier: "en_US"))
-        ]
-        if buyTitles.contains(trimmedNote) {
-            return AppLocalization.string("finances.transaction.note.investment_buy", locale: resolvedLocale)
+        func matchesLocalizedNote(key: String) -> Bool {
+            if trimmedNote == key {
+                return true
+            }
+
+            let candidateLocales = cashflowHistoryLocalizationCandidates(for: locale)
+            let localizedValues = candidateLocales.map { candidate in
+                AppLocalization.string(key, locale: candidate)
+            }
+            return localizedValues.contains(trimmedNote)
         }
 
-        let sellTitles = [
-            AppLocalization.string("finances.transaction.note.investment_sell", locale: resolvedLocale),
-            AppLocalization.string("finances.transaction.note.investment_sell", locale: Locale(identifier: "ru_RU")),
-            AppLocalization.string("finances.transaction.note.investment_sell", locale: Locale(identifier: "en_US"))
-        ]
-        if sellTitles.contains(trimmedNote) {
-            return AppLocalization.string("finances.transaction.note.investment_sell", locale: resolvedLocale)
+        if matchesLocalizedNote(key: "finances.transaction.note.investment_buy") {
+            return cashflowHistoryLocalizedText(
+                "finances.transaction.note.investment_buy",
+                locale: locale,
+                ru: "Покупка актива",
+                en: "Asset purchase"
+            )
+        }
+
+        if matchesLocalizedNote(key: "finances.transaction.note.investment_sell") {
+            return cashflowHistoryLocalizedText(
+                "finances.transaction.note.investment_sell",
+                locale: locale,
+                ru: "Продажа актива",
+                en: "Asset sale"
+            )
         }
 
         return nil
@@ -242,34 +286,72 @@ func cashflowHistoryPrimaryTitle(
     }
 }
 
-private func cashflowHistoryPresentationLocale(from locale: Locale) -> Locale {
-    let appLocale = LanguageManager.shared.currentLanguage.locale
-    guard let appLocale else { return locale }
+private func cashflowHistoryLocalizationCandidates(for locale: Locale) -> [Locale] {
+    let candidates = [
+        locale,
+        Locale(identifier: "ru_RU"),
+        Locale(identifier: "en_US"),
+        Locale(identifier: "zh-Hans")
+    ]
 
-    let localeIdentifier = locale.identifier.lowercased()
-    let currentIdentifiers = Set([
-        Locale.autoupdatingCurrent.identifier.lowercased(),
-        Locale.current.identifier.lowercased()
-    ])
-
-    guard currentIdentifiers.contains(localeIdentifier) else {
-        return locale
+    var seen = Set<String>()
+    return candidates.filter { candidate in
+        let identifier = candidate.identifier.lowercased()
+        guard !seen.contains(identifier) else { return false }
+        seen.insert(identifier)
+        return true
     }
-
-    return appLocale
 }
 
 func cashflowHistoryAccountLabel(
     for direction: CashflowHistorySettlementDirection,
-    locale: Locale = .autoupdatingCurrent
+    transaction: CashflowTransaction? = nil,
+    locale: Locale = AppLocalization.currentAppLocale
 ) -> String {
-    let isRussian = locale.identifier.lowercased().hasPrefix("ru")
+    if direction == .debit,
+       let transaction,
+       cashflowHistoryUsesDedicatedSettlementLabel(for: transaction) {
+        return AppLocalization.string(
+            "cashflow.history.detail.settlement_account",
+            locale: locale,
+            fallback: cashflowHistoryLocalizedText(
+                "cashflow.history.detail.settlement_account",
+                locale: locale,
+                ru: "Счет списания",
+                en: "Settlement account",
+                zhHans: "结算账户"
+            )
+        )
+    }
+
     switch direction {
     case .debit:
-        return isRussian ? "Счет списания" : "Debit account"
+        return cashflowHistoryLocalizedText(
+            "cashflow.history.detail.from_account",
+            locale: locale,
+            ru: "Счет списания",
+            en: "From account",
+            zhHans: "支出账户"
+        )
     case .credit:
-        return isRussian ? "Счет зачисления" : "Credit account"
+        return cashflowHistoryLocalizedText(
+            "cashflow.history.detail.to_account",
+            locale: locale,
+            ru: "Счет зачисления",
+            en: "To account",
+            zhHans: "入账账户"
+        )
     }
+}
+
+private func cashflowHistoryUsesDedicatedSettlementLabel(for transaction: CashflowTransaction) -> Bool {
+    if transaction.transactionType == .balanceAdjustment, transaction.investmentID != nil {
+        return true
+    }
+
+    return (transaction.transactionType == .expense || transaction.transactionType == .income)
+        && transaction.investmentID != nil
+        && transaction.shouldAffectCashflowTotals == false
 }
 
 func cashflowHistoryDescription(
@@ -279,7 +361,7 @@ func cashflowHistoryDescription(
     investmentNameResolver: (String?) -> String?,
     incomeCategoryResolver: (String?) -> String,
     expenseCategoryResolver: (String?) -> String,
-    locale: Locale = .autoupdatingCurrent
+    locale: Locale = AppLocalization.currentAppLocale
 ) -> String? {
     var parts: [String] = []
 
@@ -307,16 +389,22 @@ func cashflowHistoryDescription(
         for: transaction,
         in: relatedTransactions
     ), let cardName = cardNameResolver(context.cardID) {
-        parts.append("\(cashflowHistoryAccountLabel(for: context.direction, locale: locale)): \(cardName)")
+        parts.append(
+            "\(cashflowHistoryAccountLabel(for: context.direction, transaction: transaction, locale: locale)): \(cardName)"
+        )
     } else {
         switch transaction.transactionType {
         case .expense:
             if let cardName = cardNameResolver(transaction.cardID) {
-                parts.append("\(cashflowHistoryAccountLabel(for: .debit, locale: locale)): \(cardName)")
+                parts.append(
+                    "\(cashflowHistoryAccountLabel(for: .debit, transaction: transaction, locale: locale)): \(cardName)"
+                )
             }
         case .income:
             if let cardName = cardNameResolver(transaction.cardID) {
-                parts.append("\(cashflowHistoryAccountLabel(for: .credit, locale: locale)): \(cardName)")
+                parts.append(
+                    "\(cashflowHistoryAccountLabel(for: .credit, transaction: transaction, locale: locale)): \(cardName)"
+                )
             }
         case .transfer, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
             break
@@ -332,7 +420,7 @@ func cashflowHistoryDescription(
     }
 
     let trimmedNote = transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    let primaryTitle = cashflowHistoryPrimaryTitle(for: transaction)
+    let primaryTitle = cashflowHistoryPrimaryTitle(for: transaction, locale: locale)
     if !trimmedNote.isEmpty && trimmedNote != primaryTitle {
         parts.append(trimmedNote)
     }
@@ -468,7 +556,7 @@ struct CashflowTransactionsHistoryView: View {
                     }
                 }
             }
-            .navigationTitle(String(localized: "cashflow.history.title"))
+            .navigationTitle(cashflowHistoryTr("cashflow.history.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if showsDismissButton {
@@ -555,10 +643,9 @@ struct CashflowTransactionsHistoryView: View {
                     )
 
                     HistoryCardFilterChip(
-                        title: selectedCardTitle ?? String(
-                            localized: "cashflow.history.cards",
-                            defaultValue: "Счета и карты",
-                            comment: "History card filter title"
+                        title: selectedCardTitle ?? cashflowHistoryTr(
+                            "cashflow.history.cards",
+                            fallback: "Счета и карты"
                         ),
                         isSelected: selectedCardID != nil
                     ) {
@@ -620,7 +707,7 @@ struct CashflowTransactionsHistoryView: View {
             }
             .buttonStyle(.plain)
 
-            Button(String(localized: "cashflow.common.cancel")) {
+            Button(cashflowHistoryTr("cashflow.common.cancel")) {
                 withAnimation(.easeInOut(duration: 0.25)) {
                     isSearchActive = false
                     searchText = ""
@@ -642,14 +729,14 @@ struct CashflowTransactionsHistoryView: View {
                 .font(.system(size: 64))
                 .foregroundStyle(AppColors.textTertiary)
 
-            Text(String(localized: "cashflow.history.empty.title"))
+            Text(cashflowHistoryTr("cashflow.history.empty.title"))
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
 
             Text(
                 isSearchActive
-                ? String(localized: "cashflow.history.empty.search")
-                : String(localized: "cashflow.history.empty.default")
+                ? cashflowHistoryTr("cashflow.history.empty.search")
+                : cashflowHistoryTr("cashflow.history.empty.default")
             )
                 .font(.system(size: 14))
                 .foregroundStyle(AppColors.textSecondary)
@@ -754,7 +841,7 @@ struct CashflowTransactionsHistoryView: View {
                 displayedTransactionsLimit += Self.pageSize
             }
         } label: {
-            Text(String(localized: "cashflow.history.load_more"))
+            Text(cashflowHistoryTr("cashflow.history.load_more"))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .frame(maxWidth: .infinity)
@@ -786,7 +873,7 @@ struct CashflowTransactionsHistoryView: View {
 
     private var dateFilterTitle: String {
         let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
+        formatter.locale = AppLocalization.currentAppLocale
         formatter.setLocalizedDateFormatFromTemplate("LLLL")
         switch (selectedStartDate, selectedEndDate) {
         case let (start?, end?):
@@ -806,7 +893,7 @@ struct CashflowTransactionsHistoryView: View {
         case let (nil, end?):
             return formatter.string(from: end).capitalized
         case (nil, nil):
-            return String(localized: "cashflow.history.period")
+            return cashflowHistoryTr("cashflow.history.period")
         }
     }
 
@@ -879,7 +966,7 @@ struct CashflowTransactionsHistoryView: View {
 
     private func formatSectionDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
+        formatter.locale = AppLocalization.currentAppLocale
         formatter.setLocalizedDateFormatFromTemplate("dMMMM y")
         return formatter.string(from: date)
     }
@@ -1059,7 +1146,7 @@ private struct HistoryDateRangeSheet: View {
 
                 CalendarRangePickerPanel(
                     title: CalendarRangePickerCopy.sheetTitle(),
-                    subtitle: String(localized: "cashflow.custom_period.calendar_hint"),
+                    subtitle: cashflowHistoryTr("cashflow.custom_period.calendar_hint"),
                     startDate: $draftStartDate,
                     endDate: $draftEndDate,
                     theme: .cashflow
@@ -1069,8 +1156,8 @@ private struct HistoryDateRangeSheet: View {
             }
             .safeAreaInset(edge: .bottom) {
                 CalendarRangeSheetActionBar(
-                    secondaryTitle: String(localized: "cashflow.common.reset"),
-                    primaryTitle: String(localized: "cashflow.common.apply"),
+                    secondaryTitle: cashflowHistoryTr("cashflow.common.reset"),
+                    primaryTitle: cashflowHistoryTr("cashflow.common.apply"),
                     theme: .cashflow
                 ) {
                         resetToDefaultRange()
@@ -1081,13 +1168,13 @@ private struct HistoryDateRangeSheet: View {
                         dismiss()
                 }
             }
-            .navigationTitle(String(localized: "cashflow.history.date_filter.title"))
+            .navigationTitle(cashflowHistoryTr("cashflow.history.date_filter.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     ToolbarGlassIconButton(
                         systemName: "xmark",
-                        accessibilityLabel: String(localized: "cashflow.common.dismiss")
+                        accessibilityLabel: cashflowHistoryTr("cashflow.common.dismiss")
                     ) {
                         dismiss()
                     }
@@ -1108,7 +1195,7 @@ private struct HistoryDateRangeSheet: View {
 
     private var periodTitle: String {
         let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
+        formatter.locale = AppLocalization.currentAppLocale
         formatter.setLocalizedDateFormatFromTemplate("dMMM y")
         let start = min(draftStartDate, draftEndDate)
         let end = max(draftStartDate, draftEndDate)
@@ -1141,10 +1228,9 @@ private struct HistoryCardFilterSheet: View {
                     dismiss()
                 } label: {
                     HStack {
-                        Text(String(
-                            localized: "cashflow.history.cards.all",
-                            defaultValue: "Все счета и карты",
-                            comment: "All cards option in history filter"
+                        Text(cashflowHistoryTr(
+                            "cashflow.history.cards.all",
+                            fallback: "Все счета и карты"
                         ))
                         Spacer()
                         if selectedCardID == nil {
@@ -1192,15 +1278,11 @@ private struct HistoryCardFilterSheet: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color.black.ignoresSafeArea())
-            .navigationTitle(String(
-                localized: "cashflow.history.cards",
-                defaultValue: "Счета и карты",
-                comment: "History card filter title"
-            ))
+            .navigationTitle(cashflowHistoryTr("cashflow.history.cards", fallback: "Счета и карты"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(String(localized: "cashflow.common.dismiss")) {
+                    Button(cashflowHistoryTr("cashflow.common.dismiss")) {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
@@ -1246,24 +1328,23 @@ private struct HistoryTransactionDetailView: View {
                 .padding(.bottom, 24)
             }
         }
-        .navigationTitle(String(localized: "cashflow.history.detail.title"))
+        .navigationTitle(cashflowHistoryTr("cashflow.history.detail.title"))
         .navigationBarTitleDisplayMode(.inline)
-        .alert(String(localized: "cashflow.history.detail.delete.title"), isPresented: $showDeleteAlert) {
-            Button(String(localized: "cashflow.common.cancel"), role: .cancel) {}
-            Button(String(localized: "cashflow.history.detail.delete.with_recalc"), role: .destructive) {
+        .alert(cashflowHistoryTr("cashflow.history.detail.delete.title"), isPresented: $showDeleteAlert) {
+            Button(cashflowHistoryTr("cashflow.common.cancel"), role: .cancel) {}
+            Button(cashflowHistoryTr("cashflow.history.detail.delete.with_recalc"), role: .destructive) {
                 deleteTransaction(recalculate: true)
             }
-            Button(String(localized: "cashflow.history.detail.delete.without_recalc"), role: .destructive) {
+            Button(cashflowHistoryTr("cashflow.history.detail.delete.without_recalc"), role: .destructive) {
                 deleteTransaction(recalculate: false)
             }
         } message: {
-            Text(String(localized: "cashflow.history.detail.delete.message"))
+            Text(cashflowHistoryTr("cashflow.history.detail.delete.message"))
         }
         .alert(
-            String(
-                localized: "cashflow.history.detail.delete.balance_update_failed.title",
-                defaultValue: "Cannot update balances",
-                comment: "Title for failed balance recalculation after deleting a cashflow transaction"
+            cashflowHistoryTr(
+                "cashflow.history.detail.delete.balance_update_failed.title",
+                fallback: "Cannot update balances"
             ),
             isPresented: Binding(
                 get: { viewModel.state.deleteBalanceUpdateErrorMessage != nil },
@@ -1274,7 +1355,7 @@ private struct HistoryTransactionDetailView: View {
                 }
             )
         ) {
-            Button(String(localized: "cashflow.common.ok"), role: .cancel) {
+            Button(cashflowHistoryTr("cashflow.common.ok"), role: .cancel) {
                 viewModel.handle(.dismissDeleteBalanceUpdateError)
             }
         } message: {
@@ -1294,21 +1375,21 @@ private struct HistoryTransactionDetailView: View {
     private var detailCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             detailRow(
-                title: String(localized: "cashflow.history.detail.amount"),
+                title: cashflowHistoryTr("cashflow.history.detail.amount"),
                 value: formattedAmount
             )
             detailRow(
-                title: String(localized: "cashflow.history.detail.type"),
+                title: cashflowHistoryTr("cashflow.history.detail.type"),
                 value: cashflowHistoryPrimaryTitle(for: currentTransaction)
             )
             detailRow(
-                title: String(localized: "cashflow.history.detail.date"),
+                title: cashflowHistoryTr("cashflow.history.detail.date"),
                 value: formattedDate
             )
 
             if let category = categoryTitle {
                 detailRow(
-                    title: String(localized: "cashflow.history.detail.category"),
+                    title: cashflowHistoryTr("cashflow.history.detail.category"),
                     value: category
                 )
             }
@@ -1316,14 +1397,17 @@ private struct HistoryTransactionDetailView: View {
             if let settlementAccountContext,
                let settlementCard = cardName(for: settlementAccountContext.cardID) {
                 detailRow(
-                    title: cashflowHistoryAccountLabel(for: settlementAccountContext.direction),
+                    title: cashflowHistoryAccountLabel(
+                        for: settlementAccountContext.direction,
+                        transaction: currentTransaction
+                    ),
                     value: settlementCard
                 )
             }
 
             if let toCard = cardName(for: currentTransaction.toCardID) {
                 detailRow(
-                    title: String(localized: "cashflow.history.detail.to_account"),
+                    title: cashflowHistoryTr("cashflow.history.detail.to_account"),
                     value: toCard
                 )
             }
@@ -1344,7 +1428,7 @@ private struct HistoryTransactionDetailView: View {
 
             if let note = detailNote {
                 detailRow(
-                    title: String(localized: "cashflow.history.detail.note"),
+                    title: cashflowHistoryTr("cashflow.history.detail.note"),
                     value: note
                 )
             }
@@ -1363,7 +1447,7 @@ private struct HistoryTransactionDetailView: View {
             Button {
                 showEditSheet = true
             } label: {
-                Label(String(localized: "cashflow.history.detail.edit"), systemImage: "square.and.pencil")
+                Label(cashflowHistoryTr("cashflow.history.detail.edit"), systemImage: "square.and.pencil")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                     .frame(maxWidth: .infinity)
@@ -1382,7 +1466,7 @@ private struct HistoryTransactionDetailView: View {
             Button {
                 showDeleteAlert = true
             } label: {
-                Label(String(localized: "cashflow.history.detail.delete"), systemImage: "trash")
+                Label(cashflowHistoryTr("cashflow.history.detail.delete"), systemImage: "trash")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.red.opacity(0.95))
                     .frame(maxWidth: .infinity)
@@ -1415,7 +1499,7 @@ private struct HistoryTransactionDetailView: View {
 
     private var formattedDate: String {
         let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
+        formatter.locale = AppLocalization.currentAppLocale
         formatter.setLocalizedDateFormatFromTemplate("d MMMM y, HH:mm")
         return formatter.string(from: currentTransaction.transactionDate)
     }
@@ -1481,11 +1565,18 @@ private struct HistoryTransactionDetailView: View {
     }
 
     private var historyInvestmentTitle: String {
-        Locale.autoupdatingCurrent.identifier.lowercased().hasPrefix("ru") ? "Актив" : "Asset"
+        AppLocalization.string(
+            "finances.account.type.investment",
+            locale: AppLocalization.currentAppLocale
+        )
     }
 
     private var historyChangesTitle: String {
-        Locale.autoupdatingCurrent.identifier.lowercased().hasPrefix("ru") ? "Что изменилось" : "What changed"
+        AppLocalization.string(
+            "cashflow.history.detail.changes",
+            locale: AppLocalization.currentAppLocale,
+            fallback: "What changed"
+        )
     }
 
     private func deleteTransaction(recalculate: Bool) {

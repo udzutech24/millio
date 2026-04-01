@@ -76,11 +76,15 @@ struct QuickSetupView: View {
     }
 
     private var quickSetupLocale: Locale {
-        viewModel.selectedLanguage.locale ?? Locale.current
+        viewModel.presentationLocale
     }
 
-    private func quickSetupText(ru: String, en: String) -> String {
-        QuickSetupLocalization.text(locale: quickSetupLocale, ru: ru, en: en)
+    private func quickSetupText(_ key: String, fallback: String? = nil) -> String {
+        QuickSetupLocalization.tr(key, locale: quickSetupLocale, fallback: fallback)
+    }
+
+    private func quickSetupFormat(_ key: String, fallback: String? = nil, _ args: CVarArg...) -> String {
+        QuickSetupLocalization.formatArguments(key, locale: quickSetupLocale, fallback: fallback, arguments: args)
     }
 
     var body: some View {
@@ -141,7 +145,7 @@ struct QuickSetupView: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button(quickSetupText(ru: "Готово", en: "Done")) { focusedField = nil }
+                Button(quickSetupText("quick_setup.common.done")) { focusedField = nil }
             }
         }
         .sheet(isPresented: $showLanguageSheet) {
@@ -183,13 +187,13 @@ struct QuickSetupView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        .alert(quickSetupText(ru: "Не удалось применить настройку", en: "Couldn't apply setup"), isPresented: Binding(
+        .alert(quickSetupText("quick_setup.alert.apply_failed.title"), isPresented: Binding(
             get: { errorMessage != nil },
             set: { newValue in
                 if !newValue { errorMessage = nil }
             }
         )) {
-            Button(quickSetupText(ru: "Ок", en: "OK"), role: .cancel) {}
+            Button(quickSetupText("quick_setup.common.ok"), role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
         }
@@ -314,7 +318,7 @@ struct QuickSetupView: View {
             Spacer()
 
             if mode == .onboarding {
-                Button(quickSetupText(ru: "Пропустить", en: "Skip")) {
+                Button(quickSetupText("quick_setup.common.skip")) {
                     onSkipped?()
                 }
                 .font(.system(size: 15, weight: .semibold))
@@ -382,7 +386,7 @@ struct QuickSetupView: View {
     private var localeAndCurrenciesStep: some View {
         stepSectionCard {
             QuickSetupRowCard(
-                title: quickSetupText(ru: "Язык", en: "Language"),
+                title: quickSetupText("quick_setup.common.language"),
                 value: viewModel.selectedLanguage.displayName,
                 icon: "globe",
                 gradient: AppColors.coursesGradient,
@@ -392,7 +396,7 @@ struct QuickSetupView: View {
             }
 
             QuickSetupRowCard(
-                title: quickSetupText(ru: "Основная валюта", en: "Primary currency"),
+                title: quickSetupText("quick_setup.common.primary_currency"),
                 value: viewModel.primaryCurrencyCode,
                 icon: "dollarsign.circle.fill",
                 gradient: AppColors.financesGradient,
@@ -402,8 +406,8 @@ struct QuickSetupView: View {
             }
 
             QuickSetupRowCard(
-                title: quickSetupText(ru: "Избранные валюты", en: "Favorite currencies"),
-                value: viewModel.favoriteCurrencyCodes.isEmpty ? quickSetupText(ru: "Не выбраны", en: "Not selected") : viewModel.favoriteCurrencyCodes.joined(separator: ", "),
+                title: quickSetupText("quick_setup.common.favorite_currencies"),
+                value: viewModel.favoriteCurrencyCodes.isEmpty ? quickSetupText("quick_setup.common.not_selected") : viewModel.favoriteCurrencyCodes.joined(separator: ", "),
                 icon: "star.circle.fill",
                 gradient: AppColors.cashbackGradient,
                 isCompleted: isFavoriteCurrenciesConfigured
@@ -412,8 +416,21 @@ struct QuickSetupView: View {
             }
 
             HStack(spacing: 8) {
-                quickSetupTag(quickSetupText(ru: "Основная: \(viewModel.primaryCurrencyCode)", en: "Primary: \(viewModel.primaryCurrencyCode)"))
-                quickSetupTag(quickSetupText(ru: "Избранных: \(viewModel.favoriteCurrencyCodes.count)/\(QuickSetupViewModel.maxFavoriteCurrencies)", en: "Favorites: \(viewModel.favoriteCurrencyCodes.count)/\(QuickSetupViewModel.maxFavoriteCurrencies)"))
+                quickSetupTag(
+                    quickSetupFormat(
+                        "quick_setup.badge.primary_currency_format",
+                        "%@",
+                        viewModel.primaryCurrencyCode
+                    )
+                )
+                quickSetupTag(
+                    quickSetupFormat(
+                        "quick_setup.badge.favorites_count_format",
+                        "%lld/%lld",
+                        viewModel.favoriteCurrencyCodes.count,
+                        QuickSetupViewModel.maxFavoriteCurrencies
+                    )
+                )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -424,7 +441,7 @@ struct QuickSetupView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     quickActionChip(
-                        title: quickSetupText(ru: "Все", en: "All"),
+                        title: quickSetupText("quick_setup.common.all"),
                         systemImage: "square.grid.2x2",
                         prominence: .secondary
                     ) {
@@ -434,7 +451,7 @@ struct QuickSetupView: View {
                     }
 
                     quickActionChip(
-                        title: quickSetupText(ru: "Рекомендуемые", en: "Recommended"),
+                        title: quickSetupText("quick_setup.common.recommended"),
                         systemImage: "sparkles",
                         prominence: .accent
                     ) {
@@ -444,7 +461,7 @@ struct QuickSetupView: View {
                     }
 
                     quickActionChip(
-                        title: quickSetupText(ru: "Очистить", en: "Clear"),
+                        title: quickSetupText("quick_setup.common.clear"),
                         systemImage: "xmark",
                         prominence: .secondary
                     ) {
@@ -496,7 +513,7 @@ struct QuickSetupView: View {
                 Spacer()
                 Image(systemName: "info.circle")
                     .foregroundStyle(AppColors.textSecondary)
-                Text(quickSetupText(ru: "Категории можно скорректировать позже", en: "Categories can be adjusted later"))
+                Text(quickSetupText("quick_setup.hint.categories_adjust_later"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
             }
@@ -576,7 +593,7 @@ struct QuickSetupView: View {
                 }
             }
 
-            Text(quickSetupText(ru: "Можно добавить позже", en: "You can add this later"))
+            Text(quickSetupText("quick_setup.hint.add_later"))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary.opacity(0.9))
         }
@@ -587,7 +604,7 @@ struct QuickSetupView: View {
             if isProductTypeCollapsed {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(quickSetupText(ru: "Тип продукта", en: "Product type"))
+                        Text(quickSetupText("quick_setup.common.product_type"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                         Text(viewModel.productTypeForCreation.title(for: quickSetupLocale))
@@ -598,7 +615,7 @@ struct QuickSetupView: View {
 
                     Spacer()
 
-                    Button(quickSetupText(ru: "Изменить", en: "Edit")) {
+                    Button(quickSetupText("quick_setup.common.edit")) {
                         withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
                             isProductTypeCollapsed = false
                             viewModel.clearProducts()
@@ -620,7 +637,7 @@ struct QuickSetupView: View {
                 )
             } else {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(quickSetupText(ru: "Тип продукта", en: "Product type"))
+                    Text(quickSetupText("quick_setup.common.product_type"))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                 }
@@ -635,7 +652,7 @@ struct QuickSetupView: View {
             if isGroupSetupCollapsed, !viewModel.groups.isEmpty {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(quickSetupText(ru: "Группировка", en: "Grouping"))
+                        Text(quickSetupText("quick_setup.common.grouping"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                         Text(collapsedGroupsSummaryText)
@@ -646,7 +663,7 @@ struct QuickSetupView: View {
 
                     Spacer()
 
-                    Button(quickSetupText(ru: "Изменить", en: "Edit")) {
+                    Button(quickSetupText("quick_setup.common.edit")) {
                         withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
                             isGroupSetupCollapsed = false
                             viewModel.clearProducts()
@@ -668,14 +685,11 @@ struct QuickSetupView: View {
                 )
             } else {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(quickSetupText(ru: "Группировка", en: "Grouping"))
+                    Text(quickSetupText("quick_setup.common.grouping"))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     Text(
-                        quickSetupText(
-                            ru: "Чтобы похожие продукты были вместе",
-                            en: "Keep similar products together"
-                        )
+                        quickSetupText("quick_setup.grouping.subtitle")
                     )
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
@@ -712,7 +726,7 @@ struct QuickSetupView: View {
 
                                 if isRecommended {
                                     QuickSetupRecommendedBadge()
-                                        .accessibilityLabel(quickSetupText(ru: "Рекомендуемая группировка", en: "Recommended grouping"))
+                                        .accessibilityLabel(quickSetupText("quick_setup.grouping.recommended_accessibility"))
                                 }
                             }
                             .frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
@@ -849,7 +863,7 @@ struct QuickSetupView: View {
                     QuickSetupCompletionHero()
 
                     VStack(spacing: 8) {
-                        Text(quickSetupText(ru: "Настройка завершена", en: "Setup complete"))
+                        Text(quickSetupText("quick_setup.summary.complete_title"))
                             .font(.system(size: 30, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
                             .multilineTextAlignment(.center)
@@ -858,11 +872,11 @@ struct QuickSetupView: View {
 
                 stepSectionCard {
                     VStack(alignment: .leading, spacing: 10) {
-                        summaryRow(title: quickSetupText(ru: "Хранение данных", en: "Data storage"), value: selection.backupPreference.title(for: quickSetupLocale))
-                        summaryRow(title: quickSetupText(ru: "Язык", en: "Language"), value: selection.language.displayName(for: quickSetupLocale))
-                        summaryRow(title: quickSetupText(ru: "Основная валюта", en: "Primary currency"), value: selection.primaryCurrencyCode)
-                        summaryRow(title: quickSetupText(ru: "Категории расходов", en: "Expense categories"), value: "\(selection.selectedExpenseCategoryIDs.count)")
-                        summaryRow(title: quickSetupText(ru: "Продукты", en: "Products"), value: "\(selection.products.count)")
+                        summaryRow(title: quickSetupText("quick_setup.common.data_storage"), value: selection.backupPreference.title(for: quickSetupLocale))
+                        summaryRow(title: quickSetupText("quick_setup.common.language"), value: selection.language.displayName(for: quickSetupLocale))
+                        summaryRow(title: quickSetupText("quick_setup.common.primary_currency"), value: selection.primaryCurrencyCode)
+                        summaryRow(title: quickSetupText("quick_setup.common.expense_categories"), value: "\(selection.selectedExpenseCategoryIDs.count)")
+                        summaryRow(title: quickSetupText("quick_setup.common.products"), value: "\(selection.products.count)")
                     }
                 }
             }
@@ -902,8 +916,8 @@ struct QuickSetupView: View {
                 } label: {
                     quickSetupPrimaryButtonLabel(
                         title: mode == .settings
-                            ? quickSetupText(ru: "Готово", en: "Done")
-                            : quickSetupText(ru: "Продолжить", en: "Continue"),
+                            ? quickSetupText("quick_setup.common.done")
+                            : quickSetupText("quick_setup.common.continue"),
                         systemImage: "arrow.right.circle.fill",
                         isLoading: false,
                         isAccentActive: true
@@ -920,7 +934,7 @@ struct QuickSetupView: View {
                         }
                         fireSelectionHaptic()
                     } label: {
-                        Text(quickSetupText(ru: "Назад", en: "Back"))
+                        Text(quickSetupText("quick_setup.common.back"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(AppColors.textSecondary)
                             .frame(maxWidth: .infinity)
@@ -982,9 +996,11 @@ struct QuickSetupView: View {
     }
 
     private var stepProgressText: String {
-        quickSetupText(
-            ru: "Шаг \(viewModel.currentStep.rawValue + 1) из \(QuickSetupStep.allCases.count)",
-            en: "Step \(viewModel.currentStep.rawValue + 1) of \(QuickSetupStep.allCases.count)"
+        quickSetupFormat(
+            "quick_setup.step_progress_format",
+            "Step %1$lld of %2$lld",
+            viewModel.currentStep.rawValue + 1,
+            QuickSetupStep.allCases.count
         )
     }
 
@@ -999,40 +1015,36 @@ struct QuickSetupView: View {
 
     private var stepHeroTitle: String {
         if viewModel.currentStep == .products && !isProductTypeCollapsed {
-            return quickSetupText(ru: "Тип продукта", en: "Product type")
+            return quickSetupText("quick_setup.common.product_type")
         }
         if viewModel.currentStep == .products && !isGroupSetupCollapsed {
-            return quickSetupText(ru: "Группировка", en: "Grouping")
+            return quickSetupText("quick_setup.common.grouping")
         }
         return viewModel.currentStep.title(for: quickSetupLocale)
     }
 
     private var stepHeroSubtitle: String {
         if viewModel.currentStep == .products && !isProductTypeCollapsed {
-            return quickSetupText(
-                ru: "Выберите тип продукта, затем сохраните стартовый продукт",
-                en: "Choose the product type, then save your starting product"
-            )
+            return quickSetupText("quick_setup.product_type.subtitle")
         }
         if viewModel.currentStep == .products && !isGroupSetupCollapsed {
-            return quickSetupText(
-                ru: "Выберите группировку для стартового продукта",
-                en: "Choose grouping for your starting product"
-            )
+            return quickSetupText("quick_setup.grouping.select_subtitle")
         }
         return viewModel.currentStep.subtitle(for: quickSetupLocale)
     }
 
     private var selectedExpenseCategoriesText: String {
-        String(
-            format: String(localized: "quick_setup.selected_categories_count_format"),
+        quickSetupFormat(
+            "quick_setup.selected_categories_count_format",
+            "Selected: %lld",
             viewModel.selectedExpenseCategoryIDs.count
         )
     }
 
     private var addedProductsText: String {
-        String(
-            format: String(localized: "quick_setup.added_products_count_format"),
+        quickSetupFormat(
+            "quick_setup.added_products_count_format",
+            "Added: %lld",
             viewModel.products.count
         )
     }
@@ -1044,7 +1056,12 @@ struct QuickSetupView: View {
             return "\(productTypeTitle) • \(quantityText) × \(marketSnapshot.purchaseUnitPrice.formatted(.number.precision(.fractionLength(0...4)))) • \(moneyText(product.amount, currencyCode: product.currencyCode))"
         }
         let amountText = moneyText(product.amount, currencyCode: product.currencyCode)
-        return String(format: String(localized: "quick_setup.product_summary_format"), productTypeTitle, amountText)
+        return QuickSetupLocalization.format(
+            "quick_setup.product_summary_format",
+            locale: quickSetupLocale,
+            productTypeTitle,
+            amountText
+        )
     }
 
     private func productGroupName(_ product: QuickSetupProductDraft) -> String? {
@@ -1053,11 +1070,11 @@ struct QuickSetupView: View {
     }
 
     private var expenseCategoryPresets: [QuickSetupExpenseCategoryPreset] {
-        QuickSetupExpenseCategoryPreset.all(for: viewModel.selectedLanguage.locale ?? Locale.current)
+        QuickSetupExpenseCategoryPreset.all(for: quickSetupLocale)
     }
 
     private var collapsedGroupsSummaryText: String {
-        viewModel.groups.first?.name ?? quickSetupText(ru: "Группировка не выбрана", en: "No grouping selected")
+        viewModel.groups.first?.name ?? quickSetupText("quick_setup.grouping.none_selected")
     }
 
     private func saveSelection() {
@@ -1190,13 +1207,13 @@ struct QuickSetupView: View {
     private var primaryActionTitle: String {
         switch viewModel.currentStep {
         case .summary:
-            return quickSetupText(ru: "Завершить", en: "Finish")
+            return quickSetupText("quick_setup.common.finish")
         case .products:
             return viewModel.products.isEmpty && !hasPendingProductDraftInput
-                ? quickSetupText(ru: "Пропустить", en: "Skip")
+                ? quickSetupText("quick_setup.common.skip")
                 : viewModel.products.isEmpty
-                ? quickSetupText(ru: "Сохранить", en: "Save")
-                : quickSetupText(ru: "Продолжить", en: "Continue")
+                ? quickSetupText("quick_setup.common.save")
+                : quickSetupText("quick_setup.common.continue")
         default:
             return viewModel.continueTitle
         }
@@ -1228,7 +1245,7 @@ struct QuickSetupView: View {
             let saved = viewModel.savePrimaryDraftProduct()
             if !saved {
                 fireWarningHaptic()
-                errorMessage = viewModel.lastAddDraftError ?? String(localized: "quick_setup.error.check_data")
+                errorMessage = viewModel.lastAddDraftError ?? quickSetupText("quick_setup.error.check_data")
             } else {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
                     viewModel.goNextStep()
@@ -1283,7 +1300,7 @@ struct QuickSetupView: View {
                 .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.05)))
                 .id(FocusField.productName)
                 .accessibilityIdentifier("quickSetup.productNameField")
-                .accessibilityLabel(quickSetupText(ru: "Название", en: "Name"))
+                .accessibilityLabel(quickSetupText("quick_setup.common.name"))
 
             TextField(
                 viewModel.productAmountFieldTitle,
@@ -1311,7 +1328,7 @@ struct QuickSetupView: View {
                         Text(viewModel.productMarketSearchTitle)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
-                        Text(viewModel.productSymbolInput.isEmpty ? quickSetupText(ru: "Не задан", en: "Not selected") : viewModel.productSymbolInput)
+                        Text(viewModel.productSymbolInput.isEmpty ? quickSetupText("quick_setup.common.not_selected") : viewModel.productSymbolInput)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                     }
@@ -1354,7 +1371,7 @@ struct QuickSetupView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(quickSetupText(ru: "Текущая цена", en: "Current price"))
+                    Text(quickSetupText("quick_setup.common.current_price"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(AppColors.textSecondary)
                     Spacer()
@@ -1382,7 +1399,7 @@ struct QuickSetupView: View {
 
                 if viewModel.productLatestUnitPrice == nil {
                     TextField(
-                        quickSetupText(ru: "Ввести текущую цену", en: "Enter current price"),
+                        quickSetupText("quick_setup.current_price.enter"),
                         text: $productCurrentPriceDisplayText
                     )
                     .keyboardType(.decimalPad)
@@ -1392,7 +1409,7 @@ struct QuickSetupView: View {
 
                 if let total = viewModel.productPositionTotal {
                     HStack {
-                        Text(quickSetupText(ru: "Позиция", en: "Position"))
+                        Text(quickSetupText("quick_setup.common.position"))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
                         Spacer()
@@ -1404,7 +1421,7 @@ struct QuickSetupView: View {
 
                 if let growth = viewModel.productPositionGrowthAbsolute {
                     HStack {
-                        Text(quickSetupText(ru: "Рост/убыток", en: "Gain/loss"))
+                        Text(quickSetupText("quick_setup.common.gain_loss"))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
                         Spacer()
@@ -1780,7 +1797,8 @@ private struct QuickSetupFavoriteCurrenciesSheet: View {
             favoriteCodes: Set(selectedCodes),
             currentSelection: nil,
             primaryPinnedCode: primaryCurrencyCode,
-            primaryPinnedTitle: QuickSetupLocalization.text(locale: locale, ru: "Основная", en: "Primary"),
+            primaryPinnedTitle: QuickSetupLocalization.tr("quick_setup.common.primary", locale: locale),
+            locale: locale,
             onToggleFavorite: { code in
                 if onToggle(code) == .added {
                     searchText = ""
@@ -1792,17 +1810,24 @@ private struct QuickSetupFavoriteCurrenciesSheet: View {
                 }
             }
         )
-        .navigationTitle(QuickSetupLocalization.text(locale: locale, ru: "Избранные валюты", en: "Favorite currencies"))
+        .navigationTitle(QuickSetupLocalization.tr("quick_setup.common.favorite_currencies", locale: locale))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(QuickSetupLocalization.text(locale: locale, ru: "Готово", en: "Done")) {
+                Button(QuickSetupLocalization.tr("quick_setup.common.done", locale: locale)) {
                     dismiss()
                 }
             }
         }
         .safeAreaInset(edge: .bottom) {
-            Text(String(format: String(localized: "quick_setup.favorite_limit_format"), maxSelection))
+            Text(
+                QuickSetupLocalization.format(
+                    "quick_setup.favorite_limit_format",
+                    locale: locale,
+                    "You can select up to %lld currencies",
+                    maxSelection
+                )
+            )
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
                 .padding(.vertical, 10)
@@ -1828,18 +1853,19 @@ private struct QuickSetupPrimaryCurrencySheet: View {
             favoriteCodes: [],
             currentSelection: primaryCurrencyCode,
             primaryPinnedCode: primaryCurrencyCode,
-            primaryPinnedTitle: QuickSetupLocalization.text(locale: locale, ru: "Основная", en: "Primary"),
+            primaryPinnedTitle: QuickSetupLocalization.tr("quick_setup.common.primary", locale: locale),
+            locale: locale,
             onToggleFavorite: nil,
             onSelect: { code in
                 primaryCurrencyCode = code
                 dismiss()
             }
         )
-        .navigationTitle(QuickSetupLocalization.text(locale: locale, ru: "Основная валюта", en: "Primary currency"))
+        .navigationTitle(QuickSetupLocalization.tr("quick_setup.common.primary_currency", locale: locale))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(QuickSetupLocalization.text(locale: locale, ru: "Готово", en: "Done")) {
+                Button(QuickSetupLocalization.tr("quick_setup.common.done", locale: locale)) {
                     dismiss()
                 }
             }

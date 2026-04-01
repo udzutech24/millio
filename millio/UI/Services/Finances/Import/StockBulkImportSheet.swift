@@ -14,84 +14,163 @@ struct StockBulkImportModePresentation: Equatable {
 }
 
 enum StockBulkImportLayoutPolicy {
+    private static var locale: Locale { AppLocalization.currentAppLocale }
+
     static func presentation(for mode: StockBulkImportMode) -> StockBulkImportModePresentation {
         switch mode {
         case .screenshot:
             return StockBulkImportModePresentation(
                 icon: "photo.stack",
-                title: String(localized: "finances.mass_import.pick_screenshots"),
-                subtitle: localized(
-                    ru: "Загрузите до 8 кадров, а мы соберем черновик позиций и отметим спорные строки.",
-                    en: "Upload up to 8 screenshots and we will build draft positions and flag ambiguous rows."
+                title: tr("finances.mass_import.pick_screenshots", fallback: "Pick up to 8 screenshots"),
+                subtitle: tr(
+                    "finances.mass_import.mode.screenshot.subtitle",
+                    fallback: "Upload up to 8 screenshots and we will build draft positions and flag ambiguous rows."
                 )
             )
         case .manual:
             return StockBulkImportModePresentation(
                 icon: "square.and.pencil",
-                title: String(localized: "finances.mass_import.add_row"),
-                subtitle: String(localized: "finances.mass_import.add_row_hint")
+                title: tr("finances.mass_import.add_row", fallback: "Add row"),
+                subtitle: tr("finances.mass_import.add_row_hint", fallback: "Fill in the position manually")
             )
         }
     }
 
     static func bottomActionTitle(addableCount: Int) -> String {
         addableCount > 0
-            ? localized(
-                ru: "Импортировать \(addableCount) \(addableCount == 1 ? "позицию" : addableCount < 5 ? "позиции" : "позиций")",
-                en: "Import \(addableCount) position\(addableCount == 1 ? "" : "s")"
+            ? format(
+                "finances.mass_import.bottom_action.import_format",
+                fallback: "Import: %lld",
+                addableCount
             )
-            : localized(
-                ru: "Нечего импортировать",
-                en: "Nothing to import"
-            )
+            : tr("finances.mass_import.bottom_action.empty", fallback: "Nothing to import")
     }
 
     static func bottomActionSubtitle(totalRows: Int) -> String {
         totalRows > 0
-            ? localized(
-                ru: "Подготовлено строк: \(totalRows)",
-                en: "Prepared rows: \(totalRows)"
+            ? format(
+                "finances.mass_import.bottom_action.prepared_rows_format",
+                fallback: "Prepared rows: %lld",
+                totalRows
             )
             : FinancesL10n.tr("finances.mass_import.preview_empty")
     }
 
-    static func localized(ru: String, en: String, locale: Locale = .current) -> String {
-        let languageCode = locale.language.languageCode?.identifier ?? locale.identifier
-        return languageCode.hasPrefix("ru") ? ru : en
+    static var screenshotInstructionsTitle: String {
+        tr("finances.mass_import.instructions.title", fallback: "How to prepare screenshots")
     }
 
-    static var screenshotInstructionsTitle: String {
-        localized(
-            ru: "Как подготовить скриншоты",
-            en: "How to prepare screenshots"
+    static var screenshotInstructionsSubtitle: String {
+        tr(
+            "finances.mass_import.instructions.subtitle",
+            fallback: "To help the import recognize positions more accurately"
         )
     }
 
     static var screenshotInstructionsMessage: String {
-        localized(
-            ru: "Откройте экран брокера или портфеля, где видны тикер, рынок, количество и цена покупки\nДелайте четкие скриншоты без сильного блюра, бликов и перекрытий\nЛучше использовать светлый фон и полный список позиций, а не обрезанные карточки\nМожно добавить до 8 скриншотов подряд, после чего проверьте найденные строки перед импортом",
-            en: "Open your broker or portfolio screen where ticker, market, quantity, and buy price are visible\nCapture clear screenshots without heavy blur, glare, or overlays\nA light background and full position list work better than cropped cards\nYou can add up to 8 screenshots, then review the detected rows before import"
+        tr(
+            "finances.mass_import.instructions.message",
+            fallback: "Open your broker or portfolio screen where ticker, market, quantity, and buy price are visible\nCapture clear screenshots without heavy blur, glare, or overlays\nA light background and full position list work better than cropped cards\nYou can add up to 8 screenshots, then review the detected rows before import"
         )
     }
 
     static var screenshotExampleTitle: String {
-        localized(
-            ru: "Пример удачного скриншота",
-            en: "Good screenshot example"
-        )
+        tr("finances.mass_import.example.title", fallback: "Good screenshot example")
     }
 
     static var screenshotExampleHint: String {
-        localized(
-            ru: "Тикер, рынок, количество и цена покупки читаются сразу",
-            en: "Ticker, market, quantity, and buy price are readable at a glance"
+        tr(
+            "finances.mass_import.example.hint",
+            fallback: "Ticker, market, quantity, and buy price are readable at a glance"
         )
     }
 
     static var screenshotInstructionsButtonTitle: String {
-        localized(
-            ru: "Понятно",
-            en: "Got it"
+        tr("finances.mass_import.instructions.button", fallback: "Got it")
+    }
+
+    static var groupHint: String {
+        tr(
+            "finances.mass_import.group.hint",
+            fallback: "Choose the group where imported positions will be saved."
+        )
+    }
+
+    static var includeInTotalHint: String {
+        tr(
+            "finances.mass_import.include_in_total.hint",
+            fallback: "New assets will be included in the total balance right away."
+        )
+    }
+
+    static var screenshotSourceHint: String {
+        tr(
+            "finances.mass_import.source.screenshot.hint",
+            fallback: "Sharp tables and portfolio lists on a light background work best."
+        )
+    }
+
+    static var mergeDuplicatesHint: String {
+        tr(
+            "finances.mass_import.merge_duplicates.hint",
+            fallback: "Merge duplicate tickers into one final position."
+        )
+    }
+
+    static var showProblemsHint: String {
+        tr(
+            "finances.mass_import.show_problems.hint",
+            fallback: "Show only the rows that still require review."
+        )
+    }
+
+    static var previewReadyTitle: String {
+        tr("finances.mass_import.preview.ready", fallback: "Ready")
+    }
+
+    static var previewTotalTitle: String {
+        tr("finances.mass_import.preview.total", fallback: "Total")
+    }
+
+    static var previewFilterTitle: String {
+        tr("finances.mass_import.preview.filter", fallback: "Filter")
+    }
+
+    static var previewProblemsOnlyValue: String {
+        tr("finances.mass_import.preview.filter.problems_only", fallback: "Problems only")
+    }
+
+    static var candidateChooseExact: String {
+        tr(
+            "finances.mass_import.candidate.choose_exact",
+            fallback: "Choose the exact instrument from the matches below"
+        )
+    }
+
+    static func candidateFoundMatches(_ count: Int) -> String {
+        format(
+            "finances.mass_import.candidate.found_matches_format",
+            fallback: "Found %lld matches",
+            count
+        )
+    }
+
+    static var candidateTapToChoose: String {
+        tr(
+            "finances.mass_import.candidate.tap_to_choose",
+            fallback: "Tap to choose instrument"
+        )
+    }
+
+    private static func tr(_ key: String, fallback: String) -> String {
+        AppLocalization.string(key, locale: locale, fallback: fallback)
+    }
+
+    private static func format(_ key: String, fallback: String, _ arguments: CVarArg...) -> String {
+        String(
+            format: tr(key, fallback: fallback),
+            locale: locale,
+            arguments: arguments
         )
     }
 }
@@ -462,7 +541,7 @@ final class StockBulkImportViewModel: ObservableObject {
         let parts = orderedCategories.compactMap { category -> String? in
             guard let issues = grouped[category], !issues.isEmpty else { return nil }
             let symbols = Array(Set(issues.map(\.symbol))).sorted()
-            let label = MarketDataErrorPresentation.listLabel(for: category, locale: .current)
+            let label = MarketDataErrorPresentation.listLabel(for: category)
             return "\(label): \(symbols.joined(separator: ", "))"
         }
 
@@ -625,10 +704,7 @@ struct StockBulkImportSheet: View {
                                 .foregroundStyle(AppColors.textPrimary)
 
                             Text(
-                                StockBulkImportLayoutPolicy.localized(
-                                    ru: "Чтобы импорт точнее распознал позиции",
-                                    en: "To help the import recognize positions more accurately"
-                                )
+                                StockBulkImportLayoutPolicy.screenshotInstructionsSubtitle
                             )
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
@@ -883,10 +959,7 @@ struct StockBulkImportSheet: View {
                                 .font(.system(size: 17, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Text(
-                                StockBulkImportLayoutPolicy.localized(
-                                    ru: "Выберите группу, куда сохранить импортированные позиции.",
-                                    en: "Choose the group where imported positions will be saved."
-                                )
+                                StockBulkImportLayoutPolicy.groupHint
                             )
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(AppColors.textSecondary)
@@ -944,10 +1017,7 @@ struct StockBulkImportSheet: View {
                                 .font(.system(size: 17, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Text(
-                                StockBulkImportLayoutPolicy.localized(
-                                    ru: "Новые активы сразу попадут в общий баланс финансов.",
-                                    en: "New assets will be included in the total balance right away."
-                                )
+                                StockBulkImportLayoutPolicy.includeInTotalHint
                             )
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(AppColors.textSecondary)
@@ -1009,10 +1079,7 @@ struct StockBulkImportSheet: View {
                         .foregroundStyle(AppColors.textSecondary)
 
                         Text(
-                            StockBulkImportLayoutPolicy.localized(
-                                ru: "Лучше всего работают четкие таблицы и портфельные списки на светлом фоне.",
-                                en: "Sharp tables and portfolio lists on a light background work best."
-                            )
+                            StockBulkImportLayoutPolicy.screenshotSourceHint
                         )
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppColors.textTertiary)
@@ -1031,10 +1098,7 @@ struct StockBulkImportSheet: View {
                     Toggle(isOn: $viewModel.mergeDuplicates) {
                         settingsToggleContent(
                             title: String(localized: "finances.mass_import.merge_duplicates"),
-                            subtitle: StockBulkImportLayoutPolicy.localized(
-                                ru: "Склеивать одинаковые тикеры в одну итоговую позицию.",
-                                en: "Merge duplicate tickers into one final position."
-                            )
+                            subtitle: StockBulkImportLayoutPolicy.mergeDuplicatesHint
                         )
                     }
                     .tint(AppColors.brandPrimary)
@@ -1046,10 +1110,7 @@ struct StockBulkImportSheet: View {
                     Toggle(isOn: $viewModel.showProblemsOnly) {
                         settingsToggleContent(
                             title: String(localized: "finances.mass_import.show_problems"),
-                            subtitle: StockBulkImportLayoutPolicy.localized(
-                                ru: "Оставить на экране только строки, которые требуют проверки.",
-                                en: "Show only the rows that still require review."
-                            )
+                            subtitle: StockBulkImportLayoutPolicy.showProblemsHint
                         )
                     }
                     .tint(AppColors.brandPrimary)
@@ -1104,19 +1165,19 @@ struct StockBulkImportSheet: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 previewChip(
-                    title: StockBulkImportLayoutPolicy.localized(ru: "Готово", en: "Ready"),
+                    title: StockBulkImportLayoutPolicy.previewReadyTitle,
                     value: "\(viewModel.addableCount)",
                     accent: AppColors.brandPrimary
                 )
                 previewChip(
-                    title: StockBulkImportLayoutPolicy.localized(ru: "Всего", en: "Total"),
+                    title: StockBulkImportLayoutPolicy.previewTotalTitle,
                     value: "\(viewModel.rows.count)",
                     accent: Color.white.opacity(0.9)
                 )
                 if viewModel.showProblemsOnly {
                     previewChip(
-                        title: StockBulkImportLayoutPolicy.localized(ru: "Фильтр", en: "Filter"),
-                        value: StockBulkImportLayoutPolicy.localized(ru: "Только важное", en: "Problems only"),
+                        title: StockBulkImportLayoutPolicy.previewFilterTitle,
+                        value: StockBulkImportLayoutPolicy.previewProblemsOnlyValue,
                         accent: AppColors.warning
                     )
                 }
@@ -1282,10 +1343,7 @@ struct StockBulkImportSheet: View {
             if !row.candidates.isEmpty && row.selectedCandidate == nil {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(
-                        StockBulkImportLayoutPolicy.localized(
-                            ru: "Выберите точный инструмент из найденных совпадений",
-                            en: "Choose the exact instrument from the matches below"
-                        )
+                        StockBulkImportLayoutPolicy.candidateChooseExact
                     )
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
@@ -1308,19 +1366,13 @@ struct StockBulkImportSheet: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(
-                                    StockBulkImportLayoutPolicy.localized(
-                                        ru: "Найдено \(row.candidates.count) вариантов",
-                                        en: "Found \(row.candidates.count) matches"
-                                    )
+                                    StockBulkImportLayoutPolicy.candidateFoundMatches(row.candidates.count)
                                 )
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(AppColors.textSecondary)
 
                                 Text(
-                                    StockBulkImportLayoutPolicy.localized(
-                                        ru: "Нажмите, чтобы выбрать инструмент",
-                                        en: "Tap to choose instrument"
-                                    )
+                                    StockBulkImportLayoutPolicy.candidateTapToChoose
                                 )
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)

@@ -17,6 +17,8 @@ struct CashflowCurrencySelectorView: View {
     @State private var showInfoBanner: Bool = false
     @State private var showInfoAlert: Bool = false
     @State private var showCryptoProAlert: Bool = false
+
+    private var locale: Locale { AppLocalization.currentAppLocale }
     
     // Используем полный список валют
     private let allCurrencies = CurrencySelectionSupport.allCodes(includeCrypto: true)
@@ -49,7 +51,7 @@ struct CashflowCurrencySelectorView: View {
             .premiumUpsellAlert(
                 isPresented: $showCryptoProAlert,
                 titleKey: "monetization.crypto.pro_title",
-                message: String(localized: "monetization.crypto.pro_message"),
+                message: .key("monetization.crypto.pro_message"),
                 onSubscribe: { router.push(.subscription) }
             )
             .safeAreaInset(edge: .top) {
@@ -59,11 +61,11 @@ struct CashflowCurrencySelectorView: View {
                         .padding(.top, 6)
                 }
             }
-            .navigationTitle("Display currency")
+            .navigationTitle(localized("cashflow.display_currency.title", fallback: "Display currency"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button(localized("cashflow.common.cancel", fallback: "Cancel")) {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
@@ -75,7 +77,7 @@ struct CashflowCurrencySelectorView: View {
                         Image(systemName: "questionmark.circle")
                             .foregroundStyle(AppColors.textPrimary)
                     }
-                    .accessibilityLabel("Display currency hint")
+                    .accessibilityLabel(localized("cashflow.display_currency.hint_accessibility", fallback: "Display currency hint"))
                 }
             }
             .onAppear {
@@ -84,8 +86,8 @@ struct CashflowCurrencySelectorView: View {
                     hasSeenDisplayCurrencyHint = true
                 }
             }
-            .alert("Hint", isPresented: $showInfoAlert) {
-                Button("OK", role: .cancel) {}
+            .alert(localized("cashflow.display_currency.hint_title", fallback: "Hint"), isPresented: $showInfoAlert) {
+                Button(localized("cashflow.common.ok", fallback: "OK"), role: .cancel) {}
             } message: {
                 Text(infoMessage)
             }
@@ -93,7 +95,10 @@ struct CashflowCurrencySelectorView: View {
     }
 
     private var infoMessage: String {
-        "Primary currency can only be changed in Profile. Here, currency affects only the view and resets after leaving Cashflow."
+        localized(
+            "cashflow.display_currency.hint_message",
+            fallback: "Primary currency can only be changed in Profile. Here, currency affects only the view and resets after leaving Cashflow."
+        )
     }
 
     private func infoBanner(message: String) -> some View {
@@ -120,7 +125,7 @@ struct CashflowCurrencySelectorView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Hide notification")
+            .accessibilityLabel(localized("cashflow.display_currency.hide_hint_accessibility", fallback: "Hide notification"))
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
@@ -130,5 +135,9 @@ struct CashflowCurrencySelectorView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         }
+    }
+
+    private func localized(_ key: String, fallback: String) -> String {
+        AppLocalization.string(key, locale: locale, fallback: fallback)
     }
 }

@@ -28,7 +28,7 @@ struct SmartDataResetView: View {
     }
 
     private var locale: Locale {
-        appState.selectedLanguage.locale ?? Locale.current
+        AppLocalization.currentAppLocale
     }
 
     private var request: DataResetRequest {

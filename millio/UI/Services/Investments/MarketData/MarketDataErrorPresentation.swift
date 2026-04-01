@@ -12,12 +12,8 @@ enum MarketDataIssueCategory: String, Sendable {
 }
 
 enum MarketDataErrorPresentation {
-    static func degradedRefreshMessage(locale: Locale = .current) -> String {
-        FinancesL10n.text(
-            locale: locale,
-            ru: "Не удалось обновить часть котировок. Показываем последние доступные данные.",
-            en: "Some quotes could not be refreshed. Showing the latest available data."
-        )
+    static func degradedRefreshMessage(locale: Locale = AppLocalization.currentAppLocale) -> String {
+        FinancesL10n.tr("finances.market.refresh.degraded_message", locale: locale)
     }
 
     static func category(for quote: AssetSummary) -> MarketDataIssueCategory? {
@@ -93,16 +89,16 @@ enum MarketDataErrorPresentation {
         return nil
     }
 
-    static func message(for category: MarketDataIssueCategory, locale: Locale = .current) -> String {
+    static func message(for category: MarketDataIssueCategory, locale: Locale = AppLocalization.currentAppLocale) -> String {
         switch category {
         case .notFound:
-            return FinancesL10n.text(locale: locale, ru: "Тикер не найден", en: "Stock symbol not found")
+            return FinancesL10n.tr("finances.market.error.not_found", locale: locale)
         case .priceUnavailable:
-            return FinancesL10n.text(locale: locale, ru: "Нет текущей цены", en: "Current price unavailable")
+            return FinancesL10n.tr("finances.market.error.price_unavailable", locale: locale)
         case .providerError:
             return degradedRefreshMessage(locale: locale)
         case .authError:
-            return FinancesL10n.text(locale: locale, ru: "Ошибка авторизации backend котировок", en: "Quote backend auth error")
+            return FinancesL10n.tr("finances.market.error.auth", locale: locale)
         case .networkError:
             return degradedRefreshMessage(locale: locale)
         case .httpError:
@@ -114,24 +110,24 @@ enum MarketDataErrorPresentation {
         }
     }
 
-    static func listLabel(for category: MarketDataIssueCategory, locale: Locale = .current) -> String {
+    static func listLabel(for category: MarketDataIssueCategory, locale: Locale = AppLocalization.currentAppLocale) -> String {
         switch category {
         case .notFound:
-            return FinancesL10n.text(locale: locale, ru: "Не найдены тикеры", en: "Missing stock symbols")
+            return FinancesL10n.tr("finances.market.list.not_found", locale: locale)
         case .priceUnavailable:
-            return FinancesL10n.text(locale: locale, ru: "Нет текущей цены", en: "Current price unavailable")
+            return FinancesL10n.tr("finances.market.list.price_unavailable", locale: locale)
         case .providerError:
-            return FinancesL10n.text(locale: locale, ru: "Ошибка провайдера котировок", en: "Quote provider error")
+            return FinancesL10n.tr("finances.market.list.provider_error", locale: locale)
         case .authError:
-            return FinancesL10n.text(locale: locale, ru: "Ошибка авторизации backend котировок", en: "Quote backend auth error")
+            return FinancesL10n.tr("finances.market.list.auth_error", locale: locale)
         case .networkError:
-            return FinancesL10n.text(locale: locale, ru: "Сетевая ошибка загрузки котировок", en: "Network error while loading quotes")
+            return FinancesL10n.tr("finances.market.list.network_error", locale: locale)
         case .httpError:
-            return FinancesL10n.text(locale: locale, ru: "HTTP ошибка backend котировок", en: "Quote backend HTTP error")
+            return FinancesL10n.tr("finances.market.list.http_error", locale: locale)
         case .decodeError:
-            return FinancesL10n.text(locale: locale, ru: "Некорректный ответ backend котировок", en: "Invalid quote backend response")
+            return FinancesL10n.tr("finances.market.list.decode_error", locale: locale)
         case .clientError:
-            return FinancesL10n.text(locale: locale, ru: "Ошибка клиента котировок", en: "Quote client error")
+            return FinancesL10n.tr("finances.market.list.client_error", locale: locale)
         }
     }
 }

@@ -15,6 +15,10 @@ struct PrimaryCurrencySelectionView: View {
     @State private var pendingPrimaryCurrencyCode: String?
     @State private var showPrimaryCurrencyConfirmation = false
 
+    private var locale: Locale {
+        AppLocalization.currentAppLocale
+    }
+
     var body: some View {
         ZStack {
             GradientBackground()
@@ -32,7 +36,13 @@ struct PrimaryCurrencySelectionView: View {
                 }
             )
         }
-        .navigationTitle("Currency")
+        .navigationTitle(
+            AppLocalization.string(
+                "profile.currency",
+                locale: locale,
+                fallback: "Currency"
+            )
+        )
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear {
@@ -85,7 +95,7 @@ struct PrimaryCurrencySelectionView: View {
     private var primaryCurrencyConfirmationContent: PrimaryCurrencyConfirmationContent? {
         guard let pendingPrimaryCurrencyCode else { return nil }
         return PrimaryCurrencyConfirmationContent(
-            locale: appState.selectedLanguage.locale ?? Locale.current,
+            locale: locale,
             pendingCode: pendingPrimaryCurrencyCode
         )
     }

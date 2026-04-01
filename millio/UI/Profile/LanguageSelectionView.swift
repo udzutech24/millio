@@ -9,18 +9,19 @@ import SwiftUI
 
 struct LanguageSelectionView: View {
     @Binding var selectedLanguage: Language
-    @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
     private let availableLanguages: [Language]
 
-    init(selectedLanguage: Binding<Language>, availableLanguages: [Language] = Language.allCases) {
+    init(selectedLanguage: Binding<Language>, availableLanguages: [Language] = LocalizationSupport.userSelectableLanguages) {
         self._selectedLanguage = selectedLanguage
         self.availableLanguages = availableLanguages
     }
 
-    private var currentLocale: Locale {
-        appState.selectedLanguage.locale ?? Locale.current
+    private var currentLocale: Locale { AppLocalization.currentAppLocale }
+
+    private func localized(_ key: String, fallback: String) -> String {
+        AppLocalization.string(key, locale: currentLocale, fallback: fallback)
     }
     
     private var filteredLanguages: [Language] {
@@ -37,14 +38,17 @@ struct LanguageSelectionView: View {
             GradientBackground()
             
             VStack(spacing: 0) {
-                InlineSearchBar(text: $searchText, placeholder: String(localized: "profile.language.search_placeholder"))
+                InlineSearchBar(
+                    text: $searchText,
+                    placeholder: localized("profile.language.search_placeholder", fallback: "Search language")
+                )
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
                     .padding(.bottom, 8)
                 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("profile.language.all_languages")
+                        Text(verbatim: localized("profile.language.all_languages", fallback: "All languages"))
                             .font(.system(size: 16, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
                             .padding(.horizontal, 20)
@@ -77,7 +81,7 @@ struct LanguageSelectionView: View {
                 }
             }
         }
-        .navigationTitle("profile.language.navigation_title")
+        .navigationTitle(localized("profile.language.navigation_title", fallback: "Language"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
     }
@@ -98,6 +102,18 @@ struct LanguageSelectionView: View {
                 .scaledToFill()
                 .frame(width: size, height: size)
                 .clipShape(Circle())
+        case .simplifiedChinese:
+            Image(systemName: "globe.asia.australia.fill")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(AppColors.textPrimary)
+                .padding(5)
+                .frame(width: size, height: size)
+                .background(
+                    Circle()
+                        .fill(AppColors.textPrimary.opacity(0.12))
+                )
         case .system:
             Image(systemName: "globe")
                 .renderingMode(.template)

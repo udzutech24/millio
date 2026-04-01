@@ -90,40 +90,32 @@ struct DailyReminderSettings: Codable, Equatable {
         calendar: Calendar = .current,
         now: Date = Date()
     ) -> String {
-        let isRussian = Self.isRussian(language: language)
+        let locale = LocalizationSupport.resolvedLocale(for: language, fallbackLocale: .current)
 
         switch kind {
         case .expense:
-            let messages = isRussian
-                ? [
-                    "Пора внести расходы за сегодня",
-                    "Добавь сегодняшние траты, пока все помнишь",
-                    "Запиши расходы и держи баланс точным"
-                ]
-                : [
-                    "Time to log today's expenses",
-                    "Add today's spending while it's still fresh",
-                    "Record your expenses and keep your balance accurate"
-                ]
+            let messages = [
+                localizedNotificationBody("profile.daily_reminders.notification.expense.1", locale: locale, fallback: "Time to log today's expenses"),
+                localizedNotificationBody("profile.daily_reminders.notification.expense.2", locale: locale, fallback: "Add today's spending while it's still fresh"),
+                localizedNotificationBody("profile.daily_reminders.notification.expense.3", locale: locale, fallback: "Record your expenses and keep your balance accurate")
+            ]
             return messages[messageIndex(calendar: calendar, now: now) % messages.count]
         case .income:
-            let messages = isRussian
-                ? [
-                    "Пора внести новые доходы",
-                    "Запиши поступления, чтобы баланс был актуальным",
-                    "Добавь доходы и обнови картину по финансам"
-                ]
-                : [
-                    "Time to log new income",
-                    "Record incoming funds to keep your balance up to date",
-                    "Add your income and refresh your financial overview"
-                ]
+            let messages = [
+                localizedNotificationBody("profile.daily_reminders.notification.income.1", locale: locale, fallback: "Time to log new income"),
+                localizedNotificationBody("profile.daily_reminders.notification.income.2", locale: locale, fallback: "Record incoming funds to keep your balance up to date"),
+                localizedNotificationBody("profile.daily_reminders.notification.income.3", locale: locale, fallback: "Add your income and refresh your financial overview")
+            ]
             return messages[messageIndex(calendar: calendar, now: now) % messages.count]
         case .custom:
             if !trimmedCustomText.isEmpty {
                 return trimmedCustomText
             }
-            return isRussian ? "Открой millio и обнови данные" : "Open millio and update your data"
+            return localizedNotificationBody(
+                "profile.daily_reminders.notification.custom.default",
+                locale: locale,
+                fallback: "Open millio and update your data"
+            )
         }
     }
 
@@ -131,16 +123,8 @@ struct DailyReminderSettings: Codable, Equatable {
         calendar.component(.day, from: now)
     }
 
-    private static func isRussian(language: Language) -> Bool {
-        switch language {
-        case .russian:
-            return true
-        case .english:
-            return false
-        case .system:
-            let preferred = Locale.preferredLanguages.first?.lowercased() ?? Locale.current.identifier.lowercased()
-            return preferred.hasPrefix("ru")
-        }
+    private func localizedNotificationBody(_ key: String, locale: Locale, fallback: String) -> String {
+        AppLocalization.string(key, locale: locale, fallback: fallback)
     }
 
     func isKindEnabled(_ kind: DailyReminderKind) -> Bool {

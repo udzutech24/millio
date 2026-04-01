@@ -10,7 +10,7 @@ struct AdminStatsDebugView: View {
     @State private var bootstrapErrorMessage: String?
 
     private var locale: Locale {
-        appState.selectedLanguage.locale ?? Locale.current
+        AppLocalization.currentAppLocale
     }
 
     var body: some View {

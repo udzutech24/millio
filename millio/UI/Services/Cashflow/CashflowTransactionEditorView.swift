@@ -9,6 +9,10 @@ import SwiftUI
 import SwiftData
 import UIKit
 
+private func cashflowEditorText(_ key: String, fallback: String? = nil) -> String {
+    AppLocalization.string(key, locale: AppLocalization.currentAppLocale, fallback: fallback)
+}
+
 enum CashflowTransferExchangeRateMode: String, CaseIterable {
     case current
     case custom
@@ -428,11 +432,11 @@ struct CashflowTransactionEditorView: View {
                         showCurrencyPicker = false
                     }
                 )
-                .navigationTitle("cashflow.editor.transaction_currency")
+                .navigationTitle(String(localized: "cashflow.editor.transaction_currency"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") {
+                        Button(String(localized: "cashflow.common.cancel")) {
                             showCurrencyPicker = false
                         }
                         .foregroundStyle(AppColors.textPrimary)
@@ -441,7 +445,7 @@ struct CashflowTransactionEditorView: View {
                 .premiumUpsellAlert(
                     isPresented: $showCryptoProAlert,
                     titleKey: "monetization.crypto.pro_title",
-                    message: String(localized: "monetization.crypto.pro_message"),
+                    message: .key("monetization.crypto.pro_message"),
                     onSubscribe: { router.push(.subscription) }
                 )
             }
@@ -462,7 +466,11 @@ struct CashflowTransactionEditorView: View {
             return customNavigationTitle
         }
         return editingTransaction == nil
-            ? "New transaction"
+            ? String(
+                localized: "cashflow.editor.new_transaction",
+                defaultValue: "New transaction",
+                comment: "Navigation title for creating a new cashflow transaction"
+            )
             : String(localized: "cashflow.history.detail.edit")
     }
 
@@ -474,7 +482,7 @@ struct CashflowTransactionEditorView: View {
             editorCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text("cashflow.editor.transaction_type")
+                        Text(String(localized: "cashflow.editor.transaction_type"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         Picker(String(localized: "cashflow.editor.transaction_type"), selection: $selectedTransactionType) {
@@ -521,7 +529,13 @@ struct CashflowTransactionEditorView: View {
                     showCategorySheet = true
                 } label: {
                     HStack {
-                        Text(selectedTransactionType == .income ? "cashflow.editor.income_category" : "cashflow.editor.expense_category")
+                        Text(
+                            String(
+                                localized: selectedTransactionType == .income
+                                    ? "cashflow.editor.income_category"
+                                    : "cashflow.editor.expense_category"
+                            )
+                        )
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         HStack(spacing: 8) {
@@ -555,7 +569,7 @@ struct CashflowTransactionEditorView: View {
             editorCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text("cashflow.editor.amount")
+                        Text(String(localized: "cashflow.editor.amount"))
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -610,7 +624,7 @@ struct CashflowTransactionEditorView: View {
                     }
 
                     HStack {
-                        Text("cashflow.editor.date")
+                        Text(String(localized: "cashflow.editor.date"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         DatePicker("", selection: $transactionDate, displayedComponents: .date)
@@ -626,7 +640,7 @@ struct CashflowTransactionEditorView: View {
 
     private var standaloneCurrencyRow: some View {
         HStack {
-            Text("cashflow.editor.currency")
+            Text(String(localized: "cashflow.editor.currency"))
                 .foregroundStyle(AppColors.textPrimary)
             Spacer()
             if isLoadingCurrencies {
@@ -690,7 +704,7 @@ struct CashflowTransactionEditorView: View {
                     showRecurrenceRulePicker = true
                 } label: {
                     HStack(spacing: 10) {
-                        Text("cashflow.editor.frequency")
+                        Text(String(localized: "cashflow.editor.frequency"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         Text(recurrenceRule.displayName)
@@ -725,7 +739,7 @@ struct CashflowTransactionEditorView: View {
 
             if selectableAccountsForCurrentSelection.isEmpty {
                 VStack(spacing: 10) {
-                    Text("cashflow.editor.no_cards_in_currency")
+                    Text(String(localized: "cashflow.editor.no_cards_in_currency"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(AppColors.textTertiary)
                         .multilineTextAlignment(.center)
@@ -734,7 +748,7 @@ struct CashflowTransactionEditorView: View {
                     Button {
                         openFinancesAddCard()
                     } label: {
-                        Text("cashflow.editor.add_card_in_finances")
+                        Text(String(localized: "cashflow.editor.add_card_in_finances"))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                             .padding(.horizontal, 12)
@@ -760,7 +774,7 @@ struct CashflowTransactionEditorView: View {
             }
 
             if isAmountOverBalance {
-                Text("cashflow.editor.insufficient_funds")
+                Text(String(localized: "cashflow.editor.insufficient_funds"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppColors.error)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1011,7 +1025,7 @@ struct CashflowTransactionEditorView: View {
     @ViewBuilder
     private var transferCardContent: some View {
         if transferCardOptions.isEmpty {
-            Text("cashflow.editor.no_available_cards")
+            Text(String(localized: "cashflow.editor.no_available_cards"))
                 .font(.system(size: 14))
                 .foregroundStyle(AppColors.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -1036,7 +1050,7 @@ struct CashflowTransactionEditorView: View {
                 }
 
                 if isAmountOverBalance {
-                    Text("cashflow.editor.insufficient_funds")
+                    Text(String(localized: "cashflow.editor.insufficient_funds"))
                         .font(.caption)
                         .foregroundStyle(AppColors.error)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1166,21 +1180,28 @@ struct CashflowTransactionEditorView: View {
         selection: Binding<String>,
         excludingCardID: String?
     ) -> some View {
-        HStack {
-            Text(title)
-                .foregroundStyle(AppColors.textPrimary)
-                .layoutPriority(1)
-            Spacer()
-            Picker(title, selection: selection) {
-                Text("cashflow.editor.select_card").tag("")
-                ForEach(transferCardOptions.filter { $0.cardID != excludingCardID }) { account in
-                    Text(account.pickerTitle).tag(account.cardID ?? "")
+        let availableOptions = transferCardOptions.filter { $0.cardID != excludingCardID }
+
+        return Menu {
+            Button(String(localized: "cashflow.editor.select_card")) {
+                selection.wrappedValue = ""
+            }
+
+            ForEach(availableOptions) { account in
+                Button(account.pickerTitle) {
+                    selection.wrappedValue = account.cardID ?? ""
                 }
             }
-            .tint(AppColors.textTertiary)
-            .lineLimit(1)
-            .truncationMode(.tail)
+        } label: {
+            compactSelectorLabel(
+                title: title,
+                value: availableOptions.first(where: { $0.cardID == selection.wrappedValue })?.pickerTitle
+                    ?? String(localized: "cashflow.editor.select_card"),
+                usesPlaceholderStyle: selection.wrappedValue.isEmpty
+            )
         }
+        .disabled(availableOptions.isEmpty)
+        .opacity(availableOptions.isEmpty ? 0.55 : 1)
     }
 
     private var affectCardBalanceToggleRow: some View {
@@ -1228,10 +1249,16 @@ struct CashflowTransactionEditorView: View {
 
     private var additionalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle(String(localized: "Additional"))
+            sectionTitle(
+                String(
+                    localized: "cashflow.editor.section.additional",
+                    defaultValue: "Additional",
+                    comment: "Section title for additional transaction fields"
+                )
+            )
             editorCard {
                 VStack(spacing: 0) {
-                    TextField("cashflow.editor.comment", text: $note, axis: .vertical)
+                    TextField(String(localized: "cashflow.editor.comment"), text: $note, axis: .vertical)
                         .lineLimit(3...6)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
@@ -1891,7 +1918,7 @@ private struct CashflowCategorySelectionSheet: View {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppColors.textSecondary)
-                            TextField("cashflow.editor.search_category", text: $searchText)
+                            TextField(String(localized: "cashflow.editor.search_category"), text: $searchText)
                                 .textInputAutocapitalization(.words)
                                 .foregroundStyle(AppColors.textPrimary)
                         }
@@ -2190,14 +2217,15 @@ private struct CashflowRecurrenceRulePickerSheet: View {
     }
 
     private var weekdaySelectorRow: some View {
-        let ordered = CashflowRecurrenceWeekday.orderedForCurrentLocale()
+        let locale = AppLocalization.currentAppLocale
+        let ordered = CashflowRecurrenceWeekday.orderedForCurrentLocale(locale: locale)
         return HStack(spacing: 8) {
             ForEach(ordered, id: \.rawValue) { weekday in
                 let isSelected = selectedWeekdays.contains(weekday)
                 Button {
                     toggleWeekday(weekday)
                 } label: {
-                    Text(weekday.shortDisplayName)
+                    Text(weekday.shortDisplayName(locale: locale))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(isSelected ? Color.white.opacity(0.95) : AppColors.textSecondary)
                         .frame(maxWidth: .infinity)
@@ -2228,7 +2256,8 @@ private struct CashflowRecurrenceRulePickerSheet: View {
     }
 
     private var weeklySelectionSummary: String {
-        let ordered = CashflowRecurrenceWeekday.orderedForCurrentLocale()
+        let locale = AppLocalization.currentAppLocale
+        let ordered = CashflowRecurrenceWeekday.orderedForCurrentLocale(locale: locale)
         let selected = ordered.filter { selectedWeekdays.contains($0) }
         guard !selected.isEmpty else {
             return String(
@@ -2237,23 +2266,27 @@ private struct CashflowRecurrenceRulePickerSheet: View {
                 comment: "Weekly recurrence placeholder when no weekdays selected"
             )
         }
-        return selected.map(\.shortDisplayName).joined(separator: ", ")
-    }
-
-    private var isRussianLocale: Bool {
-        Locale.autoupdatingCurrent.identifier.lowercased().hasPrefix("ru")
+        return selected.map { $0.shortDisplayName(locale: locale) }.joined(separator: ", ")
     }
 
     private var okButtonTitle: String {
-        isRussianLocale ? "Ок" : "OK"
+        String(localized: "cashflow.common.ok")
     }
 
     private var weeklyDaysTitle: String {
-        isRussianLocale ? "Дни недели" : "Days of week"
+        String(
+            localized: "cashflow.recurrence.weekly.days_title",
+            defaultValue: "Days of week",
+            comment: "Section header for weekly recurrence weekday picker"
+        )
     }
 
     private var weeklyDaysHint: String {
-        isRussianLocale ? "Можно выбрать несколько дней" : "You can choose several days"
+        String(
+            localized: "cashflow.recurrence.weekly.days_hint",
+            defaultValue: "You can choose several days",
+            comment: "Helper text for weekly recurrence weekday picker"
+        )
     }
 }
 
@@ -2267,9 +2300,9 @@ struct CashflowCategoryEditorSheet: View {
         var localizedTitle: String {
             switch self {
             case .emoji:
-                return String(localized: "Эмодзи")
+                return cashflowEditorText("cashflow.editor.icon_tab.emoji")
             case .symbols:
-                return String(localized: "Иконки")
+                return cashflowEditorText("cashflow.editor.icon_tab.symbols")
             }
         }
     }
@@ -2290,8 +2323,8 @@ struct CashflowCategoryEditorSheet: View {
 
     private var title: String {
         switch mode {
-        case .create: return String(localized: "cashflow.editor.new_category")
-        case .edit: return String(localized: "cashflow.editor.edit_category")
+        case .create: return cashflowEditorText("cashflow.editor.new_category")
+        case .edit: return cashflowEditorText("cashflow.editor.edit_category")
         }
     }
 
@@ -2321,9 +2354,9 @@ struct CashflowCategoryEditorSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        FinancesSectionHeader(title: String(localized: "cashflow.editor.category_name"))
+                        FinancesSectionHeader(title: cashflowEditorText("cashflow.editor.category_name"))
                         FinancesGlassCard {
-                            TextField("cashflow.editor.enter_name", text: $name)
+                            TextField(cashflowEditorText("cashflow.editor.enter_name"), text: $name)
                                 .textInputAutocapitalization(.words)
                                 .foregroundStyle(AppColors.textPrimary)
                                 .focused($isNameFieldFocused)
@@ -2331,18 +2364,12 @@ struct CashflowCategoryEditorSheet: View {
                                 .padding(.vertical, 12)
                         }
 
-                        FinancesSectionHeader(title: String(localized: "cashflow.editor.category_icon"))
+                        FinancesSectionHeader(title: cashflowEditorText("cashflow.editor.category_icon"))
                         FinancesGlassCard {
                             VStack(spacing: 12) {
                                 if !suggestedIcons.isEmpty {
                                     VStack(alignment: .leading, spacing: 10) {
-                                        Text(
-                                            String(
-                                                localized: "cashflow.editor.icon_suggestions",
-                                                defaultValue: "Suggested icons",
-                                                comment: "Suggested icons title for category creation"
-                                            )
-                                        )
+                                        Text(cashflowEditorText("cashflow.editor.icon_suggestions", fallback: "Suggested icons"))
                                         .font(.system(size: 13, weight: .semibold))
                                         .foregroundStyle(AppColors.textSecondary)
 
@@ -2376,7 +2403,7 @@ struct CashflowCategoryEditorSheet: View {
                                     }
                                 }
 
-                                Picker(String(localized: "cashflow.editor.icon_type"), selection: $selectedTab) {
+                                Picker(cashflowEditorText("cashflow.editor.icon_type"), selection: $selectedTab) {
                                     ForEach(IconPickerTab.allCases) { tab in
                                         Text(tab.localizedTitle).tag(tab)
                                     }
@@ -2388,7 +2415,7 @@ struct CashflowCategoryEditorSheet: View {
                                         Image(systemName: "magnifyingglass")
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundStyle(AppColors.textTertiary)
-                                        TextField("cashflow.editor.icon_search_hint", text: $iconSearchText)
+                                        TextField(cashflowEditorText("cashflow.editor.icon_search_hint"), text: $iconSearchText)
                                             .font(.system(size: 14, weight: .regular))
                                             .foregroundStyle(AppColors.textPrimary)
                                     }

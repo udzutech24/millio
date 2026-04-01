@@ -36,22 +36,22 @@ enum AppLockBiometricAuth {
     static func buttonTitle() -> String {
         switch availableBiometry() {
         case .faceID:
-            return "Unlock with Face ID"
+            return localized("profile.app_lock.button.face_id", fallback: "Unlock with Face ID")
         case .touchID:
-            return "Unlock with Touch ID"
+            return localized("profile.app_lock.button.touch_id", fallback: "Unlock with Touch ID")
         default:
-            return "Unlock with biometrics"
+            return localized("profile.app_lock.button.biometrics", fallback: "Unlock with biometrics")
         }
     }
 
     static func settingsTitle() -> String {
         switch availableBiometry() {
         case .faceID:
-            return "Face ID"
+            return localized("profile.app_lock.setting.face_id", fallback: "Face ID")
         case .touchID:
-            return "Touch ID"
+            return localized("profile.app_lock.setting.touch_id", fallback: "Touch ID")
         default:
-            return "Biometrics"
+            return localized("profile.app_lock.setting.biometrics", fallback: "Biometrics")
         }
     }
 
@@ -71,11 +71,15 @@ enum AppLockBiometricAuth {
         guard let policy = preferredUnlockPolicy(for: context) else { return false }
 
         return await withCheckedContinuation { continuation in
-            context.localizedCancelTitle = "Cancel"
+            context.localizedCancelTitle = localized("common.cancel", fallback: "Cancel")
             context.evaluatePolicy(policy, localizedReason: reason) { success, _ in
                 continuation.resume(returning: success)
             }
         }
+    }
+
+    static func authenticationReason() -> String {
+        localized("profile.app_lock.auth.reason", fallback: "Unlock access to app data")
     }
 
     /// Разрешаем fallback на системный passcode только когда биометрия
@@ -94,6 +98,10 @@ enum AppLockBiometricAuth {
             return .deviceOwnerAuthentication
         }
         return nil
+    }
+
+    private static func localized(_ key: String, fallback: String) -> String {
+        AppLocalization.string(key, locale: AppLocalization.currentAppLocale, fallback: fallback)
     }
 }
 

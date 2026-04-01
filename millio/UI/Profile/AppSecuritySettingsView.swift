@@ -13,6 +13,10 @@ struct AppSecuritySettingsView: View {
     @State private var showChangePinSheet = false
     @State private var infoText: String?
 
+    private var locale: Locale {
+        AppLocalization.currentAppLocale
+    }
+
     private var biometricsTitle: String {
         AppLockBiometricAuth.settingsTitle()
     }
@@ -29,9 +33,9 @@ struct AppSecuritySettingsView: View {
         ZStack {
             GradientBackground()
 
-            ScrollView {
+                ScrollView {
                 VStack(spacing: 20) {
-                    FinancesSectionHeader(title: "Security")
+                    FinancesSectionHeader(title: localized("profile.security", fallback: "App security"))
 
                     FinancesGlassCard {
                         VStack(spacing: 0) {
@@ -45,7 +49,10 @@ struct AppSecuritySettingsView: View {
                                     }
                                 }
                             )) {
-                                securityRow(iconSystemName: "lock.fill", title: "PIN code")
+                                securityRow(
+                                    iconSystemName: "lock.fill",
+                                    title: localized("profile.security.pin", fallback: "PIN code")
+                                )
                             }
                             .tint(AppColors.toggleOnGreen)
                             .padding(.vertical, 12)
@@ -75,7 +82,7 @@ struct AppSecuritySettingsView: View {
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundStyle(AppColors.textSecondary)
                                         .frame(width: 22, alignment: .leading)
-                                    Text("Change PIN code")
+                                    Text(localized("profile.security.change_pin", fallback: "Change PIN code"))
                                         .font(.system(size: 16, weight: .regular))
                                         .foregroundStyle(AppColors.textPrimary)
                                     Spacer()
@@ -105,7 +112,7 @@ struct AppSecuritySettingsView: View {
                 .padding(.bottom, 40)
             }
         }
-        .navigationTitle("App security")
+        .navigationTitle(localized("profile.security", fallback: "App security"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(isPresented: $showCreatePinSheet) {
@@ -124,7 +131,10 @@ struct AppSecuritySettingsView: View {
             }
             if !biometricsAvailable {
                 appState.isBiometricUnlockEnabled = false
-                infoText = "Biometrics are unavailable on this device."
+                infoText = localized(
+                    "profile.security.biometrics_unavailable",
+                    fallback: "Biometrics are unavailable on this device."
+                )
             } else {
                 infoText = nil
             }
@@ -152,6 +162,10 @@ struct AppSecuritySettingsView: View {
             Spacer()
         }
         .contentShape(Rectangle())
+    }
+
+    private func localized(_ key: String, fallback: String) -> String {
+        AppLocalization.string(key, locale: locale, fallback: fallback)
     }
 }
 

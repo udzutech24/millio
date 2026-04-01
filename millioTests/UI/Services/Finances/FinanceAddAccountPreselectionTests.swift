@@ -3,6 +3,7 @@
 //  millioTests
 //
 
+import Foundation
 import Testing
 @testable import millio
 

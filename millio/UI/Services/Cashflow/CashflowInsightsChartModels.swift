@@ -75,7 +75,7 @@ enum CashflowInsightsChartBuilder {
         dateRange: ClosedRange<Date>,
         granularity: CashflowInsightsGranularity,
         calendar: Calendar = .current,
-        locale: Locale = .autoupdatingCurrent
+        locale: Locale = AppLocalization.currentAppLocale
     ) -> CashflowInsightsPresentation {
         let startDay = calendar.startOfDay(for: dateRange.lowerBound)
         let endDay = calendar.startOfDay(for: dateRange.upperBound)
@@ -133,7 +133,7 @@ enum CashflowInsightsChartBuilder {
         selectedPeriodStart: Date?,
         referenceDate: Date,
         calendar: Calendar = .current,
-        locale: Locale = .autoupdatingCurrent
+        locale: Locale = AppLocalization.currentAppLocale
     ) -> CashflowInsightsPresentation {
         let currentPeriodStart = periodStart(
             for: referenceDate,
@@ -185,7 +185,7 @@ enum CashflowInsightsChartBuilder {
         maxVisiblePeriods: Int? = nil,
         monthLabelStyle: CashflowInsightsMonthLabelStyle = .abbreviatedWithYear,
         calendar: Calendar = .current,
-        locale: Locale = .autoupdatingCurrent
+        locale: Locale = AppLocalization.currentAppLocale
     ) -> CashflowInsightsPresentation {
         let grouped = groupedEntries(entries, granularity: granularity, calendar: calendar)
         let rawSelection = normalizedSelection(
@@ -348,7 +348,7 @@ enum CashflowInsightsChartBuilder {
         for periodStart: Date,
         granularity: CashflowInsightsGranularity,
         calendar: Calendar = .current,
-        locale: Locale = .autoupdatingCurrent
+        locale: Locale = AppLocalization.currentAppLocale
     ) -> String {
         switch granularity {
         case .year:

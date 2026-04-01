@@ -52,7 +52,7 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     static var defaultProfileDisplayName: String {
         AppLocalization.string(
             "profile.default_guest",
-            locale: LanguageManager.shared.currentLanguage.locale ?? Locale.current,
+            locale: AppLocalization.currentAppLocale,
             fallback: "Guest"
         )
     }
@@ -69,7 +69,7 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
             Language.allCases.map { language in
                 AppLocalization.string(
                     "profile.default_guest",
-                    locale: language.locale ?? Locale.current,
+                    locale: LocalizationSupport.resolvedLocale(for: language),
                     fallback: "Guest"
                 ).trimmingCharacters(in: .whitespacesAndNewlines)
             }

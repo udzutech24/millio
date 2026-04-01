@@ -30,7 +30,11 @@ struct ProfileMenuStructureTests {
     func testSectionOrder() {
         let order = ProfileMenuStructure.sections.map(\.id)
 
+#if DEBUG
         #expect(order == [.general, .settings, .experience, .support, .about, .debug, .contacts])
+#else
+        #expect(order == [.general, .settings, .experience, .support, .about, .contacts])
+#endif
     }
 
     @Test("Contacts section includes only support entry")
@@ -60,14 +64,13 @@ struct ProfileMenuStructureTests {
 #endif
     }
 
-    @Test("Debug section keeps admin stats entry in debug builds")
+    @Test("Debug section is available only in debug builds")
     func testDebugSectionItems() throws {
-        let debugSection = try #require(ProfileMenuStructure.sections.first { $0.id == .debug })
-
 #if DEBUG
+        let debugSection = try #require(ProfileMenuStructure.sections.first { $0.id == .debug })
         #expect(debugSection.items == [.premiumAccess, .trialDisabled, .premiumDiagnostics, .showOnboarding, .adminStats])
 #else
-        #expect(debugSection.items == [.premiumAccess, .trialDisabled, .premiumDiagnostics, .showOnboarding])
+        #expect(ProfileMenuStructure.sections.contains { $0.id == .debug } == false)
 #endif
     }
 }

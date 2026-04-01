@@ -9,36 +9,36 @@ enum QuickSetupStep: Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
 
     var title: String {
-        title(for: Locale.current)
+        title(for: AppLocalization.currentAppLocale)
     }
 
     func title(for locale: Locale) -> String {
         switch self {
         case .localeAndCurrencies:
-            return QuickSetupLocalization.text(locale: locale, ru: "Язык и валюты", en: "Language and currencies")
+            return QuickSetupLocalization.tr("quick_setup.step.locale_and_currencies.title", locale: locale)
         case .expenseCategories:
-            return QuickSetupLocalization.text(locale: locale, ru: "Категории", en: "Categories")
+            return QuickSetupLocalization.tr("quick_setup.step.expense_categories.title", locale: locale)
         case .products:
-            return QuickSetupLocalization.text(locale: locale, ru: "Продукты", en: "Products")
+            return QuickSetupLocalization.tr("quick_setup.step.products.title", locale: locale)
         case .summary:
-            return QuickSetupLocalization.text(locale: locale, ru: "Хранение данных", en: "Data storage")
+            return QuickSetupLocalization.tr("quick_setup.step.summary.title", locale: locale)
         }
     }
 
     var subtitle: String {
-        subtitle(for: Locale.current)
+        subtitle(for: AppLocalization.currentAppLocale)
     }
 
     func subtitle(for locale: Locale) -> String {
         switch self {
         case .localeAndCurrencies:
-            return QuickSetupLocalization.text(locale: locale, ru: "Выберите язык и валюты", en: "Choose language and currencies")
+            return QuickSetupLocalization.tr("quick_setup.step.locale_and_currencies.subtitle", locale: locale)
         case .expenseCategories:
-            return QuickSetupLocalization.text(locale: locale, ru: "Выберите категории трат", en: "Choose expense categories")
+            return QuickSetupLocalization.tr("quick_setup.step.expense_categories.subtitle", locale: locale)
         case .products:
-            return QuickSetupLocalization.text(locale: locale, ru: "Добавьте счета и активы", en: "Add accounts and assets")
+            return QuickSetupLocalization.tr("quick_setup.step.products.subtitle", locale: locale)
         case .summary:
-            return QuickSetupLocalization.text(locale: locale, ru: "Выберите, как хранить данные", en: "Choose how to store your data")
+            return QuickSetupLocalization.tr("quick_setup.step.summary.subtitle", locale: locale)
         }
     }
 }
@@ -54,32 +54,32 @@ enum QuickSetupProductType: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
-        title(for: Locale.current)
+        title(for: AppLocalization.currentAppLocale)
     }
 
     func title(for locale: Locale) -> String {
         switch self {
-        case .card: return QuickSetupLocalization.text(locale: locale, ru: "Карта", en: "Card")
-        case .realEstate: return QuickSetupLocalization.text(locale: locale, ru: "Недвиж.", en: "Property")
-        case .debt: return QuickSetupLocalization.text(locale: locale, ru: "Долг", en: "Debt")
-        case .crypto: return QuickSetupLocalization.text(locale: locale, ru: "Крипто", en: "Crypto")
-        case .credit: return QuickSetupLocalization.text(locale: locale, ru: "Кредит", en: "Credit")
-        case .ticker: return QuickSetupLocalization.text(locale: locale, ru: "Акции", en: "Stocks")
+        case .card: return QuickSetupLocalization.tr("quick_setup.product_type.card.title", locale: locale)
+        case .realEstate: return QuickSetupLocalization.tr("quick_setup.product_type.real_estate.title", locale: locale)
+        case .debt: return QuickSetupLocalization.tr("quick_setup.product_type.debt.title", locale: locale)
+        case .crypto: return QuickSetupLocalization.tr("quick_setup.product_type.crypto.title", locale: locale)
+        case .credit: return QuickSetupLocalization.tr("quick_setup.product_type.credit.title", locale: locale)
+        case .ticker: return QuickSetupLocalization.tr("quick_setup.product_type.ticker.title", locale: locale)
         }
     }
 
     var subtitle: String {
-        subtitle(for: Locale.current)
+        subtitle(for: AppLocalization.currentAppLocale)
     }
 
     func subtitle(for locale: Locale) -> String {
         switch self {
-        case .card: return QuickSetupLocalization.text(locale: locale, ru: "Баланс", en: "Balance")
-        case .realEstate: return QuickSetupLocalization.text(locale: locale, ru: "Имущество", en: "Asset")
-        case .debt: return QuickSetupLocalization.text(locale: locale, ru: "Обязательство", en: "Liability")
-        case .crypto: return QuickSetupLocalization.text(locale: locale, ru: "Монета", en: "Coin")
-        case .credit: return QuickSetupLocalization.text(locale: locale, ru: "Платеж", en: "Payment")
-        case .ticker: return QuickSetupLocalization.text(locale: locale, ru: "Тикер", en: "Ticker")
+        case .card: return QuickSetupLocalization.tr("quick_setup.product_type.card.subtitle", locale: locale)
+        case .realEstate: return QuickSetupLocalization.tr("quick_setup.product_type.real_estate.subtitle", locale: locale)
+        case .debt: return QuickSetupLocalization.tr("quick_setup.product_type.debt.subtitle", locale: locale)
+        case .crypto: return QuickSetupLocalization.tr("quick_setup.product_type.crypto.subtitle", locale: locale)
+        case .credit: return QuickSetupLocalization.tr("quick_setup.product_type.credit.subtitle", locale: locale)
+        case .ticker: return QuickSetupLocalization.tr("quick_setup.product_type.ticker.subtitle", locale: locale)
         }
     }
 
@@ -188,7 +188,7 @@ struct QuickSetupGroupPreset: Identifiable, Hashable {
     var id: String { template.rawValue }
 
     var title: String {
-        title(for: Locale.current)
+        title(for: AppLocalization.currentAppLocale)
     }
 
     func title(for locale: Locale) -> String {
@@ -231,41 +231,41 @@ enum QuickSetupBackupPreference: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
-        title(for: Locale.current)
+        title(for: AppLocalization.currentAppLocale)
     }
 
     func title(for locale: Locale) -> String {
         switch self {
         case .localOnly:
-            return QuickSetupLocalization.text(locale: locale, ru: "Локальный контур", en: "Local mode")
+            return QuickSetupLocalization.tr("quick_setup.backup.local_only.title", locale: locale)
         case .cloudBackup:
-            return QuickSetupLocalization.text(locale: locale, ru: "Локально + iCloud", en: "Local + iCloud")
+            return QuickSetupLocalization.tr("quick_setup.backup.cloud_backup.title", locale: locale)
         }
     }
 
     var subtitle: String {
-        subtitle(for: Locale.current)
+        subtitle(for: AppLocalization.currentAppLocale)
     }
 
     func subtitle(for locale: Locale) -> String {
         switch self {
         case .localOnly:
-            return QuickSetupLocalization.text(locale: locale, ru: "Данные хранятся только на устройстве в SwiftData, выгрузка отключена", en: "Data stays on device in SwiftData, upload is disabled")
+            return QuickSetupLocalization.tr("quick_setup.backup.local_only.subtitle", locale: locale)
         case .cloudBackup:
-            return QuickSetupLocalization.text(locale: locale, ru: "Снимки хранятся в Private CloudKit вашего Apple ID", en: "Snapshots are stored in your Apple ID Private CloudKit")
+            return QuickSetupLocalization.tr("quick_setup.backup.cloud_backup.subtitle", locale: locale)
         }
     }
 
     var details: String {
-        details(for: Locale.current)
+        details(for: AppLocalization.currentAppLocale)
     }
 
     func details(for locale: Locale) -> String {
         switch self {
         case .localOnly:
-            return QuickSetupLocalization.text(locale: locale, ru: "Выгрузку можно включить позже: Профиль -> Backup", en: "Upload can be enabled later in Profile -> Backup")
+            return QuickSetupLocalization.tr("quick_setup.backup.local_only.details", locale: locale)
         case .cloudBackup:
-            return QuickSetupLocalization.text(locale: locale, ru: "Шифрование: AES-GCM с ключом устройства или парольной фразой", en: "Encryption: AES-GCM with device key or passphrase")
+            return QuickSetupLocalization.tr("quick_setup.backup.cloud_backup.details", locale: locale)
         }
     }
 
@@ -293,7 +293,7 @@ struct QuickSetupExpenseCategoryPreset: Identifiable, Hashable {
     static let customPrefix = "custom:"
 
     static var all: [QuickSetupExpenseCategoryPreset] {
-        all(for: Locale.current)
+        all(for: AppLocalization.currentAppLocale)
     }
 
     static func all(for locale: Locale) -> [QuickSetupExpenseCategoryPreset] {

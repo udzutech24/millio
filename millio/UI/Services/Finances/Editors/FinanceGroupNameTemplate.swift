@@ -33,7 +33,28 @@ enum FinanceGroupNameTemplate: String, CaseIterable, Identifiable {
         }
     }
 
+    private var fallbackTitle: String {
+        switch self {
+        case .debitCards:
+            return "Cards"
+        case .stocks:
+            return "Stocks"
+        case .myRealEstate:
+            return "Assets"
+        case .credits:
+            return "Credits"
+        case .deposits:
+            return "Deposits"
+        case .foreignCards:
+            return "Foreign cards"
+        }
+    }
+
     var title: String {
-        FinancesL10n.tr(localizationKey)
+        title(locale: AppLocalization.currentAppLocale)
+    }
+
+    func title(locale: Locale) -> String {
+        AppLocalization.string(localizationKey, locale: locale, fallback: fallbackTitle)
     }
 }

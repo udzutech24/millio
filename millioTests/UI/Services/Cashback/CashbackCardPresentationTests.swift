@@ -3,6 +3,7 @@
 //  millioTests
 //
 
+import Foundation
 import Testing
 @testable import millio
 
@@ -55,7 +56,7 @@ struct CashbackCardPresentationTests {
             creditLimit: 50000
         )
 
-        let detail = CashbackCardPresentation.detail(for: card)
+        let detail = CashbackCardPresentation.detail(for: card, locale: Locale(identifier: "ru"))
 
         #expect(detail.contains("Баланс 12 500 RUB"))
         #expect(detail.contains("Лимит 50 000 RUB"))
@@ -73,11 +74,34 @@ struct CashbackCardPresentationTests {
             creditLimit: 50000
         )
 
-        let detail = CashbackCardPresentation.pickerDetail(for: card)
+        let detail = CashbackCardPresentation.pickerDetail(for: card, locale: Locale(identifier: "ru"))
 
         #expect(detail.contains("Баланс 12 500 RUB"))
         #expect(detail.contains("Лимит 50 000 RUB"))
         #expect(detail.contains("•••• 9876"))
+    }
+
+    @Test("Детали карты локализуются для английского и zh-Hans")
+    func testDetailUsesRequestedLocale() {
+        let card = Card(
+            name: "",
+            cardNumber: "5555",
+            bank: .other,
+            cardType: .credit,
+            currency: "USD",
+            balance: 1200,
+            creditLimit: 5000
+        )
+
+        let english = CashbackCardPresentation.detail(for: card, locale: Locale(identifier: "en"))
+        let chinese = CashbackCardPresentation.detail(for: card, locale: Locale(identifier: "zh-Hans"))
+        let chineseTitle = CashbackCardPresentation.title(for: card, locale: Locale(identifier: "zh-Hans"))
+
+        #expect(english.contains("Balance 1 200 USD"))
+        #expect(english.contains("Limit 5 000 USD"))
+        #expect(chinese.contains("余额 1 200 USD"))
+        #expect(chinese.contains("额度 5 000 USD"))
+        #expect(chineseTitle == "未命名卡片")
     }
 
     @Test("Если банк не задан, подзаголовок не засоряется other")

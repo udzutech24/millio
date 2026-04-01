@@ -8,6 +8,10 @@
 import SwiftUI
 import UIKit
 
+private func cashflowEditorSheetText(_ key: String, fallback: String? = nil) -> String {
+    AppLocalization.string(key, locale: AppLocalization.currentAppLocale, fallback: fallback)
+}
+
 enum CashflowOperationSheetLayoutPolicy {
     static let floatingAddCategoryButtonSize: CGFloat = 64
     static let floatingAddCategoryBottomPadding: CGFloat = 20
@@ -560,7 +564,7 @@ private struct CashflowCategoryTransactionSheet: View {
 
     private var monthTitle: String {
         let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
+        formatter.locale = AppLocalization.currentAppLocale
         formatter.dateFormat = "LLLL yyyy"
         return formatter.string(from: selectedMonth).localizedCapitalized
     }
@@ -574,16 +578,7 @@ private struct CashflowCategoryTransactionSheet: View {
     }
 
     private var planButtonTitle: String {
-        switch kind {
-        case .expense:
-            return budgetSnapshot == nil
-                ? budgetLocalized(ru: "Добавить лимиты", en: "Add limits")
-                : budgetLocalized(ru: "Лимиты", en: "Limits")
-        case .income:
-            return budgetSnapshot == nil
-                ? budgetLocalized(ru: "План", en: "Plan")
-                : budgetLocalized(ru: "План", en: "Plan")
-        }
+        CashflowBudgetLocalization.planButtonTitle(for: kind, hasBudget: budgetSnapshot != nil)
     }
 
     var body: some View {
@@ -726,11 +721,7 @@ private struct CashflowCategoryTransactionSheet: View {
                             togglePinned(for: option)
                             closeCategoryActions()
                         },
-                        secondaryActionTitle: String(
-                            localized: "cashflow.category.actions.operations",
-                            defaultValue: "Операции",
-                            comment: "Category action button that opens filtered operations history"
-                        ),
+                        secondaryActionTitle: String(localized: "cashflow.category.actions.operations"),
                         secondaryActionIcon: "list.bullet.rectangle",
                         onSecondaryAction: {
                             openOperations(for: option)
@@ -837,7 +828,7 @@ private struct CashflowCategoryTransactionSheet: View {
 
                 circleToolbarButton(
                     systemName: "gearshape",
-                    accessibilityLabel: String(localized: "Settings")
+                    accessibilityLabel: String(localized: "cashflow.common.settings")
                 ) {
                     showSettingsSheet = true
                 }
@@ -931,14 +922,10 @@ private struct CashflowCategoryTransactionSheet: View {
                     .foregroundStyle(style.statusText.color)
 
                 if snapshot.categoriesLimitOverflow > 0.0000001 {
-                    Text(
-                        budgetLocalized(
-                            ru: kind == .expense
-                                ? "Сумма лимитов категорий больше общего на \(formattedAmount(snapshot.categoriesLimitOverflow))"
-                                : "Сумма планов категорий больше общего на \(formattedAmount(snapshot.categoriesLimitOverflow))",
-                            en: "Category limits exceed total by \(formattedAmount(snapshot.categoriesLimitOverflow))"
-                        )
-                    )
+                    Text(CashflowBudgetLocalization.monthlyOverflow(
+                        for: kind,
+                        amount: formattedAmount(snapshot.categoriesLimitOverflow)
+                    ))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color.orange.opacity(0.92))
                 }
@@ -1276,7 +1263,11 @@ private struct CashflowCategoryTransactionSheet: View {
                 }
                 .buttonStyle(.plain)
                 .padding(8)
-                .accessibilityLabel(isPinned ? "Unpin category" : "Pin category")
+                .accessibilityLabel(
+                    isPinned
+                        ? String(localized: "cashflow.category.actions.unpin")
+                        : String(localized: "cashflow.category.actions.pin")
+                )
             }
         }
     }
@@ -1295,7 +1286,7 @@ private struct CashflowCategoryTransactionSheet: View {
                             .stroke(Color.white.opacity(0.10), lineWidth: 1)
                     )
             )
-            .accessibilityLabel("Pinned category")
+            .accessibilityLabel(String(localized: "cashflow.category.pinned"))
     }
 
     private var floatingAddCategoryButton: some View {
@@ -1412,12 +1403,7 @@ private struct CashflowCategoryTransactionSheet: View {
     }
 
     private var historyRange: (start: Date, end: Date) {
-        let calendar = Calendar.current
-        let start = calendar.startOfMonth(for: selectedMonth)
-        let monthEnd = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: start) ?? selectedMonth
-        let today = calendar.startOfDay(for: Date())
-        let end = min(calendar.startOfDay(for: monthEnd), today)
-        return (start: start, end: max(start, end))
+        CashflowViewModel.monthHistoryRange(for: selectedMonth, calendar: .current)
     }
 
     private func openOperations(for option: CashflowCategoryOption) {
@@ -1529,7 +1515,7 @@ private struct CashflowCategoryTransactionSheet: View {
 
     private func formattedAmount(_ value: Double) -> String {
         let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.locale = AppLocalization.currentAppLocale
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 0
         formatter.minimumFractionDigits = 0
@@ -1538,12 +1524,10 @@ private struct CashflowCategoryTransactionSheet: View {
     }
 
     private func categoryBudgetLimitLabel(_ value: Double) -> String {
-        switch kind {
-        case .expense:
-            return "Лимит \(formattedAmount(value))"
-        case .income:
-            return "План \(formattedAmount(value))"
-        }
+        CashflowBudgetLocalization.categoryBudgetLimitLabel(
+            for: kind.categoryKind,
+            amount: formattedAmount(value)
+        )
     }
 
     private func handleCreateCategory(_ name: String, icon: String) {
@@ -1712,54 +1696,21 @@ private struct CashflowCategoryTransactionSheet: View {
     }
 
     private func categoryBudgetBadgeText(_ status: BudgetStatus) -> String? {
-        switch status {
-        case .warning, .critical:
-            return budgetLocalized(ru: "ПОЧТИ", en: "NEAR")
-        case .exceeded:
-            return budgetLocalized(ru: "СВЕРХ", en: "OVER")
-        case .normal:
-            return nil
-        }
+        CashflowBudgetLocalization.categoryBadgeText(for: status)
     }
 
     private func monthlyBudgetStatusText(_ snapshot: BudgetProgressSnapshot) -> String {
         let currency = cashflowCurrencyCodeLabel(viewModel.state.displayCurrency)
-        switch kind {
-        case .expense:
-            if snapshot.remaining >= 0 {
-                return budgetLocalized(
-                    ru: "Осталось \(formattedAmount(snapshot.remaining)) \(currency)",
-                    en: "\(formattedAmount(snapshot.remaining)) \(currency) remaining"
-                )
-            }
-            return budgetLocalized(
-                ru: "Перерасход \(formattedAmount(abs(snapshot.remaining))) \(currency)",
-                en: "Over by \(formattedAmount(abs(snapshot.remaining))) \(currency)"
-            )
-        case .income:
-            if snapshot.remaining <= 0.0000001 {
-                return budgetLocalized(
-                    ru: "План доходов выполнен",
-                    en: "Income plan reached"
-                )
-            }
-            return budgetLocalized(
-                ru: "По плану осталось \(formattedAmount(snapshot.remaining)) \(currency)",
-                en: "\(formattedAmount(snapshot.remaining)) \(currency) left in plan"
-            )
-        }
+        return CashflowBudgetLocalization.monthlyStatus(
+            for: kind,
+            remaining: snapshot.remaining,
+            currency: currency
+        )
     }
 
     private func monthlyBudgetUsageText(_ snapshot: BudgetProgressSnapshot) -> String {
         let usedPercent = Int((min(max(snapshot.progress, 0), 1) * 100).rounded())
-        return budgetLocalized(
-            ru: kind == .expense
-                ? "\(usedPercent)% от месячного лимита"
-                : "\(usedPercent)% от плана доходов",
-            en: kind == .expense
-                ? "\(usedPercent)% of monthly limit"
-                : "\(usedPercent)% of income plan"
-        )
+        return CashflowBudgetLocalization.monthlyUsage(for: kind, percent: usedPercent)
     }
 
     private func categoryStrokeStyle(for option: CashflowCategoryOption) -> AnyShapeStyle {
@@ -2382,9 +2333,9 @@ private struct CashflowCategoryQuickCreateSheet: View {
         var localizedTitle: String {
             switch self {
             case .emoji:
-                return String(localized: "Эмодзи")
+                return cashflowEditorSheetText("cashflow.editor.icon_tab.emoji")
             case .symbols:
-                return String(localized: "Иконки")
+                return cashflowEditorSheetText("cashflow.editor.icon_tab.symbols")
             }
         }
     }
@@ -2428,9 +2379,9 @@ private struct CashflowCategoryQuickCreateSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        FinancesSectionHeader(title: String(localized: "cashflow.editor.category_name"))
+                        FinancesSectionHeader(title: cashflowEditorSheetText("cashflow.editor.category_name"))
                         FinancesGlassCard {
-                            TextField("cashflow.editor.enter_name", text: $name)
+                            TextField(cashflowEditorSheetText("cashflow.editor.enter_name"), text: $name)
                                 .textInputAutocapitalization(.words)
                                 .foregroundStyle(AppColors.textPrimary)
                                 .focused($isNameFieldFocused)
@@ -2438,18 +2389,12 @@ private struct CashflowCategoryQuickCreateSheet: View {
                                 .padding(.vertical, 12)
                         }
 
-                        FinancesSectionHeader(title: String(localized: "cashflow.editor.category_icon"))
+                        FinancesSectionHeader(title: cashflowEditorSheetText("cashflow.editor.category_icon"))
                         FinancesGlassCard {
                             VStack(spacing: 12) {
                                 if !suggestedIcons.isEmpty {
                                     VStack(alignment: .leading, spacing: 10) {
-                                        Text(
-                                            String(
-                                                localized: "cashflow.editor.icon_suggestions",
-                                                defaultValue: "Suggested icons",
-                                                comment: "Suggested icons title for category creation"
-                                            )
-                                        )
+                                        Text(cashflowEditorSheetText("cashflow.editor.icon_suggestions", fallback: "Suggested icons"))
                                         .font(.system(size: 13, weight: .semibold))
                                         .foregroundStyle(AppColors.textSecondary)
 
@@ -2483,7 +2428,7 @@ private struct CashflowCategoryQuickCreateSheet: View {
                                     }
                                 }
 
-                                Picker(String(localized: "cashflow.editor.icon_type"), selection: $selectedTab) {
+                                Picker(cashflowEditorSheetText("cashflow.editor.icon_type"), selection: $selectedTab) {
                                     ForEach(IconPickerTab.allCases) { tab in
                                         Text(tab.localizedTitle).tag(tab)
                                     }
@@ -2495,7 +2440,7 @@ private struct CashflowCategoryQuickCreateSheet: View {
                                         Image(systemName: "magnifyingglass")
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundStyle(AppColors.textTertiary)
-                                        TextField("cashflow.editor.icon_search_hint", text: $iconSearchText)
+                                        TextField(cashflowEditorSheetText("cashflow.editor.icon_search_hint"), text: $iconSearchText)
                                             .font(.system(size: 14, weight: .regular))
                                             .foregroundStyle(AppColors.textPrimary)
                                     }
@@ -2541,7 +2486,7 @@ private struct CashflowCategoryQuickCreateSheet: View {
                 .scrollDismissesKeyboard(.immediately)
                 .dismissKeyboardOnTap()
             }
-            .navigationTitle("cashflow.editor.new_category")
+            .navigationTitle(String(localized: "cashflow.editor.new_category"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

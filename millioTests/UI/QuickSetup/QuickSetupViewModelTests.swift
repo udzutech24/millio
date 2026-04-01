@@ -237,7 +237,7 @@ final class QuickSetupViewModelTests: XCTestCase {
         let appState = AppState()
         let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
         let preset = QuickSetupGroupPreset.all[0]
-        let expectedTitle = preset.title(for: viewModel.selectedLanguage.locale ?? Locale.current)
+        let expectedTitle = preset.title(for: viewModel.presentationLocale)
 
         viewModel.addGroupPreset(preset)
         let firstID = try! XCTUnwrap(viewModel.selectedGroupDraftID)
@@ -407,7 +407,7 @@ final class QuickSetupViewModelTests: XCTestCase {
         )
     }
 
-    func testQuickSetupHidesRussianWhenSystemLanguageIsNotRussian() {
+    func testQuickSetupExposesAllReleaseReadyLanguagesForNonRussianSystem() {
         let appState = AppState()
         let systemContext = QuickSetupSystemContext(
             preferredLanguageIdentifiers: ["en-US"],
@@ -416,7 +416,7 @@ final class QuickSetupViewModelTests: XCTestCase {
 
         let viewModel = QuickSetupViewModel(appState: appState, systemContext: systemContext, defaults: isolatedDefaults)
 
-        XCTAssertEqual(viewModel.availableLanguages, [.system, .english])
+        XCTAssertEqual(viewModel.availableLanguages, [.system, .english, .russian, .simplifiedChinese])
         XCTAssertEqual(viewModel.primaryCurrencyCode, "USD")
         XCTAssertEqual(viewModel.favoriteCurrencyCodes, ["EUR", "CNY"])
         XCTAssertEqual(Array(viewModel.recommendedCurrencyCodes.prefix(5)), ["USD", "EUR", "CNY", "GBP", "JPY"])
@@ -425,7 +425,7 @@ final class QuickSetupViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.recommendedCurrencyCodes.contains("CNY"))
     }
 
-    func testQuickSetupShowsRussianAndRussianCentricCurrenciesForRussianSystem() {
+    func testQuickSetupShowsAllReleaseReadyLanguagesAndRussianCentricCurrenciesForRussianSystem() {
         let appState = AppState()
         let systemContext = QuickSetupSystemContext(
             preferredLanguageIdentifiers: ["ru-RU"],
@@ -434,10 +434,25 @@ final class QuickSetupViewModelTests: XCTestCase {
 
         let viewModel = QuickSetupViewModel(appState: appState, systemContext: systemContext, defaults: isolatedDefaults)
 
-        XCTAssertEqual(viewModel.availableLanguages, [.system, .english, .russian])
+        XCTAssertEqual(viewModel.availableLanguages, [.system, .english, .russian, .simplifiedChinese])
         XCTAssertEqual(viewModel.primaryCurrencyCode, "RUB")
         XCTAssertEqual(viewModel.favoriteCurrencyCodes, ["USD", "CNY", "EUR", "TRY"])
         XCTAssertEqual(viewModel.recommendedCurrencyCodes, ["RUB", "USD", "CNY", "EUR", "TRY"])
+    }
+
+    func testQuickSetupShowsAllReleaseReadyLanguagesForChineseSystem() {
+        let appState = AppState()
+        let systemContext = QuickSetupSystemContext(
+            preferredLanguageIdentifiers: ["zh-Hans-CN"],
+            locale: Locale(identifier: "zh_Hans_CN")
+        )
+
+        let viewModel = QuickSetupViewModel(appState: appState, systemContext: systemContext, defaults: isolatedDefaults)
+
+        XCTAssertEqual(viewModel.availableLanguages, [.system, .english, .russian, .simplifiedChinese])
+        XCTAssertEqual(viewModel.primaryCurrencyCode, "CNY")
+        XCTAssertEqual(viewModel.favoriteCurrencyCodes, ["USD", "EUR"])
+        XCTAssertTrue(viewModel.recommendedCurrencyCodes.contains("CNY"))
     }
 
     func testAddDraftTickerUsesQuantityAndPurchasePriceForMarketSnapshot() {
@@ -650,6 +665,10 @@ final class QuickSetupViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.addDraftProduct())
         XCTAssertEqual(viewModel.products.count, 2)
         XCTAssertNil(viewModel.lastAddDraftError)
+    }
+
+    func testQuickSetupUsesDedicatedFreeTrackedTickerLimitPolicy() {
+        XCTAssertEqual(EntitlementPolicy.freeQuickSetupTrackedTickerLimit, 1)
     }
 
     func testNonRussianSystemSanitizesStoredRublePrimaryAndFavorites() {

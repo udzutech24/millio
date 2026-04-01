@@ -12,6 +12,9 @@ enum MainLocalization {
 
     static let quickActionExpense = "main.quick_action.expense"
     static let quickActionIncome = "main.quick_action.income"
+    static let quickSetupBannerTitle = "main.quick_setup.banner.title"
+    static let quickSetupBannerSubtitle = "main.quick_setup.banner.subtitle"
+    static let quickSetupBannerOpen = "main.quick_setup.banner.open"
 
     static let serviceFinances = "main.service.finances"
     static let serviceCourses = "main.service.courses"
@@ -19,6 +22,6 @@ enum MainLocalization {
     static let serviceCashflow = "main.service.cashflow"
 
     static func text(_ key: String) -> String {
-        NSLocalizedString(key, comment: "")
+        AppLocalization.string(key, locale: AppLocalization.currentAppLocale)
     }
 }

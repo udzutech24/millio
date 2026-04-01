@@ -59,7 +59,6 @@ struct ConverterState {
     
     // Share
     var shareImage: UIImage? = nil
-    var shareDraftTitle: String = ""
     var shareDraftMessage: String = ""
     var showSharePreviewSheet: Bool = false
     var showShareSheet: Bool = false
@@ -219,11 +218,15 @@ final class ConverterViewModel: ViewModelProtocol {
         "PEPE": "pepe"
     ]
     
-    private var decSep: String { Locale.current.decimalSeparator ?? "," }
+    private var decSep: String { ConverterL10n.decimalSeparator }
     private var supportedCryptoCodes: Set<String> { Set(cryptoCodeToId.keys) }
     
     var currentFractionDigits: Int {
         max(0, min(8, storedFractionDigits))
+    }
+
+    var shareDraftTitle: String {
+        ConverterL10n.shareTitle(index: storedShareSequence + 1)
     }
     
     init(rateRepository: RateRepositoryProtocol = RateRepository.shared) {
@@ -402,7 +405,6 @@ final class ConverterViewModel: ViewModelProtocol {
             state.searchText = text
             
         case .prepareShare:
-            state.shareDraftTitle = nextShareDraftTitle()
             state.shareDraftMessage = ""
             state.showSharePreviewSheet = true
 
@@ -419,7 +421,7 @@ final class ConverterViewModel: ViewModelProtocol {
         case .shareCompleted(let completed, let imageData):
             state.showShareSheet = false
             if completed {
-                let title = state.shareDraftTitle.isEmpty ? nextShareDraftTitle() : state.shareDraftTitle
+                let title = shareDraftTitle
                 let note = state.shareDraftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
                 appendShareHistoryEntry(
                     imageData: imageData,
@@ -429,7 +431,6 @@ final class ConverterViewModel: ViewModelProtocol {
                 storedShareSequence += 1
             }
             state.shareDraftMessage = ""
-            state.shareDraftTitle = ""
 
         case .showShareHistory:
             state.showShareHistorySheet = true
@@ -494,6 +495,10 @@ final class ConverterViewModel: ViewModelProtocol {
     /// добавляет разделители тысяч, но сохраняет "живую" дробную часть как ввел пользователь.
     var formattedInputText: String {
         formatInputForDisplay(state.inputText)
+    }
+
+    func localizedInputText(_ raw: String) -> String {
+        formatInputForDisplay(raw)
     }
     
     private func convert(amount: Double, from: String, to: String) -> Double {
@@ -831,21 +836,7 @@ final class ConverterViewModel: ViewModelProtocol {
     }
     
     private func formatPlain(_ value: Double, maxFrac: Int = 2) -> String {
-        struct F {
-            static var nf: NumberFormatter = {
-                let nf = NumberFormatter()
-                nf.numberStyle = .decimal
-                nf.usesGroupingSeparator = true
-                nf.groupingSeparator = " "
-                nf.minimumFractionDigits = 0
-                nf.maximumFractionDigits = 2
-                nf.locale = Locale.current
-                return nf
-            }()
-        }
-        F.nf.decimalSeparator = Locale.current.decimalSeparator ?? ","
-        F.nf.maximumFractionDigits = maxFrac
-        return F.nf.string(from: NSNumber(value: value)) ?? String(format: "%.\(maxFrac)f", value)
+        ConverterL10n.decimalNumberString(from: value, maxFractionDigits: maxFrac)
     }
     
     // MARK: - Network
@@ -904,7 +895,7 @@ final class ConverterViewModel: ViewModelProtocol {
     
     // MARK: - Share Helpers
     
-    func getShareData() -> (rows: [ShareRowModel], dateString: String, highlightedCode: String) {
+    func getShareData(now: Date = Date()) -> (rows: [ShareRowModel], dateString: String, highlightedCode: String) {
         let rows: [ShareRowModel] = state.selectedCurrencies.map { code in
             ShareRowModel(
                 flag: "", // Флаги больше не используются, используется Image("flag")
@@ -912,12 +903,9 @@ final class ConverterViewModel: ViewModelProtocol {
                 value: displayValue(for: code)
             )
         }
-        
-        let df = DateFormatter()
-        df.locale = Locale(identifier: Locale.current.identifier)
-        df.dateFormat = "dd MMM • HH:mm"
-        let dateStr = df.string(from: Date())
-        
+
+        let dateStr = ConverterL10n.shareTimestamp(for: now)
+
         return (rows, dateStr, state.activeCode)
     }
     
@@ -931,7 +919,7 @@ final class ConverterViewModel: ViewModelProtocol {
             id: UUID(),
             createdAt: Date(),
             activeCode: state.activeCode,
-            inputText: state.inputText,
+            inputText: canonicalInputText(state.inputText),
             selectedCodes: state.selectedCurrencies,
             imageFileName: imageFileName,
             shareTitle: shareTitle,
@@ -993,8 +981,11 @@ final class ConverterViewModel: ViewModelProtocol {
         return base.appendingPathComponent("ConverterShareHistory", isDirectory: true)
     }
 
-    private func nextShareDraftTitle() -> String {
-        ConverterL10n.shareTitle(index: storedShareSequence + 1)
+    private func canonicalInputText(_ raw: String) -> String {
+        raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: ",", with: ".")
     }
     
     
@@ -1038,11 +1029,7 @@ final class ConverterViewModel: ViewModelProtocol {
     
     var lastUpdatedText: String {
         guard storedLastRatesTS > 0 else { return "—" }
-        let df = DateFormatter()
-        df.locale = Locale(identifier: Locale.current.identifier)
-        df.timeZone = .current
-        df.dateFormat = "dd MMM • HH:mm"
-        return df.string(from: Date(timeIntervalSince1970: storedLastRatesTS))
+        return ConverterL10n.shareTimestamp(for: Date(timeIntervalSince1970: storedLastRatesTS))
     }
     
     var canRemoveCurrency: Bool {
@@ -1159,19 +1146,11 @@ final class ConverterViewModel: ViewModelProtocol {
     }
 
     private func localizedRefreshIssuePrefix() -> String {
-        let languageCode = Locale.current.identifier
-            .split(whereSeparator: { $0 == "-" || $0 == "_" })
-            .first?
-            .lowercased() ?? ""
-        return languageCode == "ru" ? "Не обновились курсы" : "Failed to refresh rates"
+        ConverterL10n.genericUpdateError
     }
 
     private func localizedRefreshFallbackMessage() -> String {
-        let languageCode = Locale.current.identifier
-            .split(whereSeparator: { $0 == "-" || $0 == "_" })
-            .first?
-            .lowercased() ?? ""
-        return languageCode == "ru" ? "Курсы не обновились." : "Rates were not refreshed."
+        ConverterL10n.genericUpdateError
     }
 
     /// Догружает crypto-курсы в формате "1 USD = X CRYPTO" и мержит в текущий словарь.

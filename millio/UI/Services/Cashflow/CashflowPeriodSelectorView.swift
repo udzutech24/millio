@@ -37,14 +37,14 @@ struct CashflowPeriodSelectorView: View {
                 Form {
                     Section {
                         Picker(String(localized: "cashflow.period_selector.type"), selection: $selectedPeriodType) {
-                            Text("cashflow.period_selector.month").tag(PeriodType.month)
-                            Text("cashflow.period_selector.quarter").tag(PeriodType.quarter)
-                            Text("cashflow.period_selector.year").tag(PeriodType.year)
-                            Text("cashflow.period_selector.custom").tag(PeriodType.custom)
+                            Text(String(localized: "cashflow.period_selector.month")).tag(PeriodType.month)
+                            Text(String(localized: "cashflow.period_selector.quarter")).tag(PeriodType.quarter)
+                            Text(String(localized: "cashflow.period_selector.year")).tag(PeriodType.year)
+                            Text(String(localized: "cashflow.period_selector.custom")).tag(PeriodType.custom)
                         }
                         .foregroundStyle(AppColors.textPrimary)
                     } header: {
-                        Text("cashflow.period_selector.type")
+                        Text(String(localized: "cashflow.period_selector.type"))
                             .foregroundStyle(AppColors.textSecondary)
                     }
                     
@@ -54,7 +54,7 @@ struct CashflowPeriodSelectorView: View {
                                 .datePickerStyle(.graphical)
                                 .foregroundStyle(AppColors.textPrimary)
                         } header: {
-                            Text("cashflow.period_selector.select_month")
+                            Text(String(localized: "cashflow.period_selector.select_month"))
                                 .foregroundStyle(AppColors.textSecondary)
                         }
                     } else if selectedPeriodType == .quarter {
@@ -63,7 +63,7 @@ struct CashflowPeriodSelectorView: View {
                                 .datePickerStyle(.graphical)
                                 .foregroundStyle(AppColors.textPrimary)
                         } header: {
-                            Text("cashflow.period_selector.select_quarter")
+                            Text(String(localized: "cashflow.period_selector.select_quarter"))
                                 .foregroundStyle(AppColors.textSecondary)
                         }
                     } else if selectedPeriodType == .year {
@@ -72,7 +72,7 @@ struct CashflowPeriodSelectorView: View {
                                 .datePickerStyle(.graphical)
                                 .foregroundStyle(AppColors.textPrimary)
                         } header: {
-                            Text("cashflow.period_selector.select_year")
+                            Text(String(localized: "cashflow.period_selector.select_year"))
                                 .foregroundStyle(AppColors.textSecondary)
                         }
                     } else if selectedPeriodType == .custom {
@@ -83,14 +83,14 @@ struct CashflowPeriodSelectorView: View {
                                 theme: .cashflow
                             )
                         } header: {
-                            Text("cashflow.period_selector.select_period")
+                            Text(String(localized: "cashflow.period_selector.select_period"))
                                 .foregroundStyle(AppColors.textSecondary)
                         }
                     }
                 }
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("cashflow.period_selector.title")
+            .navigationTitle(String(localized: "cashflow.period_selector.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {

@@ -6,3 +6,5 @@
 "widget.converter.add_spend" = "Трата";
 "widget.converter.expense" = "Расход";
 "widget.converter.income" = "Доход";
+"widget.converter.configuration_title" = "Конвертер валют";
+"widget.converter.configuration_description" = "Курсы валют и быстрые действия прямо на экране Домой. Доступно в PRO.";

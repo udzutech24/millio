@@ -240,10 +240,10 @@ struct MainAppView: View {
     private var quickSetupBanner: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Быстрая настройка")
+                Text(MainLocalization.text(MainLocalization.quickSetupBannerTitle))
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(AppColors.textPrimary)
-                Text("Язык, валюты, категории и продукты за 1 минуту")
+                Text(MainLocalization.text(MainLocalization.quickSetupBannerSubtitle))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
                     .lineLimit(2)
@@ -251,7 +251,7 @@ struct MainAppView: View {
                 Button {
                     showQuickSetupSheet = true
                 } label: {
-                    Text("Открыть")
+                    Text(MainLocalization.text(MainLocalization.quickSetupBannerOpen))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.horizontal, 12)

@@ -96,19 +96,11 @@ struct FinanceRefreshActionOverlay: View {
                                 }
 
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(FinancesL10n.text(
-                                    locale: locale,
-                                    ru: "Обновить котировки",
-                                    en: "Refresh market data"
-                                ))
+                                Text(FinancesL10n.tr("finances.refresh_sheet.title", locale: locale))
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundStyle(AppColors.textPrimary)
 
-                                Text(FinancesL10n.text(
-                                    locale: locale,
-                                    ru: "Выберите, что нужно подтянуть: валюты или акции.",
-                                    en: "Choose whether to refresh currencies or equity prices"
-                                ))
+                                Text(FinancesL10n.tr("finances.refresh_sheet.subtitle", locale: locale))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(AppColors.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)

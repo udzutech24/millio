@@ -11,6 +11,29 @@ struct ConverterLocalizationTests {
         #expect(!title.isEmpty)
     }
 
+    @Test("Converter share title format resolves explicit locale variants")
+    func shareTitleUsesLocalizedFormatPerLocale() {
+        let english = String(
+            format: AppLocalization.string(
+                "converter.share.title_format",
+                locale: Locale(identifier: "en")
+            ),
+            locale: Locale(identifier: "en"),
+            7
+        )
+        let russian = String(
+            format: AppLocalization.string(
+                "converter.share.title_format",
+                locale: Locale(identifier: "ru")
+            ),
+            locale: Locale(identifier: "ru"),
+            7
+        )
+
+        #expect(english == "Snapshot #7")
+        #expect(russian == "Отправка #7")
+    }
+
     @Test("Converter error templates inject rate source")
     func errorTemplatesInjectSourceName() {
         let source = "Frankfurter"
@@ -45,17 +68,28 @@ struct ConverterLocalizationTests {
     @Test("Share promo brand stays millio in Russian locale")
     func sharePromoBrandDoesNotLocalizeAppName() {
         #expect(ConverterL10n.sharePromoBrand == "millio")
-        #expect(ConverterL10n.sharePromoSubtitle(locale: Locale(identifier: "ru_RU")).contains("Миллио") == false)
-        #expect(ConverterL10n.sharePromoSubtitle(locale: Locale(identifier: "ru_RU")) == "Управляйте всеми финансами в одном месте")
+        #expect(ConverterL10n.sharePromoSubtitle(locale: Locale(identifier: "ru_RU")) == "Снято в приложении Миллио")
     }
 
-    @Test("Share promo English copy stays minimal and clean")
-    func sharePromoEnglishCopyIsMinimal() {
-        #expect(ConverterL10n.sharePromoSubtitle(locale: Locale(identifier: "en_US")) == "Manage all your finances in one place")
+    @Test("Share promo copy resolves through locale-aware contract")
+    func sharePromoCopyUsesLocaleAwareContract() {
+        #expect(ConverterL10n.sharePromoTitle(locale: Locale(identifier: "en_US")) == "Smarter money decisions, faster")
+        #expect(ConverterL10n.sharePromoSubtitle(locale: Locale(identifier: "en_US")) == "Built with Millio")
+        #expect(ConverterL10n.sharePromoSubtitle(locale: Locale(identifier: "zh-Hans")) == "来自 Millio")
         #expect(ConverterL10n.shareMetaLine(
             dateString: "Mar 19 • 07:28",
             baseSummary: "Base: 1 BTC",
             locale: Locale(identifier: "en_US")
         ).contains("Updated"))
+        #expect(ConverterL10n.shareMetaLine(
+            dateString: "19 мар. • 07:28",
+            baseSummary: "База: 1 BTC",
+            locale: Locale(identifier: "ru_RU")
+        ).contains("Обновлено"))
+        #expect(ConverterL10n.shareMetaLine(
+            dateString: "3月19日 • 07:28",
+            baseSummary: "Base: 1 BTC",
+            locale: Locale(identifier: "zh-Hans")
+        ).contains("已更新"))
     }
 }

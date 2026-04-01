@@ -15,10 +15,14 @@ enum FinanceAccountType: String, Codable, CaseIterable {
     case investment = "investment"
     
     var displayName: String {
+        displayName(for: AppLocalization.currentAppLocale)
+    }
+
+    func displayName(for locale: Locale) -> String {
         switch self {
-        case .card: return String(localized: "finances.account.type.card")
-        case .credit: return String(localized: "finances.account.type.credit")
-        case .investment: return String(localized: "finances.account.type.investment")
+        case .card: return AppLocalization.string("finances.account.type.card", locale: locale)
+        case .credit: return AppLocalization.string("finances.account.type.credit", locale: locale)
+        case .investment: return AppLocalization.string("finances.account.type.investment", locale: locale)
         }
     }
     

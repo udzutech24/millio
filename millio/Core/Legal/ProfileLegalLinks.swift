@@ -16,34 +16,34 @@ struct ProfileLegalLinks {
     let privacyTitle: String
     let termsTitle: String
 
-    static func make(for language: Language, fallbackLocale: Locale = .current) -> ProfileLegalLinks {
-        let isRussian = isRussianLanguage(language, fallbackLocale: fallbackLocale)
+    static func make(for language: Language, fallbackLocale: Locale = AppLocalization.currentAppLocale) -> ProfileLegalLinks {
+        let resolvedLanguage = LocalizationSupport.resolvedLanguage(for: language, fallbackLocale: fallbackLocale)
+        let locale = resolvedLanguage.locale ?? fallbackLocale
+        let privacyTitle = AppLocalization.string("legal.privacy_title", locale: locale, fallback: "Privacy Policy")
+        let termsTitle = AppLocalization.string("legal.terms_title", locale: locale, fallback: "Terms of Use (EULA)")
 
-        if isRussian {
+        switch resolvedLanguage {
+        case .russian:
             return ProfileLegalLinks(
                 privacyURL: URL(string: "https://millio.udzutech.com/?lang=ru&page=privacy")!,
                 termsURL: appleStandardEULAURL,
-                privacyTitle: "Политика конфиденциальности",
-                termsTitle: "Условия использования (EULA)"
+                privacyTitle: privacyTitle,
+                termsTitle: termsTitle
             )
-        }
-
-        return ProfileLegalLinks(
-            privacyURL: URL(string: "https://millio.udzutech.com/?lang=en&page=privacy")!,
-            termsURL: appleStandardEULAURL,
-            privacyTitle: "Privacy Policy",
-            termsTitle: "Terms of Use (EULA)"
-        )
-    }
-
-    private static func isRussianLanguage(_ language: Language, fallbackLocale: Locale) -> Bool {
-        switch language {
-        case .russian:
-            return true
-        case .english:
-            return false
-        case .system:
-            return fallbackLocale.language.languageCode?.identifier.lowercased().hasPrefix("ru") == true
+        case .simplifiedChinese:
+            return ProfileLegalLinks(
+                privacyURL: URL(string: "https://millio.udzutech.com/?lang=en&page=privacy")!,
+                termsURL: appleStandardEULAURL,
+                privacyTitle: privacyTitle,
+                termsTitle: termsTitle
+            )
+        case .english, .system:
+            return ProfileLegalLinks(
+                privacyURL: URL(string: "https://millio.udzutech.com/?lang=en&page=privacy")!,
+                termsURL: appleStandardEULAURL,
+                privacyTitle: privacyTitle,
+                termsTitle: termsTitle
+            )
         }
     }
 }

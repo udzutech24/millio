@@ -120,22 +120,10 @@ struct CashflowScheduledTransactionsView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 if mode == .planner {
                     Menu {
-                        Button(
-                            String(
-                                localized: "cashflow.scheduled.create_picker.monthly",
-                                defaultValue: "Monthly recurring",
-                                comment: "Create a monthly recurring scheduled transaction"
-                            )
-                        ) {
+                        Button(String(localized: "cashflow.scheduled.create_picker.monthly")) {
                             createMonthlyTransaction()
                         }
-                        Button(
-                            String(
-                                localized: "cashflow.scheduled.create_picker.one_time",
-                                defaultValue: "One-time planned",
-                                comment: "Create a one-time scheduled transaction"
-                            )
-                        ) {
+                        Button(String(localized: "cashflow.scheduled.create_picker.one_time")) {
                             createPlannedForSelectedDate()
                         }
                     } label: {
@@ -187,7 +175,7 @@ struct CashflowScheduledTransactionsView: View {
                 updatePlannerSelectionIfNeeded()
             }
         } message: {
-            Text("cashflow.scheduled.delete_transaction.message")
+            Text(String(localized: "cashflow.scheduled.delete_transaction.message"))
         }
         .onAppear {
             configurePlannerFocusIfNeeded()
@@ -615,7 +603,7 @@ struct CashflowScheduledTransactionsView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "plus")
                                 .font(.system(size: 11, weight: .bold))
-                            Text("cashflow.scheduled.day_agenda.empty.add_here")
+                            Text(String(localized: "cashflow.scheduled.day_agenda.empty.add_here"))
                                 .font(.system(size: 12, weight: .semibold))
                                 .lineLimit(1)
                         }
@@ -861,11 +849,7 @@ struct CashflowScheduledTransactionsView: View {
         case .recurringMonthly:
             return transaction.recurrenceRule.displayName
         case .oneTimePlanned:
-            return String(
-                localized: "cashflow.scheduled.one_time_badge",
-                defaultValue: "One-time",
-                comment: "Badge title for one-time planned transactions"
-            )
+            return String(localized: "cashflow.scheduled.one_time_badge")
         }
     }
 
@@ -883,21 +867,21 @@ struct CashflowScheduledTransactionsView: View {
 
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
+        formatter.locale = AppLocalization.currentAppLocale
         formatter.setLocalizedDateFormatFromTemplate("dMMM y")
         return formatter.string(from: date)
     }
 
     private func shortDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
+        formatter.locale = AppLocalization.currentAppLocale
         formatter.setLocalizedDateFormatFromTemplate("d MMM")
         return formatter.string(from: date)
     }
 
     private func formatDayHeader(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
+        formatter.locale = AppLocalization.currentAppLocale
         formatter.setLocalizedDateFormatFromTemplate("EEE d MMM")
         return formatter.string(from: date)
     }
@@ -918,61 +902,33 @@ struct CashflowScheduledTransactionsView: View {
         let date = shortDate(entry.scheduledDate)
         let prefix: String = entry.kind == .recurringMonthly
             ? entry.transaction.recurrenceRule.displayName
-            : String(
-                localized: "cashflow.scheduled.overview.one_time_prefix",
-                defaultValue: "One-time",
-                comment: "Prefix for one-time item in planner overview"
-            )
+            : String(localized: "cashflow.scheduled.overview.one_time_prefix")
         return "\(prefix): \(category) • \(date)"
     }
 
     private var plannerOverviewTitle: String {
         switch kind {
         case .income:
-            return String(
-                localized: "cashflow.scheduled.overview.title.income",
-                defaultValue: "Income planner",
-                comment: "Planner overview title for income"
-            )
+            return String(localized: "cashflow.scheduled.overview.title.income")
         case .expense:
-            return String(
-                localized: "cashflow.scheduled.overview.title.expense",
-                defaultValue: "Payment planner",
-                comment: "Planner overview title for expenses"
-            )
+            return String(localized: "cashflow.scheduled.overview.title.expense")
         }
     }
 
     private var plannerMonthlySectionTitle: String {
-        String(
-            localized: "cashflow.scheduled.section.recurring",
-            defaultValue: "Recurring",
-            comment: "Section title for recurring scheduled transactions"
-        )
+        String(localized: "cashflow.scheduled.section.recurring")
     }
 
     private var plannerOneTimeSectionTitle: String {
-        String(
-            localized: "cashflow.scheduled.section.one_time",
-            defaultValue: "One-time planned",
-            comment: "Section title for one-time planned scheduled transactions"
-        )
+        String(localized: "cashflow.scheduled.section.one_time")
     }
 
     private func itemTitle(_ item: PlannerDisplayMode) -> String {
         switch item {
         case .calendar:
-            return String(
-                localized: "cashflow.scheduled.display.calendar",
-                defaultValue: "Calendar",
-                comment: "Planner display mode title"
-            )
+            return String(localized: "cashflow.scheduled.display.calendar")
         case .list:
-            return String(
-                localized: "cashflow.scheduled.display.list",
-                defaultValue: "List",
-                comment: "Planner display mode title"
-            )
+            return String(localized: "cashflow.scheduled.display.list")
         }
     }
 
@@ -1103,17 +1059,9 @@ enum CashflowScheduledTransactionsMode: Hashable {
         case (.recurring, .expense):
             return String(localized: "cashflow.scheduled.recurring_expenses")
         case (.planner, .income):
-            return String(
-                localized: "cashflow.scheduled.planner_income",
-                defaultValue: "Income planner",
-                comment: "Navigation title for combined scheduled income planner"
-            )
+            return String(localized: "cashflow.scheduled.planner_income")
         case (.planner, .expense):
-            return String(
-                localized: "cashflow.scheduled.planner_expenses",
-                defaultValue: "Payment planner",
-                comment: "Navigation title for combined scheduled expense planner"
-            )
+            return String(localized: "cashflow.scheduled.planner_expenses")
         }
     }
 
@@ -1147,17 +1095,9 @@ enum CashflowScheduledTransactionsMode: Hashable {
         case (.recurring, .expense):
             return String(localized: "cashflow.scheduled.empty.recurring_expenses")
         case (.planner, .income):
-            return String(
-                localized: "cashflow.scheduled.empty.planner_income",
-                defaultValue: "No planned income yet",
-                comment: "Empty state title for planner income screen"
-            )
+            return String(localized: "cashflow.scheduled.empty.planner_income")
         case (.planner, .expense):
-            return String(
-                localized: "cashflow.scheduled.empty.planner_expenses",
-                defaultValue: "No payments planned yet",
-                comment: "Empty state title for planner expense screen"
-            )
+            return String(localized: "cashflow.scheduled.empty.planner_expenses")
         }
     }
 
@@ -1168,17 +1108,9 @@ enum CashflowScheduledTransactionsMode: Hashable {
         case (.recurring, .expense):
             return String(localized: "cashflow.scheduled.add_recurring_expense")
         case (.planner, .income):
-            return String(
-                localized: "cashflow.scheduled.add_income_item",
-                defaultValue: "Add planned income",
-                comment: "Button title to add a scheduled income item"
-            )
+            return String(localized: "cashflow.scheduled.add_income_item")
         case (.planner, .expense):
-            return String(
-                localized: "cashflow.scheduled.add_payment",
-                defaultValue: "Add payment",
-                comment: "Button title to add a scheduled expense item"
-            )
+            return String(localized: "cashflow.scheduled.add_payment")
         }
     }
 }

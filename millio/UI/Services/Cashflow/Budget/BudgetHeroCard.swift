@@ -46,7 +46,7 @@ struct BudgetHeroCard: View {
                     Text("\(Int(min(snapshot.progress, 1) * 100))%")
                         .font(.system(size: 19, weight: .bold))
                         .foregroundStyle(primaryText)
-                    Text(budgetLocalized(ru: "лимита", en: "used"))
+                    Text(CashflowBudgetLocalization.used)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(secondaryText)
                 }
@@ -55,7 +55,7 @@ struct BudgetHeroCard: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(budgetLocalized(ru: "Лимит периода", en: "Period limit"))
+                    Text(CashflowBudgetLocalization.periodLimit)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(primaryText)
                     Spacer()
@@ -75,12 +75,11 @@ struct BudgetHeroCard: View {
                     .contentTransition(.numericText())
 
                 if snapshot.categoriesLimitOverflow > 0.0000001 {
-                    Text(
-                        budgetLocalized(
-                            ru: "Лимиты категорий превышают общий на \(cashflowAmountText(snapshot.categoriesLimitOverflow)) \(currencyCode)",
-                            en: "Category limits exceed total by \(cashflowAmountText(snapshot.categoriesLimitOverflow)) \(currencyCode)"
-                        )
-                    )
+                    Text(CashflowBudgetLocalization.heroOverflow(
+                        kind: .expense,
+                        amount: cashflowAmountText(snapshot.categoriesLimitOverflow),
+                        currencyCode: currencyCode
+                    ))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color.orange.opacity(0.92))
                     .lineLimit(2)
@@ -110,15 +109,10 @@ struct BudgetHeroCard: View {
                 )
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(budgetLocalized(ru: "Лимит периода", en: "Period limit"))
+                Text(CashflowBudgetLocalization.periodLimit)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(primaryText)
-                Text(
-                    budgetLocalized(
-                        ru: "Добавь общий лимит на текущий период, чтобы видеть остаток и риск перерасхода.",
-                        en: "Set a total limit for the current period to track remaining budget and overspending risk."
-                    )
-                )
+                Text(CashflowBudgetLocalization.emptyHint)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(secondaryText)
                 .multilineTextAlignment(.leading)
@@ -143,14 +137,14 @@ struct BudgetHeroCard: View {
 
     private func remainingTitle(_ snapshot: BudgetProgressSnapshot) -> String {
         if snapshot.remaining >= 0 {
-            return budgetLocalized(
-                ru: "Осталось \(cashflowAmountText(snapshot.remaining)) \(currencyCode)",
-                en: "\(cashflowAmountText(snapshot.remaining)) \(currencyCode) remaining"
+            return CashflowBudgetLocalization.heroRemaining(
+                cashflowAmountText(snapshot.remaining),
+                currencyCode: currencyCode
             )
         }
-        return budgetLocalized(
-            ru: "Перерасход \(cashflowAmountText(abs(snapshot.remaining))) \(currencyCode)",
-            en: "Over by \(cashflowAmountText(abs(snapshot.remaining))) \(currencyCode)"
+        return CashflowBudgetLocalization.heroExceeded(
+            cashflowAmountText(abs(snapshot.remaining)),
+            currencyCode: currencyCode
         )
     }
 
@@ -167,22 +161,6 @@ struct BudgetHeroCard: View {
     }
 
     private func statusText(_ status: BudgetStatus) -> String {
-        switch status {
-        case .normal:
-            return budgetLocalized(ru: "Норма", en: "Normal")
-        case .warning:
-            return budgetLocalized(ru: "Внимание", en: "Watch")
-        case .critical:
-            return budgetLocalized(ru: "Предел", en: "Critical")
-        case .exceeded:
-            return budgetLocalized(ru: "Перерасход", en: "Exceeded")
-        }
+        CashflowBudgetLocalization.status(status)
     }
-}
-
-func budgetLocalized(ru: String, en: String, locale: Locale = .autoupdatingCurrent) -> String {
-    if locale.language.languageCode?.identifier == "ru" {
-        return ru
-    }
-    return en
 }

@@ -26,17 +26,15 @@ enum ProfileFAQContent {
         switch effectiveLanguage(from: selectedLanguage) {
         case .russian:
             return russianSections
+        case .simplifiedChinese:
+            return simplifiedChineseSections
         case .english, .system:
             return englishSections
         }
     }
 
     private static func effectiveLanguage(from selectedLanguage: Language) -> Language {
-        if selectedLanguage != .system {
-            return selectedLanguage
-        }
-        let code = Locale.current.language.languageCode?.identifier ?? "en"
-        return code == "ru" ? .russian : .english
+        LocalizationSupport.resolvedLanguage(for: selectedLanguage, fallbackLocale: .current)
     }
 
     private static let englishSections: [ProfileFAQSection] = [
@@ -170,6 +168,75 @@ enum ProfileFAQContent {
                     answerParagraphs: [
                         "Управление подпиской выполняется в настройках Apple ID на устройстве.",
                         "В приложении откройте Профиль и нажмите карточку PRO, чтобы проверить статус."
+                    ],
+                    note: nil
+                )
+            ]
+        )
+    ]
+
+    private static let simplifiedChineseSections: [ProfileFAQSection] = [
+        ProfileFAQSection(
+            id: "general",
+            title: "常见问题",
+            items: [
+                ProfileFAQItem(
+                    id: "what-is-millio",
+                    question: "millio 是什么？",
+                    answerParagraphs: [
+                        "millio 是一款个人财务应用，可在一个地方管理余额、现金流、汇率转换、贷款和投资。",
+                        "应用强调日常使用效率：快速添加、清晰概览、简单操作。"
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: "is-my-data-safe",
+                    question: "我的数据安全吗？",
+                    answerParagraphs: [
+                        "本地数据存储在你的设备上。你也可以在设置中启用云备份。",
+                        "如需额外保护，可启用 PIN 码和生物识别的应用锁。"
+                    ],
+                    note: "任何应用都无法保证 100% 安全。请使用强设备密码，并保持 iOS 为最新版本。"
+                ),
+                ProfileFAQItem(
+                    id: "change-language-currency",
+                    question: "如何更改应用语言和基础货币？",
+                    answerParagraphs: [
+                        "打开“个人资料”>“通用”，然后选择“语言”或“货币”。",
+                        "基础货币会影响应用中多个模块的默认值。"
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: "backup-restore",
+                    question: "备份和恢复如何工作？",
+                    answerParagraphs: [
+                        "打开“个人资料”>“设置”>“备份”，启用自动备份并查看备份状态。",
+                        "更换新设备时，可在首次启动时或在相关设置页面中使用恢复流程。"
+                    ],
+                    note: nil
+                )
+            ]
+        ),
+        ProfileFAQSection(
+            id: "billing",
+            title: "订阅",
+            items: [
+                ProfileFAQItem(
+                    id: "what-is-pro",
+                    question: "PRO 包含什么内容？",
+                    answerParagraphs: [
+                        "PRO 解锁高级功能，并移除部分模块免费版的限制。",
+                        "你可以在订阅页面查看当前 PRO 权益。"
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: "manage-subscription",
+                    question: "如何管理或取消订阅？",
+                    answerParagraphs: [
+                        "订阅管理由设备上的 Apple ID 设置负责。",
+                        "在应用中打开“个人资料”，点击 PRO 卡片即可查看状态。"
                     ],
                     note: nil
                 )

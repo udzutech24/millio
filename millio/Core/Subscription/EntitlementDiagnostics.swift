@@ -13,75 +13,106 @@ struct EntitlementDiagnosticItem: Identifiable, Equatable {
 enum EntitlementDiagnostics {
     @MainActor
     static func items(for appState: AppState) -> [EntitlementDiagnosticItem] {
-        let isRussian = (appState.selectedLanguage.locale ?? Locale.current).identifier.hasPrefix("ru")
+        let locale = LocalizationSupport.resolvedLocale(
+            for: appState.selectedLanguage,
+            fallbackLocale: .current
+        )
 
         return [
             EntitlementDiagnosticItem(
                 id: "finances.products",
-                title: isRussian ? "Лимит продуктов" : "Products limit",
-                location: isRussian ? "Финансы -> добавление продуктов" : "Finances -> add products",
-                freeBehavior: isRussian ? "До \(EntitlementPolicy.freeFinanceProductLimit) продуктов." : "Up to \(EntitlementPolicy.freeFinanceProductLimit) products.",
-                premiumBehavior: isRussian ? "Безлимит продуктов." : "Unlimited products.",
+                title: localized("subscription.diagnostics.finances_products.title", locale: locale, fallback: "Products limit"),
+                location: localized("subscription.diagnostics.finances_products.location", locale: locale, fallback: "Finances -> add products"),
+                freeBehavior: String(
+                    format: localized(
+                        "subscription.diagnostics.finances_products.free_behavior_format",
+                        locale: locale,
+                        fallback: "Up to %lld products."
+                    ),
+                    locale: locale,
+                    EntitlementPolicy.freeFinanceProductLimit
+                ),
+                premiumBehavior: localized("subscription.diagnostics.finances_products.premium_behavior", locale: locale, fallback: "Unlimited products."),
                 isPremiumActive: appState.isPro,
                 currentState: appState.isPro
-                    ? (isRussian ? "Без лимита" : "Unlimited")
-                    : (isRussian ? "Лимит \(EntitlementPolicy.freeFinanceProductLimit)" : "Limit \(EntitlementPolicy.freeFinanceProductLimit)")
+                    ? localized("subscription.diagnostics.state.unlimited", locale: locale, fallback: "Unlimited")
+                    : String(
+                        format: localized("subscription.diagnostics.state.limit_format", locale: locale, fallback: "Limit %lld"),
+                        locale: locale,
+                        EntitlementPolicy.freeFinanceProductLimit
+                    )
             ),
             EntitlementDiagnosticItem(
                 id: "finances.charts",
-                title: isRussian ? "Графики в финансах" : "Finance charts",
-                location: isRussian ? "Финансы -> динамика" : "Finances -> dynamics",
-                freeBehavior: isRussian ? "Графики скрыты." : "Charts are locked.",
-                premiumBehavior: isRussian ? "Графики доступны." : "Charts are available.",
+                title: localized("subscription.diagnostics.finances_charts.title", locale: locale, fallback: "Finance charts"),
+                location: localized("subscription.diagnostics.finances_charts.location", locale: locale, fallback: "Finances -> dynamics"),
+                freeBehavior: localized("subscription.diagnostics.finances_charts.free_behavior", locale: locale, fallback: "Charts are locked."),
+                premiumBehavior: localized("subscription.diagnostics.finances_charts.premium_behavior", locale: locale, fallback: "Charts are available."),
                 isPremiumActive: EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro),
                 currentState: EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro)
-                    ? (isRussian ? "Открыто" : "Unlocked")
-                    : (isRussian ? "Закрыто на Free" : "Locked for Free")
+                    ? localized("subscription.diagnostics.state.unlocked", locale: locale, fallback: "Unlocked")
+                    : localized("subscription.diagnostics.state.locked_for_free", locale: locale, fallback: "Locked for Free")
             ),
             EntitlementDiagnosticItem(
                 id: "cashflow.chart",
-                title: isRussian ? "Доходы и расходы" : "Income and expenses",
-                location: isRussian ? "Cashflow -> динамика за период" : "Cashflow -> period chart",
-                freeBehavior: isRussian ? "График скрыт." : "Chart is locked.",
-                premiumBehavior: isRussian ? "График доступен." : "Chart is available.",
+                title: localized("subscription.diagnostics.cashflow_chart.title", locale: locale, fallback: "Income and expenses"),
+                location: localized("subscription.diagnostics.cashflow_chart.location", locale: locale, fallback: "Cashflow -> period chart"),
+                freeBehavior: localized("subscription.diagnostics.cashflow_chart.free_behavior", locale: locale, fallback: "Chart is locked."),
+                premiumBehavior: localized("subscription.diagnostics.cashflow_chart.premium_behavior", locale: locale, fallback: "Chart is available."),
                 isPremiumActive: EntitlementPolicy.canUseCashflowChart(isPro: appState.isPro),
                 currentState: EntitlementPolicy.canUseCashflowChart(isPro: appState.isPro)
-                    ? (isRussian ? "Открыто" : "Unlocked")
-                    : (isRussian ? "Закрыто на Free" : "Locked for Free")
+                    ? localized("subscription.diagnostics.state.unlocked", locale: locale, fallback: "Unlocked")
+                    : localized("subscription.diagnostics.state.locked_for_free", locale: locale, fallback: "Locked for Free")
             ),
             EntitlementDiagnosticItem(
                 id: "cashflow.expense_screenshot_import",
-                title: isRussian ? "Импорт расходов со скриншота" : "Expense screenshot import",
-                location: isRussian ? "Cashflow -> Mass import -> режим Screenshot" : "Cashflow -> Mass import -> Screenshot mode",
-                freeBehavior: isRussian ? "OCR-импорт закрыт." : "OCR import is locked.",
-                premiumBehavior: isRussian ? "OCR-импорт доступен." : "OCR import is available.",
+                title: localized("subscription.diagnostics.cashflow_expense_import.title", locale: locale, fallback: "Expense screenshot import"),
+                location: localized("subscription.diagnostics.cashflow_expense_import.location", locale: locale, fallback: "Cashflow -> Mass import -> Screenshot mode"),
+                freeBehavior: localized("subscription.diagnostics.cashflow_expense_import.free_behavior", locale: locale, fallback: "OCR import is locked."),
+                premiumBehavior: localized("subscription.diagnostics.cashflow_expense_import.premium_behavior", locale: locale, fallback: "OCR import is available."),
                 isPremiumActive: EntitlementPolicy.canImportCashflowExpensesFromScreenshot(isPro: appState.isPro),
                 currentState: EntitlementPolicy.canImportCashflowExpensesFromScreenshot(isPro: appState.isPro)
-                    ? (isRussian ? "Открыто" : "Unlocked")
-                    : (isRussian ? "Закрыто на Free" : "Locked for Free")
+                    ? localized("subscription.diagnostics.state.unlocked", locale: locale, fallback: "Unlocked")
+                    : localized("subscription.diagnostics.state.locked_for_free", locale: locale, fallback: "Locked for Free")
             ),
             EntitlementDiagnosticItem(
                 id: "cashback.categories",
-                title: isRussian ? "Категории кешбэка" : "Cashback categories",
-                location: isRussian ? "Кешбэк -> добавление категорий" : "Cashback -> category editor",
-                freeBehavior: isRussian ? "До \(EntitlementPolicy.freeCashbackCategoryLimitPerMonth) категорий в месяц." : "Up to \(EntitlementPolicy.freeCashbackCategoryLimitPerMonth) categories per month.",
-                premiumBehavior: isRussian ? "Безлимит категорий." : "Unlimited categories.",
+                title: localized("subscription.diagnostics.cashback_categories.title", locale: locale, fallback: "Cashback categories"),
+                location: localized("subscription.diagnostics.cashback_categories.location", locale: locale, fallback: "Cashback -> category editor"),
+                freeBehavior: String(
+                    format: localized(
+                        "subscription.diagnostics.cashback_categories.free_behavior_format",
+                        locale: locale,
+                        fallback: "Up to %lld categories per month."
+                    ),
+                    locale: locale,
+                    EntitlementPolicy.freeCashbackCategoryLimitPerMonth
+                ),
+                premiumBehavior: localized("subscription.diagnostics.cashback_categories.premium_behavior", locale: locale, fallback: "Unlimited categories."),
                 isPremiumActive: appState.isPro,
                 currentState: appState.isPro
-                    ? (isRussian ? "Без лимита" : "Unlimited")
-                    : (isRussian ? "Лимит \(EntitlementPolicy.freeCashbackCategoryLimitPerMonth)" : "Limit \(EntitlementPolicy.freeCashbackCategoryLimitPerMonth)")
+                    ? localized("subscription.diagnostics.state.unlimited", locale: locale, fallback: "Unlimited")
+                    : String(
+                        format: localized("subscription.diagnostics.state.limit_format", locale: locale, fallback: "Limit %lld"),
+                        locale: locale,
+                        EntitlementPolicy.freeCashbackCategoryLimitPerMonth
+                    )
             ),
             EntitlementDiagnosticItem(
                 id: "cashback.screenshot",
-                title: isRussian ? "Импорт кешбэка со скриншота" : "Cashback screenshot import",
-                location: isRussian ? "Кешбэк -> кнопка импорта со скриншота" : "Cashback -> screenshot import CTA",
-                freeBehavior: isRussian ? "Импорт закрыт." : "Import is locked.",
-                premiumBehavior: isRussian ? "Импорт доступен." : "Import is available.",
+                title: localized("subscription.diagnostics.cashback_import.title", locale: locale, fallback: "Cashback screenshot import"),
+                location: localized("subscription.diagnostics.cashback_import.location", locale: locale, fallback: "Cashback -> screenshot import CTA"),
+                freeBehavior: localized("subscription.diagnostics.cashback_import.free_behavior", locale: locale, fallback: "Import is locked."),
+                premiumBehavior: localized("subscription.diagnostics.cashback_import.premium_behavior", locale: locale, fallback: "Import is available."),
                 isPremiumActive: EntitlementPolicy.canImportCashbackFromScreenshot(isPro: appState.isPro),
                 currentState: EntitlementPolicy.canImportCashbackFromScreenshot(isPro: appState.isPro)
-                    ? (isRussian ? "Открыто" : "Unlocked")
-                    : (isRussian ? "Закрыто на Free" : "Locked for Free")
+                    ? localized("subscription.diagnostics.state.unlocked", locale: locale, fallback: "Unlocked")
+                    : localized("subscription.diagnostics.state.locked_for_free", locale: locale, fallback: "Locked for Free")
             ),
         ]
+    }
+
+    private static func localized(_ key: String, locale: Locale, fallback: String) -> String {
+        AppLocalization.string(key, locale: locale, fallback: fallback)
     }
 }

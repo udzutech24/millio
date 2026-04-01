@@ -481,7 +481,7 @@ private struct FinancesMainTabView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppColors.warning)
 
-                    Text("finances.main.warning.currency_api_partial")
+                    Text(String(localized: "finances.main.warning.currency_api_partial"))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                         .lineLimit(3)
@@ -653,7 +653,7 @@ private struct FinancesMainTabView: View {
             if visibleGroups.isEmpty {
                 emptyGroupsCallToAction
             } else {
-                Text("finances.main.accounts_section.title")
+                Text(String(localized: "finances.main.accounts_section.title"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AppColors.textTertiary.opacity(0.84))
                     .textCase(.uppercase)
@@ -756,13 +756,13 @@ private struct FinancesMainTabView: View {
                 .frame(width: 88, height: 88)
                 .shadow(color: (AppColors.financesGradient.first ?? .cyan).opacity(0.18), radius: 16, y: 8)
 
-            Text("finances.main.empty_intro.title")
+            Text(String(localized: "finances.main.empty_intro.title"))
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(AppColors.textPrimary)
                 .multilineTextAlignment(.center)
 
             if !isEmptyIntroHidden {
-                Text("finances.main.empty_intro.description")
+                Text(String(localized: "finances.main.empty_intro.description"))
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .multilineTextAlignment(.center)
@@ -773,7 +773,7 @@ private struct FinancesMainTabView: View {
             Button {
                 viewModel.handle(.showAddAccountSheet(nil))
             } label: {
-                Text("finances.main.empty_intro.add_product")
+                Text(String(localized: "finances.main.empty_intro.add_product"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                     .frame(maxWidth: .infinity)
@@ -803,7 +803,7 @@ private struct FinancesMainTabView: View {
                 Button {
                     selectedTab = .dynamics
                 } label: {
-                    Text("finances.main.empty_intro.open_dynamics")
+                    Text(String(localized: "finances.main.empty_intro.open_dynamics"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppColors.textSecondary)
                         .frame(maxWidth: .infinity)

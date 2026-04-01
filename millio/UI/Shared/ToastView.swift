@@ -12,11 +12,7 @@ struct ToastView: View {
     @Binding var isPresented: Bool
 
     private var closeLabel: String {
-        let languageCode = Locale.current.identifier
-            .split(whereSeparator: { $0 == "-" || $0 == "_" })
-            .first?
-            .lowercased() ?? ""
-        return languageCode == "ru" ? "Закрыть" : "Close"
+        String(localized: "cashflow.common.close")
     }
     
     var body: some View {

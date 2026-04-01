@@ -241,14 +241,19 @@ enum CalendarRangeQuickPreset: CaseIterable, Hashable {
     case yearToDate
 
     func title(locale: Locale = .autoupdatingCurrent) -> String {
-        let isRussian = locale.identifier.lowercased().hasPrefix("ru")
         switch self {
-        case .today: return isRussian ? "Сегодня" : "Today"
-        case .last7Days: return isRussian ? "7 дней" : "7 days"
-        case .thisMonth: return isRussian ? "Месяц" : "Month"
-        case .last30Days: return isRussian ? "30 дней" : "30 days"
-        case .last90Days: return isRussian ? "90 дней" : "90 days"
-        case .yearToDate: return isRussian ? "Год" : "Year"
+        case .today:
+            return AppLocalization.string("calendar_range.preset.today", locale: locale, fallback: "Today")
+        case .last7Days:
+            return AppLocalization.string("calendar_range.preset.last_7_days", locale: locale, fallback: "7 days")
+        case .thisMonth:
+            return AppLocalization.string("calendar_range.preset.this_month", locale: locale, fallback: "This month")
+        case .last30Days:
+            return AppLocalization.string("calendar_range.preset.last_30_days", locale: locale, fallback: "30 days")
+        case .last90Days:
+            return AppLocalization.string("calendar_range.preset.last_90_days", locale: locale, fallback: "90 days")
+        case .yearToDate:
+            return AppLocalization.string("calendar_range.preset.year_to_date", locale: locale, fallback: "Year to date")
         }
     }
 
@@ -279,15 +284,15 @@ enum CalendarRangeQuickPreset: CaseIterable, Hashable {
 
 enum CalendarRangePickerCopy {
     static func sheetTitle(locale: Locale = .autoupdatingCurrent) -> String {
-        locale.identifier.lowercased().hasPrefix("ru") ? "Выберите период" : "Choose Period"
+        AppLocalization.string("calendar_range.sheet.title", locale: locale, fallback: "Choose period")
     }
 
     static func startDateLabel(locale: Locale = .autoupdatingCurrent) -> String {
-        locale.identifier.lowercased().hasPrefix("ru") ? "Дата начала" : "Start date"
+        AppLocalization.string("calendar_range.sheet.start_date", locale: locale, fallback: "Start date")
     }
 
     static func endDateLabel(locale: Locale = .autoupdatingCurrent) -> String {
-        locale.identifier.lowercased().hasPrefix("ru") ? "Дата окончания" : "End date"
+        AppLocalization.string("calendar_range.sheet.end_date", locale: locale, fallback: "End date")
     }
 }
 

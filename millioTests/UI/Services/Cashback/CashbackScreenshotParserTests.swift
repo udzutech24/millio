@@ -187,4 +187,19 @@ struct CashbackScreenshotParserTests {
         #expect(parsed.contains { $0.categoryName == "Hotels" && $0.percentage == 10 })
         #expect(parsed.contains { $0.categoryName == "Supermarkets" && $0.percentage == 5 })
     }
+
+    @Test("Парсер поддерживает китайский маркер процентов")
+    func testParseRecognizedLinesSupportsSimplifiedChinesePrefix() {
+        let lines = [
+            "本月返现类别",
+            "高达 10% 酒店",
+            "商超购物 +5%"
+        ]
+
+        let parsed = CashbackScreenshotParser.parseRecognizedLines(lines)
+
+        #expect(parsed.count == 2)
+        #expect(parsed.contains { $0.categoryName == "酒店" && $0.percentage == 10 })
+        #expect(parsed.contains { $0.categoryName == "商超购物" && $0.percentage == 5 })
+    }
 }

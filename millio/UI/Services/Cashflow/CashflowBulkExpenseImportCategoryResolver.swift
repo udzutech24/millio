@@ -8,6 +8,8 @@
 import Foundation
 
 struct CashflowBulkExpenseImportCategoryResolver {
+    private static let normalizationLocale = Locale(identifier: "en_US_POSIX")
+
     func resolve(
         title: String,
         availableOptions: [CashflowCategoryOption],
@@ -130,7 +132,7 @@ struct CashflowBulkExpenseImportCategoryResolver {
     private func normalize(_ value: String) -> String {
         value
             .lowercased()
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Self.normalizationLocale)
             .replacingOccurrences(of: "ё", with: "е")
             .replacingOccurrences(of: #"[^\p{L}\p{N}\s]"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
@@ -152,7 +154,7 @@ struct CashflowBulkExpenseImportCategoryResolver {
     private static func normalizeKeyword(_ value: String) -> String {
         value
             .lowercased()
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: normalizationLocale)
             .replacingOccurrences(of: "ё", with: "е")
             .replacingOccurrences(of: #"[^\p{L}\p{N}\s]"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)

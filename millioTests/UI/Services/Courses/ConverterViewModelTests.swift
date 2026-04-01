@@ -313,6 +313,11 @@ struct ConverterViewModelTests {
 
     @Test("formattedInputText сохраняет дробную часть и хвостовой разделитель")
     func testFormattedInputTextPreservesFractionInput() async {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+
+        LanguageManager.shared.setLanguage(.russian)
+
         let viewModel = ConverterViewModel(rateRepository: MockConverterRateRepository())
 
         viewModel.handle(.updateInputText("22222,30"))
@@ -430,5 +435,83 @@ struct ConverterViewModelTests {
 
         #expect(defaults.double(forKey: key) == mockRepo.mockFetchedAt)
         #expect(defaults.double(forKey: key) != mockRepo.mockUpdatedAt)
+    }
+
+    @Test("Десятичный разделитель и live input следуют выбранному языку приложения")
+    func testDecimalSeparatorFollowsSelectedAppLanguage() async {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+
+        let viewModel = ConverterViewModel(rateRepository: MockConverterRateRepository())
+
+        LanguageManager.shared.setLanguage(.english)
+        viewModel.handle(.clearAll)
+        viewModel.handle(.appendComma)
+        #expect(viewModel.state.inputText == "0.")
+        #expect(viewModel.formattedInputText == "0.")
+
+        LanguageManager.shared.setLanguage(.russian)
+        viewModel.handle(.clearAll)
+        viewModel.handle(.appendComma)
+        #expect(viewModel.state.inputText == "0,")
+        #expect(viewModel.formattedInputText == "0,")
+        #expect(viewModel.localizedInputText("1200.50") == "1 200,50")
+    }
+
+    @Test("Share timestamp and last updated text format through app locale")
+    func testShareAndLastUpdatedUseSelectedAppLanguage() async {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        let defaults = UserDefaults.standard
+        let key = CurrencyWidgetShared.Keys.lastRatesTimestamp(for: RateSource.erapi.rawValue)
+        let hadValue = defaults.object(forKey: key) != nil
+        let previousValue = defaults.double(forKey: key)
+        defer {
+            LanguageManager.shared.setLanguage(previousLanguage)
+            if hadValue {
+                defaults.set(previousValue, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        let date = Date(timeIntervalSince1970: 1_772_683_800)
+        let timestamp = date.timeIntervalSince1970
+        let viewModel = ConverterViewModel(rateRepository: MockConverterRateRepository())
+        defaults.set(timestamp, forKey: key)
+
+        LanguageManager.shared.setLanguage(.english)
+        #expect(viewModel.getShareData(now: date).dateString == expectedShareTimestamp(date, locale: Locale(identifier: "en")))
+        #expect(viewModel.lastUpdatedText == expectedShareTimestamp(date, locale: Locale(identifier: "en")))
+
+        LanguageManager.shared.setLanguage(.russian)
+        #expect(viewModel.getShareData(now: date).dateString == expectedShareTimestamp(date, locale: Locale(identifier: "ru")))
+        #expect(viewModel.lastUpdatedText == expectedShareTimestamp(date, locale: Locale(identifier: "ru")))
+    }
+
+    @Test("Share draft title switches live with app language and is not cached in state")
+    func testShareDraftTitleFollowsCurrentLanguage() async {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+
+        let viewModel = ConverterViewModel(rateRepository: MockConverterRateRepository())
+        viewModel.handle(.prepareShare)
+
+        LanguageManager.shared.setLanguage(.english)
+        let englishTitle = viewModel.shareDraftTitle
+
+        LanguageManager.shared.setLanguage(.russian)
+        let russianTitle = viewModel.shareDraftTitle
+
+        #expect(!englishTitle.isEmpty)
+        #expect(!russianTitle.isEmpty)
+        #expect(englishTitle != russianTitle)
+        #expect(Mirror(reflecting: viewModel.state).children.contains { $0.label == "shareDraftTitle" } == false)
+    }
+
+    private func expectedShareTimestamp(_ date: Date, locale: Locale) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateFormat = "dd MMM • HH:mm"
+        return formatter.string(from: date)
     }
 }

@@ -70,7 +70,7 @@ struct VisionCashbackScreenshotTextRecognizer: CashbackScreenshotTextRecognizing
 
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
-            request.recognitionLanguages = ["ru-RU", "en-US"]
+            request.recognitionLanguages = ["ru-RU", "en-US", "zh-Hans"]
 
             let handler = VNImageRequestHandler(cgImage: image, options: [:])
             DispatchQueue.global(qos: .userInitiated).async {
@@ -182,7 +182,7 @@ struct CashbackScreenshotParser {
     }
 
     private static func parseInlineCashbackLine(_ line: String) -> (Double, String)? {
-        let pattern = #"^(?:[^\d]{0,8}\s*)?(?:(?:до|up to)\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:%|％|°/o|°/о|o/o|о/о)\s*(.+)$"#
+        let pattern = #"^(?:[^\d]{0,8}\s*)?(?:(?:до|up to|高达|最高)\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:%|％|°/o|°/о|o/o|о/о)\s*(.+)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }
@@ -228,7 +228,7 @@ struct CashbackScreenshotParser {
     }
 
     private static func parsePercentageOnlyLine(_ line: String) -> Double? {
-        let pattern = #"^(?:[^\d]{0,8}\s*)?(?:(?:до|up to)\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:%|％|°/o|°/о|o/o|о/о)$"#
+        let pattern = #"^(?:[^\d]{0,8}\s*)?(?:(?:до|up to|高达|最高)\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:%|％|°/o|°/о|o/o|о/о)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }

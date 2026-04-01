@@ -15,17 +15,11 @@ enum RateSource: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     
     var title: String {
-        switch self {
-        case .erapi: return String(localized: "converter.rate_source.erapi.title")
-        case .frankfurter: return String(localized: "converter.rate_source.frankfurter.title")
-        }
+        ConverterL10n.rateSourceTitle(self)
     }
     
     var subtitle: String {
-        switch self {
-        case .erapi: return String(localized: "converter.rate_source.erapi.subtitle")
-        case .frankfurter: return String(localized: "converter.rate_source.frankfurter.subtitle")
-        }
+        ConverterL10n.rateSourceSubtitle(self)
     }
     
     var latestURL: URL? {

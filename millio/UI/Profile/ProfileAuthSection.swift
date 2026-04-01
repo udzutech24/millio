@@ -11,14 +11,37 @@ struct ProfileAuthSection: View {
         static let buttonCornerRadius: CGFloat = 14
     }
 
-    private let connectedTitle = String(localized: "profile.auth.connected", defaultValue: "Signed in with Apple", comment: "Compact connected state title in profile")
-    private let emailMissingTitle = String(localized: "profile.auth.email_missing", defaultValue: "No email provided", comment: "Fallback email text")
-    private let guestTitle = String(localized: "profile.auth.guest.title", defaultValue: "Guest Mode", comment: "Guest mode title")
-    private let guestSubtitle = String(localized: "profile.auth.guest.subtitle", defaultValue: "Use Millio now and connect your Apple Account later.", comment: "Guest mode subtitle")
-    private let exitGuestTitle = String(localized: "profile.auth.exit_guest", defaultValue: "Leave Guest Mode", comment: "Exit guest mode button title")
-    private let detailsTitle = String(localized: "profile.auth.details", defaultValue: "View details", comment: "Account details row accessory title")
-    private let notSignedInTitle = String(localized: "profile.auth.not_signed_in", defaultValue: "Not signed in", comment: "Signed-out auth state title")
-    private let notSignedInSubtitle = String(localized: "profile.auth.not_signed_in.subtitle", defaultValue: "Sign in with Apple to enable account sync. iCloud backup works separately.", comment: "Signed-out auth state subtitle")
+    private var connectedTitle: String {
+        String(localized: "profile.auth.connected", defaultValue: "Signed in with Apple", comment: "Compact connected state title in profile")
+    }
+
+    private var emailMissingTitle: String {
+        String(localized: "profile.auth.email_missing", defaultValue: "No email provided", comment: "Fallback email text")
+    }
+
+    private var guestTitle: String {
+        String(localized: "profile.auth.guest.title", defaultValue: "Guest Mode", comment: "Guest mode title")
+    }
+
+    private var guestSubtitle: String {
+        String(localized: "profile.auth.guest.subtitle", defaultValue: "Use Millio now and connect your Apple Account later.", comment: "Guest mode subtitle")
+    }
+
+    private var exitGuestTitle: String {
+        String(localized: "profile.auth.exit_guest", defaultValue: "Leave Guest Mode", comment: "Exit guest mode button title")
+    }
+
+    private var detailsTitle: String {
+        String(localized: "profile.auth.details", defaultValue: "View details", comment: "Account details row accessory title")
+    }
+
+    private var notSignedInTitle: String {
+        String(localized: "profile.auth.not_signed_in", defaultValue: "Not signed in", comment: "Signed-out auth state title")
+    }
+
+    private var notSignedInSubtitle: String {
+        String(localized: "profile.auth.not_signed_in.subtitle", defaultValue: "Sign in with Apple to enable account sync. iCloud backup works separately.", comment: "Signed-out auth state subtitle")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {

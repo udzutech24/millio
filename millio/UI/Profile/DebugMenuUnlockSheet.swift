@@ -18,7 +18,7 @@ struct DebugMenuUnlockSheet: View {
     @State private var password: String = ""
     @State private var showError: Bool = false
 
-    private var locale: Locale { appState.selectedLanguage.locale ?? Locale.current }
+    private var locale: Locale { AppLocalization.currentAppLocale }
 
     private var titleText: String {
         AppLocalization.string("profile.debug.unlock.title", locale: locale, fallback: "Debug access")
@@ -155,4 +155,3 @@ struct DebugMenuUnlockSheet: View {
         }
     }
 }
-

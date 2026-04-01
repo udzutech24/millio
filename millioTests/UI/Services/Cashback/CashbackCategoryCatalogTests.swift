@@ -11,12 +11,31 @@ import Testing
 
 @Suite
 struct CashbackCategoryCatalogTests {
-    @Test("Системная категория супермаркетов в русской локали показывается как продукты")
-    func supermarketDisplayNameUsesProductsInRussian() {
+    @Test("Системная категория супермаркетов локализуется для ru/en/zh-Hans")
+    func supermarketDisplayNameUsesThreeLanguageCatalog() {
         let metadata = CashbackCategoryCatalog.metadata(for: .supermarket)
 
         #expect(metadata.localizedDisplayName(locale: Locale(identifier: "ru_RU")) == "Продукты")
         #expect(metadata.localizedDisplayName(locale: Locale(identifier: "en_US")) == "Groceries")
+        #expect(metadata.localizedDisplayName(locale: Locale(identifier: "zh-Hans")) == "商超购物")
+    }
+
+    @Test("Поиск категорий не зависит от ручного RU/EN ветвления")
+    func categorySearchUsesLocalizedCatalogNames() {
+        #expect(
+            CashbackCategoryCatalog.matchesSearch(
+                rawValue: CashbackCategory.supermarket.rawValue,
+                query: "商超",
+                locale: Locale(identifier: "zh-Hans")
+            )
+        )
+        #expect(
+            CashbackCategoryCatalog.matchesSearch(
+                rawValue: CashbackCategory.gasStation.rawValue,
+                query: "заправки",
+                locale: Locale(identifier: "en_US")
+            )
+        )
     }
 
     @Test("Частичный запрос по компьютерам даёт релевантные иконки для кэшбэка")

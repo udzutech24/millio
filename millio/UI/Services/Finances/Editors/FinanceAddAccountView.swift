@@ -18,6 +18,7 @@ struct FinanceAddAccountView: View {
     let presentationStyle: FinanceEditorPresentationStyle
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.locale) private var locale
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
 
@@ -73,8 +74,11 @@ struct FinanceAddAccountView: View {
     @FocusState private var isNameFieldFocused: Bool
     @State private var areHintsHidden: Bool = false
     @State private var showPaywallAlert = false
-    @State private var paywallMessage = ""
+    @State private var paywallMessage: LocalizedTextResolver = .empty
     @State private var groupIDsBeforeCreate: Set<String> = []
+    @State private var showProductPicker = false
+    @State private var hasConfirmedProductSelection = false
+    @State private var didInitializePresentationState = false
 
     private enum HintsPrefs {
         static let hiddenKey = "finance_add_account_hints_hidden"
@@ -90,11 +94,20 @@ struct FinanceAddAccountView: View {
         let text: String
         let kind: Kind
     }
+
+    private var localizationLocale: Locale {
+        AppLocalization.currentAppLocale
+    }
+
+    private func localized(_ key: String, fallback: String? = nil) -> String {
+        AppLocalization.string(key, locale: localizationLocale, fallback: fallback)
+    }
     
     private var navigationTitle: String {
-        (editingCard == nil && editingCredit == nil && editingInvestment == nil)
-            ? String(localized: "finances.add_account.nav.new")
-            : String(localized: "finances.add_account.nav.edit")
+        guard !showProductPicker else { return "" }
+        return (editingCard == nil && editingCredit == nil && editingInvestment == nil)
+            ? localized("finances.add_account.nav.new")
+            : localized("finances.add_account.nav.edit")
     }
     
     private var resolvedGroup: FinanceGroup? {
@@ -196,50 +209,8 @@ struct FinanceAddAccountView: View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: String(localized: "finances.add_account.section.type"))
             FinancesGlassCard {
-                Menu {
-                    Button {
-                        selectedAccountType = .card
-                        selectedProductTypeTitle = FinanceAccountType.card.displayName
-                    } label: {
-                        Label(FinanceAccountType.card.displayName, systemImage: FinanceAccountType.card.icon)
-                    }
-                    Button {
-                        selectedAccountType = .investment
-                        selectedInvestmentCategory = .other
-                        selectedInvestmentPreset = .account
-                        selectedProductTypeTitle = String(localized: "finances.add_account.product.account")
-                    } label: {
-                        Label(String(localized: "finances.add_account.product.account"), systemImage: "building.columns.fill")
-                    }
-
-                    Button {
-                        selectedAccountType = .credit
-                        selectedProductTypeTitle = FinanceAccountType.credit.displayName
-                    } label: {
-                        Label(FinanceAccountType.credit.displayName, systemImage: FinanceAccountType.credit.icon)
-                    }
-
-                    if addAccountMode == .create {
-                        Button {
-                            selectedAccountType = .investment
-                            selectedInvestmentCategory = .other
-                            selectedInvestmentPreset = .asset
-                            selectedProductTypeTitle = String(localized: "finances.account.type.investment")
-                        } label: {
-                            Label(String(localized: "finances.account.type.investment"), systemImage: FinanceAccountType.investment.icon)
-                        }
-
-                        ForEach(visibleInvestmentCategories, id: \.self) { category in
-                            Button {
-                                selectedAccountType = .investment
-                                selectedInvestmentCategory = category
-                                selectedInvestmentPreset = .category
-                                selectedProductTypeTitle = category.displayName
-                            } label: {
-                                Label(category.displayName, systemImage: category.icon)
-                            }
-                        }
-                    }
+                Button {
+                    showProductPicker = true
                 } label: {
                     HStack(spacing: 12) {
                         Text(String(localized: "finances.add_account.product.type"))
@@ -257,18 +228,35 @@ struct FinanceAddAccountView: View {
                                     endPoint: .trailing
                                 )
                             )
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppColors.textTertiary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 14)
                     .padding(.horizontal, 16)
                     .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
     }
 
     private var visibleInvestmentCategories: [InvestmentCategory] {
         [.house, .stocks, .business, .debt, .crypto, .other]
+    }
+
+    private var selectedProductOption: FinanceAddAccountProductOption {
+        FinanceAddAccountProductOption.currentSelection(
+            accountType: selectedAccountType,
+            investmentCategory: selectedInvestmentCategory,
+            investmentPreset: selectedInvestmentPreset
+        )
+    }
+
+    private var groupRecommendations: [FinanceAddAccountGroupRecommendation] {
+        guard hasConfirmedProductSelection else { return [] }
+        return Array(selectedProductOption.groupRecommendations.prefix(2))
     }
     
     private var groupSection: some View {
@@ -411,13 +399,100 @@ struct FinanceAddAccountView: View {
                     )
                 }
                 .padding(.top, 4)
+
+                if !groupRecommendations.isEmpty {
+                    recommendedGroupsSection
+                }
             }
         }
+    }
+
+    private var recommendedGroupsSection: some View {
+        HStack(spacing: 10) {
+            ForEach(groupRecommendations) { recommendation in
+                recommendedGroupButton(recommendation)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func recommendedGroupButton(_ recommendation: FinanceAddAccountGroupRecommendation) -> some View {
+        let isSelected = resolvedGroup?.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            .localizedCaseInsensitiveCompare(recommendation.title(locale: locale)) == .orderedSame
+
+        return Button {
+            applyGroupRecommendation(recommendation)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: recommendation.iconName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color(hex: recommendation.accentHex))
+                    .frame(width: 28, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color(hex: recommendation.accentHex).opacity(0.14))
+                    )
+
+                Text(recommendation.title(locale: locale))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Spacer(minLength: 0)
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color(hex: recommendation.accentHex))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.white.opacity(isSelected ? 0.085 : 0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(
+                        Color(hex: recommendation.accentHex).opacity(isSelected ? 0.38 : 0.18),
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func presentCreateGroup() {
         groupIDsBeforeCreate = Set(viewModel.state.groups.map(\.groupUniqueID))
         showCreateGroup = true
+    }
+
+    private func applyGroupRecommendation(_ recommendation: FinanceAddAccountGroupRecommendation) {
+        let suggestedName = recommendation.title(locale: locale).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !suggestedName.isEmpty else { return }
+
+        if let existingGroup = viewModel.state.groups.first(where: {
+            $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                .localizedCaseInsensitiveCompare(suggestedName) == .orderedSame
+        }) {
+            selectedGroupID = existingGroup.groupUniqueID
+            return
+        }
+
+        let maxOrder = viewModel.state.groups.map(\.order).max() ?? -1
+        let newGroup = FinanceGroup(name: suggestedName, colorHex: recommendation.accentHex, order: maxOrder + 1)
+        modelContext.insert(newGroup)
+
+        do {
+            try modelContext.save()
+            viewModel.handle(.loadGroups)
+            selectedGroupID = newGroup.groupUniqueID
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to create recommended group: \(error.localizedDescription)")
+        }
     }
     
     private var addAccountModeSection: some View {
@@ -455,13 +530,9 @@ struct FinanceAddAccountView: View {
                     viewModel: vm,
                     name: $accountName,
                     allowsTypeSwitching: !isEditingMode,
-                    selectedProductType: selectedAccountType,
-                    selectedInvestmentCategory: selectedInvestmentCategory,
-                    onProductTypeSelected: { selectedAccountType = $0 },
-                    onProductTitleSelected: { selectedProductTypeTitle = $0 },
-                    onInvestmentPresetSelected: { selectedInvestmentPreset = $0 },
-                    onInvestmentCategorySelected: { category in
-                        selectedInvestmentCategory = category
+                    selectedProductTitle: selectedProductTypeTitle,
+                    onOpenProductPicker: {
+                        showProductPicker = true
                     },
                     onCardDataChanged: { card in
                         self.cardData = card
@@ -669,15 +740,17 @@ struct FinanceAddAccountView: View {
     private var scrollContent: some View {
         ScrollView {
             VStack(spacing: 18) {
-                nameSection
-                
-                if !isEditingMode && selectedAccountType != .card {
-                    accountTypeSection
-                }
-                addAccountModeSection
+                if hasConfirmedProductSelection {
+                    nameSection
 
-                validationHintsSection
-                createFormSections
+                    if !isEditingMode && selectedAccountType != .card {
+                        accountTypeSection
+                    }
+                    addAccountModeSection
+
+                    validationHintsSection
+                    createFormSections
+                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
@@ -693,6 +766,9 @@ struct FinanceAddAccountView: View {
         ZStack {
             GradientBackground()
             scrollContent
+        }
+        .overlay {
+            productPickerOverlay
         }
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -710,7 +786,7 @@ struct FinanceAddAccountView: View {
             }
         }
         .toolbar {
-            if presentationStyle.showsDismissButton {
+            if presentationStyle.showsDismissButton, !showProductPicker {
                 ToolbarItem(placement: .navigationBarLeading) {
                     ToolbarGlassIconButton(
                         systemName: "xmark",
@@ -720,59 +796,74 @@ struct FinanceAddAccountView: View {
                     }
                 }
             }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                if areHintsHidden, !validationHints.isEmpty {
-                    Button {
-                        areHintsHidden = false
-                        UserDefaults.standard.set(false, forKey: HintsPrefs.hiddenKey)
-                    } label: {
-                        Image(systemName: "questionmark.circle")
-                            .font(.system(size: 15, weight: .semibold))
+            if !showProductPicker {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if hasConfirmedProductSelection, areHintsHidden, !validationHints.isEmpty {
+                        Button {
+                            areHintsHidden = false
+                            UserDefaults.standard.set(false, forKey: HintsPrefs.hiddenKey)
+                        } label: {
+                            Image(systemName: "questionmark.circle")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundStyle(AppColors.textTertiary)
+                        .accessibilityLabel(localized("finances.add_account.hints.show"))
                     }
-                    .foregroundStyle(AppColors.textTertiary)
-                    .accessibilityLabel(String(localized: "finances.add_account.hints.show"))
                 }
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                ToolbarGlassIconButton(
-                    systemName: "checkmark",
-                    accessibilityLabel: isEditingMode
-                    ? String(localized: "finances.common.save")
-                    : String(localized: "finances.common.add"),
-                    isEnabled: isValid,
-                    isHighlighted: isValid
-                ) {
-                    addAccount()
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    ToolbarGlassIconButton(
+                        systemName: "checkmark",
+                        accessibilityLabel: isEditingMode
+                        ? localized("finances.common.save")
+                        : localized("finances.common.add"),
+                        isEnabled: hasConfirmedProductSelection && isValid,
+                        isHighlighted: hasConfirmedProductSelection && isValid
+                    ) {
+                        addAccount()
+                    }
                 }
             }
         }
         .onAppear {
             areHintsHidden = UserDefaults.standard.bool(forKey: HintsPrefs.hiddenKey)
-            if let editingCard {
-                selectedAccountType = .card
-                selectedProductTypeTitle = FinanceAccountType.card.displayName
-                accountName = editingCard.name
-            } else if let editingCredit {
-                selectedAccountType = .credit
-                selectedProductTypeTitle = FinanceAccountType.credit.displayName
-                accountName = editingCredit.name
-            } else if let editingInvestment {
-                selectedAccountType = .investment
-                selectedInvestmentCategory = editingInvestment.category
-                selectedInvestmentPreset = .category
-                selectedProductTypeTitle = editingInvestment.category.displayName
-                accountName = editingInvestment.name
-            } else if let preselectedAccountType {
-                selectedAccountType = preselectedAccountType
-                switch preselectedAccountType {
-                case .card:
-                    selectedProductTypeTitle = FinanceAddAccountPreselection.productTitle(for: .card)
-                case .credit:
-                    selectedProductTypeTitle = FinanceAddAccountPreselection.productTitle(for: .credit)
-                case .investment:
-                    selectedInvestmentCategory = .other
-                    selectedInvestmentPreset = .asset
-                    selectedProductTypeTitle = FinanceAddAccountPreselection.productTitle(for: .investment)
+            if !didInitializePresentationState {
+                didInitializePresentationState = true
+                if let editingCard {
+                    hasConfirmedProductSelection = true
+                    selectedAccountType = .card
+                    selectedProductTypeTitle = FinanceAccountType.card.displayName(for: localizationLocale)
+                    accountName = editingCard.name
+                } else if let editingCredit {
+                    hasConfirmedProductSelection = true
+                    selectedAccountType = .credit
+                    selectedProductTypeTitle = FinanceAccountType.credit.displayName(for: localizationLocale)
+                    accountName = editingCredit.name
+                } else if let editingInvestment {
+                    hasConfirmedProductSelection = true
+                    selectedAccountType = .investment
+                    selectedInvestmentCategory = editingInvestment.category
+                    selectedInvestmentPreset = .category
+                    selectedProductTypeTitle = editingInvestment.category.displayName(for: localizationLocale)
+                    accountName = editingInvestment.name
+                } else if let preselectedAccountType {
+                    hasConfirmedProductSelection = true
+                    selectedAccountType = preselectedAccountType
+                    switch preselectedAccountType {
+                    case .card:
+                        selectedProductTypeTitle = FinanceAddAccountPreselection.productTitle(for: .card, locale: localizationLocale)
+                    case .credit:
+                        selectedProductTypeTitle = FinanceAddAccountPreselection.productTitle(for: .credit, locale: localizationLocale)
+                    case .investment:
+                        selectedInvestmentCategory = .other
+                        selectedInvestmentPreset = .asset
+                        selectedProductTypeTitle = FinanceAddAccountPreselection.productTitle(for: .investment, locale: localizationLocale)
+                    }
+                } else {
+                    hasConfirmedProductSelection = false
+                    showProductPicker = FinanceAddAccountPresentationPolicy.shouldAutoPresentTypePicker(
+                        isEditingMode: isEditingMode,
+                        preselectedAccountType: preselectedAccountType
+                    )
                 }
             }
             if let preselectedGroup {
@@ -807,10 +898,58 @@ struct FinanceAddAccountView: View {
         }
         .premiumUpsellAlert(
             isPresented: $showPaywallAlert,
-            titleKey: "Ограничение Free-плана",
+            titleKey: "monetization.free_plan.title",
             message: paywallMessage,
             onSubscribe: { router.push(.subscription) }
         )
+    }
+
+    @ViewBuilder
+    private var productPickerOverlay: some View {
+        if showProductPicker {
+            GeometryReader { proxy in
+                ZStack {
+                    Color.black.opacity(0.58)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if hasConfirmedProductSelection {
+                                showProductPicker = false
+                            }
+                        }
+
+                    FinanceAddAccountProductPickerSheet(
+                        availableSize: proxy.size,
+                        onClose: {
+                            if hasConfirmedProductSelection {
+                                showProductPicker = false
+                            } else {
+                                dismiss()
+                            }
+                        },
+                        onSelect: handleProductOptionSelection
+                    )
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: 598)
+                    .padding(.top, max(12, proxy.safeAreaInsets.top + 6))
+                    .padding(.bottom, max(12, proxy.safeAreaInsets.bottom + 6))
+                    .transition(
+                        .asymmetric(
+                            insertion: .offset(y: 18)
+                                .combined(with: .scale(scale: 0.97, anchor: .center))
+                                .combined(with: .opacity),
+                            removal: .offset(y: 12)
+                                .combined(with: .scale(scale: 0.985, anchor: .center))
+                                .combined(with: .opacity)
+                        )
+                    )
+                }
+                .allowsHitTesting(true)
+                .animation(.spring(response: 0.42, dampingFraction: 0.88), value: showProductPicker)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            }
+            .ignoresSafeArea()
+        }
     }
     
     var body: some View {
@@ -963,7 +1102,7 @@ struct FinanceAddAccountView: View {
     }
 
     private func focusNameFieldIfNeeded() {
-        guard addAccountMode == .create, !isTickerDrivenName else {
+        guard hasConfirmedProductSelection, addAccountMode == .create, !isTickerDrivenName else {
             isNameFieldFocused = false
             return
         }
@@ -1051,10 +1190,13 @@ struct FinanceAddAccountView: View {
                 currentProducts: currentFinanceProductCount
             )
             guard canAddProduct else {
-                paywallMessage = String(
-                    format: String(localized: "monetization.finance.products.limit.hard_format"),
-                    EntitlementPolicy.freeFinanceProductLimit
-                )
+                paywallMessage = LocalizedTextResolver { locale in
+                    String(
+                        format: AppLocalization.string("monetization.finance.products.limit.hard_format", locale: locale),
+                        locale: locale,
+                        EntitlementPolicy.freeFinanceProductLimit
+                    )
+                }
                 showPaywallAlert = true
                 return false
             }
@@ -1075,10 +1217,13 @@ struct FinanceAddAccountView: View {
             currentTrackedTickers: currentTrackedTickerCount
         )
         guard canAdd else {
-            paywallMessage = String(
-                format: String(localized: "monetization.ticker.limit.hard_format"),
-                EntitlementPolicy.freeTrackedTickerLimit
-            )
+            paywallMessage = LocalizedTextResolver { locale in
+                String(
+                    format: AppLocalization.string("monetization.ticker.limit.hard_format", locale: locale),
+                    locale: locale,
+                    EntitlementPolicy.freeTrackedTickerLimit
+                )
+            }
             showPaywallAlert = true
             return false
         }
@@ -1096,16 +1241,36 @@ struct FinanceAddAccountView: View {
         }
     }
 
-    private func marketCategoryPaywallMessage(for category: InvestmentCategory) -> String {
+    private func marketCategoryPaywallMessage(for category: InvestmentCategory) -> LocalizedTextResolver {
         switch category {
         case .stocks:
-            return String(localized: "monetization.finance.stocks.pro_only")
+            return .key("monetization.finance.stocks.pro_only")
         case .crypto:
-            return String(localized: "monetization.finance.crypto.pro_only")
+            return .key("monetization.finance.crypto.pro_only")
         default:
-            return String(localized: "monetization.finance.market_assets.pro_only")
+            return .key("monetization.finance.market_assets.pro_only")
         }
     }
+
+    private func handleProductOptionSelection(_ option: FinanceAddAccountProductOption) {
+        let selection = option.selection(locale: localizationLocale)
+
+        if selection.investmentCategory.isMarketTickerCategory,
+           !canUseMarketCategory(selection.investmentCategory) {
+            paywallMessage = marketCategoryPaywallMessage(for: selection.investmentCategory)
+            showPaywallAlert = true
+            return
+        }
+
+        selectedAccountType = selection.accountType
+        selectedInvestmentCategory = selection.investmentCategory
+        selectedInvestmentPreset = selection.investmentPreset
+        selectedProductTypeTitle = selection.title
+        hasConfirmedProductSelection = true
+        showProductPicker = false
+        focusNameFieldIfNeeded()
+    }
+
     private func createCardAndAddToGroup(cardViewModel: CardViewModel, group: FinanceGroup?) {
         guard let cardData = cardData else { return }
         

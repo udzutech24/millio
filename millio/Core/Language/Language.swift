@@ -11,9 +11,10 @@ enum Language: String, Codable, CaseIterable, Hashable {
     case system = "system"
     case english = "en"
     case russian = "ru"
+    case simplifiedChinese = "zh-Hans"
     
     var displayName: String {
-        displayName(for: locale ?? Locale.current)
+        displayName(for: AppLocalization.currentAppLocale)
     }
 
     func displayName(for locale: Locale) -> String {
@@ -24,6 +25,8 @@ enum Language: String, Codable, CaseIterable, Hashable {
             return AppLocalization.string("language.option.english", locale: locale)
         case .russian:
             return AppLocalization.string("language.option.russian", locale: locale)
+        case .simplifiedChinese:
+            return AppLocalization.string("language.option.chinese_simplified", locale: locale)
         }
     }
     
@@ -35,6 +38,8 @@ enum Language: String, Codable, CaseIterable, Hashable {
             return Locale(identifier: "en")
         case .russian:
             return Locale(identifier: "ru")
+        case .simplifiedChinese:
+            return Locale(identifier: "zh-Hans")
         }
     }
 }

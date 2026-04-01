@@ -6,3 +6,5 @@
 "widget.converter.add_spend" = "Spend";
 "widget.converter.expense" = "Expense";
 "widget.converter.income" = "Income";
+"widget.converter.configuration_title" = "Currency Converter";
+"widget.converter.configuration_description" = "See exchange rates and quick actions right on your Home Screen. PRO only.";

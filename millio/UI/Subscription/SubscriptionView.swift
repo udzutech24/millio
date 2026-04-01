@@ -14,13 +14,11 @@ struct SubscriptionView: View {
 
     @State private var selectedPlan: SubscriptionPlan = .yearly
     @State private var isLoading = false
-    @State private var errorMessage: String?
+    @State private var errorMessage: LocalizedTextResolver = .key("subscription.error.unknown")
     @State private var showError = false
     @State private var products: [Product] = []
 
-    private var localizationLocale: Locale {
-        appState.selectedLanguage.locale ?? Locale.current
-    }
+    private var localizationLocale: Locale { AppLocalization.currentAppLocale }
 
     private var isRunningInPreview: Bool {
         ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
@@ -75,10 +73,10 @@ struct SubscriptionView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .alert("subscription.alert.error.title", isPresented: $showError) {
+        .alert(localizedString("subscription.alert.error.title", fallback: "Error"), isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text(errorMessage ?? String(localized: "subscription.error.unknown", locale: localizationLocale))
+            Text(errorMessage.resolve(in: localizationLocale))
         }
         .task {
             guard !isRunningInPreview else { return }
@@ -128,7 +126,7 @@ struct SubscriptionView: View {
 
             Spacer()
 
-            Text("subscription.navigation.title")
+            localizedText("subscription.navigation.title")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.7))
 
@@ -209,20 +207,20 @@ struct SubscriptionView: View {
 
     private func heroTitleBlock(metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
         VStack(alignment: .leading, spacing: metrics.heroTitleSpacing) {
-            Text("subscription.hero.eyebrow")
+            localizedText("subscription.hero.eyebrow")
                 .font(.system(size: metrics.eyebrowFontSize, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.6))
                 .textCase(.uppercase)
                 .tracking(1.4)
 
-            Text("subscription.hero.title")
+            localizedText("subscription.hero.title")
                 .font(.system(size: metrics.heroTitleFontSize, weight: .black, design: .rounded))
                 .foregroundStyle(AppColors.textPrimary)
                 .multilineTextAlignment(.leading)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
 
-            Text("subscription.hero.subtitle")
+            localizedText("subscription.hero.subtitle")
                 .font(.system(size: metrics.heroSubtitleFontSize, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.7))
                 .multilineTextAlignment(.leading)
@@ -295,12 +293,12 @@ struct SubscriptionView: View {
     private func plansCard(metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
         VStack(alignment: .leading, spacing: metrics.planSectionSpacing) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("subscription.plans.title")
+                localizedText("subscription.plans.title")
                     .font(.system(size: metrics.planEyebrowFontSize, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.54))
                     .textCase(.uppercase)
 
-                Text("subscription.plans.subtitle")
+                localizedText("subscription.plans.subtitle")
                     .font(.system(size: metrics.planSubtitleFontSize, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)
@@ -312,7 +310,7 @@ struct SubscriptionView: View {
                 }
             }
 
-            Text("subscription.plans.footnote")
+            localizedText("subscription.plans.footnote")
                 .font(.system(size: metrics.planFootnoteFontSize, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.54))
                 .fixedSize(horizontal: false, vertical: true)
@@ -390,7 +388,7 @@ struct SubscriptionView: View {
 
     private func planMainInfo(for plan: SubscriptionPlan, metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(plan.titleKey)
+            localizedText(plan.titleKey)
                 .font(.system(size: metrics.planTitleFontSize, weight: .bold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -434,7 +432,7 @@ struct SubscriptionView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
-            Text(plan.periodLabelKey)
+            localizedText(plan.periodLabelKey)
                 .font(.system(size: metrics.planPeriodFontSize, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.7))
         }
@@ -444,7 +442,7 @@ struct SubscriptionView: View {
     private func benefitsSection(metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
         VStack(alignment: .leading, spacing: metrics.benefitsSectionSpacing) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("subscription.features.title")
+                localizedText("subscription.features.title")
                     .font(.system(size: metrics.benefitsTitleFontSize, weight: .bold))
                     .foregroundStyle(.white)
             }
@@ -530,7 +528,7 @@ struct SubscriptionView: View {
         VStack(spacing: metrics.legalSectionSpacing) {
             WrappingHStack(alignment: .center, horizontalSpacing: 14, verticalSpacing: 10) {
                 if appState.isPro {
-                    Link(String(localized: "subscription.link.manage", locale: localizationLocale), destination: manageSubscriptionURL)
+                    Link(localizedString("subscription.link.manage"), destination: manageSubscriptionURL)
                 }
                 Link(legalLinks.privacyTitle, destination: legalLinks.privacyURL)
                 Link(legalLinks.termsTitle, destination: legalLinks.termsURL)
@@ -540,7 +538,7 @@ struct SubscriptionView: View {
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
 
-            Text("subscription.legal.note")
+            localizedText("subscription.legal.note")
                 .font(.system(size: metrics.legalNoteFontSize, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.52))
                 .multilineTextAlignment(.center)
@@ -551,7 +549,7 @@ struct SubscriptionView: View {
                     await restorePurchases()
                 }
             } label: {
-                Text("subscription.button.restore")
+                localizedText("subscription.button.restore")
                     .font(.system(size: metrics.restoreButtonFontSize, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
             }
@@ -574,7 +572,7 @@ struct SubscriptionView: View {
                     .minimumScaleFactor(0.75)
                     .allowsTightening(true)
 
-                Text(ctaSubtitleKey)
+                localizedText(ctaSubtitleKey)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.78))
             }
@@ -621,11 +619,11 @@ struct SubscriptionView: View {
                     .foregroundStyle(appState.isTrialActive ? Color(hex: "70C7FF") : Color(hex: "4DD471"))
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(appState.isTrialActive ? "subscription.status.trial_active" : "subscription.status.subscribed_active")
+                    localizedText(appState.isTrialActive ? "subscription.status.trial_active" : "subscription.status.subscribed_active")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.white)
 
-                    Text(appState.isTrialActive ? "subscription.status.trial_detail" : "subscription.status.subscribed_detail")
+                    localizedText(appState.isTrialActive ? "subscription.status.trial_detail" : "subscription.status.subscribed_detail")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Color.white.opacity(0.62))
                 }
@@ -633,7 +631,7 @@ struct SubscriptionView: View {
 
             if let expirationDate = appState.subscriptionExpirationDate {
                 HStack(spacing: 8) {
-                    Text("subscription.status.expires_at")
+                    localizedText("subscription.status.expires_at")
                     Text(verbatim: formatDate(expirationDate))
                 }
                 .font(.system(size: 14, weight: .medium))
@@ -658,7 +656,7 @@ struct SubscriptionView: View {
                 await startTrial()
             }
         } label: {
-            Text("subscription.button.start_trial")
+            localizedText("subscription.button.start_trial")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -676,14 +674,14 @@ struct SubscriptionView: View {
         .disabled(isLoading)
     }
 
-    private var ctaSubtitleKey: LocalizedStringKey {
+    private var ctaSubtitleKey: String {
         selectedPlan == .yearly ? "subscription.cta.subtitle.yearly" : "subscription.cta.subtitle.monthly"
     }
 
     private var ctaTitle: Text {
         let fallback = selectedPlan.fallbackTotalPrice
         let totalPrice = planTotalPrice(for: selectedPlan) ?? fallback
-        return Text("subscription.button.subscribe") + Text(" ") + Text(verbatim: totalPrice)
+        return localizedText("subscription.button.subscribe") + Text(" ") + Text(verbatim: totalPrice)
     }
 
     private func planBadgeText(for plan: SubscriptionPlan) -> String? {
@@ -748,7 +746,7 @@ struct SubscriptionView: View {
             ]
             products = try await Product.products(for: productIds)
         } catch {
-            errorMessage = String(localized: "subscription.error.load_products", locale: localizationLocale)
+            errorMessage = .key("subscription.error.load_products")
             showError = true
         }
     }
@@ -770,7 +768,9 @@ struct SubscriptionView: View {
         } catch {
             if let subscriptionError = error as? SubscriptionError,
                subscriptionError != .userCancelled {
-                errorMessage = subscriptionError.localizedDescription(for: localizationLocale)
+                errorMessage = LocalizedTextResolver { locale in
+                    subscriptionError.localizedDescription(for: locale)
+                }
                 showError = true
             }
         }
@@ -785,7 +785,7 @@ struct SubscriptionView: View {
             appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
 
         } catch {
-            errorMessage = String(localized: "subscription.error.restore_purchases", locale: localizationLocale)
+            errorMessage = .key("subscription.error.restore_purchases")
             showError = true
         }
     }
@@ -799,8 +799,13 @@ struct SubscriptionView: View {
             appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
 
         } catch {
-            errorMessage = (error as? SubscriptionError)?.localizedDescription(for: localizationLocale)
-                ?? String(localized: "subscription.error.start_trial", locale: localizationLocale)
+            if let subscriptionError = error as? SubscriptionError {
+                errorMessage = LocalizedTextResolver { locale in
+                    subscriptionError.localizedDescription(for: locale)
+                }
+            } else {
+                errorMessage = .key("subscription.error.start_trial")
+            }
             showError = true
         }
     }
@@ -809,8 +814,16 @@ struct SubscriptionView: View {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
-        formatter.locale = appState.selectedLanguage.locale ?? Locale.current
+        formatter.locale = localizationLocale
         return formatter.string(from: date)
+    }
+
+    private func localizedString(_ key: String, fallback: String? = nil) -> String {
+        AppLocalization.string(key, locale: localizationLocale, fallback: fallback)
+    }
+
+    private func localizedText(_ key: String, fallback: String? = nil) -> Text {
+        Text(verbatim: localizedString(key, fallback: fallback))
     }
 }
 
@@ -820,14 +833,14 @@ enum SubscriptionPlan: CaseIterable, Identifiable {
 
     var id: Self { self }
 
-    var titleKey: LocalizedStringKey {
+    var titleKey: String {
         switch self {
         case .yearly: return "subscription.plan.yearly.title"
         case .monthly: return "subscription.plan.monthly.title"
         }
     }
 
-    var periodLabelKey: LocalizedStringKey {
+    var periodLabelKey: String {
         switch self {
         case .yearly:
             return "subscription.plan.yearly.period"

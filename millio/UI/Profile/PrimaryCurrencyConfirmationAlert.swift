@@ -12,18 +12,18 @@ struct PrimaryCurrencyConfirmationContent: Equatable {
     let pendingCode: String
 
     var title: String {
-        isRussian
-            ? "Изменить основную валюту?"
-            : "Change primary currency?"
+        AppLocalization.string(
+            "profile.primary_currency.change_title",
+            locale: locale,
+            fallback: "Change primary currency?"
+        )
     }
 
     var message: String {
         AppLocalization.string(
             "profile.primary_currency.change_message",
             locale: locale,
-            fallback: isRussian
-                ? "Это обновит основную валюту приложения и валюты отображения, которые следуют за основной валютой"
-                : "This updates the app primary currency and display currencies that follow the primary currency"
+            fallback: "This updates the app primary currency and display currencies that follow the primary currency"
         )
         .trimmingTrailingSentencePeriod()
     }
@@ -32,7 +32,7 @@ struct PrimaryCurrencyConfirmationContent: Equatable {
         let format = AppLocalization.string(
             "profile.primary_currency.change_to_format",
             locale: locale,
-            fallback: isRussian ? "Изменить на %@" : "Change to %@"
+            fallback: "Change to %@"
         )
         return String(format: format, pendingCode)
     }
@@ -41,31 +41,20 @@ struct PrimaryCurrencyConfirmationContent: Equatable {
         AppLocalization.string(
             "finances.common.cancel",
             locale: locale,
-            fallback: isRussian ? "Отмена" : "Cancel"
+            fallback: "Cancel"
         )
     }
 
     var badgeTitle: String {
-        isRussian ? "Новая основная валюта" : "New primary currency"
+        AppLocalization.string(
+            "profile.primary_currency.badge_title",
+            locale: locale,
+            fallback: "New primary currency"
+        )
     }
 
     var currencyName: String {
-        if isRussian {
-            return CurrencySelectionSupport.nameRu(for: pendingCode) ?? pendingCode
-        }
-        return CurrencySelectionSupport.nameEn(for: pendingCode) ?? pendingCode
-    }
-
-    private var isRussian: Bool {
-        if #available(iOS 16.0, *),
-           let code = locale.language.languageCode?.identifier.lowercased() {
-            return code == "ru"
-        }
-
-        return locale.identifier
-            .split(whereSeparator: { $0 == "-" || $0 == "_" })
-            .first?
-            .lowercased() == "ru"
+        CurrencySelectionSupport.localizedName(for: pendingCode, locale: locale) ?? pendingCode
     }
 }
 

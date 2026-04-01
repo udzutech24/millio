@@ -299,10 +299,13 @@ final class CashbackViewModel: ViewModelProtocol {
     }
 
     var selectedMonthTitle: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
-        formatter.dateFormat = "LLLL yyyy"
-        return formatter.string(from: state.selectedMonth).capitalized
+        selectedMonthTitle(locale: CashbackL10n.locale)
+    }
+
+    func selectedMonthTitle(locale: Locale) -> String {
+        let month = CashbackMonthTitleFormatter.monthText(for: state.selectedMonth, locale: locale)
+        let year = CashbackMonthTitleFormatter.yearText(for: state.selectedMonth, locale: locale)
+        return "\(month.capitalized) \(year)"
     }
 
     var maxSelectableMonth: Date {

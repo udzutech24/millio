@@ -1654,6 +1654,90 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(creationDayBalance - 12_500) < 0.01)
     }
 
+    @Test("Крипта: историческая динамика берет сумму из asset snapshot, а не из legacy baseline")
+    func testCryptoHistoryUsesAssetSnapshotBeforeLegacyBaseline() async throws {
+        let modelContext = try createTestModelContext()
+        let createdAt = Date().addingTimeInterval(-10 * 86_400)
+        let rebalanceAt = Date().addingTimeInterval(-12 * 3_600)
+
+        let investment = Investment(
+            name: "BTC/USD",
+            investmentType: .positive,
+            category: .crypto,
+            amount: 145.67,
+            currency: "USD"
+        )
+        investment.createdAt = createdAt
+        investment.updatedAt = rebalanceAt
+        investment.initialAmount = 300
+        investment.hasInitialAmount = true
+        investment.marketQuantity = 0.002144
+        investment.lastKnownUnitPrice = 67_940.86
+        investment.averagePurchaseUnitPrice = 107_000
+        investment.totalPurchaseCost = 229.408
+        modelContext.insert(investment)
+
+        let priceUpdate = CashflowTransaction(
+            transactionType: .balanceAdjustment,
+            amount: -74.33,
+            currency: "USD",
+            transactionDate: rebalanceAt,
+            investmentID: investment.investmentUniqueID,
+            note: "Historical BTC repricing"
+        )
+        priceUpdate.applyAssetChangeSnapshot(
+            before: CashflowAssetChangeSnapshot(
+                quantity: 0.002144,
+                unitPrice: 102_611.94,
+                purchaseUnitPrice: 107_000,
+                purchaseCost: 229.408,
+                totalAmount: 220
+            ),
+            after: CashflowAssetChangeSnapshot(
+                quantity: 0.002144,
+                unitPrice: 67_940.86,
+                purchaseUnitPrice: 107_000,
+                purchaseCost: 229.408,
+                totalAmount: 145.67
+            )
+        )
+        modelContext.insert(priceUpdate)
+
+        let group = FinanceGroup(name: "Крипта", colorHex: "#00AAFF")
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let balanceBeforeRebalance = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: rebalanceAt.addingTimeInterval(-60),
+            accountCardIDs: []
+        )
+        let balanceAfterRebalance = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: rebalanceAt.addingTimeInterval(60),
+            accountCardIDs: []
+        )
+
+        #expect(abs(balanceBeforeRebalance - 220) < 0.01)
+        #expect(abs(balanceAfterRebalance - 145.67) < 0.01)
+    }
+
     @Test("Агрегат: вчера и сегодня совпадают, если не было транзакций изменений")
     func testAggregateBalanceStableBetweenYesterdayAndTodayWithoutChanges() async throws {
         let modelContext = try createTestModelContext()

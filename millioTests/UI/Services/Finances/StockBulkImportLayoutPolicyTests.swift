@@ -31,4 +31,20 @@ struct StockBulkImportLayoutPolicyTests {
         #expect(StockBulkImportLayoutPolicy.bottomActionTitle(addableCount: 0) != "")
         #expect(StockBulkImportLayoutPolicy.bottomActionTitle(addableCount: 3) != StockBulkImportLayoutPolicy.bottomActionTitle(addableCount: 0))
     }
+
+    @Test("Stock bulk import layout policy serves Simplified Chinese copy from the catalog")
+    @MainActor
+    func stockBulkImportSupportsSimplifiedChineseCatalogCopy() {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+
+        LanguageManager.shared.setLanguage(.simplifiedChinese)
+
+        let presentation = StockBulkImportLayoutPolicy.presentation(for: .screenshot)
+
+        #expect(presentation.title == "最多选择 8 张截图")
+        #expect(presentation.subtitle == "最多上传 8 张截图，我们会生成持仓草稿并标出有歧义的行。")
+        #expect(StockBulkImportLayoutPolicy.screenshotInstructionsTitle == "如何准备截图")
+        #expect(StockBulkImportLayoutPolicy.bottomActionTitle(addableCount: 3) == "导入：3")
+    }
 }

@@ -1,0 +1,10 @@
+"widget.converter.title" = "转换器";
+"widget.converter.updated_at_format" = "更新于：%@";
+"widget.converter.add_expense" = "添加支出";
+"widget.converter.add_income" = "添加收入";
+"widget.converter.ruble_short" = "₽";
+"widget.converter.add_spend" = "支出";
+"widget.converter.expense" = "支出";
+"widget.converter.income" = "收入";
+"widget.converter.configuration_title" = "汇率换算";
+"widget.converter.configuration_description" = "在主屏幕查看汇率并使用快捷操作。仅限 PRO。";

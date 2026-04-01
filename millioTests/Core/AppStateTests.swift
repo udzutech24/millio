@@ -75,6 +75,31 @@ struct AppStateTests {
         appState.selectedLanguage = .english
         #expect(appState.selectedLanguage == .english)
     }
+
+    @Test("Simplified Chinese selection persists and updates AppleLanguages")
+    func testSimplifiedChineseSelectionPersistsAndUpdatesAppleLanguages() {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        let defaults = UserDefaults.standard
+        let previousAppleLanguages = defaults.array(forKey: "AppleLanguages") as? [String]
+        defer {
+            LanguageManager.shared.setLanguage(previousLanguage)
+            if let previousAppleLanguages {
+                defaults.set(previousAppleLanguages, forKey: "AppleLanguages")
+            } else {
+                defaults.removeObject(forKey: "AppleLanguages")
+            }
+            defaults.synchronize()
+        }
+
+        let appState = AppState()
+        appState.selectedLanguage = .simplifiedChinese
+
+        #expect(appState.selectedLanguage == .simplifiedChinese)
+        #expect(LanguageManager.shared.currentLanguage == .simplifiedChinese)
+        #expect(defaults.string(forKey: "selectedLanguage") == Language.simplifiedChinese.rawValue)
+        #expect(defaults.array(forKey: "AppleLanguages") as? [String] == [Language.simplifiedChinese.rawValue])
+        #expect(LocalizationSupport.locale(AppLocalization.currentAppLocale, matches: .simplifiedChinese))
+    }
     
     @Test("AppState.isPro зависит от subscriptionStatus")
     func testIsProComputedFromSubscriptionStatus() {
@@ -271,6 +296,48 @@ struct AppStateTests {
         #expect(UserDefaults.standard.string(forKey: "selectedLanguage") == "system")
     }
 
+    @Test("Смена языка через AppState сразу обновляет app localization без перезапуска")
+    @MainActor
+    func testAppStateLanguageSwitchUpdatesRuntimeLocalizedStringsImmediately() {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+
+        let appState = AppState()
+
+        appState.selectedLanguage = .english
+        #expect(AppLocalization.string("profile.title", locale: AppLocalization.currentAppLocale) == "Profile")
+        #expect(AppLocalization.string("profile.language", locale: AppLocalization.currentAppLocale) == "Language")
+
+        appState.selectedLanguage = .russian
+        #expect(AppLocalization.string("profile.title", locale: AppLocalization.currentAppLocale) == "Профиль")
+        #expect(AppLocalization.string("profile.language", locale: AppLocalization.currentAppLocale) == "Язык")
+    }
+
+    @Test("Explicit locale lookup bypasses runtime bundle language override")
+    @MainActor
+    func testExplicitLocaleLookupIgnoresRuntimeLanguageOverride() {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+
+        LanguageManager.shared.setLanguage(.simplifiedChinese)
+
+        #expect(AppLocalization.string("calendar_range.preset.today", locale: Locale(identifier: "en_US")) == "Today")
+        #expect(AppLocalization.string("calendar_range.sheet.start_date", locale: Locale(identifier: "ru_RU")) == "Дата начала")
+    }
+
+    @Test("Explicit locale lookup keeps converter promo copy stable under runtime language override")
+    @MainActor
+    func testExplicitLocaleLookupForConverterPromoIgnoresRuntimeLanguageOverride() {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+
+        LanguageManager.shared.setLanguage(.simplifiedChinese)
+
+        #expect(AppLocalization.string("converter.share.promo_title", locale: Locale(identifier: "en_US")) == "Smarter money decisions, faster")
+        #expect(AppLocalization.string("converter.share.promo_subtitle", locale: Locale(identifier: "en_US")) == "Built with Millio")
+        #expect(AppLocalization.string("converter.share.promo_subtitle", locale: Locale(identifier: "ru_RU")) == "Снято в приложении Миллио")
+    }
+
     @Test("LanguageManager выбирает system для поддерживаемых системных языков")
     func testLanguageManagerDefaultLanguageSupportedSystem() {
         #expect(LanguageManager.defaultLanguage(forPreferredLanguage: "ru-RU") == .system)
@@ -280,6 +347,7 @@ struct AppStateTests {
     @Test("LanguageManager выбирает english для неподдерживаемого системного языка")
     func testLanguageManagerDefaultLanguageUnsupportedSystem() {
         #expect(LanguageManager.defaultLanguage(forPreferredLanguage: "de-DE") == .english)
+        #expect(LanguageManager.defaultLanguage(forPreferredLanguage: "zh-Hans-CN") == .system)
         #expect(LanguageManager.defaultLanguage(forPreferredLanguage: nil) == .english)
     }
 }

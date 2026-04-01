@@ -2120,19 +2120,11 @@ private struct FinanceDynamicsContentView: View {
 
     private var deleteGroupConfirmationTitle: String {
         let groupName = currentGroup?.name ?? String(localized: "finances.group.ungrouped")
-        let languageCode = Locale.current.language.languageCode?.identifier ?? Locale.current.identifier
-        if languageCode == "ru" {
-            return "Удалить группу «\(groupName)»?"
-        }
-        return "Delete group \"\(groupName)\"?"
+        return FinancesL10n.format("finances.dynamics.delete_group.confirm.title_format", groupName)
     }
 
     private var deleteGroupConfirmationMessage: String {
-        let languageCode = Locale.current.language.languageCode?.identifier ?? Locale.current.identifier
-        if languageCode == "ru" {
-            return "Это действие удалит группу и все продукты внутри неё. Подтвердите удаление."
-        }
-        return "This will delete the group and every product inside it. Please confirm the deletion."
+        FinancesL10n.tr("finances.dynamics.delete_group.confirm.message")
     }
 
     private func deleteAccountFooterButton(account: FinanceAccount) -> some View {

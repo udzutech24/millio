@@ -117,7 +117,7 @@ struct CashflowBulkExpenseImportSheet: View {
     @State private var isErrorDismissed: Bool = false
     @State private var isSaveDismissed: Bool = false
     @State private var showPremiumAlert: Bool = false
-    @State private var premiumAlertMessage: String = ""
+    @State private var premiumAlertMessage: LocalizedTextResolver = .empty
     @State private var showHelpSheet: Bool = false
     @State private var showMonthPickerSheet: Bool = false
     @State private var showCategoryEditorSheet: Bool = false
@@ -199,13 +199,7 @@ struct CashflowBulkExpenseImportSheet: View {
                 }
 
                 ToolbarItem(placement: .principal) {
-                    Text(
-                        String(
-                            localized: "cashflow.bulk_expense.title",
-                            defaultValue: "Mass import",
-                            comment: "Navigation title for bulk expense import sheet"
-                        )
-                    )
+                    Text(CashflowBulkExpenseImportLocalization.title)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.96))
                     .lineLimit(1)
@@ -223,11 +217,7 @@ struct CashflowBulkExpenseImportSheet: View {
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text(String(
-                        localized: "cashflow.bulk_expense.help.open",
-                        defaultValue: "How mass import works",
-                        comment: "Accessibility label for opening bulk import help"
-                    )))
+                    .accessibilityLabel(Text(CashflowBulkExpenseImportLocalization.helpOpen))
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -246,11 +236,7 @@ struct CashflowBulkExpenseImportSheet: View {
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text(String(
-                        localized: "cashflow.bulk_expense.save",
-                        defaultValue: "Save",
-                        comment: "Bulk expense import save button"
-                    )))
+                    .accessibilityLabel(Text(CashflowBulkExpenseImportLocalization.save))
                     .disabled(!canSave || isProcessing)
                 }
             }
@@ -324,7 +310,7 @@ struct CashflowBulkExpenseImportSheet: View {
         .presentationDragIndicator(.visible)
         .premiumUpsellAlert(
             isPresented: $showPremiumAlert,
-            titleKey: "Ограничение Free-плана",
+            titleKey: "monetization.free_plan.title",
             message: premiumAlertMessage,
             onSubscribe: {
                 router.push(.subscription)
@@ -445,16 +431,8 @@ struct CashflowBulkExpenseImportSheet: View {
                     }
                 } label: {
                     compactSelectorLabel(
-                        title: String(
-                            localized: "cashflow.bulk_expense.card_title",
-                            defaultValue: "Card",
-                            comment: "Card picker title in bulk expense import"
-                        ),
-                        value: selectedCard?.name ?? String(
-                            localized: "cashflow.bulk_expense.pick_card",
-                            defaultValue: "Choose card",
-                            comment: "Placeholder text for picking a card"
-                        ),
+                        title: CashflowBulkExpenseImportLocalization.cardTitle,
+                        value: selectedCard?.name ?? CashflowBulkExpenseImportLocalization.pickCard,
                         icon: selectedCard?.cardType.icon ?? "creditcard.fill",
                         usesPlaceholderStyle: selectedCard == nil,
                         style: .expanded
@@ -491,11 +469,7 @@ struct CashflowBulkExpenseImportSheet: View {
                 .frame(width: 20, height: 20)
 
             Text(
-                String(
-                    localized: "cashflow.bulk_expense.affect_balance.compact",
-                    defaultValue: "Update balance",
-                    comment: "Compact title for bulk expense import balance update toggle"
-                )
+                CashflowBulkExpenseImportLocalization.affectBalanceCompact
             )
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(Color.white.opacity(0.92))
@@ -519,11 +493,7 @@ struct CashflowBulkExpenseImportSheet: View {
                 )
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(String(
-            localized: "cashflow.bulk_expense.affect_balance",
-            defaultValue: "Update card balance",
-            comment: "Toggle title for applying card balance changes"
-        )))
+        .accessibilityLabel(Text(CashflowBulkExpenseImportLocalization.affectBalance))
     }
 
     private var affectBalanceToggleButton: some View {
@@ -583,12 +553,8 @@ struct CashflowBulkExpenseImportSheet: View {
             .frame(width: 60, height: 32)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(String(
-            localized: "cashflow.bulk_expense.affect_balance",
-            defaultValue: "Update card balance",
-            comment: "Toggle title for applying card balance changes"
-        )))
-        .accessibilityValue(Text(shouldAffectCardBalance ? "On" : "Off"))
+        .accessibilityLabel(Text(CashflowBulkExpenseImportLocalization.affectBalance))
+        .accessibilityValue(Text(CashflowBulkExpenseImportLocalization.toggleState(isEnabled: shouldAffectCardBalance)))
     }
 
     private func affectBalanceToastBanner(
@@ -844,7 +810,7 @@ struct CashflowBulkExpenseImportSheet: View {
                     Button {
                         showMonthPickerSheet = false
                     } label: {
-                        Text(String(localized: "Done"))
+                        Text(CashflowBulkExpenseImportLocalization.done)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Color.white.opacity(0.94))
                             .frame(maxWidth: .infinity)
@@ -872,9 +838,7 @@ struct CashflowBulkExpenseImportSheet: View {
 
     private var screenshotCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(
-                "Загрузи скриншоты банка, проверь распознанные строки и только потом перенеси их в категории месяца."
-            )
+            Text(CashflowBulkExpenseImportLocalization.screenshotHint)
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(Color.white.opacity(0.58))
 
@@ -885,16 +849,8 @@ struct CashflowBulkExpenseImportSheet: View {
             ) {
                 rowActionLabel(
                     title: isProcessing
-                    ? String(
-                        localized: "cashflow.bulk_expense.screenshot.processing",
-                        defaultValue: "Analyzing screenshots…",
-                        comment: "Processing screenshots button label"
-                    )
-                    : String(
-                        localized: "cashflow.bulk_expense.screenshot.pick",
-                        defaultValue: "Choose screenshots",
-                        comment: "Choose screenshot button label"
-                    ),
+                    ? CashflowBulkExpenseImportLocalization.screenshotProcessing
+                    : CashflowBulkExpenseImportLocalization.screenshotPick,
                     systemImage: isProcessing ? "hourglass" : "photo.on.rectangle.angled"
                 )
             }
@@ -927,18 +883,18 @@ struct CashflowBulkExpenseImportSheet: View {
     private var screenshotPreviewCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Проверь импорт")
+                Text(CashflowBulkExpenseImportLocalization.screenshotReviewTitle)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.95))
 
-                Text("Сначала смотри, что распозналось и в какие категории это пойдёт. Тут можно исправить строку, сменить категорию или убрать мусор до переноса в итоги месяца.")
+                Text(CashflowBulkExpenseImportLocalization.screenshotReviewSubtitle)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack(spacing: 10) {
-                summaryMetric(title: "Строк", value: "\(screenshotPreviewRows.count)")
+                summaryMetric(title: CashflowBulkExpenseImportLocalization.screenshotReviewRows, value: "\(screenshotPreviewRows.count)")
                 Spacer()
                 Button {
                     applyScreenshotPreviewRows()
@@ -946,7 +902,7 @@ struct CashflowBulkExpenseImportSheet: View {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.down.circle.fill")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("Перенести в категории")
+                        Text(CashflowBulkExpenseImportLocalization.screenshotReviewApply)
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .foregroundStyle(Color.white.opacity(0.95))
@@ -1003,9 +959,9 @@ struct CashflowBulkExpenseImportSheet: View {
             }
 
             TextField(
-                "Название",
+                CashflowBulkExpenseImportLocalization.rowTitlePlaceholder,
                 text: titleBinding,
-                prompt: Text("Название").foregroundStyle(Color.white.opacity(0.28))
+                prompt: Text(CashflowBulkExpenseImportLocalization.rowTitlePlaceholder).foregroundStyle(Color.white.opacity(0.28))
             )
             .textInputAutocapitalization(.words)
             .autocorrectionDisabled()
@@ -1017,7 +973,7 @@ struct CashflowBulkExpenseImportSheet: View {
 
             HStack(spacing: 10) {
                 TextField(
-                    "Сумма",
+                    CashflowBulkExpenseImportLocalization.rowAmountPlaceholder,
                     text: amountBinding,
                     prompt: Text("0").foregroundStyle(Color.white.opacity(0.28))
                 )
@@ -1037,7 +993,7 @@ struct CashflowBulkExpenseImportSheet: View {
             }
 
             if let selectedOption, selectedOption.rawValue != ExpenseCategory.other.rawValue {
-                Text("Предположение: \(selectedOption.displayName)")
+                Text(CashflowBulkExpenseImportLocalization.suggestion(selectedOption.displayName))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.54))
             }
@@ -1068,7 +1024,7 @@ struct CashflowBulkExpenseImportSheet: View {
                     HStack(spacing: 8) {
                         Image(systemName: "folder")
                             .font(.system(size: 12, weight: .semibold))
-                        Text("В мою категорию")
+                        Text(CashflowBulkExpenseImportLocalization.useCategory)
                             .font(.system(size: 13, weight: .semibold))
                         Spacer(minLength: 6)
                         Image(systemName: "chevron.down")
@@ -1097,7 +1053,7 @@ struct CashflowBulkExpenseImportSheet: View {
                     HStack(spacing: 6) {
                         Image(systemName: "plus")
                             .font(.system(size: 12, weight: .bold))
-                        Text("Создать")
+                        Text(CashflowBulkExpenseImportLocalization.createCategory)
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .foregroundStyle(Color.white.opacity(0.94))
@@ -1151,7 +1107,7 @@ struct CashflowBulkExpenseImportSheet: View {
 
     private func previewConfidenceBadge(_ row: CashflowBulkExpenseRowDraft) -> some View {
         let tint: Color = row.requiresAttention ? warning : positive
-        let label = row.requiresAttention ? "Проверь" : row.confidence.label
+        let label = row.requiresAttention ? CashflowBulkExpenseImportLocalization.rowAttention : row.confidence.label
 
         return Text(label)
             .font(.system(size: 11, weight: .semibold))
@@ -1197,10 +1153,9 @@ struct CashflowBulkExpenseImportSheet: View {
                 let overflow = totalAmount - availableBalance
                 if overflow > 0.009 {
                     noticeCard(
-                        text: String(
-                            localized: "cashflow.bulk_expense.summary.balance_warning",
-                            defaultValue: "This monthly import exceeds the available card balance by \(CashflowBulkExpenseRowDraft.formatAmount(overflow)) \(selectedCard.currency).",
-                            comment: "Warning for bulk expense import when amount exceeds card balance"
+                        text: CashflowBulkExpenseImportLocalization.balanceWarning(
+                            amount: overflow,
+                            currencyCode: selectedCard.currency
                         ),
                         tint: warning,
                         systemImage: "exclamationmark.triangle.fill"
@@ -1223,11 +1178,7 @@ struct CashflowBulkExpenseImportSheet: View {
                         .foregroundStyle(Color.white.opacity(0.42))
 
                     TextField(
-                        String(
-                            localized: "cashflow.bulk_expense.search.placeholder",
-                            defaultValue: "Search category",
-                            comment: "Search placeholder for bulk expense categories"
-                        ),
+                        CashflowBulkExpenseImportLocalization.searchCategory,
                         text: $categorySearchText
                     )
                     .textInputAutocapitalization(.never)
@@ -1247,10 +1198,9 @@ struct CashflowBulkExpenseImportSheet: View {
                 let overflow = totalAmount - availableBalance
                 if overflow > 0.009 {
                     noticeCard(
-                        text: String(
-                            localized: "cashflow.bulk_expense.summary.balance_warning",
-                            defaultValue: "This monthly import exceeds the available card balance by \(CashflowBulkExpenseRowDraft.formatAmount(overflow)) \(selectedCard.currency).",
-                            comment: "Warning for bulk expense import when amount exceeds card balance"
+                        text: CashflowBulkExpenseImportLocalization.balanceWarning(
+                            amount: overflow,
+                            currencyCode: selectedCard.currency
                         ),
                         tint: warning,
                         systemImage: "exclamationmark.triangle.fill"
@@ -1293,11 +1243,7 @@ struct CashflowBulkExpenseImportSheet: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(
-                    String(
-                        localized: "cashflow.bulk_expense.summary.rows",
-                        defaultValue: "Categories",
-                        comment: "Summary title for category count"
-                    )
+                    CashflowBulkExpenseImportLocalization.categories
                 )
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.6))
@@ -1311,11 +1257,7 @@ struct CashflowBulkExpenseImportSheet: View {
 
             VStack(spacing: 4) {
                 Text(
-                    String(
-                        localized: "cashflow.bulk_expense.summary.total",
-                        defaultValue: "Total",
-                        comment: "Summary title for total amount"
-                    )
+                    CashflowBulkExpenseImportLocalization.total
                 )
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.6))
@@ -1355,11 +1297,7 @@ struct CashflowBulkExpenseImportSheet: View {
                     )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(String(
-                localized: "cashflow.bulk_expense.search.placeholder",
-                defaultValue: "Search category",
-                comment: "Search placeholder for bulk expense categories"
-            )))
+            .accessibilityLabel(Text(CashflowBulkExpenseImportLocalization.searchCategory))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
@@ -1501,7 +1439,10 @@ struct CashflowBulkExpenseImportSheet: View {
 
     private func categoryBreakdownLabel(_ breakdown: CashflowBulkExpenseCategoryBreakdown) -> some View {
         Text(
-            "Ручн. \(CashflowBulkExpenseRowDraft.formatAmount(breakdown.baselineAmount)) + Bulk \(CashflowBulkExpenseRowDraft.formatAmount(breakdown.importedAmount))"
+            CashflowBulkExpenseImportLocalization.categoryBreakdownLabel(
+                baselineAmount: breakdown.baselineAmount,
+                importedAmount: breakdown.importedAmount
+            )
         )
         .font(.system(size: 8, weight: .semibold))
         .foregroundStyle(Color.white.opacity(0.52))
@@ -1633,12 +1574,15 @@ struct CashflowBulkExpenseImportSheet: View {
         screenshotPreviewRows = result.remainingRows
 
         if result.appliedRows.isEmpty {
-            saveMessage = "Сначала исправь или убери строки, которые ещё требуют проверки."
+            saveMessage = CashflowBulkExpenseImportLocalization.mergeReviewRequiredMessage()
         } else if result.remainingRows.isEmpty {
-            saveMessage = "Проверенные строки перенесены в категории. Теперь можно сохранять."
+            saveMessage = CashflowBulkExpenseImportLocalization.mergeCompletedMessage()
             mode = .manual
         } else {
-            saveMessage = "Перенесено \(result.appliedRows.count). Ещё \(result.remainingRows.count) строк требуют проверки."
+            saveMessage = CashflowBulkExpenseImportLocalization.mergePartialMessage(
+                appliedCount: result.appliedRows.count,
+                remainingCount: result.remainingRows.count
+            )
         }
 
         errorMessage = nil
@@ -1702,7 +1646,7 @@ struct CashflowBulkExpenseImportSheet: View {
                                 defaultValue: "Or import screenshots",
                                 comment: "Bulk expense import help step title"
                             ),
-                            body: "Скриншоты больше не разлетаются по категориям молча. Сначала смотри превью строк, правь ошибки OCR, меняй категории и только потом переносишь проверенные строки в итоги месяца."
+                            body: CashflowBulkExpenseImportLocalization.screenshotStepBody
                         )
                         screenshotCroppingGuideCard
                         helpStepCard(
@@ -1738,16 +1682,12 @@ struct CashflowBulkExpenseImportSheet: View {
                 }
             }
             .navigationTitle(
-                String(
-                    localized: "cashflow.bulk_expense.help.sheet_title",
-                    defaultValue: "How it works",
-                    comment: "Help sheet title for bulk expense import"
-                )
+                CashflowBulkExpenseImportLocalization.helpSheetTitle
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "Done")) {
+                    Button(CashflowBulkExpenseImportLocalization.done) {
                         showHelpSheet = false
                     }
                     .foregroundStyle(accent)
@@ -1758,16 +1698,12 @@ struct CashflowBulkExpenseImportSheet: View {
 
     private var helpHeroCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(String(localized: "cashflow.bulk_expense.title"))
+            Text(CashflowBulkExpenseImportLocalization.title)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Color.white.opacity(0.96))
 
             Text(
-                String(
-                    localized: "cashflow.bulk_expense.help.hero.body",
-                    defaultValue: "This screen is designed for quickly recording monthly expenses by category without creating each transaction manually.",
-                    comment: "Help hero body for bulk expense import"
-                )
+                CashflowBulkExpenseImportLocalization.helpHeroBody
             )
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.68))
@@ -1792,21 +1728,13 @@ struct CashflowBulkExpenseImportSheet: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(
-                        String(
-                            localized: "cashflow.bulk_expense.help.crop.title",
-                            defaultValue: "How to crop a bank screenshot",
-                            comment: "Title for screenshot cropping guide in bulk expense import help"
-                        )
+                        CashflowBulkExpenseImportLocalization.cropTitle
                     )
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.94))
 
                     Text(
-                        String(
-                            localized: "cashflow.bulk_expense.help.crop.subtitle",
-                            defaultValue: "The parser works best when the frame contains only merchant names and amounts.",
-                            comment: "Subtitle for screenshot cropping guide in bulk expense import help"
-                        )
+                        CashflowBulkExpenseImportLocalization.cropSubtitle
                     )
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.62))
@@ -1818,38 +1746,22 @@ struct CashflowBulkExpenseImportSheet: View {
             helpHintRow(
                 systemImage: "checkmark.circle.fill",
                 tint: positive,
-                text: String(
-                    localized: "cashflow.bulk_expense.help.crop.do",
-                    defaultValue: "Leave 5-12 expense rows with merchant names and amounts in one column.",
-                    comment: "Positive screenshot cropping tip for bulk expense import help"
-                )
+                text: CashflowBulkExpenseImportLocalization.cropDo
             )
             helpHintRow(
                 systemImage: "checkmark.circle.fill",
                 tint: positive,
-                text: String(
-                    localized: "cashflow.bulk_expense.help.crop.do_second",
-                    defaultValue: "Keep the amount fully visible: `Пятерочка 1 240 ₽`, `Яндекс Такси 870 ₽`.",
-                    comment: "Second positive screenshot cropping tip for bulk expense import help"
-                )
+                text: CashflowBulkExpenseImportLocalization.cropDoSecond
             )
             helpHintRow(
                 systemImage: "xmark.circle.fill",
                 tint: danger,
-                text: String(
-                    localized: "cashflow.bulk_expense.help.crop.dont",
-                    defaultValue: "Cut off balance, cards carousel, charts, cashback banners, and bottom navigation.",
-                    comment: "Negative screenshot cropping tip for bulk expense import help"
-                )
+                text: CashflowBulkExpenseImportLocalization.cropDont
             )
             helpHintRow(
                 systemImage: "exclamationmark.triangle.fill",
                 tint: warning,
-                text: String(
-                    localized: "cashflow.bulk_expense.help.crop.warning",
-                    defaultValue: "Transfers and top-ups can be recognized too. They will go to `Transfers` and are highlighted in red for cleanup.",
-                    comment: "Warning screenshot cropping tip for bulk expense import help"
-                )
+                text: CashflowBulkExpenseImportLocalization.cropWarning
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1887,11 +1799,7 @@ struct CashflowBulkExpenseImportSheet: View {
     private var screenshotCropExample: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(
-                String(
-                    localized: "cashflow.bulk_expense.help.crop.example_title",
-                    defaultValue: "Example frame",
-                    comment: "Title for screenshot crop example in bulk expense import help"
-                )
+                CashflowBulkExpenseImportLocalization.cropExampleTitle
             )
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(Color.white.opacity(0.72))
@@ -1905,17 +1813,17 @@ struct CashflowBulkExpenseImportSheet: View {
                         .fill(Color.white.opacity(0.07))
                         .frame(height: 28)
                         .overlay(alignment: .leading) {
-                            Text("История операций")
+                            Text(CashflowBulkExpenseImportLocalization.cropExampleHistory)
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(Color.white.opacity(0.55))
                                 .padding(.leading, 12)
                         }
 
                     VStack(spacing: 8) {
-                        screenshotExampleRow(title: "Пятерочка", amount: "1 240 ₽")
-                        screenshotExampleRow(title: "Яндекс Такси", amount: "870 ₽")
-                        screenshotExampleRow(title: "Coffee Point", amount: "340 ₽")
-                        screenshotExampleRow(title: "Перевод себе", amount: "5 000 ₽", tint: danger.opacity(0.9))
+                        screenshotExampleRow(title: CashflowBulkExpenseImportLocalization.cropExampleMerchantGroceries, amount: "1 240 ₽")
+                        screenshotExampleRow(title: CashflowBulkExpenseImportLocalization.cropExampleMerchantTaxi, amount: "870 ₽")
+                        screenshotExampleRow(title: CashflowBulkExpenseImportLocalization.cropExampleMerchantCoffee, amount: "340 ₽")
+                        screenshotExampleRow(title: CashflowBulkExpenseImportLocalization.cropExampleMerchantTransfer, amount: "5 000 ₽", tint: danger.opacity(0.9))
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 10)
@@ -1934,9 +1842,9 @@ struct CashflowBulkExpenseImportSheet: View {
                     )
 
                     HStack(spacing: 8) {
-                        cropBadZone(label: "Баланс")
-                        cropBadZone(label: "Карусель карт")
-                        cropBadZone(label: "Нижнее меню")
+                        cropBadZone(label: CashflowBulkExpenseImportLocalization.cropExampleBalance)
+                        cropBadZone(label: CashflowBulkExpenseImportLocalization.cropExampleCards)
+                        cropBadZone(label: CashflowBulkExpenseImportLocalization.cropExampleNav)
                     }
                 }
                 .padding(12)
@@ -2180,20 +2088,11 @@ struct CashflowBulkExpenseImportSheet: View {
     }
 
     private var monthTitle: String {
-        let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
-        formatter.setLocalizedDateFormatFromTemplate("LLLL yyyy")
-        return formatter.string(from: selectedMonth).localizedCapitalized
+        CashflowBulkExpenseImportLocalization.monthTitle(for: selectedMonth)
     }
 
     private var periodRangeTitle: String {
-        let calendar = Calendar.current
-        let start = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth)) ?? selectedMonth
-        let end = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: start) ?? start
-        let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
-        formatter.dateFormat = "dd.MM.yyyy"
-        return "\(formatter.string(from: start)) — \(formatter.string(from: end))"
+        CashflowBulkExpenseImportLocalization.periodRangeTitle(for: selectedMonth)
     }
 
     private var canMoveToNextMonth: Bool {
@@ -2329,11 +2228,7 @@ struct CashflowBulkExpenseImportSheet: View {
 
     private func prepareScreenshotPreviewRows(_ parsedRows: [CashflowBulkExpenseParsedRow]) {
         guard !parsedRows.isEmpty else {
-            errorMessage = String(
-                localized: "cashflow.bulk_expense.manual.empty_parse",
-                defaultValue: "Nothing usable was found in the imported data.",
-                comment: "Error when bulk import parsing finds nothing"
-            )
+            errorMessage = CashflowBulkExpenseImportLocalization.emptyParse
             return
         }
 
@@ -2345,7 +2240,7 @@ struct CashflowBulkExpenseImportSheet: View {
             }
         )
 
-        saveMessage = "Распознано \(screenshotPreviewRows.count) строк. Проверь их перед переносом в категории"
+        saveMessage = CashflowBulkExpenseImportLocalization.recognizedRowsMessage(screenshotPreviewRows.count)
         errorMessage = nil
         isSaveDismissed = false
         isErrorDismissed = false
@@ -2388,11 +2283,7 @@ struct CashflowBulkExpenseImportSheet: View {
 
         do {
             let savedCount = try await viewModel.persistBulkExpenseImport(request)
-            saveMessage = String(
-                localized: "cashflow.bulk_expense.saved",
-                defaultValue: "Saved \(savedCount) category totals.",
-                comment: "Success message after saving bulk expense import"
-            )
+            saveMessage = CashflowBulkExpenseImportLocalization.savedMessage(count: savedCount)
             isSaveDismissed = false
             onComplete?()
             dismiss()
@@ -2411,7 +2302,7 @@ struct CashflowBulkExpenseImportSheet: View {
     }
 
     private func presentScreenshotImportUpsell() {
-        premiumAlertMessage = String(localized: "monetization.cashflow.bulk_expense_screenshot.pro_only")
+        premiumAlertMessage = .key("monetization.cashflow.bulk_expense_screenshot.pro_only")
         showPremiumAlert = true
         if mode == .screenshot {
             mode = .manual

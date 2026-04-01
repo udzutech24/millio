@@ -52,7 +52,7 @@ struct InvestmentEditorView: View {
     @State private var marketErrorMessage: String?
     @State private var lastMarketRefreshAt: Date?
     @State private var showPaywallAlert = false
-    @State private var paywallMessage = ""
+    @State private var paywallMessage: LocalizedTextResolver = .empty
     @State private var showCryptoProAlert = false
     @State private var showDeleteConfirmation = false
 
@@ -291,14 +291,14 @@ struct InvestmentEditorView: View {
             }
             .premiumUpsellAlert(
                 isPresented: $showPaywallAlert,
-                titleKey: "Ограничение Free-плана",
+                titleKey: "monetization.free_plan.title",
                 message: paywallMessage,
                 onSubscribe: { router.push(.subscription) }
             )
             .premiumUpsellAlert(
                 isPresented: $showCryptoProAlert,
                 titleKey: "monetization.crypto.pro_title",
-                message: String(localized: "monetization.crypto.pro_message"),
+                message: .key("monetization.crypto.pro_message"),
                 onSubscribe: { router.push(.subscription) }
             )
         }
@@ -844,7 +844,7 @@ struct InvestmentEditorView: View {
 
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: Locale.current.identifier)
+        formatter.locale = AppLocalization.currentAppLocale
         formatter.dateFormat = "dd.MM.yyyy HH:mm"
         return formatter.string(from: date)
     }
@@ -978,10 +978,13 @@ struct InvestmentEditorView: View {
             currentTrackedTickers: currentTrackedTickerCount
         )
         guard canAdd else {
-            paywallMessage = String(
-                format: String(localized: "monetization.ticker.limit.hard_format"),
-                EntitlementPolicy.freeTrackedTickerLimit
-            )
+            paywallMessage = LocalizedTextResolver { locale in
+                String(
+                    format: AppLocalization.string("monetization.ticker.limit.hard_format", locale: locale),
+                    locale: locale,
+                    EntitlementPolicy.freeTrackedTickerLimit
+                )
+            }
             showPaywallAlert = true
             return false
         }
@@ -999,14 +1002,14 @@ struct InvestmentEditorView: View {
         }
     }
 
-    private func marketCategoryPaywallMessage(for category: InvestmentCategory) -> String {
+    private func marketCategoryPaywallMessage(for category: InvestmentCategory) -> LocalizedTextResolver {
         switch category {
         case .stocks:
-            return String(localized: "monetization.finance.stocks.pro_only")
+            return .key("monetization.finance.stocks.pro_only")
         case .crypto:
-            return String(localized: "monetization.finance.crypto.pro_only")
+            return .key("monetization.finance.crypto.pro_only")
         default:
-            return String(localized: "monetization.finance.market_assets.pro_only")
+            return .key("monetization.finance.market_assets.pro_only")
         }
     }
 

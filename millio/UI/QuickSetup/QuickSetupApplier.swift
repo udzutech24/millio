@@ -30,7 +30,7 @@ struct QuickSetupApplier {
 
     private func applyExpenseCategories(_ selectedIDs: [String]) throws {
         let baseCategories = ExpenseCategory.allCases
-        let locale = appState.selectedLanguage.locale ?? Locale.current
+        let locale = AppLocalization.currentAppLocale
         let presetsByID = Dictionary(uniqueKeysWithValues: QuickSetupExpenseCategoryPreset.all(for: locale).map { ($0.id, $0) })
         var selectedSystemRaws = Set<String>()
         var selectedCustomPresets: [QuickSetupExpenseCategoryPreset] = []
@@ -107,7 +107,7 @@ struct QuickSetupApplier {
         let groupsByDraftID = try ensureQuickSetupGroups(groups)
         var ungroupedGroup: FinanceGroup?
         var trackedTickerCount = try activeTrackedTickerCount()
-        let locale = appState.selectedLanguage.locale ?? Locale.current
+        let locale = AppLocalization.currentAppLocale
 
         for draft in products {
             let targetGroup: FinanceGroup
@@ -354,16 +354,13 @@ enum QuickSetupApplyError: LocalizedError {
                 limit
             )
         case .quickSetupTrackedTickerLimitReached(let limit, let locale):
-            return String(
-                format: QuickSetupLocalization.text(
-                    locale: locale,
-                    ru: "В быстрой настройке без PRO доступна %d акция",
-                    en: "Quick setup includes %d stock without PRO"
-                ),
+            return QuickSetupLocalization.format(
+                "quick_setup.error.tracked_ticker_limit_format",
+                locale: locale,
                 limit
             )
         case .cryptoRequiresPro(let locale):
-            return QuickSetupLocalization.text(locale: locale, ru: "Криптовалюта доступна в PRO", en: "Crypto is available in PRO")
+            return QuickSetupLocalization.tr("quick_setup.error.crypto_requires_pro", locale: locale)
         }
     }
 }

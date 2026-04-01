@@ -33,10 +33,16 @@ struct ProfileView: View {
         static let cardCornerRadius: CGFloat = 22
     }
 
-    private let accountDetailsTitle = String(localized: "profile.auth.details", defaultValue: "Details", comment: "Account details entry button title")
+    private var accountDetailsTitle: String {
+        String(localized: "profile.auth.details", defaultValue: "Details", comment: "Account details entry button title")
+    }
 
     private var legalLinks: ProfileLegalLinks {
         ProfileLegalLinks.make(for: appState.selectedLanguage)
+    }
+
+    private var profileLocale: Locale {
+        AppLocalization.currentAppLocale
     }
     
     private var appVersion: String {
@@ -344,59 +350,50 @@ struct ProfileView: View {
     }
     
     private var backupStatusText: String {
-        let locale = appState.selectedLanguage.locale ?? Locale.current
         if appState.isBackupEnabled {
             if let backupDate = appState.lastBackupDate {
                 return ProfileBackupStatusFormatter.trailingDateText(
                     for: backupDate,
-                    locale: locale
+                    locale: profileLocale
                 )
             }
-            return AppLocalization.string("profile.status.enabled", locale: locale)
+            return AppLocalization.string("profile.status.enabled", locale: profileLocale)
         }
-        return AppLocalization.string("profile.status.disabled", locale: locale)
+        return AppLocalization.string("profile.status.disabled", locale: profileLocale)
     }
 
     private var appLockStatusText: String {
-        let locale = appState.selectedLanguage.locale ?? Locale.current
         return appState.isAppLockEnabled
-            ? AppLocalization.string("profile.status.enabled", locale: locale)
-            : AppLocalization.string("profile.status.disabled", locale: locale)
+            ? AppLocalization.string("profile.status.enabled", locale: profileLocale)
+            : AppLocalization.string("profile.status.disabled", locale: profileLocale)
     }
 
     private var quickSetupStatusText: String {
-        let locale = appState.selectedLanguage.locale ?? Locale.current
         return SettingsManager.shared.isQuickSetupCompleted
-            ? AppLocalization.string("profile.status.completed", locale: locale)
-            : AppLocalization.string("profile.status.not_completed", locale: locale)
+            ? AppLocalization.string("profile.status.completed", locale: profileLocale)
+            : AppLocalization.string("profile.status.not_completed", locale: profileLocale)
     }
 
     private var remindersRowTitle: String {
         AppLocalization.string(
             "profile.reminders",
-            locale: appState.selectedLanguage.locale ?? Locale.current,
-            fallback: isRussianLocale ? "Напоминания" : "Reminders"
+            locale: profileLocale,
+            fallback: "Reminders"
         )
-    }
-
-    private var isRussianLocale: Bool {
-        let identifier = (appState.selectedLanguage.locale ?? Locale.current).identifier.lowercased()
-        return identifier.hasPrefix("ru")
     }
 
     private func compactPremiumStatusText(for status: ProfilePremiumCompactStatus) -> String {
         AppLocalization.string(
             status.localizationKey,
-            locale: appState.selectedLanguage.locale ?? Locale.current
+            locale: profileLocale
         )
     }
 
     private var premiumDiagnosticsSummary: String {
         let items = EntitlementDiagnostics.items(for: appState)
         let activeCount = items.filter(\.isPremiumActive).count
-        let locale = appState.selectedLanguage.locale ?? Locale.current
-        let format = AppLocalization.string("profile.premium.diagnostics.summary", locale: locale)
-        return String(format: format, locale: locale, activeCount, items.count)
+        let format = AppLocalization.string("profile.premium.diagnostics.summary", locale: profileLocale)
+        return String(format: format, locale: profileLocale, activeCount, items.count)
     }
 
     private var premiumDiagnosticsTitleKey: LocalizedStringKey {
@@ -518,18 +515,16 @@ struct ProfileView: View {
                         SettingsManager.shared.launchSplashDisplayMode = mode
                     } label: {
                         if mode == appState.launchSplashDisplayMode {
-                            Label(mode.profileTitle(locale: appState.selectedLanguage.locale ?? Locale.current), systemImage: "checkmark")
+                            Label(mode.profileTitle(locale: profileLocale), systemImage: "checkmark")
                         } else {
-                            Text(mode.profileTitle(locale: appState.selectedLanguage.locale ?? Locale.current))
+                            Text(mode.profileTitle(locale: profileLocale))
                         }
                     }
                 }
             } label: {
                 settingsRow(item: .launchSplash, title: "profile.launch_splash.title") {
                     rowValueText(
-                        appState.launchSplashDisplayMode.profileTitle(
-                            locale: appState.selectedLanguage.locale ?? Locale.current
-                        ),
+                        appState.launchSplashDisplayMode.profileTitle(locale: profileLocale),
                         accent: true
                     )
                     chevron
@@ -855,7 +850,7 @@ struct ProfileView: View {
     private func displayTitle(for sectionID: ProfileMenuSectionID) -> String {
         AppLocalization.string(
             sectionID.localizationKey,
-            locale: appState.selectedLanguage.locale ?? Locale.current,
+            locale: profileLocale,
             fallback: sectionID.fallbackTitle
         )
     }
@@ -867,6 +862,9 @@ struct SupportContactSheet: View {
 
     private let channels = SupportContactChannel.allCases
     private let resolver = SupportContactResolver(config: .default)
+    private var locale: Locale {
+        AppLocalization.currentAppLocale
+    }
 
     var body: some View {
         NavigationStack {
@@ -901,11 +899,11 @@ struct SupportContactSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 24)
             }
-            .navigationTitle("profile.contact_us")
+            .navigationTitle(localized("profile.contact_us", fallback: "Contact us"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("profile.done") {
+                    Button(localized("profile.done", fallback: "Done")) {
                         dismiss()
                     }
                 }
@@ -918,7 +916,7 @@ struct SupportContactSheet: View {
             SupportContactIconView(icon: channel.icon)
                 .frame(width: 24, height: 24)
 
-            Text(channel.titleKey)
+            Text(localized(channel.titleLocalizationKey, fallback: channel.fallbackTitle))
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(AppColors.textPrimary)
 
@@ -931,9 +929,17 @@ struct SupportContactSheet: View {
         .padding(.vertical, 10)
         .contentShape(Rectangle())
     }
+
+    private func localized(_ key: String, fallback: String) -> String {
+        AppLocalization.string(key, locale: locale, fallback: fallback)
+    }
 }
 
 private struct SupportContactHeaderView: View {
+    private var locale: Locale {
+        AppLocalization.currentAppLocale
+    }
+
     var body: some View {
         VStack(spacing: 10) {
             ZStack {
@@ -950,12 +956,17 @@ private struct SupportContactHeaderView: View {
             .frame(width: 56, height: 56)
             .shadow(color: AppColors.profileCardGlow, radius: 18, x: 0, y: 10)
 
-            Text("profile.contact.header.title")
+            Text(localized("profile.contact.header.title", fallback: "We're here to help."))
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text("profile.contact.feedback_message")
+            Text(
+                localized(
+                    "profile.contact.feedback_message",
+                    fallback: "Found a bug or have a strong idea for improvement? Send us a screenshot and a short description. If we confirm the issue or ship the idea, you and your friend will get a 1-year subscription"
+                )
+            )
                 .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(AppColors.textSecondary)
                 .multilineTextAlignment(.center)
@@ -964,6 +975,10 @@ private struct SupportContactHeaderView: View {
         }
         .padding(.top, 6)
         .padding(.bottom, 6)
+    }
+
+    private func localized(_ key: String, fallback: String) -> String {
+        AppLocalization.string(key, locale: locale, fallback: fallback)
     }
 }
 
@@ -974,7 +989,7 @@ enum SupportContactChannel: String, Identifiable, CaseIterable {
 
     var id: String { rawValue }
 
-    var titleKey: LocalizedStringKey {
+    var titleLocalizationKey: String {
         switch self {
         case .email:
             return "profile.contact.option.email"
@@ -982,6 +997,17 @@ enum SupportContactChannel: String, Identifiable, CaseIterable {
             return "profile.contact.option.telegram"
         case .whatsapp:
             return "profile.contact.option.whatsapp"
+        }
+    }
+
+    var fallbackTitle: String {
+        switch self {
+        case .email:
+            return "Email"
+        case .telegram:
+            return "Telegram"
+        case .whatsapp:
+            return "WhatsApp"
         }
     }
 

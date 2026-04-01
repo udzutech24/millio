@@ -5,6 +5,7 @@ import XCTest
 final class SmartDataResetLocalizationTests: XCTestCase {
     private let ruLocale = Locale(identifier: "ru_RU")
     private let enLocale = Locale(identifier: "en_US")
+    private let zhLocale = Locale(identifier: "zh-Hans")
 
     func testRussianCoreLabels() {
         XCTAssertEqual(SmartDataResetL10n.navigationTitle(locale: ruLocale), "Умный сброс")
@@ -20,6 +21,14 @@ final class SmartDataResetLocalizationTests: XCTestCase {
         XCTAssertEqual(SmartDataResetL10n.targetsSectionTitle(locale: enLocale), "What to delete")
         XCTAssertEqual(SmartDataResetL10n.previewSectionTitle(locale: enLocale), "Preview")
         XCTAssertEqual(SmartDataResetL10n.applyResetButton(isApplying: false, locale: enLocale), "Apply reset")
+    }
+
+    func testSimplifiedChineseCoreLabels() {
+        XCTAssertEqual(SmartDataResetL10n.navigationTitle(locale: zhLocale), "智能重置")
+        XCTAssertEqual(SmartDataResetL10n.periodSectionTitle(locale: zhLocale), "时间范围")
+        XCTAssertEqual(SmartDataResetL10n.targetsSectionTitle(locale: zhLocale), "删除内容")
+        XCTAssertEqual(SmartDataResetL10n.previewSectionTitle(locale: zhLocale), "预览")
+        XCTAssertEqual(SmartDataResetL10n.applyResetButton(isApplying: false, locale: zhLocale), "应用重置")
     }
 
     func testRussianPeriodAndTargetTitles() {

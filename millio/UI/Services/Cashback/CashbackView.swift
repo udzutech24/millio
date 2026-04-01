@@ -39,7 +39,7 @@ private struct CashbackCategoryEditButton: View {
                 .frame(width: 24, height: 24)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text("Редактировать категорию"))
+        .accessibilityLabel(Text(CashbackL10n.categoryEditAccessibility))
     }
 }
 
@@ -96,9 +96,7 @@ private struct CashbackContentViewInternal: View {
     @FocusState private var isSearchFieldFocused: Bool
     private let currentRoute: AppRoute = .cashback
 
-    private var localizationLocale: Locale {
-        appState.selectedLanguage.locale ?? Locale.current
-    }
+    private var localizationLocale: Locale { AppLocalization.currentAppLocale }
 
     private var filteredCashbacks: [Cashback] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -115,7 +113,11 @@ private struct CashbackContentViewInternal: View {
                 return true
             }
 
-            if CashbackCategoryCatalog.matchesSearch(rawValue: cashback.categoryRaw, query: query) {
+            if CashbackCategoryCatalog.matchesSearch(
+                rawValue: cashback.categoryRaw,
+                query: query,
+                locale: localizationLocale
+            ) {
                 return true
             }
 
@@ -167,6 +169,7 @@ private struct CashbackContentViewInternal: View {
         .interactiveBackSwipe()
         .toolbar { topToolbar }
         .animation(.easeInOut(duration: 0.18), value: isSearchExpanded)
+        .environment(\.locale, localizationLocale)
         .safeAreaInset(edge: .bottom) {
             addCashbackFAB
         }
@@ -193,12 +196,12 @@ private struct CashbackContentViewInternal: View {
                     .scaledToFit()
                     .frame(width: 120, height: 120)
 
-                Text("Нет кешбэка в этом месяце")
+                Text(CashbackL10n.emptyStateTitle)
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                     .multilineTextAlignment(.center)
 
-                Text("Добавьте категории кешбэка - начните с быстрой настройки")
+                Text(CashbackL10n.emptyStateSubtitle)
                     .font(.system(size: 16, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .multilineTextAlignment(.center)
@@ -206,7 +209,7 @@ private struct CashbackContentViewInternal: View {
                 Button {
                     viewModel.handle(.addCashback)
                 } label: {
-                    Text("Добавить кешбэк")
+                    Text(CashbackL10n.emptyStateCTA)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -276,7 +279,7 @@ private struct CashbackContentViewInternal: View {
                     .listRowSeparator(.hidden)
                 }
             } header: {
-                Text("Категории кешбэка")
+                Text(CashbackL10n.categoriesSectionTitle)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textPrimary.opacity(0.36))
                     .textCase(nil)
@@ -298,7 +301,7 @@ private struct CashbackContentViewInternal: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
 
-            TextField("Поиск категории", text: $searchText)
+            TextField(CashbackL10n.searchPlaceholder, text: $searchText)
                 .textInputAutocapitalization(.never)
                 .disableAutocorrection(true)
                 .submitLabel(.done)
@@ -317,7 +320,7 @@ private struct CashbackContentViewInternal: View {
                         .foregroundStyle(AppColors.textTertiary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Очистить поиск"))
+                .accessibilityLabel(Text(CashbackL10n.clearSearchAccessibility))
             }
         }
         .padding(.horizontal, 14)
@@ -348,11 +351,11 @@ private struct CashbackContentViewInternal: View {
                 .font(.system(size: 28, weight: .medium))
                 .foregroundStyle(AppColors.textTertiary)
 
-            Text("Ничего не найдено")
+            Text(CashbackL10n.searchEmptyTitle)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
 
-            Text("Попробуйте другое название категории или карты")
+            Text(CashbackL10n.searchEmptySubtitle)
                 .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(AppColors.textTertiary)
                 .multilineTextAlignment(.center)
@@ -379,7 +382,7 @@ private struct CashbackContentViewInternal: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Назад"))
+                .accessibilityLabel(Text(CashbackL10n.backAccessibility))
 
                 Button {
                     showQuickNavigationPopover.toggle()
@@ -390,7 +393,7 @@ private struct CashbackContentViewInternal: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Быстрая навигация по мини-приложениям"))
+                .accessibilityLabel(Text(CashbackL10n.quickNavigationAccessibility))
                 .popover(isPresented: $showQuickNavigationPopover, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
                     MiniAppQuickNavigationPopover(
                         destinations: MiniAppNavigation.destinations(excluding: currentRoute)
@@ -407,7 +410,7 @@ private struct CashbackContentViewInternal: View {
             HStack(spacing: 10) {
                 monthStepButton(
                     systemName: "chevron.left",
-                    accessibilityLabel: "Предыдущий месяц",
+                    accessibilityLabel: LocalizedStringKey(CashbackL10n.previousMonthAccessibility),
                     isEnabled: viewModel.canMoveMonthBackward()
                 ) {
                     viewModel.handle(.moveMonthBackward)
@@ -427,7 +430,7 @@ private struct CashbackContentViewInternal: View {
 
                 monthStepButton(
                     systemName: "chevron.right",
-                    accessibilityLabel: "Следующий месяц",
+                    accessibilityLabel: LocalizedStringKey(CashbackL10n.nextMonthAccessibility),
                     isEnabled: viewModel.canMoveMonthForward()
                 ) {
                     viewModel.handle(.moveMonthForward)
@@ -452,7 +455,7 @@ private struct CashbackContentViewInternal: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text(isSearchExpanded ? "Закрыть поиск" : "Поиск"))
+                .accessibilityLabel(Text(isSearchExpanded ? CashbackL10n.closeSearchAccessibility : CashbackL10n.openSearchAccessibility))
 
                 Button {
                     showCategorySettingsSheet = true
@@ -463,7 +466,7 @@ private struct CashbackContentViewInternal: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Настройки категорий"))
+                .accessibilityLabel(Text(CashbackL10n.categorySettingsAccessibility))
             }
         }
     }
@@ -529,7 +532,7 @@ private struct CashbackCategorySettingsSheet: View {
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass")
                             .foregroundStyle(AppColors.textSecondary)
-                        TextField("Поиск категории", text: $searchText)
+                        TextField(CashbackL10n.searchPlaceholder, text: $searchText)
                             .foregroundStyle(AppColors.textPrimary)
                     }
                     .padding(12)
@@ -598,7 +601,7 @@ private struct CashbackCategorySettingsSheet: View {
                                             )
                                     }
                                     .buttonStyle(.plain)
-                                    .accessibilityLabel(isFavorite ? Text("Убрать из избранного") : Text("Добавить в избранное"))
+                                    .accessibilityLabel(isFavorite ? Text(CashbackL10n.favoriteRemoveAccessibility) : Text(CashbackL10n.favoriteAddAccessibility))
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
@@ -625,7 +628,7 @@ private struct CashbackCategorySettingsSheet: View {
                 }
                 .padding(.top, 12)
             }
-            .navigationTitle("Настройки категорий")
+            .navigationTitle(CashbackL10n.categorySettingsTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -636,10 +639,10 @@ private struct CashbackCategorySettingsSheet: View {
                             .font(.system(size: 18, weight: .semibold))
                     }
                     .foregroundStyle(AppColors.textPrimary)
-                    .accessibilityLabel(Text("Закрыть"))
+                    .accessibilityLabel(Text(CashbackL10n.dismissAccessibility))
                 }
                 ToolbarItem(placement: .principal) {
-                    Text("Настройки категорий")
+                    Text(CashbackL10n.categorySettingsTitle)
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     }
@@ -736,12 +739,12 @@ private struct CashbackRowView: View {
 
                 HStack(spacing: 6) {
                     if isFavorite {
-                        statusBadge(title: "TOP", fill: Color.orange.opacity(0.18), tint: .orange)
+                        statusBadge(title: CashbackL10n.topBadge, fill: Color.orange.opacity(0.18), tint: .orange)
                     }
 
                     if isPinned {
                         statusBadge(
-                            title: "PIN",
+                            title: CashbackL10n.pinnedBadge,
                             fill: CashbackScreenStyle.neonCyan.opacity(0.18),
                             tint: CashbackScreenStyle.neonCyan
                         )
@@ -765,9 +768,9 @@ private struct CashbackRowView: View {
             } label: {
                 Label {
                     if isPinned {
-                        Text("Открепить")
+                        Text(CashbackL10n.unpinAction)
                     } else {
-                        Text("Закрепить")
+                        Text(CashbackL10n.pinAction)
                     }
                 } icon: {
                     Image(systemName: isPinned ? "pin.slash.fill" : "pin.fill")
@@ -779,14 +782,14 @@ private struct CashbackRowView: View {
             Button {
                 viewModel.handle(.editCashback(cashback))
             } label: {
-                Label("Редактировать", systemImage: "pencil")
+                Label(CashbackL10n.editAction, systemImage: "pencil")
             }
             .tint(CashbackScreenStyle.accent)
 
             Button(role: .destructive) {
                 viewModel.handle(.deleteCashback(cashback))
             } label: {
-                Label("Удалить", systemImage: "trash")
+                Label(CashbackL10n.deleteAction, systemImage: "trash")
             }
             .tint(AppColors.error)
         }
@@ -854,7 +857,7 @@ private struct CashbackRowView: View {
         let names = viewModel
             .getCardsForCashback(cashback)
             .map(\.name)
-        guard !names.isEmpty else { return String(localized: "Без привязанной карты") }
+        guard !names.isEmpty else { return CashbackL10n.noLinkedCard }
         let preview = Array(names.prefix(2))
         if names.count <= 2 {
             return preview.joined(separator: ", ")
@@ -908,7 +911,7 @@ private struct CashbackEditorView: View {
     @State private var importAlertMessage: String?
     @State private var isImportAlertPremiumLocked: Bool = false
     @State private var showPaywallAlert: Bool = false
-    @State private var paywallMessage: String = ""
+    @State private var paywallMessage: LocalizedTextResolver = .empty
     private let screenshotParser = CashbackScreenshotParser()
 
     private var filteredCategories: [CashbackCategoryOption] {
@@ -991,8 +994,8 @@ private struct CashbackEditorView: View {
             )
             .navigationTitle(
                 viewModel.state.editingCashback == nil
-                    ? String(localized: "Новый кешбэк")
-                    : String(localized: "Редактировать кешбэк")
+                    ? CashbackL10n.newCashbackTitle
+                    : CashbackL10n.editCashbackTitle
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1060,7 +1063,7 @@ private struct CashbackEditorView: View {
                 guard let item = newValue else { return }
                 guard !isScreenshotImportLocked else {
                     isImportAlertPremiumLocked = true
-                    importAlertMessage = String(localized: "cashback.import.screenshot.pro_only")
+                    importAlertMessage = CashbackL10n.screenshotImportLockedText
                     screenshotPhotoItem = nil
                     return
                 }
@@ -1068,13 +1071,13 @@ private struct CashbackEditorView: View {
                     await importFromScreenshot(item: item)
                 }
             }
-            .alert(String(localized: "Импорт со скриншота"), isPresented: isShowingImportAlert) {
+            .alert(CashbackL10n.importScreenshotTitle, isPresented: isShowingImportAlert) {
                 if isImportAlertPremiumLocked {
-                    Button(String(localized: "subscription.button.subscribe")) {
+                    Button(CashbackL10n.subscribeCTA) {
                         router.push(.subscription)
                     }
                 }
-                Button("OK", role: .cancel) {
+                Button(CashbackL10n.text("cashflow.common.ok", fallback: "OK"), role: .cancel) {
                     isImportAlertPremiumLocked = false
                     importAlertMessage = nil
                 }
@@ -1083,7 +1086,7 @@ private struct CashbackEditorView: View {
             }
             .premiumUpsellAlert(
                 isPresented: $showPaywallAlert,
-                titleKey: "Ограничение Free-плана",
+                titleKey: "cashback.paywall.free_plan.title",
                 message: paywallMessage,
                 onSubscribe: { router.push(.subscription) }
             )
@@ -1094,7 +1097,7 @@ private struct CashbackEditorView: View {
 
     private var cardPickerSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "Выберите карту"))
+            FinancesSectionHeader(title: CashbackL10n.selectCardSectionTitle)
 
             Button {
                 showCardPicker = true
@@ -1127,7 +1130,7 @@ private struct CashbackEditorView: View {
                                             .lineLimit(1)
 
                                         CashbackCardSelectionBadge(
-                                            title: "Выбрана",
+                                            title: CashbackL10n.selectedBadge,
                                             tint: CashbackScreenStyle.accentSoft,
                                             fill: CashbackScreenStyle.accent.opacity(0.14)
                                         )
@@ -1151,11 +1154,11 @@ private struct CashbackEditorView: View {
                                 CashbackCardPromptOrb()
 
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Выбрать карту")
+                                    Text(CashbackL10n.selectCardCTA)
                                         .font(.system(size: 17, weight: .semibold))
                                         .foregroundStyle(AppColors.textPrimary)
 
-                                    Text("Без карты кешбэк не сохранится")
+                                    Text(CashbackL10n.selectCardHint)
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundStyle(AppColors.textSecondary)
                                 }
@@ -1179,15 +1182,12 @@ private struct CashbackEditorView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppColors.textTertiary)
                     Text(
-                        String(
-                            format: String(localized: "cashback.free_plan.card_limit_format"),
-                            EntitlementPolicy.freeCashbackCardLimit
-                        )
+                        CashbackL10n.cardLimitText(EntitlementPolicy.freeCashbackCardLimit)
                     )
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppColors.textTertiary)
                     Spacer()
-                    Button(String(localized: "subscription.button.subscribe")) {
+                    Button(CashbackL10n.subscribeCTA) {
                         router.push(.subscription)
                     }
                     .font(.system(size: 12, weight: .semibold))
@@ -1200,18 +1200,18 @@ private struct CashbackEditorView: View {
 
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "Выбор категорий"))
+            FinancesSectionHeader(title: CashbackL10n.categoryPickerSectionTitle)
             HStack {
                 if isScreenshotImportLocked {
                     HStack(spacing: 8) {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppColors.textTertiary)
-                        Text("cashback.import.screenshot.pro_only")
+                        Text(CashbackL10n.screenshotImportLockedText)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppColors.textTertiary)
                         Spacer()
-                        Button(String(localized: "subscription.button.subscribe")) {
+                        Button(CashbackL10n.subscribeCTA) {
                             router.push(.subscription)
                         }
                         .font(.system(size: 12, weight: .semibold))
@@ -1232,10 +1232,10 @@ private struct CashbackEditorView: View {
                                     .font(.system(size: 16, weight: .regular))
                             }
                             if isImportingFromScreenshot {
-                                Text("cashback.import.screenshot.loading")
+                                Text(CashbackL10n.screenshotImportLoadingText)
                                     .font(.system(size: 14, weight: .medium))
                             } else {
-                                Text("Импорт со скриншота")
+                                Text(CashbackL10n.importScreenshotCTA)
                                     .font(.system(size: 14, weight: .medium))
                             }
                         }
@@ -1260,7 +1260,7 @@ private struct CashbackEditorView: View {
                             .font(.system(size: 24, weight: .regular))
                             .foregroundStyle(AppColors.textPrimary)
 
-                        TextField("Поиск категорий", text: $searchText)
+                        TextField(CashbackL10n.searchCategoriesPlaceholder, text: $searchText)
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                     }
@@ -1283,6 +1283,8 @@ private struct CashbackEditorView: View {
                                         Text(category.displayName)
                                             .font(.system(size: 13, weight: .medium))
                                             .lineLimit(1)
+                                            .minimumScaleFactor(0.76)
+                                            .allowsTightening(true)
                                     }
                                     .foregroundStyle(AppColors.textPrimary)
                                     .padding(.horizontal, 12)
@@ -1296,7 +1298,7 @@ private struct CashbackEditorView: View {
                                 .buttonStyle(.plain)
                                 .contextMenu {
                                     if category.isCustom {
-                                        Button("Удалить", role: .destructive) {
+                                        Button(CashbackL10n.deleteAction, role: .destructive) {
                                             pendingCategoryRawAction = category.rawValue
                                             showDeleteCategoryAlert = true
                                         }
@@ -1319,7 +1321,7 @@ private struct CashbackEditorView: View {
                                             .stroke(CashbackScreenStyle.accent, lineWidth: 1)
                                     }
 
-                                Text("Создать категорию")
+                                Text(CashbackL10n.createCategoryCTA)
                                     .font(.system(size: 15, weight: .regular))
                                     .foregroundStyle(AppColors.textPrimary)
                             }
@@ -1340,11 +1342,11 @@ private struct CashbackEditorView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 if isShowingAllCategories {
-                                    Text("Свернуть")
+                                    Text(CashbackL10n.collapseCategoriesCTA)
                                         .font(.system(size: 15, weight: .regular))
                                         .foregroundStyle(AppColors.textPrimary)
                                 } else {
-                                    Text("Показать ещё")
+                                    Text(CashbackL10n.showMoreCategoriesCTA)
                                         .font(.system(size: 15, weight: .regular))
                                         .foregroundStyle(AppColors.textPrimary)
                                 }
@@ -1366,11 +1368,11 @@ private struct CashbackEditorView: View {
                 }
                 .padding(16)
             }
-            .alert("Удалить категорию?", isPresented: $showDeleteCategoryAlert) {
-                Button("Отмена", role: .cancel) {
+            .alert(CashbackL10n.deleteCategoryTitle, isPresented: $showDeleteCategoryAlert) {
+                Button(CashbackL10n.text("finances.common.cancel", fallback: "Cancel"), role: .cancel) {
                     pendingCategoryRawAction = nil
                 }
-                Button("Удалить", role: .destructive) {
+                Button(CashbackL10n.deleteAction, role: .destructive) {
                     guard let raw = pendingCategoryRawAction else { return }
                     if viewModel.deleteCategory(rawValue: raw) {
                         selectedCategoryRaws.remove(raw)
@@ -1379,7 +1381,7 @@ private struct CashbackEditorView: View {
                     pendingCategoryRawAction = nil
                 }
             } message: {
-                Text("Все связанные кешбэки этой категории будут безопасно перенесены в категорию \"Другое\".")
+                Text(CashbackL10n.deleteCategoryMessage)
             }
         }
     }
@@ -1387,7 +1389,7 @@ private struct CashbackEditorView: View {
     private var selectedCategoriesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                FinancesSectionHeader(title: String(localized: "Выбранные категории"))
+                FinancesSectionHeader(title: CashbackL10n.selectedCategoriesTitle)
                 Spacer()
                 HStack(spacing: 8) {
                     quickFillButton(5)
@@ -1398,7 +1400,7 @@ private struct CashbackEditorView: View {
 
             FinancesGlassCard(accentColor: CashbackScreenStyle.accent) {
                 if selectedCategoriesList.isEmpty {
-                    Text("Выберите хотя бы одну категорию")
+                    Text(CashbackL10n.selectCategoryHint)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(AppColors.textTertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1428,7 +1430,7 @@ private struct CashbackEditorView: View {
                                         .foregroundStyle(AppColors.textSecondary)
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel(Text("Убрать категорию"))
+                                .accessibilityLabel(Text(CashbackL10n.removeCategoryAccessibility))
 
                                 HStack(spacing: 14) {
                                     Button {
@@ -1472,7 +1474,7 @@ private struct CashbackEditorView: View {
                             .padding(.vertical, 14)
                             .contextMenu {
                                 if category.isCustom {
-                                    Button("Удалить", role: .destructive) {
+                                    Button(CashbackL10n.deleteAction, role: .destructive) {
                                         pendingCategoryRawAction = category.rawValue
                                         showDeleteCategoryAlert = true
                                     }
@@ -1512,7 +1514,7 @@ private struct CashbackEditorView: View {
         Button {
             saveCashback()
         } label: {
-            Text("Сохранить")
+            Text(CashbackL10n.saveCTA)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .frame(maxWidth: .infinity)
@@ -1558,10 +1560,13 @@ private struct CashbackEditorView: View {
             isPro: appState.isPro,
             projectedCategoryCount: projectedCategoryCount
         ) else {
-            paywallMessage = String(
-                format: String(localized: "monetization.cashback.categories.limit.hard_format"),
-                EntitlementPolicy.freeCashbackCategoryLimitPerMonth
-            )
+            paywallMessage = LocalizedTextResolver { locale in
+                CashbackL10n.formatted(
+                    "monetization.cashback.categories.limit.hard_format",
+                    EntitlementPolicy.freeCashbackCategoryLimitPerMonth,
+                    locale: locale
+                )
+            }
             showPaywallAlert = true
             return
         }
@@ -1589,7 +1594,7 @@ private struct CashbackEditorView: View {
     private func importFromScreenshot(item: PhotosPickerItem) async {
         guard !isScreenshotImportLocked else {
             isImportAlertPremiumLocked = true
-            importAlertMessage = String(localized: "cashback.import.screenshot.pro_only")
+            importAlertMessage = CashbackL10n.screenshotImportLockedText
             screenshotPhotoItem = nil
             return
         }
@@ -1602,21 +1607,18 @@ private struct CashbackEditorView: View {
         }
 
         guard let data = try? await item.loadTransferable(type: Data.self) else {
-            importAlertMessage = String(localized: "cashback.import.screenshot.read_failed")
+            importAlertMessage = CashbackL10n.text("cashback.import.screenshot.read_failed", fallback: "Failed to read screenshot")
             return
         }
 
         do {
             let parsed = try await screenshotParser.parse(from: data)
             applyImportedItems(parsed)
-            importAlertMessage = String(
-                format: String(localized: "cashback.import.screenshot.recognized_format"),
-                parsed.count
-            )
+            importAlertMessage = CashbackL10n.screenshotImportRecognizedText(parsed.count)
         } catch let error as CashbackScreenshotImportError {
             importAlertMessage = error.errorDescription
         } catch {
-            importAlertMessage = String(localized: "cashback.import.screenshot.parse_failed")
+            importAlertMessage = CashbackL10n.text("cashback.import.screenshot.parse_failed", fallback: "Could not parse screenshot")
         }
     }
 
@@ -1797,9 +1799,9 @@ private struct CashbackCategoryEditorSheet: View {
         var localizedTitle: String {
             switch self {
             case .emoji:
-                return String(localized: "Эмодзи")
+                return CashbackL10n.categoryEditorTabEmoji
             case .symbols:
-                return String(localized: "Иконки")
+                return CashbackL10n.categoryEditorTabSymbols
             }
         }
     }
@@ -1837,9 +1839,9 @@ private struct CashbackCategoryEditorSheet: View {
     private var title: String {
         switch mode {
         case .create:
-            return String(localized: "Новая категория")
+            return CashbackL10n.categoryEditorTitleNew
         case .edit:
-            return String(localized: "Категория")
+            return CashbackL10n.categoryEditorTitleEdit
         }
     }
 
@@ -1873,27 +1875,21 @@ private struct CashbackCategoryEditorSheet: View {
 
                 ScrollView {
                     VStack(spacing: 18) {
-                        FinancesSectionHeader(title: String(localized: "Название"))
+                        FinancesSectionHeader(title: CashbackL10n.categoryEditorNameTitle)
                         FinancesGlassCard(accentColor: CashbackScreenStyle.accent) {
-                            TextField("Например: Кофейни", text: $name)
+                            TextField(CashbackL10n.categoryEditorNamePlaceholder, text: $name)
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                                 .focused($isNameFieldFocused)
                                 .padding(16)
                         }
 
-                        FinancesSectionHeader(title: String(localized: "Иконка"))
+                        FinancesSectionHeader(title: CashbackL10n.categoryEditorIconTitle)
                         FinancesGlassCard(accentColor: CashbackScreenStyle.accent) {
                             VStack(spacing: 12) {
                                 if !suggestedIcons.isEmpty {
                                     VStack(alignment: .leading, spacing: 10) {
-                                        Text(
-                                            String(
-                                                localized: "cashflow.editor.icon_suggestions",
-                                                defaultValue: "Suggested icons",
-                                                comment: "Suggested icons title for category creation"
-                                            )
-                                        )
+                                        Text(CashbackL10n.categoryEditorSuggestedIconsTitle)
                                         .font(.system(size: 13, weight: .semibold))
                                         .foregroundStyle(AppColors.textSecondary)
 
@@ -1928,7 +1924,7 @@ private struct CashbackCategoryEditorSheet: View {
                                     }
                                 }
 
-                                Picker("Тип иконки", selection: $selectedTab) {
+                                Picker(CashbackL10n.categoryEditorIconPickerTitle, selection: $selectedTab) {
                                     Text(IconPickerTab.emoji.localizedTitle)
                                         .tag(IconPickerTab.emoji)
                                     Text(IconPickerTab.symbols.localizedTitle)
@@ -1941,7 +1937,7 @@ private struct CashbackCategoryEditorSheet: View {
                                         Image(systemName: "magnifyingglass")
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundStyle(AppColors.textTertiary)
-                                        TextField("Поиск иконки (например, машина, корзина, сердце)", text: $iconSearchText)
+                                        TextField(CashbackL10n.categoryEditorIconSearchPlaceholder, text: $iconSearchText)
                                             .font(.system(size: 14, weight: .regular))
                                             .foregroundStyle(AppColors.textPrimary)
                                     }
@@ -2009,7 +2005,7 @@ private struct CashbackCategoryEditorSheet: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text("Отмена"))
+                    .accessibilityLabel(Text(CashbackL10n.text("finances.common.cancel", fallback: "Cancel")))
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -2021,7 +2017,7 @@ private struct CashbackCategoryEditorSheet: View {
                                 .font(.system(size: 15, weight: .semibold))
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(Text("Удалить"))
+                        .accessibilityLabel(Text(CashbackL10n.deleteAction))
                     }
                 }
 
@@ -2041,7 +2037,7 @@ private struct CashbackCategoryEditorSheet: View {
                         )
                     )
                     .disabled(!isValid)
-                    .accessibilityLabel(Text("Сохранить"))
+                    .accessibilityLabel(Text(CashbackL10n.saveCTA))
                 }
             }
             .onAppear {
@@ -2058,14 +2054,14 @@ private struct CashbackCategoryEditorSheet: View {
                 }
                 iconSearchText = ""
             }
-            .alert("Удалить категорию?", isPresented: $showDeleteConfirmation) {
-                Button("Отмена", role: .cancel) {}
-                Button("Удалить", role: .destructive) {
+            .alert(CashbackL10n.deleteCategoryTitle, isPresented: $showDeleteConfirmation) {
+                Button(CashbackL10n.text("finances.common.cancel", fallback: "Cancel"), role: .cancel) {}
+                Button(CashbackL10n.deleteAction, role: .destructive) {
                     onDelete?()
                     dismiss()
                 }
             } message: {
-                Text("Связанные кешбэки этой категории будут перенесены в «Другое».")
+                Text(CashbackL10n.deleteCategoryMessage)
             }
         }
     }
@@ -2092,6 +2088,7 @@ private struct CashbackSingleCardPickerView: View {
     @State private var isAddCardRecommendationHidden = CashbackCardPickerRecommendationPrefs.shared.isHidden()
     @State private var financeViewModel: FinanceViewModel?
     @State private var showAddCardSheet: Bool = false
+    private var localizationLocale: Locale { AppLocalization.currentAppLocale }
     private let currentRoute: AppRoute = .cashback
 
     var body: some View {
@@ -2105,11 +2102,11 @@ private struct CashbackSingleCardPickerView: View {
                             .font(.system(size: 64))
                             .foregroundStyle(AppColors.textTertiary)
 
-                        Text("Нет доступных карт")
+                        Text(CashbackL10n.noCardsTitle)
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
 
-                        Text("Добавьте карту в сервисе \"Карты\"")
+                        Text(CashbackL10n.noCardsSubtitle(locale: localizationLocale))
                             .font(.system(size: 14, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
                             .multilineTextAlignment(.center)
@@ -2153,7 +2150,7 @@ private struct CashbackSingleCardPickerView: View {
                     }
                 }
             }
-            .navigationTitle("Выбор карты")
+            .navigationTitle(CashbackL10n.cardPickerTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -2164,7 +2161,7 @@ private struct CashbackSingleCardPickerView: View {
                             .font(.system(size: 17, weight: .semibold))
                     }
                     .foregroundStyle(AppColors.brandPrimary)
-                    .accessibilityLabel(Text("Готово"))
+                    .accessibilityLabel(Text(CashbackL10n.doneAccessibility))
                 }
             }
             .sheet(isPresented: $showAddCardSheet, onDismiss: onCardsChanged) {
@@ -2180,14 +2177,14 @@ private struct CashbackSingleCardPickerView: View {
 
     private var pickerHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Выберите карту, для которой вы настраиваете категории и проценты в этом месяце")
+            Text(CashbackL10n.cardPickerHeader)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let selectedCard = availableCards.first(where: { $0.cardUniqueID == selectedCardID }) {
                 HStack(spacing: 8) {
-                    Text("Выбрана")
+                    Text(CashbackL10n.selectedBadge)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(CashbackScreenStyle.accentSoft)
                         .padding(.horizontal, 10)
@@ -2239,7 +2236,7 @@ private struct CashbackSingleCardPickerView: View {
     private func favoriteMarker(for card: Card) -> some View {
         Group {
             if card.isFavorite {
-                Label("Избранная", systemImage: "star.fill")
+                Label(CashbackL10n.favoriteMarker, systemImage: "star.fill")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
                     .labelStyle(.titleAndIcon)
@@ -2266,17 +2263,14 @@ private struct CashbackSingleCardPickerView: View {
                 .foregroundStyle(CashbackScreenStyle.accentSoft)
 
             Text(
-                String(
-                    format: String(localized: "cashback.free_plan.card_limit_format"),
-                    EntitlementPolicy.freeCashbackCardLimit
-                )
+                        CashbackL10n.cardLimitText(EntitlementPolicy.freeCashbackCardLimit)
             )
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(AppColors.textSecondary)
 
             Spacer(minLength: 8)
 
-            Button(String(localized: "cashback.free_plan.show_all_cards_pro")) {
+            Button(CashbackL10n.text("cashback.free_plan.show_all_cards_pro", fallback: "View all cards with PRO")) {
                 onTapUpgrade()
             }
             .font(.system(size: 13, weight: .semibold))
@@ -2335,22 +2329,22 @@ private struct CashbackSingleCardPickerView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
 
-                Text("Где добавить новую карту")
+                Text(CashbackL10n.addCardHintTitle)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
 
                 Spacer()
 
-                Button("Скрыть") {
+                Button(CashbackL10n.hideRecommendationCTA) {
                     isAddCardRecommendationHidden = true
                     CashbackCardPickerRecommendationPrefs.shared.setHidden(true)
                 }
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(AppColors.textTertiary)
-                .accessibilityLabel(Text("Скрыть рекомендацию"))
+                .accessibilityLabel(Text(CashbackL10n.hideRecommendationAccessibility))
             }
 
-            Text("Новой карты нет в списке? Добавьте ее в «Финансах»")
+            Text(CashbackL10n.addCardHintSubtitle(financesTitle: MainLocalization.text(MainLocalization.serviceFinances)))
                 .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(AppColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -2361,12 +2355,12 @@ private struct CashbackSingleCardPickerView: View {
                 }
                 showAddCardSheet = true
             } label: {
-                Text("Добавить карту")
+                Text(CashbackL10n.addCardCTA)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.brandPrimary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text("Открыть создание новой карты"))
+            .accessibilityLabel(Text(CashbackL10n.addCardAccessibility))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)

@@ -18,7 +18,7 @@ struct FinanceCreateCardView: View {
     @State private var cardViewModel: CardViewModel?
     @State private var createdCardID: String? = nil
     @State private var showPaywallAlert: Bool = false
-    @State private var paywallMessage: String = ""
+    @State private var paywallMessage: LocalizedTextResolver = .empty
 
     private var currentFinanceProductCount: Int {
         viewModel.state.availableCards.count
@@ -72,10 +72,13 @@ struct FinanceCreateCardView: View {
                     .tint(AppColors.textPrimary)
                     .onAppear {
                         guard canAddProduct else {
-                            paywallMessage = String(
-                                format: String(localized: "monetization.finance.products.limit.hard_format"),
-                                EntitlementPolicy.freeFinanceProductLimit
-                            )
+                            paywallMessage = LocalizedTextResolver { locale in
+                                String(
+                                    format: AppLocalization.string("monetization.finance.products.limit.hard_format", locale: locale),
+                                    locale: locale,
+                                    EntitlementPolicy.freeFinanceProductLimit
+                                )
+                            }
                             showPaywallAlert = true
                             return
                         }
@@ -86,7 +89,7 @@ struct FinanceCreateCardView: View {
         }
         .premiumUpsellAlert(
             isPresented: $showPaywallAlert,
-            titleKey: "Ограничение Free-плана",
+            titleKey: "monetization.free_plan.title",
             message: paywallMessage,
             onSubscribe: {
                 router.push(.subscription)
@@ -107,7 +110,7 @@ struct FinanceCreateCreditView: View {
     @State private var creditViewModel: CreditViewModel?
     @State private var createdCreditID: String? = nil
     @State private var showPaywallAlert: Bool = false
-    @State private var paywallMessage: String = ""
+    @State private var paywallMessage: LocalizedTextResolver = .empty
 
     private var currentFinanceProductCount: Int {
         viewModel.state.availableCards.count
@@ -161,10 +164,13 @@ struct FinanceCreateCreditView: View {
                     .tint(AppColors.textPrimary)
                     .onAppear {
                         guard canAddProduct else {
-                            paywallMessage = String(
-                                format: String(localized: "monetization.finance.products.limit.hard_format"),
-                                EntitlementPolicy.freeFinanceProductLimit
-                            )
+                            paywallMessage = LocalizedTextResolver { locale in
+                                String(
+                                    format: AppLocalization.string("monetization.finance.products.limit.hard_format", locale: locale),
+                                    locale: locale,
+                                    EntitlementPolicy.freeFinanceProductLimit
+                                )
+                            }
                             showPaywallAlert = true
                             return
                         }
@@ -175,7 +181,7 @@ struct FinanceCreateCreditView: View {
         }
         .premiumUpsellAlert(
             isPresented: $showPaywallAlert,
-            titleKey: "Ограничение Free-плана",
+            titleKey: "monetization.free_plan.title",
             message: paywallMessage,
             onSubscribe: {
                 router.push(.subscription)
@@ -196,7 +202,7 @@ struct FinanceCreateInvestmentView: View {
     @State private var investmentViewModel: InvestmentViewModel?
     @State private var createdInvestmentID: String? = nil
     @State private var showPaywallAlert: Bool = false
-    @State private var paywallMessage: String = ""
+    @State private var paywallMessage: LocalizedTextResolver = .empty
 
     private var currentFinanceProductCount: Int {
         viewModel.state.availableCards.count
@@ -250,10 +256,13 @@ struct FinanceCreateInvestmentView: View {
                     .tint(AppColors.textPrimary)
                     .onAppear {
                         guard canAddProduct else {
-                            paywallMessage = String(
-                                format: String(localized: "monetization.finance.products.limit.hard_format"),
-                                EntitlementPolicy.freeFinanceProductLimit
-                            )
+                            paywallMessage = LocalizedTextResolver { locale in
+                                String(
+                                    format: AppLocalization.string("monetization.finance.products.limit.hard_format", locale: locale),
+                                    locale: locale,
+                                    EntitlementPolicy.freeFinanceProductLimit
+                                )
+                            }
                             showPaywallAlert = true
                             return
                         }
@@ -264,7 +273,7 @@ struct FinanceCreateInvestmentView: View {
         }
         .premiumUpsellAlert(
             isPresented: $showPaywallAlert,
-            titleKey: "Ограничение Free-плана",
+            titleKey: "monetization.free_plan.title",
             message: paywallMessage,
             onSubscribe: {
                 router.push(.subscription)

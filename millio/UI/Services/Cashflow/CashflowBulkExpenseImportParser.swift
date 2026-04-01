@@ -42,7 +42,7 @@ struct VisionCashflowBulkExpenseImportTextRecognizer: CashflowBulkExpenseImportT
 
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
-            request.recognitionLanguages = ["ru-RU", "en-US"]
+            request.recognitionLanguages = ["ru-RU", "en-US", "zh-Hans"]
 
             let handler = VNImageRequestHandler(cgImage: image, options: [:])
             DispatchQueue.global(qos: .userInitiated).async {

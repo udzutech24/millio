@@ -8,20 +8,24 @@ struct RateAppBlock: View {
     @State private var rating: Int = 0
     @State private var activePrompt: Prompt?
 
+    private var locale: Locale {
+        AppLocalization.currentAppLocale
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("profile.rate_app.block.eyebrow")
+                Text(localized("profile.rate_app.block.eyebrow", fallback: "Your voice"))
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(AppColors.brandPrimary.opacity(0.9))
                     .kerning(1.1)
                     .textCase(.uppercase)
 
-                Text("profile.rate_app.block.title")
+                Text(localized("profile.rate_app.block.title", fallback: "How do you like Millio?"))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(AppColors.textPrimary)
 
-                Text("profile.rate_app.block.subtitle")
+                Text(localized("profile.rate_app.block.subtitle", fallback: "A short review helps us make Millio better"))
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(AppColors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -56,9 +60,9 @@ struct RateAppBlock: View {
                             .shadow(color: star <= rating ? AppColors.brandPrimary.opacity(0.22) : .clear, radius: 10, y: 6)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(Text("profile.rate_app.star"))
+                        .accessibilityLabel(Text(localized("profile.rate_app.star", fallback: "Star")))
                         .accessibilityValue(Text("\(star)"))
-                        .accessibilityHint(Text("profile.rate_app.star_hint"))
+                        .accessibilityHint(Text(localized("profile.rate_app.star_hint", fallback: "Select a rating.")))
                     }
 
                     Spacer(minLength: 0)
@@ -83,9 +87,9 @@ struct RateAppBlock: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppColors.brandPrimary)
 
-            Text(ratingSummaryKey)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(AppColors.textSecondary)
+                Text(localized(ratingSummaryText.key, fallback: ratingSummaryText.fallback))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
 
             Spacer(minLength: 0)
 
@@ -140,16 +144,16 @@ struct RateAppBlock: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(prompt.titleKey)
+                    Text(localized(prompt.title.key, fallback: prompt.title.fallback))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(AppColors.textPrimary)
 
-                    Text(prompt.messageKey(canOpenAppStoreReview: canOpenAppStoreReview))
+                    Text(localized(prompt.message(canOpenAppStoreReview: canOpenAppStoreReview).key, fallback: prompt.message(canOpenAppStoreReview: canOpenAppStoreReview).fallback))
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text(prompt.gratitudeKey)
+                    Text(localized(prompt.gratitude.key, fallback: prompt.gratitude.fallback))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppColors.brandPrimary.opacity(0.95))
                         .fixedSize(horizontal: false, vertical: true)
@@ -162,7 +166,7 @@ struct RateAppBlock: View {
                 Button {
                     handlePrimaryAction(for: prompt)
                 } label: {
-                    Text(prompt.primaryActionTitle(canOpenAppStoreReview: canOpenAppStoreReview))
+                    Text(localized(prompt.primaryAction(canOpenAppStoreReview: canOpenAppStoreReview).key, fallback: prompt.primaryAction(canOpenAppStoreReview: canOpenAppStoreReview).fallback))
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(AppColors.textPrimary)
                         .frame(maxWidth: .infinity)
@@ -183,7 +187,7 @@ struct RateAppBlock: View {
                         activePrompt = nil
                     }
                 } label: {
-                    Text("profile.rate_app.not_now")
+                    Text(localized("profile.rate_app.not_now", fallback: "Not now"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.9))
                         .frame(maxWidth: .infinity)
@@ -219,6 +223,10 @@ struct RateAppBlock: View {
                 )
         )
         .shadow(color: prompt.shadowColor, radius: 18, y: 12)
+    }
+
+    private func localized(_ key: String, fallback: String) -> String {
+        AppLocalization.string(key, locale: locale, fallback: fallback)
     }
 
     private func handlePrimaryAction(for prompt: Prompt) {
@@ -260,21 +268,26 @@ struct RateAppBlock: View {
         star <= rating ? AppColors.brandPrimary.opacity(0.32) : Color.white.opacity(0.08)
     }
 
-    private var ratingSummaryKey: LocalizedStringKey {
+    private var ratingSummaryText: LocalizedTextDescriptor {
         switch rating {
         case 5:
-            return "profile.rate_app.summary.excellent"
+            return .init(key: "profile.rate_app.summary.excellent", fallback: "Thanks for the 5 out of 5")
         case 4:
-            return "profile.rate_app.summary.good"
+            return .init(key: "profile.rate_app.summary.good", fallback: "Almost perfect")
         case 1...3:
-            return "profile.rate_app.summary.feedback"
+            return .init(key: "profile.rate_app.summary.feedback", fallback: "Tell us what to improve")
         default:
-            return "profile.rate_app.summary.idle"
+            return .init(key: "profile.rate_app.summary.idle", fallback: "Choose a rating")
         }
     }
 }
 
 private extension RateAppBlock {
+    struct LocalizedTextDescriptor {
+        let key: String
+        let fallback: String
+    }
+
     enum Prompt {
         case rateInAppStore
         case sendFeedback
@@ -324,43 +337,43 @@ private extension RateAppBlock {
             }
         }
 
-        var titleKey: LocalizedStringKey {
+        var title: LocalizedTextDescriptor {
             switch self {
             case .rateInAppStore:
-                return "profile.rate_app.dialog.rate.title"
+                return .init(key: "profile.rate_app.dialog.rate.title", fallback: "Thank you!")
             case .sendFeedback:
-                return "profile.rate_app.dialog.feedback.title"
+                return .init(key: "profile.rate_app.dialog.feedback.title", fallback: "What should we improve?")
             }
         }
 
-        func messageKey(canOpenAppStoreReview: Bool) -> LocalizedStringKey {
+        func message(canOpenAppStoreReview: Bool) -> LocalizedTextDescriptor {
             switch self {
             case .rateInAppStore:
                 return canOpenAppStoreReview
-                    ? "profile.rate_app.dialog.rate.message.app_store"
-                    : "profile.rate_app.dialog.rate.message.in_app"
+                    ? .init(key: "profile.rate_app.dialog.rate.message.app_store", fallback: "If you have a minute, please support Millio with a rating in the App Store")
+                    : .init(key: "profile.rate_app.dialog.rate.message.in_app", fallback: "If you have a minute, please rate Millio")
             case .sendFeedback:
-                return "profile.rate_app.dialog.feedback.message"
+                return .init(key: "profile.rate_app.dialog.feedback.message", fallback: "Tell us what we should improve")
             }
         }
 
-        var gratitudeKey: LocalizedStringKey {
+        var gratitude: LocalizedTextDescriptor {
             switch self {
             case .rateInAppStore:
-                return "profile.rate_app.dialog.rate.gratitude"
+                return .init(key: "profile.rate_app.dialog.rate.gratitude", fallback: "It helps Millio grow")
             case .sendFeedback:
-                return "profile.rate_app.dialog.feedback.gratitude"
+                return .init(key: "profile.rate_app.dialog.feedback.gratitude", fallback: "Thanks for the honest feedback")
             }
         }
 
-        func primaryActionTitle(canOpenAppStoreReview: Bool) -> LocalizedStringKey {
+        func primaryAction(canOpenAppStoreReview: Bool) -> LocalizedTextDescriptor {
             switch self {
             case .rateInAppStore:
                 return canOpenAppStoreReview
-                    ? "profile.rate_app.dialog.rate.action.app_store"
-                    : "profile.rate_app.dialog.rate.action.in_app"
+                    ? .init(key: "profile.rate_app.dialog.rate.action.app_store", fallback: "Leave a rating")
+                    : .init(key: "profile.rate_app.dialog.rate.action.in_app", fallback: "Rate now")
             case .sendFeedback:
-                return "profile.rate_app.dialog.feedback.action"
+                return .init(key: "profile.rate_app.dialog.feedback.action", fallback: "Send feedback")
             }
         }
     }

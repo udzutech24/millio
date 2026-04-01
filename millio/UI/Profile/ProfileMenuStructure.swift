@@ -204,53 +204,62 @@ enum ProfileMenuStructure {
     }()
 
     // Keep section grouping in one place so screen order stays testable.
-    static let sections: [ProfileMenuSection] = [
-        ProfileMenuSection(
-            id: .general,
-            items: [
-                .language,
-                .primaryCurrency
-            ]
-        ),
-        ProfileMenuSection(
-            id: .settings,
-            items: [
-                .backup,
-                .security,
-                .dailyReminders
-            ]
-        ),
-        ProfileMenuSection(
-            id: .experience,
-            items: [
-                .quickSetup,
-                .launchSplash
-            ]
-        ),
-        ProfileMenuSection(
-            id: .support,
-            items: [
-                .faq,
-                .smartDataReset
-            ]
-        ),
-        ProfileMenuSection(
-            id: .about,
-            items: [
-                .version,
-                .privacy,
-                .terms
-            ]
-        ),
-        ProfileMenuSection(
-            id: .debug,
-            items: debugItems
-        ),
-        ProfileMenuSection(
-            id: .contacts,
-            items: [
-                .contactUs
-            ]
+    static let sections: [ProfileMenuSection] = {
+        var sections: [ProfileMenuSection] = [
+            ProfileMenuSection(
+                id: .general,
+                items: [
+                    .language,
+                    .primaryCurrency
+                ]
+            ),
+            ProfileMenuSection(
+                id: .settings,
+                items: [
+                    .backup,
+                    .security,
+                    .dailyReminders
+                ]
+            ),
+            ProfileMenuSection(
+                id: .experience,
+                items: [
+                    .quickSetup,
+                    .launchSplash
+                ]
+            ),
+            ProfileMenuSection(
+                id: .support,
+                items: [
+                    .faq,
+                    .smartDataReset
+                ]
+            ),
+            ProfileMenuSection(
+                id: .about,
+                items: [
+                    .version,
+                    .privacy,
+                    .terms
+                ]
+            )
+        ]
+#if DEBUG
+        sections.append(
+            ProfileMenuSection(
+                id: .debug,
+                items: debugItems
+            )
         )
-    ]
+#endif
+        sections.append(
+            ProfileMenuSection(
+                id: .contacts,
+                items: [
+                    .contactUs
+                ]
+            )
+        )
+        return sections
+    }()
 }

@@ -38,9 +38,7 @@ struct FinanceOverviewCardView: View {
         self.chrome = chrome
     }
 
-    private var localizationLocale: Locale {
-        appState.selectedLanguage.locale ?? Locale.current
-    }
+    private var localizationLocale: Locale { AppLocalization.currentAppLocale }
 
     var body: some View {
         content
@@ -264,7 +262,7 @@ struct FinanceOverviewCardView: View {
 
         return FinanceOverviewLedgerSourceItem(
             groupID: "ungrouped-\(normalized.side.rawValue)",
-            groupName: financesText(ru: "Без группы", en: "Ungrouped"),
+            groupName: FinancesL10n.tr("finances.overview.ungrouped", locale: localizationLocale),
             groupColorHex: nil,
             accountID: card.cardUniqueID,
             accountName: card.name,
@@ -292,7 +290,7 @@ struct FinanceOverviewCardView: View {
 
         return FinanceOverviewLedgerSourceItem(
             groupID: "ungrouped-\(normalized.side.rawValue)",
-            groupName: financesText(ru: "Без группы", en: "Ungrouped"),
+            groupName: FinancesL10n.tr("finances.overview.ungrouped", locale: localizationLocale),
             groupColorHex: nil,
             accountID: credit.creditUniqueID,
             accountName: credit.name,
@@ -320,7 +318,7 @@ struct FinanceOverviewCardView: View {
 
         return FinanceOverviewLedgerSourceItem(
             groupID: "ungrouped-\(normalized.side.rawValue)",
-            groupName: financesText(ru: "Без группы", en: "Ungrouped"),
+            groupName: FinancesL10n.tr("finances.overview.ungrouped", locale: localizationLocale),
             groupColorHex: nil,
             accountID: investment.investmentUniqueID,
             accountName: financeViewModel.investmentDisplayName(investment),
@@ -364,9 +362,10 @@ struct FinanceOverviewCardView: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(AppColors.textSecondary.opacity(0.9))
                             .accessibilityLabel(
-                                financesText(
-                                    ru: "Разница между активами и обязательствами в \(financeViewModel.state.displayCurrency.uppercased()).",
-                                    en: "Difference between assets and liabilities in \(financeViewModel.state.displayCurrency.uppercased())."
+                                FinancesL10n.format(
+                                    "finances.overview.saldo.accessibility_format",
+                                    locale: localizationLocale,
+                                    financeViewModel.state.displayCurrency.uppercased()
                                 )
                             )
                     }
@@ -630,7 +629,7 @@ struct FinanceOverviewCardView: View {
             }
 
             if displayedGroups.isEmpty {
-                Text(financesText(ru: "Нет счетов", en: "No accounts"))
+                Text(FinancesL10n.tr("finances.overview.no_accounts", locale: localizationLocale))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
             } else {
@@ -675,7 +674,7 @@ struct FinanceOverviewCardView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if side.groups.isEmpty {
-                Text(financesText(ru: "Нет счетов", en: "No accounts"))
+                Text(FinancesL10n.tr("finances.overview.no_accounts", locale: localizationLocale))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -775,12 +774,7 @@ struct FinanceOverviewCardView: View {
     }
 
     private var expandedSideHint: some View {
-        Text(
-            financesText(
-                ru: "Нажми на Debit или Credit выше, чтобы раскрыть только одну сторону и пролистывать группы по горизонтали.",
-                en: "Tap Debit or Credit above to expand one side and scroll groups horizontally."
-            )
-        )
+        Text(FinancesL10n.tr("finances.overview.expanded_hint", locale: localizationLocale))
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(AppColors.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -852,16 +846,13 @@ struct FinanceOverviewCardView: View {
 
     private var helperNote: some View {
         FinancesHintsPanel(
-            title: financesText(ru: "Подсказки", en: "Hints"),
+            title: FinancesL10n.tr("finances.overview.hints.title", locale: localizationLocale),
             prefsKey: "finances.overview.ledger",
             items: [
                 .init(
                     id: "ledger-sides",
                     kind: .info,
-                    text: financesText(
-                        ru: "Кредит и дебит показаны как левая и правая стороны: кредит слева, дебит справа. Кредитные карты и кредиты — слева как обязательства.",
-                        en: "Credit and debit are shown as left and right sides: credit on the left, debit on the right. Credit cards and loans stay on the left as liabilities."
-                    )
+                    text: FinancesL10n.tr("finances.overview.hints.ledger_sides", locale: localizationLocale)
                 )
             ],
             accentColor: Color.white.opacity(0.18)
@@ -892,7 +883,7 @@ struct FinanceOverviewCardView: View {
                     .padding(16)
                 }
             }
-            .navigationTitle(financesText(ru: "Бухгалтерская раскладка", en: "Ledger overview"))
+            .navigationTitle(FinancesL10n.tr("finances.overview.nav.title", locale: localizationLocale))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1020,22 +1011,18 @@ struct FinanceOverviewCardView: View {
         return AppColors.textSecondary
     }
 
-    private func financesText(ru: String, en: String) -> String {
-        FinancesL10n.text(locale: localizationLocale, ru: ru, en: en)
-    }
-
     private func groupAccountsText(_ count: Int) -> String {
-        financesText(
-            ru: "\(count) счетов",
-            en: count == 1 ? "1 account" : "\(count) accounts"
-        )
+        let key = count == 1
+            ? "finances.overview.group_accounts.one"
+            : "finances.overview.group_accounts.other"
+        return FinancesL10n.format(key, locale: localizationLocale, count)
     }
 
     private func hiddenGroupsText(_ count: Int) -> String {
-        financesText(
-            ru: "Еще групп: \(count)",
-            en: count == 1 ? "1 more group" : "\(count) more groups"
-        )
+        let key = count == 1
+            ? "finances.overview.hidden_groups.one"
+            : "finances.overview.hidden_groups.other"
+        return FinancesL10n.format(key, locale: localizationLocale, count)
     }
 
     private func groupColor(for group: FinanceOverviewLedgerGroup, fallback: Color) -> Color {

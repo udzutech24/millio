@@ -25,8 +25,6 @@ final class LanguageManager: LanguageManagerProtocol {
         }
     }
 
-    private static let supportedSystemLanguageCodes: Set<String> = ["ru", "en"]
-    
     private init() {
         if let saved = UserDefaults.standard.string(forKey: userDefaultsKey),
            let language = Language(rawValue: saved) {
@@ -43,11 +41,14 @@ final class LanguageManager: LanguageManagerProtocol {
             }
             UserDefaults.standard.synchronize()
         }
+
+        BundleLanguageOverride.apply(language: currentLanguage)
     }
     
     func setLanguage(_ language: Language) {
         currentLanguage = language
         UserDefaults.standard.set(language.rawValue, forKey: userDefaultsKey)
+        BundleLanguageOverride.apply(language: language)
         
         // Применяем locale для локализации
         if let locale = language.locale {
@@ -61,15 +62,11 @@ final class LanguageManager: LanguageManagerProtocol {
     }
 
     static func defaultLanguage(forPreferredLanguage preferredLanguage: String?) -> Language {
-        guard
-            let preferredLanguage,
-            let rawLanguageCode = preferredLanguage.split(whereSeparator: { $0 == "-" || $0 == "_" }).first
-        else {
+        guard let preferredLanguage else {
             return .english
         }
 
-        let languageCode = String(rawLanguageCode).lowercased()
-        if supportedSystemLanguageCodes.contains(languageCode) {
+        if LocalizationSupport.shouldUseSystemLanguage(preferredLanguage) {
             return .system
         }
         return .english

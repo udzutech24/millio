@@ -13,12 +13,12 @@ struct PremiumUpsellAlert: View {
     @Binding var isPresented: Bool
 
     let titleKey: String
-    let message: String
+    let message: LocalizedTextResolver
     let onSubscribe: () -> Void
     let onCancel: () -> Void
 
     private var localizationLocale: Locale {
-        appState.selectedLanguage.locale ?? Locale.current
+        AppLocalization.currentAppLocale
     }
 
     var body: some View {
@@ -42,7 +42,7 @@ struct PremiumUpsellAlert: View {
                     .foregroundStyle(AppColors.textPrimary)
                     .multilineTextAlignment(.center)
 
-                Text(message)
+                Text(message.resolve(in: localizationLocale))
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -132,7 +132,7 @@ struct PremiumUpsellAlert: View {
 private struct PremiumUpsellAlertModifier: ViewModifier {
     @Binding var isPresented: Bool
     let titleKey: String
-    let message: String
+    let message: LocalizedTextResolver
     let onSubscribe: () -> Void
     let onCancel: () -> Void
 
@@ -158,7 +158,7 @@ extension View {
     func premiumUpsellAlert(
         isPresented: Binding<Bool>,
         titleKey: String,
-        message: String,
+        message: LocalizedTextResolver,
         onSubscribe: @escaping () -> Void,
         onCancel: @escaping () -> Void = {}
     ) -> some View {
@@ -170,6 +170,22 @@ extension View {
                 onSubscribe: onSubscribe,
                 onCancel: onCancel
             )
+        )
+    }
+
+    func premiumUpsellAlert(
+        isPresented: Binding<Bool>,
+        titleKey: String,
+        messageKey: String,
+        onSubscribe: @escaping () -> Void,
+        onCancel: @escaping () -> Void = {}
+    ) -> some View {
+        premiumUpsellAlert(
+            isPresented: isPresented,
+            titleKey: titleKey,
+            message: .key(messageKey),
+            onSubscribe: onSubscribe,
+            onCancel: onCancel
         )
     }
 }

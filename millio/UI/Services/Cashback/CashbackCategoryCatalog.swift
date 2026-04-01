@@ -9,78 +9,63 @@ import Foundation
 
 struct CashbackCategoryMetadata: Equatable {
     let category: CashbackCategory
-    let displayNameRU: String
-    let displayNameEN: String
+    let localizationKey: String
+    let fallbackDisplayName: String
     let icon: String
     let aliases: [String]
 
-    func localizedDisplayName(locale: Locale? = nil) -> String {
-        let languageCode: String
-        if let locale {
-            languageCode = locale.identifier
-                .split(separator: "_")
-                .first
-                .map { String($0).lowercased() } ?? "en"
-        } else {
-            switch LanguageManager.shared.currentLanguage {
-            case .russian:
-                languageCode = "ru"
-            case .english:
-                languageCode = "en"
-            case .system:
-                languageCode = AppLocalization.currentAppLocale.identifier
-                    .split(separator: "_")
-                    .first
-                    .map { String($0).lowercased() } ?? "en"
-            }
-        }
-        return languageCode == "ru" ? displayNameRU : displayNameEN
+    func localizedDisplayName(locale: Locale = AppLocalization.currentAppLocale) -> String {
+        CashbackL10n.text(localizationKey, locale: locale, fallback: fallbackDisplayName)
+    }
+
+    func searchableNames(locales: [Locale] = CashbackL10n.supportedLocales) -> [String] {
+        locales.map { localizedDisplayName(locale: $0) }
     }
 }
 
 enum CashbackCategoryCatalog {
     static let allMetadata: [CashbackCategoryMetadata] = [
-        .init(category: .allPurchases, displayNameRU: "Все покупки", displayNameEN: "All purchases", icon: "🛒", aliases: ["все покупки", "all purchases", "base cashback"]),
-        .init(category: .gasStation, displayNameRU: "АЗС", displayNameEN: "Gas stations", icon: "⛽️", aliases: ["топливо", "азс", "заправки", "fuel", "gas station", "gas stations", "petrol"]),
-        .init(category: .supermarket, displayNameRU: "Продукты", displayNameEN: "Groceries", icon: "🛒", aliases: ["продукты", "супермаркеты", "groceries", "grocery", "supermarket", "supermarkets", "вкусвилл", "пятерочка"]),
-        .init(category: .restaurant, displayNameRU: "Кафе", displayNameEN: "Restaurants", icon: "🍽️", aliases: ["кафе", "рестораны", "restaurants", "restaurant", "dining"]),
-        .init(category: .fastFood, displayNameRU: "Фастфуд", displayNameEN: "Fast food", icon: "🍔", aliases: ["фастфуд", "быстрая еда", "fast food", "burger", "pizza", "пицца", "пиццерия", "роллы", "суши", "бургер", "шаверма", "шаурма", "доставка еды"]),
-        .init(category: .coffeeShop, displayNameRU: "Кофейни", displayNameEN: "Coffee shops", icon: "☕️", aliases: ["кофейня", "кофе", "coffee", "coffee shop"]),
-        .init(category: .pharmacy, displayNameRU: "Аптеки", displayNameEN: "Pharmacies", icon: "💊", aliases: ["аптека", "аптеки", "pharmacy", "drugstore"]),
-        .init(category: .healthcare, displayNameRU: "Медицина", displayNameEN: "Medical", icon: "🩺", aliases: ["медицина", "медицинские услуги", "клиника", "врач", "medical", "medical services", "healthcare", "dental"]),
-        .init(category: .transport, displayNameRU: "Транспорт", displayNameEN: "Transport", icon: "🚕", aliases: ["транспорт", "metro", "public transport", "bus", "transit"]),
-        .init(category: .taxi, displayNameRU: "Такси", displayNameEN: "Taxi", icon: "🚖", aliases: ["такси", "taxi", "uber", "yandex go", "rideshare"]),
-        .init(category: .carSharing, displayNameRU: "Каршеринг", displayNameEN: "Car sharing", icon: "🚗", aliases: ["каршеринг", "car sharing", "carsharing"]),
-        .init(category: .autoServices, displayNameRU: "Авто", displayNameEN: "Auto", icon: "🛠️", aliases: ["авто", "автосервис", "сто", "car service", "auto repair", "maintenance"]),
-        .init(category: .entertainment, displayNameRU: "Развлечения", displayNameEN: "Entertainment", icon: "🎮", aliases: ["развлечения", "entertainment", "cinema", "movie", "theatre"]),
-        .init(category: .cinema, displayNameRU: "Кино", displayNameEN: "Cinema", icon: "🎬", aliases: ["кино", "cinema", "movie"]),
-        .init(category: .travel, displayNameRU: "Путешествия", displayNameEN: "Travel", icon: "🧳", aliases: ["путешествия", "travel", "trip"]),
-        .init(category: .hotels, displayNameRU: "Отели", displayNameEN: "Hotels", icon: "🏨", aliases: ["отели", "hotel", "hotels", "lodging"]),
-        .init(category: .airlines, displayNameRU: "Авиабилеты", displayNameEN: "Flights", icon: "✈️", aliases: ["авиабилеты", "flights", "airline", "airfare"]),
-        .init(category: .railway, displayNameRU: "Поезда", displayNameEN: "Rail", icon: "🚆", aliases: ["поезда", "railway", "train tickets", "rail"]),
-        .init(category: .online, displayNameRU: "Онлайн", displayNameEN: "Online", icon: "🌐", aliases: ["онлайн", "online", "internet", "ecommerce"]),
-        .init(category: .marketplaces, displayNameRU: "Маркетплейсы", displayNameEN: "Marketplaces", icon: "📦", aliases: ["маркетплейсы", "marketplace", "ozon", "wb", "wildberries", "amazon"]),
-        .init(category: .electronics, displayNameRU: "Техника", displayNameEN: "Electronics", icon: "💻", aliases: ["техника", "electronics", "gadgets", "electronic"]),
-        .init(category: .homeGoods, displayNameRU: "Дом", displayNameEN: "Home", icon: "🏠", aliases: ["дом", "home goods", "товары для дома", "household"]),
-        .init(category: .furniture, displayNameRU: "Мебель", displayNameEN: "Furniture", icon: "🛋️", aliases: ["мебель", "furniture"]),
-        .init(category: .clothing, displayNameRU: "Одежда", displayNameEN: "Clothing", icon: "👕", aliases: ["одежда", "clothing", "fashion", "apparel"]),
-        .init(category: .shoes, displayNameRU: "Обувь", displayNameEN: "Shoes", icon: "👟", aliases: ["обувь", "shoes", "footwear"]),
-        .init(category: .beauty, displayNameRU: "Красота", displayNameEN: "Beauty", icon: "💄", aliases: ["красота", "beauty", "cosmetics", "spa", "barber"]),
-        .init(category: .sport, displayNameRU: "Спорт", displayNameEN: "Sport", icon: "🏋️", aliases: ["спорт", "gym", "fitness", "sport"]),
-        .init(category: .books, displayNameRU: "Книги", displayNameEN: "Books", icon: "📚", aliases: ["книги", "books", "bookstore"]),
-        .init(category: .education, displayNameRU: "Образование", displayNameEN: "Education", icon: "🎓", aliases: ["образование", "education", "courses", "tuition"]),
-        .init(category: .kids, displayNameRU: "Дети", displayNameEN: "Kids", icon: "🧸", aliases: ["дети", "kids", "baby", "toys"]),
-        .init(category: .pets, displayNameRU: "Питомцы", displayNameEN: "Pets", icon: "🐾", aliases: ["питомцы", "pets", "pet store", "veterinary"]),
-        .init(category: .telecom, displayNameRU: "Связь", displayNameEN: "Telecom", icon: "📱", aliases: ["связь", "telecom", "mobile", "cellular"]),
-        .init(category: .internet, displayNameRU: "Интернет", displayNameEN: "Internet", icon: "📶", aliases: ["интернет", "internet", "wifi", "isp"]),
-        .init(category: .utilities, displayNameRU: "ЖКХ", displayNameEN: "Utilities", icon: "💡", aliases: ["жкх", "коммунальные", "utilities", "electricity", "water"]),
-        .init(category: .digitalServices, displayNameRU: "Сервисы", displayNameEN: "Digital", icon: "🖥️", aliases: ["сервисы", "digital services", "software", "apps", "saas"]),
-        .init(category: .subscriptions, displayNameRU: "Подписки", displayNameEN: "Subscriptions", icon: "🔁", aliases: ["подписки", "subscription", "subscriptions", "netflix", "spotify"]),
-        .init(category: .insurance, displayNameRU: "Страхование", displayNameEN: "Insurance", icon: "🛡️", aliases: ["страхование", "insurance"]),
-        .init(category: .homeRepair, displayNameRU: "Ремонт", displayNameEN: "Repair", icon: "🔧", aliases: ["ремонт", "diy", "home repair", "hardware"]),
-        .init(category: .flowersGifts, displayNameRU: "Подарки", displayNameEN: "Gifts", icon: "🎁", aliases: ["подарки", "цветы", "gift", "flowers"]),
-        .init(category: .alcohol, displayNameRU: "Алкоголь", displayNameEN: "Alcohol", icon: "🍷", aliases: ["алкоголь", "alcohol", "wine", "beer"]),
-        .init(category: .other, displayNameRU: "Разное", displayNameEN: "Other", icon: "🧩", aliases: ["разное", "прочее", "other", "misc", "unknown"])
+        .init(category: .allPurchases, localizationKey: "cashback.category.all_purchases", fallbackDisplayName: "All purchases", icon: "🛒", aliases: ["все покупки", "all purchases", "base cashback"]),
+        .init(category: .gasStation, localizationKey: "cashback.category.gas_station", fallbackDisplayName: "Gas stations", icon: "⛽️", aliases: ["топливо", "азс", "заправки", "fuel", "gas station", "gas stations", "petrol"]),
+        .init(category: .supermarket, localizationKey: "cashback.category.supermarket", fallbackDisplayName: "Groceries", icon: "🛒", aliases: ["продукты", "супермаркеты", "groceries", "grocery", "supermarket", "supermarkets", "вкусвилл", "пятерочка"]),
+        .init(category: .restaurant, localizationKey: "cashback.category.restaurant", fallbackDisplayName: "Restaurants", icon: "🍽️", aliases: ["кафе", "рестораны", "restaurants", "restaurant", "dining"]),
+        .init(category: .fastFood, localizationKey: "cashback.category.fast_food", fallbackDisplayName: "Fast food", icon: "🍔", aliases: ["фастфуд", "быстрая еда", "fast food", "burger", "pizza", "пицца", "пиццерия", "роллы", "суши", "бургер", "шаверма", "шаурма", "доставка еды"]),
+        .init(category: .coffeeShop, localizationKey: "cashback.category.coffee_shop", fallbackDisplayName: "Coffee shops", icon: "☕️", aliases: ["кофейня", "кофе", "coffee", "coffee shop"]),
+        .init(category: .pharmacy, localizationKey: "cashback.category.pharmacy", fallbackDisplayName: "Pharmacies", icon: "💊", aliases: ["аптека", "аптеки", "pharmacy", "drugstore"]),
+        .init(category: .healthcare, localizationKey: "cashback.category.healthcare", fallbackDisplayName: "Healthcare", icon: "🩺", aliases: ["медицина", "медицинские услуги", "клиника", "врач", "medical", "medical services", "healthcare", "dental"]),
+        .init(category: .transport, localizationKey: "cashback.category.transport", fallbackDisplayName: "Transport", icon: "🚕", aliases: ["транспорт", "metro", "public transport", "bus", "transit"]),
+        .init(category: .taxi, localizationKey: "cashback.category.taxi", fallbackDisplayName: "Taxi", icon: "🚖", aliases: ["такси", "taxi", "uber", "yandex go", "rideshare"]),
+        .init(category: .carSharing, localizationKey: "cashback.category.car_sharing", fallbackDisplayName: "Car sharing", icon: "🚗", aliases: ["каршеринг", "car sharing", "carsharing"]),
+        .init(category: .autoServices, localizationKey: "cashback.category.auto_services", fallbackDisplayName: "Auto", icon: "🛠️", aliases: ["авто", "автосервис", "сто", "car service", "auto repair", "maintenance"]),
+        .init(category: .entertainment, localizationKey: "cashback.category.entertainment", fallbackDisplayName: "Entertainment", icon: "🎮", aliases: ["развлечения", "entertainment", "cinema", "movie", "theatre"]),
+        .init(category: .cinema, localizationKey: "cashback.category.cinema", fallbackDisplayName: "Movies", icon: "🎬", aliases: ["кино", "cinema", "movie"]),
+        .init(category: .travel, localizationKey: "cashback.category.travel", fallbackDisplayName: "Travel", icon: "🧳", aliases: ["путешествия", "travel", "trip"]),
+        .init(category: .hotels, localizationKey: "cashback.category.hotels", fallbackDisplayName: "Hotels", icon: "🏨", aliases: ["отели", "hotel", "hotels", "lodging"]),
+        .init(category: .airlines, localizationKey: "cashback.category.airlines", fallbackDisplayName: "Airfare", icon: "✈️", aliases: ["авиабилеты", "flights", "airline", "airfare"]),
+        .init(category: .railway, localizationKey: "cashback.category.railway", fallbackDisplayName: "Rail Tickets", icon: "🚆", aliases: ["поезда", "railway", "train tickets", "rail"]),
+        .init(category: .online, localizationKey: "cashback.category.online", fallbackDisplayName: "Online Shopping", icon: "🌐", aliases: ["онлайн", "online", "internet", "ecommerce"]),
+        .init(category: .marketplaces, localizationKey: "cashback.category.marketplaces", fallbackDisplayName: "Marketplaces", icon: "📦", aliases: ["маркетплейсы", "marketplace", "ozon", "wb", "wildberries", "amazon"]),
+        .init(category: .electronics, localizationKey: "cashback.category.electronics", fallbackDisplayName: "Electronics", icon: "💻", aliases: ["техника", "electronics", "gadgets", "electronic"]),
+        .init(category: .homeGoods, localizationKey: "cashback.category.home_goods", fallbackDisplayName: "Home goods", icon: "🏠", aliases: ["дом", "home goods", "товары для дома", "household"]),
+        .init(category: .furniture, localizationKey: "cashback.category.furniture", fallbackDisplayName: "Furniture", icon: "🛋️", aliases: ["мебель", "furniture"]),
+        .init(category: .clothing, localizationKey: "cashback.category.clothing", fallbackDisplayName: "Clothing", icon: "👕", aliases: ["одежда", "clothing", "fashion", "apparel"]),
+        .init(category: .shoes, localizationKey: "cashback.category.shoes", fallbackDisplayName: "Shoes", icon: "👟", aliases: ["обувь", "shoes", "footwear"]),
+        .init(category: .beauty, localizationKey: "cashback.category.beauty", fallbackDisplayName: "Beauty & Personal Care", icon: "💄", aliases: ["красота", "beauty", "cosmetics", "spa", "barber"]),
+        .init(category: .sport, localizationKey: "cashback.category.sport", fallbackDisplayName: "Sporting Goods", icon: "🏋️", aliases: ["спорт", "gym", "fitness", "sport"]),
+        .init(category: .books, localizationKey: "cashback.category.books", fallbackDisplayName: "Books", icon: "📚", aliases: ["книги", "books", "bookstore"]),
+        .init(category: .education, localizationKey: "cashback.category.education", fallbackDisplayName: "Education", icon: "🎓", aliases: ["образование", "education", "courses", "tuition"]),
+        .init(category: .kids, localizationKey: "cashback.category.kids", fallbackDisplayName: "Kids & Baby", icon: "🧸", aliases: ["дети", "kids", "baby", "toys"]),
+        .init(category: .pets, localizationKey: "cashback.category.pets", fallbackDisplayName: "Pet supplies", icon: "🐾", aliases: ["питомцы", "pets", "pet store", "veterinary"]),
+        .init(category: .telecom, localizationKey: "cashback.category.telecom", fallbackDisplayName: "Mobile services", icon: "📱", aliases: ["связь", "telecom", "mobile", "cellular"]),
+        .init(category: .internet, localizationKey: "cashback.category.internet", fallbackDisplayName: "Internet", icon: "📶", aliases: ["интернет", "internet", "wifi", "isp"]),
+        .init(category: .utilities, localizationKey: "cashback.category.utilities", fallbackDisplayName: "Utilities & Bills", icon: "💡", aliases: ["жкх", "коммунальные", "utilities", "electricity", "water"]),
+        .init(category: .digitalServices, localizationKey: "cashback.category.digital_services", fallbackDisplayName: "Digital services", icon: "🖥️", aliases: ["сервисы", "digital services", "software", "apps", "saas"]),
+        .init(category: .subscriptions, localizationKey: "cashback.category.subscriptions", fallbackDisplayName: "Subscriptions", icon: "🔁", aliases: ["подписки", "subscription", "subscriptions", "netflix", "spotify"]),
+        .init(category: .insurance, localizationKey: "cashback.category.insurance", fallbackDisplayName: "Insurance", icon: "🛡️", aliases: ["страхование", "insurance"]),
+        .init(category: .homeRepair, localizationKey: "cashback.category.home_repair", fallbackDisplayName: "Home repair", icon: "🔧", aliases: ["ремонт", "diy", "home repair", "hardware"]),
+        .init(category: .flowersGifts, localizationKey: "cashback.category.flowers_gifts", fallbackDisplayName: "Flowers and gifts", icon: "🎁", aliases: ["подарки", "цветы", "gift", "flowers"]),
+        .init(category: .alcohol, localizationKey: "cashback.category.alcohol", fallbackDisplayName: "Liquor Stores", icon: "🍷", aliases: ["алкоголь", "alcohol", "wine", "beer"]),
+        .init(category: .other, localizationKey: "cashback.category.other", fallbackDisplayName: "Other", icon: "🧩", aliases: ["разное", "прочее", "other", "misc", "unknown"])
     ]
 
     private static let metadataByCategory = Dictionary(uniqueKeysWithValues: allMetadata.map { ($0.category, $0) })
@@ -94,12 +79,12 @@ enum CashbackCategoryCatalog {
         metadataByRawValue[rawValue]
     }
 
-    static func matchesSearch(rawValue: String, query: String, locale: Locale = .autoupdatingCurrent) -> Bool {
+    static func matchesSearch(rawValue: String, query: String, locale: Locale = AppLocalization.currentAppLocale) -> Bool {
         let normalizedQuery = normalize(query)
         guard !normalizedQuery.isEmpty else { return true }
         guard let metadata = metadata(forRawValue: rawValue) else { return false }
 
-        let candidates = [metadata.localizedDisplayName(locale: locale), metadata.displayNameRU, metadata.displayNameEN, rawValue] + metadata.aliases
+        let candidates = metadata.searchableNames(locales: [locale] + CashbackL10n.supportedLocales) + [rawValue] + metadata.aliases
         return candidates.map(normalize).contains { candidate in
             candidate.contains(normalizedQuery) || normalizedQuery.contains(candidate)
         }
@@ -133,8 +118,8 @@ enum CashbackCategoryCatalog {
 
     private static let fallbackMetadata = CashbackCategoryMetadata(
         category: .other,
-        displayNameRU: "Разное",
-        displayNameEN: "Other",
+        localizationKey: "cashback.category.other",
+        fallbackDisplayName: "Other",
         icon: "🧩",
         aliases: ["разное", "прочее", "other"]
     )
@@ -226,7 +211,7 @@ enum CashbackCategoryCatalog {
     private static func rankedMetadata(for normalizedQuery: String) -> [CashbackCategoryMetadata] {
         allMetadata
             .compactMap { metadata -> (CashbackCategoryMetadata, Int)? in
-                let candidates = [metadata.displayNameRU, metadata.displayNameEN] + metadata.aliases
+                let candidates = metadata.searchableNames() + metadata.aliases
                 let score = candidates
                     .map(normalize)
                     .map { matchScore(query: normalizedQuery, candidate: $0) }
@@ -235,7 +220,7 @@ enum CashbackCategoryCatalog {
             }
             .sorted { lhs, rhs in
                 if lhs.1 == rhs.1 {
-                    return lhs.0.displayNameRU < rhs.0.displayNameRU
+                    return lhs.0.fallbackDisplayName < rhs.0.fallbackDisplayName
                 }
                 return lhs.1 > rhs.1
             }

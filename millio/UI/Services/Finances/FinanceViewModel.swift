@@ -2265,10 +2265,10 @@ final class FinanceViewModel: ViewModelProtocol {
             issues.clientErrorSymbols.isEmpty
 
         if hasOnlyAuthErrors {
-            return MarketDataErrorPresentation.message(for: .authError, locale: .current)
+            return MarketDataErrorPresentation.message(for: .authError)
         }
 
-        return MarketDataErrorPresentation.degradedRefreshMessage(locale: .current)
+        return MarketDataErrorPresentation.degradedRefreshMessage()
     }
 
     private func appendStockRefreshSymbols(
@@ -2277,7 +2277,7 @@ final class FinanceViewModel: ViewModelProtocol {
         to parts: inout [String]
     ) {
         guard !values.isEmpty else { return }
-        let label = MarketDataErrorPresentation.listLabel(for: category, locale: .current)
+        let label = MarketDataErrorPresentation.listLabel(for: category)
         parts.append("\(label): \(values.joined(separator: ", "))")
     }
 

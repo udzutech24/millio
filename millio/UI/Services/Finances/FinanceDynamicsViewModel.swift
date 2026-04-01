@@ -864,11 +864,21 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             return true
         }
         
-        guard state.showArchivedAccounts == false else {
-            return uniqueAccounts
+        let visibleAccounts: [FinanceAccount]
+        if state.showArchivedAccounts {
+            visibleAccounts = uniqueAccounts
+        } else {
+            visibleAccounts = uniqueAccounts.filter { !isAccountArchived($0) }
         }
-        
-        return uniqueAccounts.filter { !isAccountArchived($0) }
+
+        if !visibleAccounts.isEmpty {
+            return visibleAccounts
+        }
+
+        // SwiftData relationships can be stale right after inserts/updates in tests and some
+        // freshly-saved flows. Falling back to a direct account fetch keeps dynamics deterministic
+        // instead of silently producing an empty chart.
+        return fallbackAccountsForCalculation()
     }
     
     /// Обновить список динамики
@@ -1780,6 +1790,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 
                 accountCurrency = resolvedInvestmentCurrency(investment)
                 shouldInclude = true
+                let investmentSign = investment.investmentType == .positive ? 1.0 : -1.0
                 
                 // Для рыночных активов baseline должен опираться на cost basis, если legacy initialAmount
                 // оказался записан как 0. Иначе динамика начинает путь с нуля и рисует ложный +inf.
@@ -1798,7 +1809,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     baseAmount = investment.amount - totalDelta
                 }
                 
-                var investmentBalance = investment.investmentType == .positive ? baseAmount : -baseAmount
+                var investmentBalance = investmentSign * baseAmount
                 
                 if date < investment.createdAt {
                     if includeInitialBeforeCreation {
@@ -1815,13 +1826,25 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             transaction.transactionDate <= date
                         }
                         .sorted(by: { $0.transactionDate < $1.transactionDate })
-                    
-                    for transaction in balanceAdjustmentTransactions {
-                        let converted = await convertTransactionAmount(
-                            transaction,
-                            to: accountCurrency
+
+                    if investment.isMarketPriced {
+                        investmentBalance = await reconstructMarketInvestmentBalance(
+                            investment: investment,
+                            accountCurrency: accountCurrency,
+                            baseAmount: baseAmount,
+                            allTransactions: investmentTransactions,
+                            relevantTransactions: balanceAdjustmentTransactions,
+                            signedFallbackBalance: investmentBalance,
+                            date: date
                         )
-                        investmentBalance += converted
+                    } else {
+                        for transaction in balanceAdjustmentTransactions {
+                            let converted = await convertTransactionAmount(
+                                transaction,
+                                to: accountCurrency
+                            )
+                            investmentBalance += converted
+                        }
                     }
 
                     // Если история неполная (например, для рыночных активов при изменении цены/количества
@@ -1871,8 +1894,53 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         if balanceCache.count < 1000 {
             balanceCache[cacheKey] = totalBalance
         }
-        
+
         return totalBalance
+    }
+
+    private func reconstructMarketInvestmentBalance(
+        investment: Investment,
+        accountCurrency: String,
+        baseAmount: Double,
+        allTransactions: [CashflowTransaction],
+        relevantTransactions: [CashflowTransaction],
+        signedFallbackBalance: Double,
+        date: Date
+    ) async -> Double {
+        let balanceAdjustmentTransactions = allTransactions
+            .filter { transaction in
+                transaction.transactionType == .balanceAdjustment &&
+                transaction.investmentID == investment.investmentUniqueID
+            }
+            .sorted(by: { $0.transactionDate < $1.transactionDate })
+
+        guard !balanceAdjustmentTransactions.isEmpty else {
+            return signedFallbackBalance
+        }
+
+        let sign = investment.investmentType == .positive ? 1.0 : -1.0
+        var unsignedBalance = baseAmount
+
+        if let firstTransaction = balanceAdjustmentTransactions.first,
+           date < firstTransaction.transactionDate,
+           let amountBefore = firstTransaction.assetAmountBefore {
+            return sign * amountBefore
+        }
+
+        for transaction in relevantTransactions {
+            if let amountAfter = transaction.assetAmountAfter {
+                unsignedBalance = amountAfter
+                continue
+            }
+
+            let converted = await convertTransactionAmount(
+                transaction,
+                to: accountCurrency
+            )
+            unsignedBalance += converted
+        }
+
+        return sign * unsignedBalance
     }
 
     private func shouldUseNetTotals() -> Bool {

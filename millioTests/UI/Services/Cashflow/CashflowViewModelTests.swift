@@ -152,6 +152,94 @@ extension CashflowViewModelTests {
         #expect(!text.hasSuffix("."))
     }
 
+    @Test("История месяца использует полный диапазон выбранного месяца")
+    func monthHistoryRangeCoversFullMonth() {
+        let calendar = Calendar(identifier: .gregorian)
+        let month = calendar.date(from: DateComponents(year: 2026, month: 4, day: 1)) ?? Date()
+
+        let range = CashflowViewModel.monthHistoryRange(for: month, calendar: calendar)
+
+        #expect(range.start == calendar.date(from: DateComponents(year: 2026, month: 4, day: 1)))
+        #expect(range.end == calendar.date(from: DateComponents(year: 2026, month: 4, day: 30)))
+    }
+
+    @Test("История расходов включает будущую дату внутри выбранного месяца")
+    func historyTransactionsIncludeLaterDateWithinSelectedMonth() throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar(identifier: .gregorian)
+        let month = calendar.date(from: DateComponents(year: 2026, month: 4, day: 1)) ?? Date()
+        let futureExpenseDate = calendar.date(from: DateComponents(year: 2026, month: 4, day: 20, hour: 12)) ?? month
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { calendar.date(from: DateComponents(year: 2026, month: 4, day: 1, hour: 8)) ?? month }
+        )
+
+        let expense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 200_000,
+            currency: "RUB",
+            transactionDate: futureExpenseDate,
+            expenseCategory: .housing,
+            note: "Rent"
+        )
+        modelContext.insert(expense)
+        try modelContext.save()
+        viewModel.handle(.loadTransactions)
+
+        let range = CashflowViewModel.monthHistoryRange(for: month, calendar: calendar)
+        let query = CashflowHistoryQuery(
+            typeFilter: .expense,
+            searchText: "",
+            startDate: range.start,
+            endDate: range.end,
+            cardID: nil,
+            categoryRawValue: nil
+        )
+
+        let transactions = viewModel.historyTransactions(matching: query)
+
+        #expect(transactions.count == 1)
+        #expect(transactions.first?.amount == 200_000)
+        #expect(transactions.first?.transactionDate == futureExpenseDate)
+    }
+
+    @Test("Текст предупреждения об оценочном курсе локализуется для zh-Hans")
+    func estimatedRateWarningTextIsLocalizedForSimplifiedChinese() {
+        let calendar = Calendar(identifier: .gregorian)
+        let date = calendar.date(from: DateComponents(year: 2026, month: 3, day: 14)) ?? Date()
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh-Hans")
+        formatter.setLocalizedDateFormatFromTemplate("dMMyyyy")
+
+        let text = CashflowViewModel.estimatedRateWarningText(
+            asOf: date,
+            locale: Locale(identifier: "zh-Hans")
+        )
+
+        #expect(text.contains("估算汇率"))
+        #expect(text.contains(formatter.string(from: date)))
+        #expect(text.contains("截至"))
+        #expect(!text.hasSuffix("。"))
+    }
+
+    @Test("Weekly recurrence copy exists for ru en zh-Hans")
+    func weeklyRecurrenceCopyExistsForReleaseLanguages() {
+        #expect(AppLocalization.string("cashflow.recurrence.weekly", locale: Locale(identifier: "ru_RU")) == "Еженедельно")
+        #expect(AppLocalization.string("cashflow.recurrence.weekly", locale: Locale(identifier: "en_US")) == "Weekly")
+        #expect(AppLocalization.string("cashflow.recurrence.weekly", locale: Locale(identifier: "zh-Hans")) == "每周")
+    }
+
+    @Test("Weekday chips use app locale symbols and ordering")
+    func recurrenceWeekdayUsesProvidedLocaleSymbolsAndOrdering() {
+        let russianWeekdays = CashflowRecurrenceWeekday.orderedForCurrentLocale(locale: Locale(identifier: "ru_RU"))
+        let chineseWeekdays = CashflowRecurrenceWeekday.orderedForCurrentLocale(locale: Locale(identifier: "zh-Hans"))
+
+        #expect(russianWeekdays.first == .monday)
+        #expect(chineseWeekdays.first == .sunday)
+        #expect(CashflowRecurrenceWeekday.monday.shortDisplayName(locale: Locale(identifier: "ru_RU")) == "П")
+        #expect(CashflowRecurrenceWeekday.monday.shortDisplayName(locale: Locale(identifier: "zh-Hans")) == "一")
+    }
+
     @Test("Заголовок месяца в Cashflow учитывает locale (en_US)")
     func periodHeaderTitleUsesProvidedLocaleForMonthPeriod() {
         let calendar = Calendar(identifier: .gregorian)

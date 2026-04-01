@@ -252,6 +252,7 @@ enum BackupExperiencePresenter {
     private static func relativeBackupDate(_ date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
+        formatter.locale = AppLocalization.currentAppLocale
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 }

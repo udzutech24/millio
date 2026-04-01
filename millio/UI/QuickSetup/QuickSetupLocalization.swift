@@ -1,20 +1,53 @@
 import Foundation
 
 enum QuickSetupLocalization {
-    static func text(locale: Locale, ru: String, en: String) -> String {
-        isRussian(locale) ? ru : en
+    private static func normalizedFormatArgument(_ argument: any CVarArg) -> any CVarArg {
+        switch argument {
+        case let value as Int:
+            return Int64(value)
+        case let value as Int8:
+            return Int64(value)
+        case let value as Int16:
+            return Int64(value)
+        case let value as Int32:
+            return Int64(value)
+        case let value as UInt:
+            return UInt64(value)
+        case let value as UInt8:
+            return UInt64(value)
+        case let value as UInt16:
+            return UInt64(value)
+        case let value as UInt32:
+            return UInt64(value)
+        default:
+            return argument
+        }
     }
 
-    static func isRussian(_ locale: Locale) -> Bool {
-        normalizedLanguageCode(from: locale.identifier) == "ru"
+    static func tr(_ key: String, locale: Locale = AppLocalization.currentAppLocale, fallback: String? = nil) -> String {
+        AppLocalization.string(key, locale: locale, fallback: fallback)
     }
 
-    private static func normalizedLanguageCode(from identifier: String) -> String {
-        String(
-            identifier
-                .split(whereSeparator: { $0 == "-" || $0 == "_" })
-                .first?
-                .lowercased() ?? ""
-        )
+    static func format(
+        _ key: String,
+        locale: Locale = AppLocalization.currentAppLocale,
+        fallback: String? = nil,
+        _ args: CVarArg...
+    ) -> String {
+        formatArguments(key, locale: locale, fallback: fallback, arguments: args)
+    }
+
+    static func formatArguments(
+        _ key: String,
+        locale: Locale = AppLocalization.currentAppLocale,
+        fallback: String? = nil,
+        arguments: [CVarArg]
+    ) -> String {
+        let template = tr(key, locale: locale, fallback: fallback)
+        guard !template.isEmpty, !arguments.isEmpty else {
+            return template
+        }
+        let normalizedArguments = arguments.map(normalizedFormatArgument)
+        return String(format: template, locale: locale, arguments: normalizedArguments)
     }
 }

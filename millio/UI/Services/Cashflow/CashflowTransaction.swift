@@ -60,10 +60,11 @@ enum CashflowRecurrenceRule: String, Codable, CaseIterable {
         switch self {
         case .none: return String(localized: "Do not repeat")
         case .weekly:
-            if Locale.autoupdatingCurrent.identifier.lowercased().hasPrefix("ru") {
-                return "Еженедельно"
-            }
-            return "Weekly"
+            return String(
+                localized: "cashflow.recurrence.weekly",
+                defaultValue: "Weekly",
+                comment: "Weekly recurrence rule label"
+            )
         case .monthly: return String(localized: "Monthly")
         case .quarterly:
             return String(
@@ -113,8 +114,10 @@ enum CashflowRecurrenceWeekday: Int, Codable, CaseIterable, Hashable {
     case friday = 6
     case saturday = 7
 
-    var shortDisplayName: String {
-        let symbols = DateFormatter().veryShortStandaloneWeekdaySymbols ?? DateFormatter().shortWeekdaySymbols
+    func shortDisplayName(locale: Locale = AppLocalization.currentAppLocale) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        let symbols = formatter.veryShortStandaloneWeekdaySymbols ?? formatter.shortWeekdaySymbols
         let index = rawValue - 1
         guard let symbols, symbols.indices.contains(index) else {
             return "\(rawValue)"
@@ -126,8 +129,13 @@ enum CashflowRecurrenceWeekday: Int, Codable, CaseIterable, Hashable {
         Self(rawValue: value)
     }
 
-    static func orderedForCurrentLocale(calendar: Calendar = .autoupdatingCurrent) -> [CashflowRecurrenceWeekday] {
-        let first = max(1, min(calendar.firstWeekday, 7))
+    static func orderedForCurrentLocale(
+        locale: Locale = AppLocalization.currentAppLocale,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> [CashflowRecurrenceWeekday] {
+        var localizedCalendar = calendar
+        localizedCalendar.locale = locale
+        let first = max(1, min(localizedCalendar.firstWeekday, 7))
         let orderedRaw = (0..<7).map { offset in
             ((first - 1 + offset) % 7) + 1
         }
@@ -174,20 +182,7 @@ enum IncomeCategory: String, Codable, CaseIterable {
     }
 
     func localizedDisplayName(locale: Locale = AppLocalization.currentAppLocale) -> String {
-        switch self {
-        case .salary: return localizedName(locale: locale, ru: "Зарплата", en: "Salary")
-        case .freelance: return localizedName(locale: locale, ru: "Фриланс", en: "Freelance")
-        case .business: return localizedName(locale: locale, ru: "Бизнес", en: "Business")
-        case .bonus: return localizedName(locale: locale, ru: "Премия", en: "Bonus")
-        case .interest: return localizedName(locale: locale, ru: "Проценты", en: "Interest")
-        case .dividends: return localizedName(locale: locale, ru: "Дивиденды", en: "Dividends")
-        case .rental: return localizedName(locale: locale, ru: "Аренда", en: "Rental")
-        case .sale: return localizedName(locale: locale, ru: "Продажа вещей", en: "Sale")
-        case .refunds: return localizedName(locale: locale, ru: "Возвраты", en: "Refunds")
-        case .gift: return localizedName(locale: locale, ru: "Подарок", en: "Gift")
-        case .other: return localizedName(locale: locale, ru: "Другое", en: "Other")
-        case .investment: return localizedName(locale: locale, ru: "Инвестиции", en: "Investments")
-        }
+        AppLocalization.string(localizationKey, locale: locale)
     }
 
     static func matchesSearch(rawValue: String, query: String, locale: Locale = AppLocalization.currentAppLocale) -> Bool {
@@ -347,8 +342,23 @@ private func normalizeSearchQuery(_ value: String) -> String {
         .trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
-private func localizedName(locale: Locale, ru: String, en: String) -> String {
-    AppLocalization.string(en, locale: locale, fallback: ExpenseCategoryCatalog.preferredLanguageCode(for: locale) == "ru" ? ru : en)
+private extension IncomeCategory {
+    var localizationKey: String {
+        switch self {
+        case .salary: return "Salary"
+        case .freelance: return "Freelance"
+        case .business: return "Business"
+        case .bonus: return "Bonus"
+        case .interest: return "Interest"
+        case .dividends: return "Dividends"
+        case .rental: return "Rental"
+        case .sale: return "Sale"
+        case .refunds: return "Refunds"
+        case .gift: return "Gift"
+        case .other: return "Other"
+        case .investment: return "Investments"
+        }
+    }
 }
 
 // MARK: - Custom Category

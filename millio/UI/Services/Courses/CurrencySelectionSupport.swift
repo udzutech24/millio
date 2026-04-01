@@ -14,43 +14,57 @@ public struct CurrencySelectionSupport {
 
     public struct CryptoMeta {
         public let code: String
-        public let ruName: String
-        public let enName: String
+        public let localizedNames: [String: String]
         public let emoji: String
+
+        public init(code: String, localizedNames: [String: String], emoji: String) {
+            self.code = code
+            self.localizedNames = localizedNames
+            self.emoji = emoji
+        }
+
+        public func localizedName(for locale: Locale) -> String {
+            for candidate in AppLocalization.preferredLanguageCandidates(from: locale) {
+                if let name = localizedNames[candidate] {
+                    return name
+                }
+            }
+            return localizedNames["en"] ?? code
+        }
     }
 
     /// Список крипты (порядок можно менять — так будет в allCodes, если ты захочешь выводить крипту отдельно)
     public static let cryptoList: [CryptoMeta] = [
-        .init(code: "BTC",  ruName: "Биткоин",              enName: "Bitcoin",            emoji: "₿"),
-        .init(code: "ETH",  ruName: "Эфириум",             enName: "Ethereum",           emoji: "◇"),
-        .init(code: "USDT", ruName: "Tether",              enName: "Tether",             emoji: "🪙"),
-        .init(code: "USDC", ruName: "USD Coin",            enName: "USD Coin",           emoji: "🪙"),
-        .init(code: "BNB",  ruName: "BNB",                 enName: "BNB",                emoji: "🟡"),
-        .init(code: "SOL",  ruName: "Solana",              enName: "Solana",             emoji: "🟣"),
-        .init(code: "XRP",  ruName: "XRP",                 enName: "XRP",                emoji: "⚪️"),
-        .init(code: "ADA",  ruName: "Cardano",             enName: "Cardano",            emoji: "🔵"),
-        .init(code: "DOGE", ruName: "Dogecoin",            enName: "Dogecoin",           emoji: "🐶"),
-        .init(code: "TON",  ruName: "Toncoin",             enName: "Toncoin",            emoji: "💎"),
-        .init(code: "TRX",  ruName: "TRON",                enName: "TRON",               emoji: "🔺"),
-        .init(code: "DOT",  ruName: "Polkadot",            enName: "Polkadot",           emoji: "🟣"),
-        .init(code: "MATIC",ruName: "Polygon",             enName: "Polygon",            emoji: "🟪"),
-        .init(code: "AVAX", ruName: "Avalanche",           enName: "Avalanche",          emoji: "🔺"),
-        .init(code: "SHIB", ruName: "Shiba Inu",           enName: "Shiba Inu",          emoji: "🐕"),
-        .init(code: "LTC",  ruName: "Litecoin",            enName: "Litecoin",           emoji: "Ł"),
-        .init(code: "BCH",  ruName: "Bitcoin Cash",        enName: "Bitcoin Cash",       emoji: "🟧"),
-        .init(code: "ATOM", ruName: "Cosmos",              enName: "Cosmos",             emoji: "⚛️"),
-        .init(code: "LINK", ruName: "Chainlink",           enName: "Chainlink",          emoji: "🔗"),
-        .init(code: "XLM",  ruName: "Stellar",             enName: "Stellar",            emoji: "⭐️"),
-        .init(code: "ETC",  ruName: "Ethereum Classic",    enName: "Ethereum Classic",   emoji: "⟠"),
-        .init(code: "FIL",  ruName: "Filecoin",            enName: "Filecoin",           emoji: "🗄️"),
-        .init(code: "NEAR", ruName: "NEAR",                enName: "NEAR",               emoji: "🖤"),
-        .init(code: "HBAR", ruName: "Hedera",              enName: "Hedera",             emoji: "🧩"),
-        .init(code: "APT",  ruName: "Aptos",               enName: "Aptos",              emoji: "🌊"),
-        .init(code: "OP",   ruName: "Optimism",            enName: "Optimism",           emoji: "🟥"),
-        .init(code: "ARB",  ruName: "Arbitrum",            enName: "Arbitrum",           emoji: "🌀"),
-        .init(code: "ICP",  ruName: "Internet Computer",   enName: "Internet Computer",  emoji: "∞"),
-        .init(code: "SUI",  ruName: "Sui",                 enName: "Sui",                emoji: "💧"),
-        .init(code: "PEPE", ruName: "Pepe",                enName: "Pepe",               emoji: "🐸")
+        .init(code: "BTC", localizedNames: ["en": "Bitcoin", "ru": "Биткоин"], emoji: "₿"),
+        .init(code: "ETH", localizedNames: ["en": "Ethereum", "ru": "Эфириум"], emoji: "◇"),
+        .init(code: "USDT", localizedNames: ["en": "Tether", "ru": "Tether"], emoji: "🪙"),
+        .init(code: "USDC", localizedNames: ["en": "USD Coin", "ru": "USD Coin"], emoji: "🪙"),
+        .init(code: "BNB", localizedNames: ["en": "BNB", "ru": "BNB"], emoji: "🟡"),
+        .init(code: "SOL", localizedNames: ["en": "Solana", "ru": "Solana"], emoji: "🟣"),
+        .init(code: "XRP", localizedNames: ["en": "XRP", "ru": "XRP"], emoji: "⚪️"),
+        .init(code: "ADA", localizedNames: ["en": "Cardano", "ru": "Cardano"], emoji: "🔵"),
+        .init(code: "DOGE", localizedNames: ["en": "Dogecoin", "ru": "Dogecoin"], emoji: "🐶"),
+        .init(code: "TON", localizedNames: ["en": "Toncoin", "ru": "Toncoin"], emoji: "💎"),
+        .init(code: "TRX", localizedNames: ["en": "TRON", "ru": "TRON"], emoji: "🔺"),
+        .init(code: "DOT", localizedNames: ["en": "Polkadot", "ru": "Polkadot"], emoji: "🟣"),
+        .init(code: "MATIC", localizedNames: ["en": "Polygon", "ru": "Polygon"], emoji: "🟪"),
+        .init(code: "AVAX", localizedNames: ["en": "Avalanche", "ru": "Avalanche"], emoji: "🔺"),
+        .init(code: "SHIB", localizedNames: ["en": "Shiba Inu", "ru": "Shiba Inu"], emoji: "🐕"),
+        .init(code: "LTC", localizedNames: ["en": "Litecoin", "ru": "Litecoin"], emoji: "Ł"),
+        .init(code: "BCH", localizedNames: ["en": "Bitcoin Cash", "ru": "Bitcoin Cash"], emoji: "🟧"),
+        .init(code: "ATOM", localizedNames: ["en": "Cosmos", "ru": "Cosmos"], emoji: "⚛️"),
+        .init(code: "LINK", localizedNames: ["en": "Chainlink", "ru": "Chainlink"], emoji: "🔗"),
+        .init(code: "XLM", localizedNames: ["en": "Stellar", "ru": "Stellar"], emoji: "⭐️"),
+        .init(code: "ETC", localizedNames: ["en": "Ethereum Classic", "ru": "Ethereum Classic"], emoji: "⟠"),
+        .init(code: "FIL", localizedNames: ["en": "Filecoin", "ru": "Filecoin"], emoji: "🗄️"),
+        .init(code: "NEAR", localizedNames: ["en": "NEAR", "ru": "NEAR"], emoji: "🖤"),
+        .init(code: "HBAR", localizedNames: ["en": "Hedera", "ru": "Hedera"], emoji: "🧩"),
+        .init(code: "APT", localizedNames: ["en": "Aptos", "ru": "Aptos"], emoji: "🌊"),
+        .init(code: "OP", localizedNames: ["en": "Optimism", "ru": "Optimism"], emoji: "🟥"),
+        .init(code: "ARB", localizedNames: ["en": "Arbitrum", "ru": "Arbitrum"], emoji: "🌀"),
+        .init(code: "ICP", localizedNames: ["en": "Internet Computer", "ru": "Internet Computer"], emoji: "∞"),
+        .init(code: "SUI", localizedNames: ["en": "Sui", "ru": "Sui"], emoji: "💧"),
+        .init(code: "PEPE", localizedNames: ["en": "Pepe", "ru": "Pepe"], emoji: "🐸")
     ]
 
     private static let cryptoByCode: [String: CryptoMeta] = {
@@ -162,14 +176,22 @@ public struct CurrencySelectionSupport {
 
     public static func nameRu(for code: String) -> String? {
         let c = code.uppercased()
-        if let meta = cryptoByCode[c] { return meta.ruName }
+        if let meta = cryptoByCode[c] { return meta.localizedName(for: ruLocale) }
         return ruLocale.localizedString(forCurrencyCode: c)
     }
 
     public static func nameEn(for code: String) -> String? {
         let c = code.uppercased()
-        if let meta = cryptoByCode[c] { return meta.enName }
+        if let meta = cryptoByCode[c] { return meta.localizedName(for: enLocale) }
         return enLocale.localizedString(forCurrencyCode: c)
+    }
+
+    public static func localizedName(for code: String, locale: Locale) -> String? {
+        let c = code.uppercased()
+        if let meta = cryptoByCode[c] {
+            return meta.localizedName(for: locale)
+        }
+        return locale.localizedString(forCurrencyCode: c)
     }
 
     static func countryNameRu(for code: String) -> String? {
@@ -275,11 +297,12 @@ public struct CurrencyPickerView: View {
     public let primaryPinnedCode: String?
     /// Заголовок для отдельной верхней секции.
     public let primaryPinnedTitle: String
+    public let locale: Locale
     public let onToggleFavorite: ((String) -> Void)?
     public let badgeForCode: ((String) -> CurrencyPickerBadge?)?
     public let onSelect: (String) -> Void
 
-    public init(
+    init(
         allCodes: [String],
         searchText: Binding<String>,
         selectedCodes: [String],
@@ -288,6 +311,7 @@ public struct CurrencyPickerView: View {
         currentSelection: String? = nil,
         primaryPinnedCode: String? = nil,
         primaryPinnedTitle: String? = nil,
+        locale: Locale = AppLocalization.currentAppLocale,
         onToggleFavorite: ((String) -> Void)? = nil,
         badgeForCode: ((String) -> CurrencyPickerBadge?)? = nil,
         onSelect: @escaping (String) -> Void
@@ -300,6 +324,7 @@ public struct CurrencyPickerView: View {
         self.currentSelection = currentSelection?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         self.primaryPinnedCode = primaryPinnedCode?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         self.primaryPinnedTitle = primaryPinnedTitle ?? ConverterL10n.primaryCurrencySection
+        self.locale = locale
         self.onToggleFavorite = onToggleFavorite
         self.badgeForCode = badgeForCode
         self.onSelect = onSelect
@@ -510,12 +535,12 @@ public struct CurrencyPickerView: View {
         dividerColor: Color
     ) -> some View {
         let c = code.uppercased()
-        let ruName = CurrencySelectionSupport.nameRu(for: c) ?? ""
+        let localizedName = CurrencySelectionSupport.localizedName(for: c, locale: locale) ?? ""
         let badge = badgeForCode?(c)
 
         SelectionItemRow(
             title: c,
-            subtitle: ruName.isEmpty ? nil : ruName,
+            subtitle: localizedName.isEmpty ? nil : localizedName,
             isSelected: isSelected,
             dividerColor: dividerColor,
             showDivider: showDivider,
@@ -598,7 +623,7 @@ extension CurrencySelectionSupport {
     static func normalizedSearchToken(_ value: String) -> String {
         value
             .trimmingCharacters(in: .whitespacesAndNewlines)
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: AppLocalization.currentAppLocale)
             .lowercased()
     }
 

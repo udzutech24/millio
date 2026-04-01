@@ -14,9 +14,13 @@ enum InvestmentType: String, Codable, CaseIterable {
     case negative = "negative" // Минусовая
     
     var displayName: String {
+        displayName(for: AppLocalization.currentAppLocale)
+    }
+
+    func displayName(for locale: Locale) -> String {
         switch self {
-        case .positive: return String(localized: "finances.investment.type.positive")
-        case .negative: return String(localized: "finances.investment.type.negative")
+        case .positive: return AppLocalization.string("finances.investment.type.positive", locale: locale)
+        case .negative: return AppLocalization.string("finances.investment.type.negative", locale: locale)
         }
     }
     
@@ -41,16 +45,20 @@ enum InvestmentCategory: String, Codable, CaseIterable {
     case other = "other" // Другое
     
     var displayName: String {
+        displayName(for: AppLocalization.currentAppLocale)
+    }
+
+    func displayName(for locale: Locale) -> String {
         switch self {
-        case .car: return String(localized: "finances.investment.category.car")
-        case .house: return String(localized: "finances.investment.category.house")
-        case .stocks: return String(localized: "finances.investment.category.stocks")
-        case .business: return String(localized: "finances.investment.category.business")
-        case .debt: return String(localized: "finances.investment.category.debt")
-        case .crypto: return String(localized: "finances.investment.category.crypto")
-        case .bonds: return String(localized: "finances.investment.category.bonds")
-        case .metals: return String(localized: "finances.investment.category.metals")
-        case .other: return String(localized: "finances.investment.category.other")
+        case .car: return AppLocalization.string("finances.investment.category.car", locale: locale)
+        case .house: return AppLocalization.string("finances.investment.category.house", locale: locale)
+        case .stocks: return AppLocalization.string("finances.investment.category.stocks", locale: locale)
+        case .business: return AppLocalization.string("finances.investment.category.business", locale: locale)
+        case .debt: return AppLocalization.string("finances.investment.category.debt", locale: locale)
+        case .crypto: return AppLocalization.string("finances.investment.category.crypto", locale: locale)
+        case .bonds: return AppLocalization.string("finances.investment.category.bonds", locale: locale)
+        case .metals: return AppLocalization.string("finances.investment.category.metals", locale: locale)
+        case .other: return AppLocalization.string("finances.investment.category.other", locale: locale)
         }
     }
     
@@ -76,10 +84,14 @@ enum InvestmentPriority: String, Codable, CaseIterable {
     case high = "high" // Высокий
     
     var displayName: String {
+        displayName(for: AppLocalization.currentAppLocale)
+    }
+
+    func displayName(for locale: Locale) -> String {
         switch self {
-        case .low: return String(localized: "finances.priority.low")
-        case .normal: return String(localized: "finances.priority.normal")
-        case .high: return String(localized: "finances.priority.high")
+        case .low: return AppLocalization.string("finances.priority.low", locale: locale)
+        case .normal: return AppLocalization.string("finances.priority.normal", locale: locale)
+        case .high: return AppLocalization.string("finances.priority.high", locale: locale)
         }
     }
     

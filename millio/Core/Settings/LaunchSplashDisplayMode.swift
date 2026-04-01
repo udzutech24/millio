@@ -13,7 +13,7 @@ enum LaunchSplashDisplayMode: String, CaseIterable {
     case disabled
 
     var profileTitle: String {
-        profileTitle(locale: Locale.current)
+        profileTitle(locale: AppLocalization.currentAppLocale)
     }
 
     func profileTitle(locale: Locale) -> String {

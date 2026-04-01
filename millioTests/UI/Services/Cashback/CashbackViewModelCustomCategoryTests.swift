@@ -452,10 +452,10 @@ struct CashbackViewModelCustomCategoryTests {
 
         viewModel.handle(.setSelectedMonth(january))
         viewModel.handle(.moveMonthForward)
-        #expect(viewModel.selectedMonthTitle == "Февраль 2026")
+        #expect(viewModel.selectedMonthTitle(locale: Locale(identifier: "ru_RU")) == "Февраль 2026")
 
         viewModel.handle(.moveMonthForward)
-        #expect(viewModel.selectedMonthTitle == "Февраль 2026")
+        #expect(viewModel.selectedMonthTitle(locale: Locale(identifier: "ru_RU")) == "Февраль 2026")
     }
 
     @Test("Переход назад по месяцу сдвигает selectedMonth на один месяц")
@@ -469,9 +469,9 @@ struct CashbackViewModelCustomCategoryTests {
             defaults: makeDefaults()
         )
 
-        #expect(viewModel.selectedMonthTitle == "Март 2026")
+        #expect(viewModel.selectedMonthTitle(locale: Locale(identifier: "ru_RU")) == "Март 2026")
         viewModel.handle(.moveMonthBackward)
-        #expect(viewModel.selectedMonthTitle == "Февраль 2026")
+        #expect(viewModel.selectedMonthTitle(locale: Locale(identifier: "ru_RU")) == "Февраль 2026")
     }
 
     @Test("Переход назад по месяцу не выходит за minSelectableMonth")
@@ -495,13 +495,13 @@ struct CashbackViewModelCustomCategoryTests {
             defaults: makeDefaults()
         )
 
-        #expect(viewModel.selectedMonthTitle == "Май 2026")
+        #expect(viewModel.selectedMonthTitle(locale: Locale(identifier: "ru_RU")) == "Май 2026")
         viewModel.handle(.moveMonthBackward)
-        #expect(viewModel.selectedMonthTitle == "Апрель 2026")
+        #expect(viewModel.selectedMonthTitle(locale: Locale(identifier: "ru_RU")) == "Апрель 2026")
         #expect(viewModel.canMoveMonthBackward() == false)
 
         viewModel.handle(.moveMonthBackward)
-        #expect(viewModel.selectedMonthTitle == "Апрель 2026")
+        #expect(viewModel.selectedMonthTitle(locale: Locale(identifier: "ru_RU")) == "Апрель 2026")
     }
 
     @Test("Избранные категории сортируются выше остальных")

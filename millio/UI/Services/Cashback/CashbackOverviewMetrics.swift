@@ -15,15 +15,33 @@ struct CashbackOverviewMetrics: Equatable {
     let linkedCardCount: Int
     let averagePercentage: Double
     let highestPercentage: Double
-    let featuredCategoryName: String?
+    private let featuredCategoryRaw: String?
+    private let featuredCustomCategoryName: String?
     let featuredCashbackKey: String?
+
+    var featuredCategoryName: String? {
+        guard let featuredCategoryRaw else { return nil }
+
+        if let systemCategory = CashbackCategory(rawValue: featuredCategoryRaw) {
+            return systemCategory.displayName
+        }
+
+        if featuredCategoryRaw.hasPrefix(Cashback.customCategoryPrefix),
+           let featuredCustomCategoryName,
+           !featuredCustomCategoryName.isEmpty {
+            return featuredCustomCategoryName
+        }
+
+        return CashbackCategory.other.displayName
+    }
 
     static let empty = CashbackOverviewMetrics(
         categoryCount: 0,
         linkedCardCount: 0,
         averagePercentage: 0,
         highestPercentage: 0,
-        featuredCategoryName: nil,
+        featuredCategoryRaw: nil,
+        featuredCustomCategoryName: nil,
         featuredCashbackKey: nil
     )
 
@@ -42,6 +60,9 @@ struct CashbackOverviewMetrics: Equatable {
         let averagePercentage = cashbacks.map(\.percentage).reduce(0, +) / Double(categoryCount)
 
         let featuredCashback = cashbacks.max { lhs, rhs in
+            let lhsName = localizedCategoryName(for: lhs)
+            let rhsName = localizedCategoryName(for: rhs)
+
             if lhs.percentage != rhs.percentage {
                 return lhs.percentage < rhs.percentage
             }
@@ -52,7 +73,7 @@ struct CashbackOverviewMetrics: Equatable {
                 return lhsCards < rhsCards
             }
 
-            return lhs.displayCategoryName.localizedCaseInsensitiveCompare(rhs.displayCategoryName) == .orderedDescending
+            return lhsName.localizedCaseInsensitiveCompare(rhsName) == .orderedDescending
         }
 
         return CashbackOverviewMetrics(
@@ -60,7 +81,8 @@ struct CashbackOverviewMetrics: Equatable {
             linkedCardCount: linkedCardCount,
             averagePercentage: averagePercentage,
             highestPercentage: highestPercentage,
-            featuredCategoryName: featuredCashback?.displayCategoryName,
+            featuredCategoryRaw: featuredCashback?.categoryRaw,
+            featuredCustomCategoryName: featuredCashback?.isCustomCategory == true ? featuredCashback?.name : nil,
             featuredCashbackKey: featuredCashback.map(stableKey(for:))
         )
     }
@@ -88,5 +110,17 @@ struct CashbackOverviewMetrics: Equatable {
             .sorted()
             .joined(separator: ",")
         return "\(cashback.monthKey)|\(cashback.categoryRaw)|\(cardsKey)"
+    }
+
+    private static func localizedCategoryName(for cashback: Cashback) -> String {
+        if let systemCategory = CashbackCategory(rawValue: cashback.categoryRaw) {
+            return systemCategory.displayName
+        }
+
+        if cashback.isCustomCategory, !cashback.name.isEmpty {
+            return cashback.name
+        }
+
+        return CashbackCategory.other.displayName
     }
 }

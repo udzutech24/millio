@@ -216,6 +216,44 @@ struct CashflowTransactionsHistoryViewTests {
         ])
     }
 
+    @Test("История изменения актива локализуется для zh-Hans")
+    func historyAssetChangeLinesUseSimplifiedChineseLabels() {
+        let transaction = CashflowTransaction(
+            transactionType: .balanceAdjustment,
+            amount: 440,
+            currency: "USD",
+            transactionDate: Date()
+        )
+        transaction.applyAssetChangeSnapshot(
+            before: CashflowAssetChangeSnapshot(
+                quantity: 10,
+                unitPrice: 100,
+                purchaseUnitPrice: nil,
+                purchaseCost: nil,
+                totalAmount: 1_000
+            ),
+            after: CashflowAssetChangeSnapshot(
+                quantity: 12,
+                unitPrice: 120,
+                purchaseUnitPrice: nil,
+                purchaseCost: nil,
+                totalAmount: 1_440
+            )
+        )
+
+        let lines = cashflowHistoryAssetChangeLines(
+            for: transaction,
+            currencyCode: "USD",
+            locale: Locale(identifier: "zh-Hans")
+        )
+
+        #expect(lines == [
+            "数量: 10 -> 12",
+            "价格: 100 USD -> 120 USD",
+            "价值: 1 000 USD -> 1 440 USD"
+        ])
+    }
+
     @Test("История берет актуальную операцию после редактирования")
     @MainActor
     func historyResolvesUpdatedTransactionFromViewModelState() throws {
@@ -317,6 +355,10 @@ struct CashflowTransactionsHistoryViewTests {
         let previousLanguage = LanguageManager.shared.currentLanguage
         LanguageManager.shared.setLanguage(.russian)
         defer { LanguageManager.shared.setLanguage(previousLanguage) }
+        let localizedBuyNote = AppLocalization.string(
+            "finances.transaction.note.investment_buy",
+            locale: AppLocalization.currentAppLocale
+        )
 
         let investmentTrade = CashflowTransaction(
             transactionType: .balanceAdjustment,
@@ -324,7 +366,7 @@ struct CashflowTransactionsHistoryViewTests {
             currency: "USD",
             transactionDate: Date(),
             investmentID: "asset-1",
-            note: String(localized: "finances.transaction.note.investment_buy"),
+            note: localizedBuyNote,
             operationGroupID: "trade-1"
         )
         investmentTrade.applyAssetChangeSnapshot(
@@ -352,7 +394,7 @@ struct CashflowTransactionsHistoryViewTests {
             cardID: "card-main",
             investmentID: "asset-1",
             expenseCategory: .other,
-            note: String(localized: "finances.transaction.note.investment_buy"),
+            note: localizedBuyNote,
             operationGroupID: "trade-1",
             affectsCashflowTotals: false
         )
@@ -382,6 +424,29 @@ struct CashflowTransactionsHistoryViewTests {
         #expect(description?.contains("Счет списания: Black Card") == true)
     }
 
+    @Test("История покупки актива локализует legacy note key в title")
+    func historyLocalizesInvestmentTradeTitleFromRawLocalizationKey() {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        LanguageManager.shared.setLanguage(.russian)
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+
+        let investmentTrade = CashflowTransaction(
+            transactionType: .balanceAdjustment,
+            amount: 100,
+            currency: "USD",
+            transactionDate: Date(),
+            investmentID: "asset-1",
+            note: "finances.transaction.note.investment_buy"
+        )
+
+        #expect(
+            cashflowHistoryPrimaryTitle(
+                for: investmentTrade,
+                locale: Locale(identifier: "ru_RU")
+            ) == "Покупка актива"
+        )
+    }
+
     @Test("Фильтр по карте находит покупку актива через settlement leg")
     @MainActor
     func historyFiltersInvestmentTradeByLinkedSettlementCard() throws {
@@ -389,6 +454,10 @@ struct CashflowTransactionsHistoryViewTests {
         try context.deleteAll(CashflowTransaction.self)
         try context.deleteAll(Card.self)
         try context.save()
+        let localizedBuyNote = AppLocalization.string(
+            "finances.transaction.note.investment_buy",
+            locale: AppLocalization.currentAppLocale
+        )
 
         let card = Card(name: "Broker Card", cardNumber: "3333")
         context.insert(card)
@@ -399,7 +468,7 @@ struct CashflowTransactionsHistoryViewTests {
             currency: "USD",
             transactionDate: Date(),
             investmentID: "asset-1",
-            note: String(localized: "finances.transaction.note.investment_buy"),
+            note: localizedBuyNote,
             operationGroupID: "trade-2"
         )
         investmentTrade.applyAssetChangeSnapshot(
@@ -427,7 +496,7 @@ struct CashflowTransactionsHistoryViewTests {
             cardID: card.cardUniqueID,
             investmentID: "asset-1",
             expenseCategory: .other,
-            note: String(localized: "finances.transaction.note.investment_buy"),
+            note: localizedBuyNote,
             operationGroupID: "trade-2",
             affectsCashflowTotals: false
         )

@@ -370,12 +370,18 @@ enum CashflowHistoryTypeFilter: CaseIterable {
 
     var title: String {
         switch self {
-        case .all: return String(localized: "cashflow.history.filter.all")
-        case .income: return String(localized: "cashflow.history.filter.income")
-        case .expense: return String(localized: "cashflow.history.filter.expense")
-        case .transfer: return String(localized: "cashflow.history.filter.transfer")
-        case .assetBalanceChange: return String(localized: "cashflow.history.filter.asset_change")
-        case .accountBalanceCorrection: return String(localized: "cashflow.history.filter.account_correction")
+        case .all:
+            return AppLocalization.string("cashflow.history.filter.all", locale: AppLocalization.currentAppLocale)
+        case .income:
+            return AppLocalization.string("cashflow.history.filter.income", locale: AppLocalization.currentAppLocale)
+        case .expense:
+            return AppLocalization.string("cashflow.history.filter.expense", locale: AppLocalization.currentAppLocale)
+        case .transfer:
+            return AppLocalization.string("cashflow.history.filter.transfer", locale: AppLocalization.currentAppLocale)
+        case .assetBalanceChange:
+            return AppLocalization.string("cashflow.history.filter.asset_change", locale: AppLocalization.currentAppLocale)
+        case .accountBalanceCorrection:
+            return AppLocalization.string("cashflow.history.filter.account_correction", locale: AppLocalization.currentAppLocale)
         }
     }
 
@@ -650,7 +656,7 @@ final class CashflowViewModel: ViewModelProtocol {
             sortBy: [SortDescriptor(\.transactionDate, order: .reverse)]
         )
         state.transactions = (try? modelContext.fetch(descriptor)) ?? []
-        Task { @MainActor [weak self] in
+        Task(priority: .userInitiated) { @MainActor [weak self] in
             guard let self else { return }
             await self.notificationManager.scheduleCashflowScheduledReminders(for: self.state.transactions)
         }
@@ -680,7 +686,7 @@ final class CashflowViewModel: ViewModelProtocol {
         guard !isRecurringGenerationInProgress else { return }
         isRecurringGenerationInProgress = true
 
-        Task { @MainActor [weak self] in
+        Task(priority: .userInitiated) { @MainActor [weak self] in
             guard let self else { return }
             defer { self.isRecurringGenerationInProgress = false }
 
@@ -695,7 +701,7 @@ final class CashflowViewModel: ViewModelProtocol {
         guard !isDueAutoApplyInProgress else { return }
         isDueAutoApplyInProgress = true
 
-        Task { @MainActor [weak self] in
+        Task(priority: .userInitiated) { @MainActor [weak self] in
             guard let self else { return }
             defer { self.isDueAutoApplyInProgress = false }
 
@@ -2637,6 +2643,17 @@ final class CashflowViewModel: ViewModelProtocol {
         return (calendar.startOfDay(for: start), end)
     }
 
+    /// Полный календарный месяц для истории категории.
+    /// Не обрезаем конец "сегодня", иначе monthly total и history смотрят на разные диапазоны.
+    nonisolated static func monthHistoryRange(
+        for month: Date,
+        calendar: Calendar = .current
+    ) -> (start: Date, end: Date) {
+        let start = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
+        let monthEnd = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: start) ?? start
+        return (calendar.startOfDay(for: start), calendar.startOfDay(for: monthEnd))
+    }
+
     /// Нормализует и ограничивает пользовательский диапазон дат:
     /// - `start <= end`
     /// - обе даты приведены к `startOfDay`
@@ -3543,7 +3560,7 @@ final class CashflowViewModel: ViewModelProtocol {
 
     static func estimatedRateWarningText(
         asOf date: Date,
-        locale: Locale = .autoupdatingCurrent
+        locale: Locale = AppLocalization.currentAppLocale
     ) -> String {
         let base = AppLocalization.string("finances.dynamics.warning.estimated_rate", locale: locale)
         let baseWithoutTrailingDot = base
@@ -3552,17 +3569,17 @@ final class CashflowViewModel: ViewModelProtocol {
 
         let formatter = DateFormatter()
         formatter.locale = locale
-        formatter.setLocalizedDateFormatFromTemplate("dMMyyyy")
+        let template = LocalizationSupport.effectiveLanguage(for: locale) == Language.english.rawValue
+            ? "Mdyyyy"
+            : "dMMyyyy"
+        formatter.setLocalizedDateFormatFromTemplate(template)
         let dateText = formatter.string(from: date)
-
-        let languageCode = locale.identifier
-            .split(separator: "_")
-            .first
-            .map { String($0).lowercased() } ?? "en"
-        if languageCode == "ru" {
-            return "\(baseWithoutTrailingDot) на \(dateText)"
-        }
-        return "\(baseWithoutTrailingDot) as of \(dateText)"
+        let suffixFormat = AppLocalization.string(
+            "finances.dynamics.warning.estimated_rate.as_of",
+            locale: locale,
+            fallback: "as of %@"
+        )
+        return "\(baseWithoutTrailingDot) \(String(format: suffixFormat, locale: locale, dateText))"
     }
     
     private func deleteTransactionAsync(_ transaction: CashflowTransaction, recalculate: Bool) async {
@@ -3602,16 +3619,22 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     private func linkedTransactionsForDelete(containing transaction: CashflowTransaction) -> [CashflowTransaction] {
-        guard let operationGroupID = transaction.operationGroupID,
-              !operationGroupID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return [transaction]
-        }
-        let normalizedOperationGroupID = operationGroupID.trimmingCharacters(in: .whitespacesAndNewlines)
-
         let descriptor = FetchDescriptor<CashflowTransaction>(
             sortBy: [SortDescriptor(\.transactionDate, order: .reverse)]
         )
         let stored = (try? modelContext.fetch(descriptor)) ?? []
+
+        guard let operationGroupID = transaction.operationGroupID,
+              !operationGroupID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            if let storedTransaction = stored.first(where: {
+                $0.persistentModelID == transaction.persistentModelID
+            }) {
+                return [storedTransaction]
+            }
+            return [transaction]
+        }
+        let normalizedOperationGroupID = operationGroupID.trimmingCharacters(in: .whitespacesAndNewlines)
+
         let linked = stored.filter {
             $0.operationGroupID?.trimmingCharacters(in: .whitespacesAndNewlines) == normalizedOperationGroupID
         }

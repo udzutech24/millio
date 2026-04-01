@@ -17,12 +17,16 @@ enum CreditType: String, Codable, CaseIterable {
     case other = "other" // Другое
     
     var displayName: String {
+        displayName(for: AppLocalization.currentAppLocale)
+    }
+
+    func displayName(for locale: Locale) -> String {
         switch self {
-        case .consumer: return String(localized: "finances.credit.type.consumer")
-        case .mortgage: return String(localized: "finances.credit.type.mortgage")
-        case .auto: return String(localized: "finances.credit.type.auto")
-        case .refinancing: return String(localized: "finances.credit.type.refinancing")
-        case .other: return String(localized: "finances.credit.type.other")
+        case .consumer: return AppLocalization.string("finances.credit.type.consumer", locale: locale)
+        case .mortgage: return AppLocalization.string("finances.credit.type.mortgage", locale: locale)
+        case .auto: return AppLocalization.string("finances.credit.type.auto", locale: locale)
+        case .refinancing: return AppLocalization.string("finances.credit.type.refinancing", locale: locale)
+        case .other: return AppLocalization.string("finances.credit.type.other", locale: locale)
         }
     }
     
@@ -43,11 +47,15 @@ enum CreditPaymentMode: String, Codable, CaseIterable {
     case nextDate = "next_date"
 
     var displayName: String {
+        displayName(for: AppLocalization.currentAppLocale)
+    }
+
+    func displayName(for locale: Locale) -> String {
         switch self {
         case .dayOfMonth:
-            return String(localized: "finances.credit.payment_mode.day_of_month")
+            return AppLocalization.string("finances.credit.payment_mode.day_of_month", locale: locale)
         case .nextDate:
-            return String(localized: "finances.credit.payment_mode.next_date")
+            return AppLocalization.string("finances.credit.payment_mode.next_date", locale: locale)
         }
     }
 }

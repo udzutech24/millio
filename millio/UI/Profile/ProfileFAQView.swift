@@ -10,6 +10,10 @@ import SwiftUI
 struct ProfileFAQView: View {
     let selectedLanguage: Language
 
+    private var locale: Locale {
+        LocalizationSupport.resolvedLocale(for: selectedLanguage)
+    }
+
     private var sections: [ProfileFAQSection] {
         ProfileFAQContent.sections(for: selectedLanguage)
     }
@@ -31,19 +35,18 @@ struct ProfileFAQView: View {
                 .padding(.bottom, 40)
             }
         }
-        .navigationTitle("profile.faq.title")
+        .navigationTitle(localized("profile.faq.title", locale: locale, fallback: "FAQ"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
     }
 
     private var introBlock: some View {
-        let locale = selectedLanguage.locale ?? Locale.current
         return VStack(alignment: .leading, spacing: 8) {
-            Text("profile.faq.basic")
+            Text(localized("profile.faq.basic", locale: locale, fallback: "FAQ for getting started"))
                 .font(.system(size: 34, weight: .medium, design: .serif))
                 .foregroundStyle(AppColors.textPrimary)
 
-            Text(AppLocalization.string("profile.faq.subtitle", locale: locale))
+            Text(localized("profile.faq.subtitle", locale: locale, fallback: "Quick answers about how Millio works."))
                 .font(.system(size: 17, weight: .regular))
                 .foregroundStyle(AppColors.textSecondary)
                 .italic()
@@ -117,13 +120,20 @@ struct ProfileFAQView: View {
             )
         }
     }
+
+    private func localized(_ key: String, locale: Locale, fallback: String) -> String {
+        AppLocalization.string(key, locale: locale, fallback: fallback)
+    }
 }
 
 struct ProfileFAQDetailView: View {
     let item: ProfileFAQItem
     private var questionPrefix: String {
-        let locale = LanguageManager.shared.currentLanguage.locale ?? Locale.current
-        return AppLocalization.string("profile.faq.question_prefix", locale: locale)
+        AppLocalization.string(
+            "profile.faq.question_prefix",
+            locale: AppLocalization.currentAppLocale,
+            fallback: "Q:"
+        )
     }
 
     var body: some View {
@@ -163,7 +173,9 @@ struct ProfileFAQDetailView: View {
                 .padding(.bottom, 40)
             }
         }
-        .navigationTitle("profile.faq.title")
+        .navigationTitle(
+            AppLocalization.string("profile.faq.title", locale: AppLocalization.currentAppLocale, fallback: "FAQ")
+        )
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
     }

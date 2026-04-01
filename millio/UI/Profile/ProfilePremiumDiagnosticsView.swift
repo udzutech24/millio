@@ -8,7 +8,7 @@ struct ProfilePremiumDiagnosticsView: View {
     }
 
     private var locale: Locale {
-        appState.selectedLanguage.locale ?? Locale.current
+        AppLocalization.currentAppLocale
     }
 
     var body: some View {

@@ -999,7 +999,10 @@ struct BackupManagementView: View {
 
     private func formattedBackupDate(_ date: Date?) -> String? {
         guard let date else { return nil }
-        return date.formatted(date: .abbreviated, time: .shortened)
+        return date.formatted(
+            Date.FormatStyle(date: .abbreviated, time: .shortened)
+                .locale(AppLocalization.currentAppLocale)
+        )
     }
 
     @discardableResult
