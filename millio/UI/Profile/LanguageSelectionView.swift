@@ -29,7 +29,8 @@ struct LanguageSelectionView: View {
             return availableLanguages
         }
         return availableLanguages.filter {
-            $0.displayName(for: currentLocale).localizedCaseInsensitiveContains(searchText)
+            $0.searchableNames(for: currentLocale)
+                .contains(where: { $0.localizedCaseInsensitiveContains(searchText) })
         }
     }
     

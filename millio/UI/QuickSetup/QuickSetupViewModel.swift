@@ -175,7 +175,7 @@ final class QuickSetupViewModel: ObservableObject {
         case removed
     }
 
-    static let recommendedExpenseCategoryIDs: [String] = [
+    nonisolated static let recommendedExpenseCategoryIDs: [String] = [
         ExpenseCategory.groceries.rawValue,
         ExpenseCategory.dining.rawValue,
         ExpenseCategory.transport.rawValue,
@@ -188,7 +188,7 @@ final class QuickSetupViewModel: ObservableObject {
         ExpenseCategory.other.rawValue
     ]
 
-    static let allExpenseCategoryIDs: [String] = ExpenseCategory.allCases.map(\.rawValue)
+    nonisolated static let allExpenseCategoryIDs: [String] = ExpenseCategory.allCases.map(\.rawValue)
 
     @Published var currentStep: QuickSetupStep = .localeAndCurrencies
     @Published var selectedLanguage: Language
@@ -232,7 +232,7 @@ final class QuickSetupViewModel: ObservableObject {
     private let initialBackupPreference: QuickSetupBackupPreference
     private var hasCustomizedBackupPreference = false
 
-    static let maxFavoriteCurrencies = 4
+    nonisolated static let maxFavoriteCurrencies = 4
 
     var presentationLocale: Locale {
         if let selectedLocale = selectedLanguage.locale {

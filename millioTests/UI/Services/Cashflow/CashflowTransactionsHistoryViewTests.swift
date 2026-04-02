@@ -10,6 +10,7 @@ import SwiftData
 import Testing
 @testable import millio
 
+@Suite(.serialized)
 struct CashflowTransactionsHistoryViewTests {
     private static let container: ModelContainer = {
         let schema = Schema([CashflowTransaction.self, Card.self, HistoricalRate.self])
@@ -254,6 +255,58 @@ struct CashflowTransactionsHistoryViewTests {
         ])
     }
 
+    @Test("История изменения актива не протекает через активный язык приложения")
+    func historyAssetChangeLinesHonorRequestedLocaleWhenAppLanguageDiffers() {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+        LanguageManager.shared.setLanguage(.simplifiedChinese)
+
+        let transaction = CashflowTransaction(
+            transactionType: .balanceAdjustment,
+            amount: 440,
+            currency: "USD",
+            transactionDate: Date()
+        )
+        transaction.applyAssetChangeSnapshot(
+            before: CashflowAssetChangeSnapshot(
+                quantity: 10,
+                unitPrice: 100,
+                purchaseUnitPrice: nil,
+                purchaseCost: nil,
+                totalAmount: 1_000
+            ),
+            after: CashflowAssetChangeSnapshot(
+                quantity: 12,
+                unitPrice: 120,
+                purchaseUnitPrice: nil,
+                purchaseCost: nil,
+                totalAmount: 1_440
+            )
+        )
+
+        let russianLines = cashflowHistoryAssetChangeLines(
+            for: transaction,
+            currencyCode: "USD",
+            locale: Locale(identifier: "ru_RU")
+        )
+        let chineseLines = cashflowHistoryAssetChangeLines(
+            for: transaction,
+            currencyCode: "USD",
+            locale: Locale(identifier: "zh-Hans")
+        )
+
+        #expect(russianLines == [
+            "Кол-во: 10 -> 12",
+            "Цена: 100 USD -> 120 USD",
+            "Стоимость: 1 000 USD -> 1 440 USD"
+        ])
+        #expect(chineseLines == [
+            "数量: 10 -> 12",
+            "价格: 100 USD -> 120 USD",
+            "价值: 1 000 USD -> 1 440 USD"
+        ])
+    }
+
     @Test("История берет актуальную операцию после редактирования")
     @MainActor
     func historyResolvesUpdatedTransactionFromViewModelState() throws {
@@ -355,9 +408,10 @@ struct CashflowTransactionsHistoryViewTests {
         let previousLanguage = LanguageManager.shared.currentLanguage
         LanguageManager.shared.setLanguage(.russian)
         defer { LanguageManager.shared.setLanguage(previousLanguage) }
+        let locale = Locale(identifier: "ru_RU")
         let localizedBuyNote = AppLocalization.string(
             "finances.transaction.note.investment_buy",
-            locale: AppLocalization.currentAppLocale
+            locale: locale
         )
 
         let investmentTrade = CashflowTransaction(
@@ -415,12 +469,12 @@ struct CashflowTransactionsHistoryViewTests {
             },
             incomeCategoryResolver: { _ in "" },
             expenseCategoryResolver: { _ in "" },
-            locale: Locale(identifier: "ru_RU")
+            locale: locale
         )
 
         #expect(related.count == 1)
         #expect(context == CashflowHistorySettlementAccountContext(cardID: "card-main", direction: .debit))
-        #expect(cashflowHistoryPrimaryTitle(for: investmentTrade) == "Покупка актива")
+        #expect(cashflowHistoryPrimaryTitle(for: investmentTrade, locale: locale) == "Покупка актива")
         #expect(description?.contains("Счет списания: Black Card") == true)
     }
 

@@ -6,7 +6,7 @@
 import Testing
 @testable import millio
 
-@Suite
+@Suite(.serialized)
 struct StockBulkImportLayoutPolicyTests {
     @Test("Режим скриншотов использует photo-stack и понятный onboarding текст")
     func screenshotPresentationUsesDedicatedContent() {

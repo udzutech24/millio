@@ -87,10 +87,11 @@ struct DailyReminderSettings: Codable, Equatable {
     func notificationBody(
         for kind: DailyReminderKind,
         language: Language = LanguageManager.shared.currentLanguage,
+        fallbackLocale: Locale = .current,
         calendar: Calendar = .current,
         now: Date = Date()
     ) -> String {
-        let locale = LocalizationSupport.resolvedLocale(for: language, fallbackLocale: .current)
+        let locale = LocalizationSupport.resolvedLocale(for: language, fallbackLocale: fallbackLocale)
 
         switch kind {
         case .expense:

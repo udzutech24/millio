@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 import UIKit
 
-private func cashflowEditorText(_ key: String, fallback: String? = nil) -> String {
+private func cashflowEditorCopy(_ key: String, fallback: String? = nil) -> String {
     AppLocalization.string(key, locale: AppLocalization.currentAppLocale, fallback: fallback)
 }
 
@@ -588,10 +588,14 @@ struct CashflowTransactionEditorView: View {
                         .minimumScaleFactor(Self.amountMinimumScaleFactor)
                         .foregroundStyle(AppColors.textPrimary)
                         .focused($isAmountFieldFocused)
+                        // Keep the amount input pinned to a single visual line even on
+                        // newer iOS versions that try to grow the field vertically.
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(height: Self.amountRowHeight, alignment: .center)
                         .frame(minWidth: 170, maxWidth: .infinity, alignment: .trailing)
                         .layoutPriority(1)
                     }
-                    .frame(minHeight: Self.amountRowHeight)
+                    .frame(height: Self.amountRowHeight, alignment: .center)
                     .padding(.horizontal, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -2300,9 +2304,9 @@ struct CashflowCategoryEditorSheet: View {
         var localizedTitle: String {
             switch self {
             case .emoji:
-                return cashflowEditorText("cashflow.editor.icon_tab.emoji")
+                return cashflowEditorCopy("cashflow.editor.icon_tab.emoji")
             case .symbols:
-                return cashflowEditorText("cashflow.editor.icon_tab.symbols")
+                return cashflowEditorCopy("cashflow.editor.icon_tab.symbols")
             }
         }
     }
@@ -2323,8 +2327,8 @@ struct CashflowCategoryEditorSheet: View {
 
     private var title: String {
         switch mode {
-        case .create: return cashflowEditorText("cashflow.editor.new_category")
-        case .edit: return cashflowEditorText("cashflow.editor.edit_category")
+        case .create: return cashflowEditorCopy("cashflow.editor.new_category")
+        case .edit: return cashflowEditorCopy("cashflow.editor.edit_category")
         }
     }
 
@@ -2354,9 +2358,9 @@ struct CashflowCategoryEditorSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        FinancesSectionHeader(title: cashflowEditorText("cashflow.editor.category_name"))
+                        FinancesSectionHeader(title: cashflowEditorCopy("cashflow.editor.category_name"))
                         FinancesGlassCard {
-                            TextField(cashflowEditorText("cashflow.editor.enter_name"), text: $name)
+                            TextField(cashflowEditorCopy("cashflow.editor.enter_name"), text: $name)
                                 .textInputAutocapitalization(.words)
                                 .foregroundStyle(AppColors.textPrimary)
                                 .focused($isNameFieldFocused)
@@ -2364,12 +2368,12 @@ struct CashflowCategoryEditorSheet: View {
                                 .padding(.vertical, 12)
                         }
 
-                        FinancesSectionHeader(title: cashflowEditorText("cashflow.editor.category_icon"))
+                        FinancesSectionHeader(title: cashflowEditorCopy("cashflow.editor.category_icon"))
                         FinancesGlassCard {
                             VStack(spacing: 12) {
                                 if !suggestedIcons.isEmpty {
                                     VStack(alignment: .leading, spacing: 10) {
-                                        Text(cashflowEditorText("cashflow.editor.icon_suggestions", fallback: "Suggested icons"))
+                                        Text(cashflowEditorCopy("cashflow.editor.icon_suggestions", fallback: "Suggested icons"))
                                         .font(.system(size: 13, weight: .semibold))
                                         .foregroundStyle(AppColors.textSecondary)
 
@@ -2403,7 +2407,7 @@ struct CashflowCategoryEditorSheet: View {
                                     }
                                 }
 
-                                Picker(cashflowEditorText("cashflow.editor.icon_type"), selection: $selectedTab) {
+                                Picker(cashflowEditorCopy("cashflow.editor.icon_type"), selection: $selectedTab) {
                                     ForEach(IconPickerTab.allCases) { tab in
                                         Text(tab.localizedTitle).tag(tab)
                                     }
@@ -2415,7 +2419,7 @@ struct CashflowCategoryEditorSheet: View {
                                         Image(systemName: "magnifyingglass")
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundStyle(AppColors.textTertiary)
-                                        TextField(cashflowEditorText("cashflow.editor.icon_search_hint"), text: $iconSearchText)
+                                        TextField(cashflowEditorCopy("cashflow.editor.icon_search_hint"), text: $iconSearchText)
                                             .font(.system(size: 14, weight: .regular))
                                             .foregroundStyle(AppColors.textPrimary)
                                     }

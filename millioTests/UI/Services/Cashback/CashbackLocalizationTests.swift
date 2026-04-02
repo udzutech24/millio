@@ -48,19 +48,21 @@ struct CashbackLocalizationTests {
 
     @Test("Системные категории кешбэка резолвятся через локализованный каталог")
     func cashbackCategoriesAreLocalized() {
-        let checks: [CashbackCategory] = [
-            .allPurchases,
-            .gasStation,
-            .supermarket,
-            .restaurant,
-            .other
-        ]
+        AppLanguageTestSupport.withLanguage(.simplifiedChinese) {
+            let checks: [CashbackCategory] = [
+                .allPurchases,
+                .gasStation,
+                .supermarket,
+                .restaurant,
+                .other
+            ]
 
-        for category in checks {
-            let localized = category.displayName
-            let expected = CashbackCategoryCatalog.metadata(for: category).localizedDisplayName()
-            #expect(localized == expected)
-            #expect(!localized.isEmpty)
+            for category in checks {
+                let localized = category.displayName
+                let expected = CashbackCategoryCatalog.metadata(for: category).localizedDisplayName()
+                #expect(localized == expected)
+                #expect(!localized.isEmpty)
+            }
         }
     }
 

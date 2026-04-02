@@ -15,9 +15,18 @@ private func cashflowHistoryLocalizedText(
     en: String,
     zhHans: String? = nil
 ) -> String {
-    let localized = AppLocalization.string(key, locale: locale)
-    guard localized == key else { return localized }
-    return FinancesL10n.text(locale: locale, ru: ru, en: en, zhHans: zhHans)
+    let fallback = {
+        switch LocalizationSupport.effectiveLanguage(for: locale) {
+        case Language.russian.rawValue:
+            return ru
+        case Language.simplifiedChinese.rawValue:
+            return zhHans ?? en
+        default:
+            return en
+        }
+    }()
+
+    return AppLocalization.string(key, locale: locale, fallback: fallback)
 }
 
 private func cashflowHistoryTr(_ key: String, fallback: String? = nil) -> String {

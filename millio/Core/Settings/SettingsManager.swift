@@ -50,9 +50,13 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     private let defaults: UserDefaults
 
     static var defaultProfileDisplayName: String {
+        defaultProfileDisplayName(for: LanguageManager.shared.currentLanguage)
+    }
+
+    static func defaultProfileDisplayName(for language: Language) -> String {
         AppLocalization.string(
             "profile.default_guest",
-            locale: AppLocalization.currentAppLocale,
+            locale: LocalizationSupport.resolvedLocale(for: language),
             fallback: "Guest"
         )
     }

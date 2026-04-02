@@ -25,9 +25,17 @@ enum AppLocalization {
 
     /// Resolves a localized string for an explicit locale, independent of app-wide language overrides.
     static func string(_ key: String, locale: Locale, fallback: String? = nil, bundle: Bundle = resourceBundle) -> String {
+        // Prefer the source string catalog first. Runtime bundle overrides and
+        // compiled `.lproj` assets can lag behind the requested locale and return
+        // a valid string in the wrong language, which is worse than a miss.
+        if let catalogLocalized = ExplicitStringCatalog.shared.localizedString(for: key, locale: locale) {
+            return catalogLocalized
+        }
+
         // When the caller asks for the active app locale, prefer the runtime
-        // bundle override directly. This keeps hot reload working for string
-        // catalog entries that may not exist as standalone `.lproj` bundles.
+        // bundle override after the source catalog lookup. This keeps live
+        // language switching working for entries that may exist only in the
+        // built bundle while avoiding stale-language leakage.
         if sharesLanguageCandidates(locale, currentAppLocale) {
             let localized = bundle.localizedString(forKey: key, value: fallback, table: nil)
             if localized != key {
@@ -37,10 +45,9 @@ enum AppLocalization {
 
         // Runtime bundle overrides are useful for live language switching, but they
         // break explicit locale lookups because `Bundle.main` always resolves through
-        // the currently selected app language. Walk locale candidates manually, but
-        // keep that walk strict: once we fall through to the app's development
-        // localization here, locale-specific lookups can silently return the wrong
-        // language (for example Chinese for Russian tests).
+        // the currently selected app language. Walk locale candidates manually only
+        // after the source catalog lookup, so standalone bundles remain a fallback
+        // rather than a source of cross-language leakage.
         let candidates = preferredLanguageCandidates(from: locale, includeDevelopmentFallback: false)
         for candidate in candidates {
             guard let localizedBundle = bundle.localizedBundle(forResource: candidate) else {
@@ -63,10 +70,11 @@ enum AppLocalization {
         // Foundation resolver as a final explicit-locale lookup before falling
         // back to the provided default value or key.
         let resolvedExplicitLocale = canonicalExplicitLocale(for: locale)
+        let catalogBundle = freshBundleCopy(for: bundle) ?? bundle
         let catalogLocalized = BundleLanguageOverride.performWithoutOverride {
             String(
                 localized: String.LocalizationValue(key),
-                bundle: bundle,
+                bundle: catalogBundle,
                 locale: resolvedExplicitLocale
             )
         }
@@ -148,6 +156,164 @@ enum AppLocalization {
             return Locale(identifier: "en_US")
         default:
             return locale
+        }
+    }
+
+    private static func freshBundleCopy(for bundle: Bundle) -> Bundle? {
+        Bundle(path: bundle.bundlePath)
+    }
+}
+
+private struct ExplicitStringCatalog {
+    static let shared = ExplicitStringCatalog()
+
+    private let sourceLanguage: String?
+    private let strings: [String: [String: String]]
+
+    init() {
+        for catalogURL in Self.catalogURLs() {
+            do {
+                let data = try Data(contentsOf: catalogURL)
+                let jsonObject = try JSONSerialization.jsonObject(with: data)
+                guard
+                    let root = jsonObject as? [String: Any],
+                    let entries = root["strings"] as? [String: Any]
+                else {
+                    continue
+                }
+
+                self.sourceLanguage = LocalizationSupport.normalizedLanguageCode(from: root["sourceLanguage"] as? String)
+                self.strings = Self.parse(entries)
+                return
+            } catch {
+                continue
+            }
+        }
+
+        self.sourceLanguage = nil
+        self.strings = [:]
+    }
+
+    func localizedString(for key: String, locale: Locale) -> String? {
+        guard let localizations = strings[key] else {
+            return nil
+        }
+
+        let candidates = AppLocalization.preferredLanguageCandidates(
+            from: locale,
+            includeDevelopmentFallback: false
+        )
+
+        for candidate in candidates {
+            if let value = localizedValue(in: localizations, for: candidate) {
+                return value
+            }
+        }
+
+        if let sourceLanguage, let value = localizedValue(in: localizations, for: sourceLanguage) {
+            return value
+        }
+
+        return nil
+    }
+
+    private static func parse(_ entries: [String: Any]) -> [String: [String: String]] {
+        var parsed: [String: [String: String]] = [:]
+
+        for (key, value) in entries {
+            guard
+                let entry = value as? [String: Any],
+                let localizations = entry["localizations"] as? [String: Any]
+            else {
+                continue
+            }
+
+            var localizedValues: [String: String] = [:]
+            for (localeIdentifier, localizationValue) in localizations {
+                guard
+                    let localization = localizationValue as? [String: Any],
+                    let stringUnit = localization["stringUnit"] as? [String: Any],
+                    let stringValue = stringUnit["value"] as? String,
+                    !stringValue.isEmpty
+                else {
+                    continue
+                }
+
+                for candidate in localeCandidates(for: localeIdentifier) {
+                    localizedValues[candidate] = stringValue
+                }
+            }
+
+            if !localizedValues.isEmpty {
+                parsed[key] = localizedValues
+            }
+        }
+
+        return parsed
+    }
+
+    private static func catalogURLs(filePath: String = #filePath) -> [URL] {
+        var urls: [URL] = []
+
+        var directory = URL(fileURLWithPath: filePath).deletingLastPathComponent()
+        let fileManager = FileManager.default
+
+        for _ in 0..<12 {
+            let candidate = directory
+                .appendingPathComponent("millio", isDirectory: true)
+                .appendingPathComponent("Localizable.xcstrings", isDirectory: false)
+            if fileManager.fileExists(atPath: candidate.path) {
+                urls.append(candidate)
+                break
+            }
+
+            let parent = directory.deletingLastPathComponent()
+            if parent.path == directory.path {
+                break
+            }
+            directory = parent
+        }
+
+        if let bundledURL = AppLocalization.resourceBundle.url(forResource: "Localizable", withExtension: "xcstrings") {
+            urls.append(bundledURL)
+        }
+
+        var seen = Set<String>()
+        return urls.filter { url in
+            seen.insert(url.path).inserted
+        }
+    }
+
+    private func localizedValue(in localizations: [String: String], for localeIdentifier: String) -> String? {
+        for candidate in Self.localeCandidates(for: localeIdentifier) {
+            if let value = localizations[candidate], !value.isEmpty {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func localeCandidates(for localeIdentifier: String) -> [String] {
+        var candidates: [String] = []
+        let normalizedIdentifier = localeIdentifier.replacingOccurrences(of: "_", with: "-")
+
+        if !localeIdentifier.isEmpty {
+            candidates.append(localeIdentifier)
+        }
+        if !normalizedIdentifier.isEmpty {
+            candidates.append(normalizedIdentifier)
+        }
+
+        let normalizedLanguage = LocalizationSupport.normalizedLanguageCode(from: normalizedIdentifier)
+        if !normalizedLanguage.isEmpty {
+            candidates.append(normalizedLanguage)
+        }
+
+        var seen = Set<String>()
+        return candidates.filter { candidate in
+            guard !candidate.isEmpty, !seen.contains(candidate) else { return false }
+            seen.insert(candidate)
+            return true
         }
     }
 }

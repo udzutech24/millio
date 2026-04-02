@@ -2,6 +2,7 @@ import Testing
 
 @testable import millio
 
+@Suite(.serialized)
 struct MiniAppNavigationTests {
     @Test("Мини-приложения исключают текущий экран")
     func excludesCurrentRoute() {
@@ -23,11 +24,13 @@ struct MiniAppNavigationTests {
 
     @Test("Мини-приложение кешбэка использует локализационный ключ сервиса")
     func cashbackUsesLocalizedServiceTitle() {
-        let destinations = MiniAppNavigation.destinations(excluding: .courses)
-        let cashback = destinations.first(where: { $0.route == .cashback })
+        AppLanguageTestSupport.withLanguage(.simplifiedChinese) {
+            let destinations = MiniAppNavigation.destinations(excluding: .courses)
+            let cashback = destinations.first(where: { $0.route == .cashback })
 
-        #expect(cashback?.titleKey == MainLocalization.serviceCashback)
-        #expect(cashback?.title == MainLocalization.text(MainLocalization.serviceCashback))
+            #expect(cashback?.titleKey == MainLocalization.serviceCashback)
+            #expect(cashback?.title == MainLocalization.text(MainLocalization.serviceCashback))
+        }
     }
 
     @Test("Мини-приложения используют стабильные акцентные цвета в quick navigation")

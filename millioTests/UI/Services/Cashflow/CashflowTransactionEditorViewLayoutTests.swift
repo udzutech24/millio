@@ -285,4 +285,39 @@ struct CashflowTransactionEditorViewLayoutTests {
         #expect(CashflowTransactionEditorView.amountFontSize(for: "1234567") == CashflowTransactionEditorView.amountCompactFontSize)
         #expect(CashflowTransactionEditorView.amountFontSize(for: "1 234 567.89") == CashflowTransactionEditorView.amountCompactFontSize)
     }
+
+    @Test("Поле суммы остается однострочным и фиксированной высоты")
+    func amountFieldSourceGuards() throws {
+        let source = try String(
+            contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowTransactionEditorView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains(".fixedSize(horizontal: false, vertical: true)"))
+        #expect(source.contains(".frame(height: Self.amountRowHeight, alignment: .center)"))
+    }
+
+    private func sourceURL(_ relativePath: String) throws -> URL {
+        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let fileManager = FileManager.default
+
+        for _ in 0..<12 {
+            let candidate = directory.appendingPathComponent(relativePath)
+            if fileManager.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+
+            let parent = directory.deletingLastPathComponent()
+            if parent.path == directory.path {
+                break
+            }
+            directory = parent
+        }
+
+        throw NSError(
+            domain: "CashflowTransactionEditorViewLayoutTests",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Could not find \(relativePath) from \(#filePath)"]
+        )
+    }
 }

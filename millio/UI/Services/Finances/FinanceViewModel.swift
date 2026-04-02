@@ -2254,21 +2254,15 @@ final class FinanceViewModel: ViewModelProtocol {
 
     private func stockRefreshIssueMessage(for issues: StockRefreshIssues) -> String? {
         guard issues.hasIssues else { return nil }
-        let hasOnlyAuthErrors =
-            !issues.authErrorSymbols.isEmpty &&
-            issues.notFoundSymbols.isEmpty &&
-            issues.priceUnavailableSymbols.isEmpty &&
-            issues.providerErrorSymbols.isEmpty &&
-            issues.networkErrorSymbols.isEmpty &&
-            issues.httpErrorSymbols.isEmpty &&
-            issues.decodingErrorSymbols.isEmpty &&
-            issues.clientErrorSymbols.isEmpty
-
-        if hasOnlyAuthErrors {
+        if !issues.authErrorSymbols.isEmpty {
+            // Auth failures need explicit user-visible treatment even when other
+            // quote issues happened in the same refresh batch.
             return MarketDataErrorPresentation.message(for: .authError)
         }
 
-        return MarketDataErrorPresentation.degradedRefreshMessage()
+        // Partial quote refresh failures are expected during background updates.
+        // We keep the last successful prices and avoid surfacing a global warning toast.
+        return nil
     }
 
     private func appendStockRefreshSymbols(

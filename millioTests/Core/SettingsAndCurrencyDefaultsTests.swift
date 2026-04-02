@@ -212,6 +212,12 @@ struct SettingsAndCurrencyDefaultsTests {
         }
     }
 
+    @Test("SettingsManager resolves default guest display name for explicit language")
+    func testDefaultProfileDisplayNameUsesExplicitLanguage() {
+        #expect(SettingsManager.defaultProfileDisplayName(for: .english) == "Guest")
+        #expect(SettingsManager.defaultProfileDisplayName(for: .russian) == "Гость")
+    }
+
     @Test("AppState loads profile avatar path from SettingsManager on init")
     @MainActor
     func testAppStateLoadsProfileAvatarPathFromSettings() {
@@ -264,44 +270,48 @@ struct SettingsAndCurrencyDefaultsTests {
     @Test("AppState re-localizes default profile name on language change")
     @MainActor
     func testProfileDisplayNameUpdatesOnLanguageChange() {
-        let profileKey = "profileDisplayName"
-        let languageKey = "selectedLanguage"
-        let appleLanguagesKey = "AppleLanguages"
+        AppLanguageTestSupport.withLockedAppLanguage {
+            let profileKey = "profileDisplayName"
+            let languageKey = "selectedLanguage"
+            let appleLanguagesKey = "AppleLanguages"
 
-        let originalProfileName = UserDefaults.standard.string(forKey: profileKey)
-        let originalLanguage = UserDefaults.standard.string(forKey: languageKey)
-        let originalAppleLanguages = UserDefaults.standard.array(forKey: appleLanguagesKey)
+            let originalProfileName = UserDefaults.standard.string(forKey: profileKey)
+            let originalLanguage = UserDefaults.standard.string(forKey: languageKey)
+            let originalAppleLanguages = UserDefaults.standard.array(forKey: appleLanguagesKey)
 
-        defer {
-            if let originalProfileName {
-                UserDefaults.standard.set(originalProfileName, forKey: profileKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: profileKey)
+            defer {
+                if let originalProfileName {
+                    UserDefaults.standard.set(originalProfileName, forKey: profileKey)
+                } else {
+                    UserDefaults.standard.removeObject(forKey: profileKey)
+                }
+                if let originalLanguage {
+                    UserDefaults.standard.set(originalLanguage, forKey: languageKey)
+                } else {
+                    UserDefaults.standard.removeObject(forKey: languageKey)
+                }
+                if let originalAppleLanguages {
+                    UserDefaults.standard.set(originalAppleLanguages, forKey: appleLanguagesKey)
+                } else {
+                    UserDefaults.standard.removeObject(forKey: appleLanguagesKey)
+                }
+                if let originalLanguage, let restored = Language(rawValue: originalLanguage) {
+                    LanguageManager.shared.setLanguage(restored)
+                }
             }
-            if let originalLanguage {
-                UserDefaults.standard.set(originalLanguage, forKey: languageKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: languageKey)
-            }
-            if let originalAppleLanguages {
-                UserDefaults.standard.set(originalAppleLanguages, forKey: appleLanguagesKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: appleLanguagesKey)
-            }
-            if let originalLanguage, let restored = Language(rawValue: originalLanguage) {
-                LanguageManager.shared.setLanguage(restored)
-            }
+
+            UserDefaults.standard.set("Guest", forKey: profileKey)
+            LanguageManager.shared.setLanguage(.english)
+
+            let appState = AppState()
+            #expect(appState.selectedLanguage == .english)
+            #expect(appState.profileDisplayName == "Guest")
+
+            appState.selectedLanguage = .russian
+            #expect(appState.selectedLanguage == .russian)
+            #expect(appState.profileDisplayName == "Гость")
+            #expect(SettingsManager.shared.profileDisplayName == "Гость")
         }
-
-        UserDefaults.standard.set("Guest", forKey: profileKey)
-        LanguageManager.shared.setLanguage(.english)
-
-        let appState = AppState()
-        #expect(appState.profileDisplayName == "Guest")
-
-        appState.selectedLanguage = .russian
-        #expect(appState.profileDisplayName == "Гость")
-        #expect(SettingsManager.shared.profileDisplayName == "Гость")
     }
 
     @Test("AppState refresh token changes on language update")

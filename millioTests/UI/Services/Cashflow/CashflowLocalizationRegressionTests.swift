@@ -15,105 +15,109 @@ struct CashflowLocalizationRegressionTests {
     @Test("Hidden system override keeps category localized after app language switch")
     @MainActor
     func hiddenSystemOverrideUsesCurrentAppLanguage() throws {
-        let previousLanguage = LanguageManager.shared.currentLanguage
-        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+        try AppLanguageTestSupport.withLockedAppLanguage {
+            let previousLanguage = LanguageManager.shared.currentLanguage
+            defer { LanguageManager.shared.setLanguage(previousLanguage) }
 
-        let schema = Schema([
-            CashflowTransaction.self,
-            CashflowCustomCategory.self,
-            CashflowSystemCategoryOverride.self,
-            Card.self,
-            FinanceGroup.self,
-            FinanceAccount.self,
-            HistoricalRate.self
-        ])
-        let container = try ModelContainer(
-            for: schema,
-            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
-        )
-        let context = container.mainContext
+            let schema = Schema([
+                CashflowTransaction.self,
+                CashflowCustomCategory.self,
+                CashflowSystemCategoryOverride.self,
+                Card.self,
+                FinanceGroup.self,
+                FinanceAccount.self,
+                HistoricalRate.self
+            ])
+            let container = try ModelContainer(
+                for: schema,
+                configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+            )
+            let context = container.mainContext
 
-        LanguageManager.shared.setLanguage(.russian)
-        let baseRussianName = ExpenseCategory.groceries.displayName
-        let override = CashflowSystemCategoryOverride(
-            kind: .expense,
-            categoryRaw: ExpenseCategory.groceries.rawValue,
-            name: baseRussianName,
-            icon: ExpenseCategory.groceries.icon,
-            isHidden: true
-        )
-        context.insert(override)
-        try context.save()
+            LanguageManager.shared.setLanguage(.russian)
+            let baseRussianName = ExpenseCategory.groceries.displayName
+            let override = CashflowSystemCategoryOverride(
+                kind: .expense,
+                categoryRaw: ExpenseCategory.groceries.rawValue,
+                name: baseRussianName,
+                icon: ExpenseCategory.groceries.icon,
+                isHidden: true
+            )
+            context.insert(override)
+            try context.save()
 
-        let viewModel = CashflowViewModel(modelContext: context)
+            let viewModel = CashflowViewModel(modelContext: context)
 
-        LanguageManager.shared.setLanguage(.english)
-        let option = viewModel.categoryOption(for: ExpenseCategory.groceries.rawValue, kind: .expense)
+            LanguageManager.shared.setLanguage(.english)
+            let option = viewModel.categoryOption(for: ExpenseCategory.groceries.rawValue, kind: .expense)
 
-        #expect(baseRussianName == "Продукты")
-        #expect(option.displayName == "Groceries")
+            #expect(baseRussianName == "Продукты")
+            #expect(option.displayName == "Groceries")
+        }
     }
 
     @Test("Legacy Russian system override names are treated as system names after language switch")
     @MainActor
     func legacyRussianSystemOverrideNamesAreLocalized() throws {
-        let previousLanguage = LanguageManager.shared.currentLanguage
-        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+        try AppLanguageTestSupport.withLockedAppLanguage {
+            let previousLanguage = LanguageManager.shared.currentLanguage
+            defer { LanguageManager.shared.setLanguage(previousLanguage) }
 
-        let schema = Schema([
-            CashflowTransaction.self,
-            CashflowCustomCategory.self,
-            CashflowSystemCategoryOverride.self,
-            Card.self,
-            FinanceGroup.self,
-            FinanceAccount.self,
-            HistoricalRate.self
-        ])
-        let container = try ModelContainer(
-            for: schema,
-            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
-        )
-        let context = container.mainContext
+            let schema = Schema([
+                CashflowTransaction.self,
+                CashflowCustomCategory.self,
+                CashflowSystemCategoryOverride.self,
+                Card.self,
+                FinanceGroup.self,
+                FinanceAccount.self,
+                HistoricalRate.self
+            ])
+            let container = try ModelContainer(
+                for: schema,
+                configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+            )
+            let context = container.mainContext
 
-        LanguageManager.shared.setLanguage(.russian)
+            LanguageManager.shared.setLanguage(.russian)
 
-        let legacyServiceOverride = CashflowSystemCategoryOverride(
-            kind: .expense,
-            categoryRaw: ExpenseCategory.carService.rawValue,
-            name: "Сервис",
-            icon: ExpenseCategory.carService.icon,
-            isHidden: true
-        )
-        let legacyGroceriesOverride = CashflowSystemCategoryOverride(
-            kind: .expense,
-            categoryRaw: ExpenseCategory.groceries.rawValue,
-            name: "Супермаркеты",
-            icon: ExpenseCategory.groceries.icon,
-            isHidden: true
-        )
-        let legacyUtilitiesOverride = CashflowSystemCategoryOverride(
-            kind: .expense,
-            categoryRaw: ExpenseCategory.utilities.rawValue,
-            name: "ЖКХ и коммунальные",
-            icon: ExpenseCategory.utilities.icon,
-            isHidden: true
-        )
-        context.insert(legacyServiceOverride)
-        context.insert(legacyGroceriesOverride)
-        context.insert(legacyUtilitiesOverride)
-        try context.save()
+            let legacyServiceOverride = CashflowSystemCategoryOverride(
+                kind: .expense,
+                categoryRaw: ExpenseCategory.carService.rawValue,
+                name: "Сервис",
+                icon: ExpenseCategory.carService.icon,
+                isHidden: true
+            )
+            let legacyGroceriesOverride = CashflowSystemCategoryOverride(
+                kind: .expense,
+                categoryRaw: ExpenseCategory.groceries.rawValue,
+                name: "Супермаркеты",
+                icon: ExpenseCategory.groceries.icon,
+                isHidden: true
+            )
+            let legacyUtilitiesOverride = CashflowSystemCategoryOverride(
+                kind: .expense,
+                categoryRaw: ExpenseCategory.utilities.rawValue,
+                name: "ЖКХ и коммунальные",
+                icon: ExpenseCategory.utilities.icon,
+                isHidden: true
+            )
+            context.insert(legacyServiceOverride)
+            context.insert(legacyGroceriesOverride)
+            context.insert(legacyUtilitiesOverride)
+            try context.save()
 
-        let viewModel = CashflowViewModel(modelContext: context)
+            let viewModel = CashflowViewModel(modelContext: context)
 
-        LanguageManager.shared.setLanguage(.english)
+            LanguageManager.shared.setLanguage(.english)
 
-        let groceries = viewModel.categoryOption(for: ExpenseCategory.groceries.rawValue, kind: .expense)
-        let service = viewModel.categoryOption(for: ExpenseCategory.carService.rawValue, kind: .expense)
-        let utilities = viewModel.categoryOption(for: ExpenseCategory.utilities.rawValue, kind: .expense)
+            let groceries = viewModel.categoryOption(for: ExpenseCategory.groceries.rawValue, kind: .expense)
+            let service = viewModel.categoryOption(for: ExpenseCategory.carService.rawValue, kind: .expense)
+            let utilities = viewModel.categoryOption(for: ExpenseCategory.utilities.rawValue, kind: .expense)
 
-        #expect(groceries.displayName == "Groceries")
-        #expect(service.displayName == "Car service")
-        #expect(utilities.displayName == "Utilities")
+            #expect(groceries.displayName == "Groceries")
+            #expect(service.displayName == "Car service")
+            #expect(utilities.displayName == "Utilities")
+        }
     }
 
     @Test("Russian locale contains localized Cashflow labels")
@@ -269,19 +273,25 @@ struct CashflowLocalizationRegressionTests {
         #expect(AppLocalization.string("cashflow.operation.new_income", locale: locale) == "添加收入")
         #expect(AppLocalization.string("cashflow.operation.new_transfer", locale: locale) == "新建转账")
         #expect(AppLocalization.string("cashflow.editor.section.selected_income", locale: locale) == "已选收入")
-        #expect(AppLocalization.string("cashflow.editor.section.main_info", locale: locale) == "详情")
+        #expect(AppLocalization.string("cashflow.editor.section.main_info", locale: locale) == "主要信息")
+        #expect(AppLocalization.string("cashflow.editor.amount", locale: locale) == "金额")
         #expect(AppLocalization.string("cashflow.editor.currency", locale: locale) == "货币")
         #expect(AppLocalization.string("cashflow.editor.account", locale: locale) == "账户")
+        #expect(AppLocalization.string("cashflow.editor.card", locale: locale) == "卡片")
         #expect(AppLocalization.string("cashflow.editor.select_account", locale: locale) == "选择账户")
         #expect(AppLocalization.string("cashflow.editor.select_card", locale: locale) == "选择卡片")
         #expect(AppLocalization.string("cashflow.editor.from_card", locale: locale) == "转出卡")
         #expect(AppLocalization.string("cashflow.editor.to_card", locale: locale) == "转入卡")
         #expect(AppLocalization.string("cashflow.editor.no_available_cards", locale: locale) == "没有可用卡片")
         #expect(AppLocalization.string("cashflow.editor.no_cards_in_currency", locale: locale) == "所选货币下没有可用卡片")
-        #expect(AppLocalization.string("cashflow.editor.add_card_in_finances", locale: locale) == "在 Finances 中添加卡片")
+        #expect(AppLocalization.string("cashflow.editor.add_card_in_finances", locale: locale) == "前往 Finances 添加卡片")
+        #expect(AppLocalization.string("cashflow.editor.available_format", locale: locale) == "可用：%@ %@")
+        #expect(AppLocalization.string("cashflow.editor.insufficient_funds", locale: locale) == "余额不足")
         #expect(AppLocalization.string("cashflow.editor.date", locale: locale) == "日期")
         #expect(AppLocalization.string("cashflow.editor.frequency", locale: locale) == "频率")
         #expect(AppLocalization.string("cashflow.editor.comment", locale: locale) == "备注")
+        #expect(AppLocalization.string("cashflow.editor.affect_balance.subtitle.income", locale: locale) == "如果当前余额已经正确，只需要补录所选期间的收入历史，请关闭此开关")
+        #expect(AppLocalization.string("cashflow.editor.affect_balance.subtitle.expense", locale: locale) == "如果当前余额已经正确，只需要补录所选期间的支出历史，请关闭此开关")
         #expect(AppLocalization.string("cashflow.editor.new_category", locale: locale) == "新建分类")
         #expect(AppLocalization.string("cashflow.editor.edit_category", locale: locale) == "编辑分类")
         #expect(AppLocalization.string("cashflow.editor.category_name", locale: locale) == "名称")

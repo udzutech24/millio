@@ -14,14 +14,14 @@ enum CashbackCardPresentation {
             : card.name
     }
 
-    static func pickerSubtitle(for card: Card) -> String {
+    static func pickerSubtitle(for card: Card, locale: Locale = CashbackL10n.locale) -> String {
         var parts: [String] = []
 
         if card.bank != .other {
-            parts.append(card.bank.displayName)
+            parts.append(card.bank.displayName(for: locale))
         }
 
-        parts.append(card.cardType.displayName)
+        parts.append(card.cardType.displayName(for: locale))
         return parts.joined(separator: " • ")
     }
 
@@ -36,14 +36,14 @@ enum CashbackCardPresentation {
         return parts.joined(separator: " • ")
     }
 
-    static func subtitle(for card: Card) -> String {
+    static func subtitle(for card: Card, locale: Locale = CashbackL10n.locale) -> String {
         var parts: [String] = []
 
         if card.bank != .other {
-            parts.append(card.bank.displayName)
+            parts.append(card.bank.displayName(for: locale))
         }
 
-        parts.append(card.cardType.displayName)
+        parts.append(card.cardType.displayName(for: locale))
 
         let maskedNumber = maskedNumberText(for: card)
         if !maskedNumber.isEmpty {

@@ -7,7 +7,7 @@ import Foundation
 import Testing
 @testable import millio
 
-@Suite
+@Suite(.serialized)
 struct CashbackCardPresentationTests {
     @Test("Подзаголовок карты включает банк, тип и маску номера")
     func testSubtitleIncludesBankTypeAndMaskedNumber() {
@@ -64,6 +64,29 @@ struct CashbackCardPresentationTests {
 
     @Test("Детали picker добавляют маску номера после финансовых данных")
     func testPickerDetailAddsMaskedNumber() {
+        let card = Card(
+            name: "Credit",
+            cardNumber: "9876",
+            bank: .alfa,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 12500,
+            creditLimit: 50000
+        )
+
+        let detail = CashbackCardPresentation.pickerDetail(for: card, locale: Locale(identifier: "ru"))
+
+        #expect(detail.contains("Баланс 12 500 RUB"))
+        #expect(detail.contains("Лимит 50 000 RUB"))
+        #expect(detail.contains("•••• 9876"))
+    }
+
+    @Test("Явная locale для picker detail не протекает через активный язык приложения")
+    func testPickerDetailUsesRequestedLocaleEvenWhenAppLanguageDiffers() {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+        LanguageManager.shared.setLanguage(.simplifiedChinese)
+
         let card = Card(
             name: "Credit",
             cardNumber: "9876",

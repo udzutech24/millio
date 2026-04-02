@@ -30,7 +30,7 @@ final class AppState {
             }
             languageRefreshToken = UUID()
             if SettingsManager.isDefaultProfileDisplayName(profileDisplayName) {
-                let localizedDefault = SettingsManager.defaultProfileDisplayName
+                let localizedDefault = SettingsManager.defaultProfileDisplayName(for: selectedLanguage)
                 if profileDisplayName != localizedDefault {
                     profileDisplayName = localizedDefault
                     SettingsManager.shared.profileDisplayName = localizedDefault

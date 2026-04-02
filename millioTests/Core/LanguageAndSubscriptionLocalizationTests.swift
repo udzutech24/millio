@@ -2,36 +2,45 @@ import Foundation
 import Testing
 @testable import millio
 
-@Suite("Language and subscription localization")
+@Suite("Language and subscription localization", .serialized)
 struct LanguageAndSubscriptionLocalizationTests {
-    @Test("Language display names are localized for English locale")
+    @Test("Language display names use self names with localized system option")
     func testLanguageDisplayNamesInEnglish() {
         let locale = Locale(identifier: "en")
 
         #expect(Language.system.displayName(for: locale) == "System")
         #expect(Language.english.displayName(for: locale) == "English")
-        #expect(Language.russian.displayName(for: locale) == "Russian")
-        #expect(Language.simplifiedChinese.displayName(for: locale) == "Simplified Chinese")
+        #expect(Language.russian.displayName(for: locale) == "Русский")
+        #expect(Language.simplifiedChinese.displayName(for: locale) == "中文")
     }
 
-    @Test("Language display names are localized for Russian locale")
+    @Test("Language display names stay in native scripts for Russian locale")
     func testLanguageDisplayNamesInRussian() {
         let locale = Locale(identifier: "ru")
 
         #expect(Language.system.displayName(for: locale) == "Системный")
-        #expect(Language.english.displayName(for: locale) == "Английский")
+        #expect(Language.english.displayName(for: locale) == "English")
         #expect(Language.russian.displayName(for: locale) == "Русский")
-        #expect(Language.simplifiedChinese.displayName(for: locale) == "Китайский (упрощенный)")
+        #expect(Language.simplifiedChinese.displayName(for: locale) == "中文")
     }
 
-    @Test("Language display names are localized for Simplified Chinese locale")
+    @Test("Language display names stay in native scripts for Simplified Chinese locale")
     func testLanguageDisplayNamesInSimplifiedChinese() {
         let locale = Locale(identifier: "zh-Hans")
 
         #expect(Language.system.displayName(for: locale) == "跟随系统")
-        #expect(Language.english.displayName(for: locale) == "英语")
-        #expect(Language.russian.displayName(for: locale) == "俄语")
-        #expect(Language.simplifiedChinese.displayName(for: locale) == "简体中文")
+        #expect(Language.english.displayName(for: locale) == "English")
+        #expect(Language.russian.displayName(for: locale) == "Русский")
+        #expect(Language.simplifiedChinese.displayName(for: locale) == "中文")
+    }
+
+    @Test("Language search aliases keep translated queries working")
+    func testLanguageSearchAliases() {
+        let locale = Locale(identifier: "ru")
+
+        #expect(Language.english.searchableNames(for: locale).contains("Английский"))
+        #expect(Language.simplifiedChinese.searchableNames(for: locale).contains("Китайский (упрощенный)"))
+        #expect(Language.simplifiedChinese.searchableNames(for: locale).contains("中文"))
     }
 
     @Test("Subscription errors are localized for release-ready locales")
@@ -56,6 +65,26 @@ struct LanguageAndSubscriptionLocalizationTests {
         #expect(AppLocalization.string("cashflow.chart.title", locale: Locale(identifier: "ru_RU")) == "Доходы и расходы")
         #expect(AppLocalization.string("Salary", locale: Locale(identifier: "en_US")) == "Salary")
         #expect(AppLocalization.string("Salary", locale: Locale(identifier: "ru_RU")) == "Зарплата")
+    }
+
+    @Test("Explicit locale lookup stays pinned to the requested language for profile strings")
+    func testProfileStringsDoNotLeakAcrossLanguages() {
+        #expect(AppLocalization.string("profile.launch_splash.mode.once_per_day", locale: Locale(identifier: "en")) == "Once per day")
+        #expect(AppLocalization.string("profile.launch_splash.mode.off", locale: Locale(identifier: "zh-Hans")) == "关闭")
+        #expect(AppLocalization.string("profile.rate_app.block.subtitle", locale: Locale(identifier: "en")) == "A short review helps us make Millio better")
+        #expect(AppLocalization.string("profile.rate_app.summary.idle", locale: Locale(identifier: "zh-Hans")) == "请选择评分")
+        #expect(AppLocalization.string("profile.rate_app.dialog.rate.title", locale: Locale(identifier: "en")) == "Thank you!")
+    }
+
+    @Test("Current app locale resolves from the catalog immediately after language switch")
+    func testCurrentAppLocaleDoesNotLeakPreviousLanguage() {
+        AppLanguageTestSupport.withLanguage(.simplifiedChinese) {
+            #expect(AppLocalization.string("cashflow.budget.setup.title.expense", locale: AppLocalization.currentAppLocale) == "预算限额")
+        }
+
+        AppLanguageTestSupport.withLanguage(.russian) {
+            #expect(AppLocalization.string("cashflow.budget.setup.title.expense", locale: AppLocalization.currentAppLocale) == "Лимит бюджета")
+        }
     }
 
     @Test("Subscription yearly savings badge is localized for release-ready locales")

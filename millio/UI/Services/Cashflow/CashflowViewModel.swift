@@ -462,8 +462,10 @@ final class CashflowViewModel: ViewModelProtocol {
     private let budgetAutoRepeatPrefs = BudgetAutoRepeatPrefs()
     
     private var eventSubscriptionID: UUID?
+    private var restoreReloadTask: Task<Void, Never>?
     private var isRecurringGenerationInProgress: Bool = false
     private var isDueAutoApplyInProgress: Bool = false
+    private var chartUpdateRevision: Int = 0
     private let dueAutoApplyCheckpointKey = "cashflow_due_auto_apply_checkpoint_v1"
     
     init(
@@ -499,6 +501,7 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     deinit {
+        restoreReloadTask?.cancel()
         if let id = eventSubscriptionID {
             Task { @MainActor in
                 EventBus.shared.unsubscribe(id)
@@ -837,6 +840,21 @@ final class CashflowViewModel: ViewModelProtocol {
         state.systemCategoryOverrides = (try? modelContext.fetch(descriptor)) ?? []
     }
 
+    private func reloadAfterRestoreCompleted() {
+        restoreReloadTask?.cancel()
+        // Decouple restore refresh from synchronous EventBus delivery to avoid
+        // doing a full SwiftData reload inline on the publisher's QoS.
+        restoreReloadTask = Task(priority: .userInitiated) { @MainActor [weak self] in
+            guard let self, !Task.isCancelled else { return }
+            self.loadTransactions()
+            self.loadCards()
+            self.loadInvestments()
+            self.loadLinkedInvestments()
+            self.loadCustomCategories()
+            self.loadSystemCategoryOverrides()
+        }
+    }
+
     private func subscribeToFinanceEvents() {
         eventSubscriptionID = EventBus.shared.subscribe { [weak self] event in
             guard let self else { return }
@@ -849,12 +867,7 @@ final class CashflowViewModel: ViewModelProtocol {
             case FinanceEvent.transactionsUpdated:
                 self.loadTransactions()
             case BackupEvent.restoreCompleted:
-                self.loadTransactions()
-                self.loadCards()
-                self.loadInvestments()
-                self.loadLinkedInvestments()
-                self.loadCustomCategories()
-                self.loadSystemCategoryOverrides()
+                self.reloadAfterRestoreCompleted()
             default:
                 break
             }
@@ -875,6 +888,15 @@ final class CashflowViewModel: ViewModelProtocol {
     
     private func applyFilters() {
         state.filteredTransactions = state.transactions
+    }
+
+    private func nextChartUpdateRevision() -> Int {
+        chartUpdateRevision += 1
+        return chartUpdateRevision
+    }
+
+    private func isCurrentChartUpdateRevision(_ revision: Int) -> Bool {
+        revision == chartUpdateRevision && !Task.isCancelled
     }
 
     // MARK: - History
@@ -1082,13 +1104,18 @@ final class CashflowViewModel: ViewModelProtocol {
     private func updateChartData() {
         state.currencyConversionWarning = nil
         state.currencyConversionWarningDate = nil
+        let revision = nextChartUpdateRevision()
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.updateChartDataAsync()
+            guard self.isCurrentChartUpdateRevision(revision) else { return }
+            await self.updateChartDataAsync(expectedRevision: revision)
         }
     }
     
-    private func updateChartDataAsync() async {
+    private func updateChartDataAsync(expectedRevision: Int? = nil) async {
+        let revision = expectedRevision ?? nextChartUpdateRevision()
+        guard isCurrentChartUpdateRevision(revision) else { return }
+
         loadBudgetPlanForCurrentPeriod()
         let (startDate, endDate) = getDateRange()
         let calendar = Calendar.current
@@ -1160,7 +1187,8 @@ final class CashflowViewModel: ViewModelProtocol {
                 break
             }
         }
-        
+
+        guard isCurrentChartUpdateRevision(revision) else { return }
         state.totalIncome = totalIncome
         state.totalExpense = totalExpense
         state.periodBalance = totalIncome - totalExpense
@@ -1204,6 +1232,7 @@ final class CashflowViewModel: ViewModelProtocol {
             guard let nextDay = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
             cursor = nextDay
         }
+        guard isCurrentChartUpdateRevision(revision) else { return }
         state.chartPoints = points
         state.convertedTransactions = convertedTransactions.sorted { $0.date < $1.date }
 
@@ -1213,7 +1242,7 @@ final class CashflowViewModel: ViewModelProtocol {
             second: 59,
             of: endDay
         ) ?? endDay
-        await updateAssetsBreakdown(startDate: startDay, endDate: snapshotEndDate)
+        await updateAssetsBreakdown(startDate: startDay, endDate: snapshotEndDate, expectedRevision: revision)
     }
     
     func currentDateRange() -> (Date, Date) {
@@ -2680,7 +2709,10 @@ final class CashflowViewModel: ViewModelProtocol {
         state.chartPeriod = .specificMonth
     }
 
-    private func updateAssetsBreakdown(startDate: Date, endDate: Date) async {
+    private func updateAssetsBreakdown(startDate: Date, endDate: Date, expectedRevision: Int? = nil) async {
+        let revision = expectedRevision ?? chartUpdateRevision
+        guard isCurrentChartUpdateRevision(revision) else { return }
+
         let snapshot: (start: Double, end: Double)?
         if let assetsSnapshotProvider {
             snapshot = await assetsSnapshotProvider(startDate, endDate, state.displayCurrency)
@@ -2688,6 +2720,7 @@ final class CashflowViewModel: ViewModelProtocol {
             snapshot = await resolveAssetsSnapshotFromFinance(startDate: startDate, endDate: endDate)
         }
 
+        guard isCurrentChartUpdateRevision(revision) else { return }
         let startAssets = snapshot?.start ?? 0.0
         let endAssets = snapshot?.end ?? 0.0
         let periodTotalChange = endAssets - startAssets

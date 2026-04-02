@@ -15,23 +15,30 @@ protocol LanguageManagerProtocol {
 
 final class LanguageManager: LanguageManagerProtocol {
     static let shared = LanguageManager()
+    private static let languageLock = NSRecursiveLock()
     
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "LanguageManager")
     private let userDefaultsKey = "selectedLanguage"
-    
-    private(set) var currentLanguage: Language {
+
+    private var storedCurrentLanguage: Language {
         didSet {
-            logger.info("Language changed to: \(self.currentLanguage.rawValue)")
+            logger.info("Language changed to: \(self.storedCurrentLanguage.rawValue)")
         }
+    }
+
+    var currentLanguage: Language {
+        Self.languageLock.lock()
+        defer { Self.languageLock.unlock() }
+        return storedCurrentLanguage
     }
 
     private init() {
         if let saved = UserDefaults.standard.string(forKey: userDefaultsKey),
            let language = Language(rawValue: saved) {
-            self.currentLanguage = language
+            self.storedCurrentLanguage = language
         } else {
             let fallback = Self.defaultLanguage(forPreferredLanguage: Locale.preferredLanguages.first)
-            self.currentLanguage = fallback
+            self.storedCurrentLanguage = fallback
             UserDefaults.standard.set(fallback.rawValue, forKey: userDefaultsKey)
 
             if let locale = fallback.locale {
@@ -42,11 +49,14 @@ final class LanguageManager: LanguageManagerProtocol {
             UserDefaults.standard.synchronize()
         }
 
-        BundleLanguageOverride.apply(language: currentLanguage)
+        BundleLanguageOverride.apply(language: storedCurrentLanguage)
     }
     
     func setLanguage(_ language: Language) {
-        currentLanguage = language
+        Self.languageLock.lock()
+        defer { Self.languageLock.unlock() }
+
+        storedCurrentLanguage = language
         UserDefaults.standard.set(language.rawValue, forKey: userDefaultsKey)
         BundleLanguageOverride.apply(language: language)
         
@@ -59,6 +69,12 @@ final class LanguageManager: LanguageManagerProtocol {
             UserDefaults.standard.removeObject(forKey: "AppleLanguages")
             UserDefaults.standard.synchronize()
         }
+    }
+
+    static func withLockedLanguageMutation<T>(_ body: () throws -> T) rethrows -> T {
+        languageLock.lock()
+        defer { languageLock.unlock() }
+        return try body()
     }
 
     static func defaultLanguage(forPreferredLanguage preferredLanguage: String?) -> Language {

@@ -65,6 +65,7 @@ struct LocalizationRolloutTests {
             settings.notificationBody(
                 for: .custom,
                 language: .system,
+                fallbackLocale: Locale(identifier: "fr_FR"),
                 calendar: Calendar(identifier: .gregorian),
                 now: Date(timeIntervalSince1970: 0)
             ) == "Open millio and update your data"

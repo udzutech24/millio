@@ -10796,7 +10796,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在 Finances 中添加卡片"
+            "value" : "前往 Finances 添加卡片"
           }
         }
       }
@@ -10814,6 +10814,12 @@
             "state" : "translated",
             "value" : "Выключи, если текущий остаток уже верный и нужно только дозанести траты за выбранный период в историю"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果当前余额已经正确，只需要补录所选期间的支出历史，请关闭此开关"
+          }
         }
       }
     },
@@ -10829,6 +10835,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Выключи, если текущий остаток уже верный и нужно только дозанести доходы за выбранный период в историю"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果当前余额已经正确，只需要补录所选期间的收入历史，请关闭此开关"
           }
         }
       }
@@ -10846,6 +10858,12 @@
             "state" : "translated",
             "value" : "Сумма"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "金额"
+          }
         }
       }
     },
@@ -10862,6 +10880,12 @@
             "state" : "translated",
             "value" : "Доступно: %@ %@"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可用：%@ %@"
+          }
         }
       }
     },
@@ -10877,6 +10901,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Карта"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卡片"
           }
         }
       }
@@ -11344,6 +11374,12 @@
             "state" : "translated",
             "value" : "Недостаточно средств"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "余额不足"
+          }
         }
       }
     },
@@ -11548,7 +11584,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "详情"
+            "value" : "主要信息"
           }
         }
       }

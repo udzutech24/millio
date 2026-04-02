@@ -417,18 +417,16 @@ struct QuickSetupView: View {
 
             HStack(spacing: 8) {
                 quickSetupTag(
-                    quickSetupFormat(
-                        "quick_setup.badge.primary_currency_format",
-                        "%@",
-                        viewModel.primaryCurrencyCode
+                    QuickSetupLocalization.primaryCurrencyBadge(
+                        viewModel.primaryCurrencyCode,
+                        locale: quickSetupLocale
                     )
                 )
                 quickSetupTag(
-                    quickSetupFormat(
-                        "quick_setup.badge.favorites_count_format",
-                        "%lld/%lld",
-                        viewModel.favoriteCurrencyCodes.count,
-                        QuickSetupViewModel.maxFavoriteCurrencies
+                    QuickSetupLocalization.favoritesCountBadge(
+                        selectedCount: viewModel.favoriteCurrencyCodes.count,
+                        maxCount: QuickSetupViewModel.maxFavoriteCurrencies,
+                        locale: quickSetupLocale
                     )
                 )
             }
@@ -996,11 +994,10 @@ struct QuickSetupView: View {
     }
 
     private var stepProgressText: String {
-        quickSetupFormat(
-            "quick_setup.step_progress_format",
-            "Step %1$lld of %2$lld",
-            viewModel.currentStep.rawValue + 1,
-            QuickSetupStep.allCases.count
+        QuickSetupLocalization.stepProgress(
+            current: viewModel.currentStep.rawValue + 1,
+            total: QuickSetupStep.allCases.count,
+            locale: quickSetupLocale
         )
     }
 
@@ -1034,18 +1031,16 @@ struct QuickSetupView: View {
     }
 
     private var selectedExpenseCategoriesText: String {
-        quickSetupFormat(
-            "quick_setup.selected_categories_count_format",
-            "Selected: %lld",
-            viewModel.selectedExpenseCategoryIDs.count
+        QuickSetupLocalization.selectedCategoriesCount(
+            viewModel.selectedExpenseCategoryIDs.count,
+            locale: quickSetupLocale
         )
     }
 
     private var addedProductsText: String {
-        quickSetupFormat(
-            "quick_setup.added_products_count_format",
-            "Added: %lld",
-            viewModel.products.count
+        QuickSetupLocalization.addedProductsCount(
+            viewModel.products.count,
+            locale: quickSetupLocale
         )
     }
 

@@ -71,13 +71,13 @@ actor MockMarketDataClient: MarketDataClientProtocol {
     func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary? {
         let key = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         latestPriceRequests.append(key)
-        if let error = errorsBySymbol[key] {
+        if let error = matchingValue(in: errorsBySymbol, for: key) {
             throw error
         }
-        if let quote = quotesBySymbol[key] {
+        if let quote = matchingValue(in: quotesBySymbol, for: key) {
             return quote
         }
-        guard let price = pricesBySymbol[key] ?? nil else {
+        guard let price = matchingValue(in: pricesBySymbol, for: key) ?? nil else {
             return nil
         }
         let formatter = ISO8601DateFormatter()
@@ -118,12 +118,12 @@ actor MockMarketDataClient: MarketDataClientProtocol {
         for s in symbols {
             let key = s.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
             latestPriceRequests.append(key)
-            if let error = errorsBySymbol[key] {
+            if let error = matchingValue(in: errorsBySymbol, for: key) {
                 throw error
             }
-            if let quote = quotesBySymbol[key] {
+            if let quote = matchingValue(in: quotesBySymbol, for: key) {
                 result.append(quote ?? AssetSummary(symbol: key, canonicalSymbol: key, providerSymbol: key, name: nil, exchange: nil, micCode: nil, currency: nil, price: nil, previousClose: nil, change: nil, percentChange: nil, isMarketOpen: nil, resolutionStatus: .notFound, updatedAt: "", isStale: false))
-            } else if let price = pricesBySymbol[key] ?? nil {
+            } else if let price = matchingValue(in: pricesBySymbol, for: key) ?? nil {
                 let formatter = ISO8601DateFormatter()
                 formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
                 result.append(AssetSummary(symbol: key, canonicalSymbol: key, providerSymbol: key, name: nil, exchange: nil, micCode: nil, currency: "USD", price: price, previousClose: nil, change: nil, percentChange: nil, isMarketOpen: nil, resolutionStatus: .fresh, updatedAt: formatter.string(from: Date()), isStale: false))
@@ -132,6 +132,27 @@ actor MockMarketDataClient: MarketDataClientProtocol {
             }
         }
         return result
+    }
+
+    private func matchingValue<Value>(in values: [String: Value], for key: String) -> Value? {
+        for candidate in aliasCandidates(for: key) {
+            if let value = values[candidate] {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private func aliasCandidates(for key: String) -> [String] {
+        let canonical = MarketInstrumentIdentity.canonicalQuoteLookupKey(symbol: key, exchange: nil)
+        let fallbacks = MarketInstrumentIdentity.fallbackQuoteLookupKeys(symbol: key, exchange: nil)
+        var seen: Set<String> = []
+        return ([key, canonical] + fallbacks)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+            .filter { candidate in
+                guard !candidate.isEmpty else { return false }
+                return seen.insert(candidate).inserted
+            }
     }
 }
 
@@ -1564,13 +1585,8 @@ struct FinanceViewModelTests {
 
         await viewModel.refreshStockPrices()
 
-        #expect(viewModel.state.showRefreshIssue)
-        #expect(
-            viewModel.state.refreshIssueMessage == MarketDataErrorPresentation.degradedRefreshMessage(locale: .current)
-        )
-        #expect(
-            viewModel.state.refreshIssueMessage?.contains("TSLA") == false
-        )
+        #expect(viewModel.state.showRefreshIssue == false)
+        #expect(viewModel.state.refreshIssueMessage == nil)
     }
 
     @Test("Обновление акций использует один request symbol для market identity")
@@ -1716,7 +1732,7 @@ struct FinanceViewModelTests {
         #expect(viewModel.state.refreshIssueMessage == nil)
     }
 
-    @Test("Provider error показывает мягкое human сообщение без ticker dump")
+    @Test("Provider error не показывает глобальный toast при частичном обновлении")
     func testRefreshStockPricesSoftensProviderErrors() async throws {
         let modelContext = try createTestModelContext()
 
@@ -1755,11 +1771,8 @@ struct FinanceViewModelTests {
 
         await viewModel.refreshStockPrices()
 
-        let message = viewModel.state.refreshIssueMessage ?? ""
-
-        #expect(viewModel.state.showRefreshIssue)
-        #expect(message == MarketDataErrorPresentation.degradedRefreshMessage(locale: .current))
-        #expect(message.contains("PALL") == false)
+        #expect(viewModel.state.showRefreshIssue == false)
+        #expect(viewModel.state.refreshIssueMessage == nil)
     }
 
     @Test("Ошибки авторизации обновления акций показывают human-safe сообщение без ticker dump")
@@ -1797,8 +1810,8 @@ struct FinanceViewModelTests {
 
         let message = viewModel.state.refreshIssueMessage ?? ""
         let supportedMessages = Set([
-            MarketDataErrorPresentation.message(for: .authError, locale: .current),
-            MarketDataErrorPresentation.degradedRefreshMessage(locale: .current)
+            MarketDataErrorPresentation.message(for: .authError),
+            MarketDataErrorPresentation.degradedRefreshMessage()
         ])
 
         #expect(viewModel.state.showRefreshIssue)
@@ -1806,7 +1819,7 @@ struct FinanceViewModelTests {
         #expect(message.contains("QQQ") == false)
     }
 
-    @Test("Котировка без цены показывает мягкое degraded сообщение")
+    @Test("Котировка без цены не показывает глобальный toast")
     func testRefreshStockPricesSoftensPriceUnavailable() async throws {
         let modelContext = try createTestModelContext()
 
@@ -1845,10 +1858,8 @@ struct FinanceViewModelTests {
 
         await viewModel.refreshStockPrices()
 
-        let message = viewModel.state.refreshIssueMessage ?? ""
-
-        #expect(viewModel.state.showRefreshIssue)
-        #expect(message == MarketDataErrorPresentation.degradedRefreshMessage(locale: .current))
+        #expect(viewModel.state.showRefreshIssue == false)
+        #expect(viewModel.state.refreshIssueMessage == nil)
     }
 
     @Test("Повторный ручной refresh не запускает повторный quote request во время cooldown")

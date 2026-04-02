@@ -107,6 +107,62 @@ struct QuickSetupLocalizationTests {
         )
     }
 
+    @Test("Quick setup formatter keeps progress and badges stable for Russian locale")
+    func quickSetupFormatterStaysStableForRussianLocale() {
+        let russian = Locale(identifier: "ru")
+
+        #expect(
+            QuickSetupLocalization.stepProgress(
+                current: 1,
+                total: QuickSetupStep.allCases.count,
+                locale: russian
+            ) == "Шаг 1 из 4"
+        )
+        #expect(
+            QuickSetupLocalization.primaryCurrencyBadge(
+                "RUB",
+                locale: russian
+            ) == "Основная: RUB"
+        )
+        #expect(
+            QuickSetupLocalization.favoritesCountBadge(
+                selectedCount: 3,
+                maxCount: QuickSetupViewModel.maxFavoriteCurrencies,
+                locale: russian
+            ) == "Избранных: 3/4"
+        )
+    }
+
+    @Test("Quick setup formatter keeps forwarded variadic arguments stable for progress and badges")
+    func quickSetupFormatArgumentsStayStableForProgressAndBadges() {
+        let russian = Locale(identifier: "ru")
+
+        #expect(
+            QuickSetupLocalization.formatArguments(
+                "quick_setup.step_progress_format",
+                locale: russian,
+                fallback: "Step %1$lld of %2$lld",
+                arguments: [1, 4]
+            ) == "Шаг 1 из 4"
+        )
+        #expect(
+            QuickSetupLocalization.formatArguments(
+                "quick_setup.badge.primary_currency_format",
+                locale: russian,
+                fallback: "%@",
+                arguments: ["RUB"]
+            ) == "Основная: RUB"
+        )
+        #expect(
+            QuickSetupLocalization.formatArguments(
+                "quick_setup.badge.favorites_count_format",
+                locale: russian,
+                fallback: "%1$lld/%2$lld",
+                arguments: [3, QuickSetupViewModel.maxFavoriteCurrencies]
+            ) == "Избранных: 3/4"
+        )
+    }
+
     @Test("Quick setup dependent finance keys are localized for release languages")
     func quickSetupDependentFinanceKeysExistForThreeLanguages() throws {
         let strings = try loadStrings()

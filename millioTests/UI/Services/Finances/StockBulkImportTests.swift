@@ -588,7 +588,7 @@ struct StockBulkImportTests {
         #expect(viewModel.marketDataWarning?.contains("SPY") == false)
         #expect(
             viewModel.marketDataWarning?.contains(
-                MarketDataErrorPresentation.listLabel(for: .networkError, locale: .current)
+                MarketDataErrorPresentation.listLabel(for: .networkError)
             ) == true
         )
     }
@@ -694,12 +694,12 @@ struct StockBulkImportTests {
         #expect(viewModel.marketDataWarning?.contains("SIVR") == true)
         #expect(
             viewModel.marketDataWarning?.contains(
-                MarketDataErrorPresentation.listLabel(for: .providerError, locale: .current)
+                MarketDataErrorPresentation.listLabel(for: .providerError)
             ) == true
         )
         #expect(
             viewModel.marketDataWarning?.contains(
-                MarketDataErrorPresentation.listLabel(for: .priceUnavailable, locale: .current)
+                MarketDataErrorPresentation.listLabel(for: .priceUnavailable)
             ) == true
         )
     }
