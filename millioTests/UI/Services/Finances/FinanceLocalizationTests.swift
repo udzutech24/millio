@@ -105,8 +105,10 @@ struct FinanceLocalizationTests {
         let overviewCardView = try String(contentsOf: sourceURL("millio/UI/Services/Finances/Components/FinanceOverviewCardView.swift"), encoding: .utf8)
         let marketDataPresentation = try String(contentsOf: sourceURL("millio/UI/Services/Investments/MarketData/MarketDataErrorPresentation.swift"), encoding: .utf8)
         let stockBulkImportSheet = try String(contentsOf: sourceURL("millio/UI/Services/Finances/Import/StockBulkImportSheet.swift"), encoding: .utf8)
+        let financesSheets = try String(contentsOf: sourceURL("millio/UI/Services/Finances/Sheets/FinancesSheets.swift"), encoding: .utf8)
 
         #expect(!financesView.contains("Text(\"finances."))
+        #expect(!financesView.contains("String(localized:"))
         #expect(!rowsView.contains("Text(\"finances."))
         #expect(!dynamicsView.contains("Locale.current"))
         #expect(!groupEditorView.contains("Locale.current"))
@@ -116,6 +118,8 @@ struct FinanceLocalizationTests {
         #expect(!marketDataPresentation.contains("FinancesL10n.text("))
         #expect(!marketDataPresentation.contains("Locale.current"))
         #expect(!stockBulkImportSheet.contains("locale: .current"))
+        #expect(!stockBulkImportSheet.contains("String(localized: \"finances.mass_import."))
+        #expect(!financesSheets.contains("String(localized: \"finances.savings_goal."))
     }
 
     @Test("Overview и market-data copy локализованы для ru en zh-Hans")

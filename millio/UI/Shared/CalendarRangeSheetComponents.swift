@@ -20,6 +20,7 @@ struct CalendarRangePickerPanel: View {
     var highlightsSingleDaySelection: Bool = true
     var initialActiveEndpoint: CalendarRangeSelectionEndpoint = CalendarRangePickerDefaults.initialEndpoint
     var quickPresets: [CalendarRangeQuickPreset] = CalendarRangeQuickPreset.allCases
+    @Environment(\.locale) private var locale
     @State private var activeEndpoint: CalendarRangeSelectionEndpoint = CalendarRangePickerDefaults.initialEndpoint
 
     var body: some View {
@@ -42,13 +43,13 @@ struct CalendarRangePickerPanel: View {
 
             HStack(spacing: 12) {
                 endpointCard(
-                    title: CalendarRangePickerCopy.startDateLabel(),
+                    title: CalendarRangePickerCopy.startDateLabel(locale: locale),
                     date: startDate,
                     endpoint: .start
                 )
 
                 endpointCard(
-                    title: CalendarRangePickerCopy.endDateLabel(),
+                    title: CalendarRangePickerCopy.endDateLabel(locale: locale),
                     date: endDate,
                     endpoint: .end
                 )
@@ -90,7 +91,7 @@ struct CalendarRangePickerPanel: View {
                         endDate = range.end
                         activeEndpoint = .end
                     } label: {
-                        Text(preset.title())
+                        Text(preset.title(locale: locale))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                             .padding(.horizontal, 16)
@@ -126,7 +127,7 @@ struct CalendarRangePickerPanel: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
 
-                Text(endpointDateFormatter.string(from: date))
+                Text(CalendarRangeFormatting.endpointDate(date, locale: locale))
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(1)
@@ -158,13 +159,6 @@ struct CalendarRangePickerPanel: View {
             && calendar.isDate(calendar.startOfDay(for: endDate), inSameDayAs: range.end)
     }
 }
-
-private let endpointDateFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.locale = .autoupdatingCurrent
-    formatter.setLocalizedDateFormatFromTemplate("d MMMM")
-    return formatter
-}()
 
 struct CalendarRangeSheetActionBar: View {
     let secondaryTitle: String

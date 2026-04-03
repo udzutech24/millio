@@ -181,6 +181,7 @@ private struct FinanceDynamicsContentView: View {
     var initialAccount: FinanceAccount? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @Environment(\.modelContext) private var modelContext
     @State private var collapseProgress: CGFloat = 0
     @State private var lastCollapseProgress: CGFloat = 0
@@ -2642,7 +2643,7 @@ private struct FinanceDynamicsContentView: View {
                 GradientBackground()
 
                 CalendarRangePickerPanel(
-                    title: CalendarRangePickerCopy.sheetTitle(),
+                    title: CalendarRangePickerCopy.sheetTitle(locale: locale),
                     subtitle: String(localized: "finances.dynamics.custom_period.subtitle"),
                     startDate: $draftStartDate,
                     endDate: $draftEndDate,

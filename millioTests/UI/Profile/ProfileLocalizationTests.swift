@@ -195,6 +195,27 @@ struct ProfileLocalizationTests {
         #expect(localizedString("common.cancel", languageCode: "zh-Hans") == "取消")
     }
 
+    @Test("Profile auth helper follows the current app language at runtime")
+    func testProfileAuthHelperUsesCurrentAppLanguage() throws {
+        AppLanguageTestSupport.withLanguage(.english) {
+            #expect(ProfileAuthL10n.guestTitle() == "Guest Mode")
+            #expect(ProfileAuthL10n.guestSubtitle() == "Use Millio now and connect your Apple Account later.")
+            #expect(ProfileAuthL10n.exitGuestTitle() == "Leave Guest Mode")
+        }
+
+        AppLanguageTestSupport.withLanguage(.russian) {
+            #expect(ProfileAuthL10n.guestTitle() == "Гостевой режим")
+            #expect(ProfileAuthL10n.guestSubtitle() == "Используйте Millio сейчас и подключите Apple ID позже.")
+            #expect(ProfileAuthL10n.exitGuestTitle() == "Выйти из гостевого режима")
+        }
+
+        AppLanguageTestSupport.withLanguage(.simplifiedChinese) {
+            #expect(ProfileAuthL10n.guestTitle() == "访客模式")
+            #expect(ProfileAuthL10n.guestSubtitle() == "现在就开始使用 Millio，稍后再连接你的 Apple 账户。")
+            #expect(ProfileAuthL10n.exitGuestTitle() == "退出访客模式")
+        }
+    }
+
     @Test("Daily reminder summary subject keys are localized for English and Russian")
     func testDailyReminderSummarySubjectLocalization() {
         #expect(localizedString("profile.daily_reminders.summary.kind.expense", languageCode: "en") == "expenses")

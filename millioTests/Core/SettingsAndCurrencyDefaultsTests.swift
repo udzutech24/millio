@@ -197,8 +197,12 @@ struct SettingsAndCurrencyDefaultsTests {
         let isolated = makeIsolatedSettingsManager()
         defer { isolated.cleanup() }
 
-        isolated.defaults.removeObject(forKey: "profileDisplayName")
-        #expect(isolated.manager.profileDisplayName == SettingsManager.defaultProfileDisplayName)
+        for language in [Language.english, .russian, .simplifiedChinese] {
+            AppLanguageTestSupport.withLanguage(language) {
+                isolated.defaults.removeObject(forKey: "profileDisplayName")
+                #expect(isolated.manager.profileDisplayName == SettingsManager.defaultProfileDisplayName(for: language))
+            }
+        }
     }
 
     @Test("SettingsManager normalizes legacy guest display names")
@@ -206,9 +210,13 @@ struct SettingsAndCurrencyDefaultsTests {
         let isolated = makeIsolatedSettingsManager()
         defer { isolated.cleanup() }
 
-        for legacyValue in ["Гость", "Guest"] {
-            isolated.defaults.set(legacyValue, forKey: "profileDisplayName")
-            #expect(isolated.manager.profileDisplayName == SettingsManager.defaultProfileDisplayName)
+        for language in [Language.english, .russian, .simplifiedChinese] {
+            AppLanguageTestSupport.withLanguage(language) {
+                for legacyValue in ["Гость", "Guest", "访客"] {
+                    isolated.defaults.set(legacyValue, forKey: "profileDisplayName")
+                    #expect(isolated.manager.profileDisplayName == SettingsManager.defaultProfileDisplayName(for: language))
+                }
+            }
         }
     }
 
@@ -216,6 +224,7 @@ struct SettingsAndCurrencyDefaultsTests {
     func testDefaultProfileDisplayNameUsesExplicitLanguage() {
         #expect(SettingsManager.defaultProfileDisplayName(for: .english) == "Guest")
         #expect(SettingsManager.defaultProfileDisplayName(for: .russian) == "Гость")
+        #expect(SettingsManager.defaultProfileDisplayName(for: .simplifiedChinese) == "访客")
     }
 
     @Test("AppState loads profile avatar path from SettingsManager on init")

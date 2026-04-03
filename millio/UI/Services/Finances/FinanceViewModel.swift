@@ -604,7 +604,7 @@ final class FinanceViewModel: ViewModelProtocol {
 
     private func scheduleBackgroundTask(_ operation: @escaping @MainActor (FinanceViewModel) async -> Void) {
         let taskID = UUID()
-        backgroundTasks[taskID] = Task { [weak self] in
+        backgroundTasks[taskID] = Task(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             await operation(self)
             self.finishBackgroundTask(taskID)

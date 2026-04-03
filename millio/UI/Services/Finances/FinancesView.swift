@@ -8,6 +8,10 @@ import SwiftData
 
 // MARK: - Finances Tab Enum
 
+private func financesLocalized(_ key: String) -> String {
+    FinancesL10n.tr(key)
+}
+
 enum FinancesTab: String {
     case main = "main"
     case dynamics = "dynamics"
@@ -75,7 +79,7 @@ struct FinancesView: View {
         .onDisappear {
             viewModel?.handle(.setDisplayCurrency(appState.primaryCurrencyCode))
         }
-        .navigationTitle(String(localized: "finances.main.title"))
+        .navigationTitle(financesLocalized("finances.main.title"))
         .navigationBarBackButtonHidden(true)
         .interactiveBackSwipe()
         .toolbar {
@@ -86,7 +90,7 @@ struct FinancesView: View {
                     toolbarButtonLabel(systemName: "chevron.left", weight: .semibold)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "finances.common.back"))
+                .accessibilityLabel(financesLocalized("finances.common.back"))
                 
                 Button {
                     showQuickNavigationPopover.toggle()
@@ -94,7 +98,7 @@ struct FinancesView: View {
                     toolbarButtonLabel(systemName: "square.grid.2x2", weight: .regular)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "finances.common.quick_navigation"))
+                .accessibilityLabel(financesLocalized("finances.common.quick_navigation"))
                 .popover(isPresented: $showQuickNavigationPopover, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
                     MiniAppQuickNavigationPopover(
                         destinations: MiniAppNavigation.destinations(excluding: currentRoute)
@@ -113,7 +117,7 @@ struct FinancesView: View {
                     } label: {
                         toolbarButtonLabel(systemName: "gearshape", weight: .semibold)
                     }
-                    .accessibilityLabel(String(localized: "finances.common.settings"))
+                    .accessibilityLabel(financesLocalized("finances.common.settings"))
                 }
             }
         }
@@ -226,8 +230,8 @@ private struct FinancesSettingsSheet: View {
                         onOpenMassTickerImport()
                     } label: {
                         settingsRow(
-                            title: String(localized: "finances.settings.mass_import.title"),
-                            subtitle: String(localized: "finances.settings.mass_import.subtitle"),
+                            title: financesLocalized("finances.settings.mass_import.title"),
+                            subtitle: financesLocalized("finances.settings.mass_import.subtitle"),
                             icon: "text.insert"
                         )
                     }
@@ -237,8 +241,8 @@ private struct FinancesSettingsSheet: View {
                         onOpenSavingsGoal()
                     } label: {
                         settingsRow(
-                            title: String(localized: "finances.settings.savings_goal.title"),
-                            subtitle: String(localized: "finances.settings.savings_goal.subtitle"),
+                            title: financesLocalized("finances.settings.savings_goal.title"),
+                            subtitle: financesLocalized("finances.settings.savings_goal.subtitle"),
                             icon: "target"
                         )
                     }
@@ -249,8 +253,8 @@ private struct FinancesSettingsSheet: View {
                             onOpenDailyAudit()
                         } label: {
                             settingsRow(
-                                title: String(localized: "finances.settings.daily_audit.title"),
-                                subtitle: String(localized: "finances.settings.daily_audit.subtitle"),
+                                title: financesLocalized("finances.settings.daily_audit.title"),
+                                subtitle: financesLocalized("finances.settings.daily_audit.subtitle"),
                                 icon: "list.clipboard"
                             )
                         }
@@ -262,7 +266,7 @@ private struct FinancesSettingsSheet: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
             }
-            .navigationTitle(String(localized: "finances.settings.title"))
+            .navigationTitle(financesLocalized("finances.settings.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -481,7 +485,7 @@ private struct FinancesMainTabView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppColors.warning)
 
-                    Text(String(localized: "finances.main.warning.currency_api_partial"))
+                    Text(financesLocalized("finances.main.warning.currency_api_partial"))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                         .lineLimit(3)
@@ -574,8 +578,8 @@ private struct FinancesMainTabView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(viewModel.state.isLoadingRates
-            ? String(localized: "finances.common.refreshing")
-            : String(localized: "finances.common.refresh"))
+            ? financesLocalized("finances.common.refreshing")
+            : financesLocalized("finances.common.refresh"))
     }
 
     private func handleRefreshAction(_ action: FinanceRefreshAction) {
@@ -653,7 +657,7 @@ private struct FinancesMainTabView: View {
             if visibleGroups.isEmpty {
                 emptyGroupsCallToAction
             } else {
-                Text(String(localized: "finances.main.accounts_section.title"))
+                Text(financesLocalized("finances.main.accounts_section.title"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AppColors.textTertiary.opacity(0.84))
                     .textCase(.uppercase)
@@ -746,7 +750,7 @@ private struct FinancesMainTabView: View {
                             .frame(width: 24, height: 24)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "finances.main.empty_intro.dismiss"))
+                    .accessibilityLabel(financesLocalized("finances.main.empty_intro.dismiss"))
                 }
             }
 
@@ -756,13 +760,13 @@ private struct FinancesMainTabView: View {
                 .frame(width: 88, height: 88)
                 .shadow(color: (AppColors.financesGradient.first ?? .cyan).opacity(0.18), radius: 16, y: 8)
 
-            Text(String(localized: "finances.main.empty_intro.title"))
+            Text(financesLocalized("finances.main.empty_intro.title"))
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(AppColors.textPrimary)
                 .multilineTextAlignment(.center)
 
             if !isEmptyIntroHidden {
-                Text(String(localized: "finances.main.empty_intro.description"))
+                Text(financesLocalized("finances.main.empty_intro.description"))
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .multilineTextAlignment(.center)
@@ -773,7 +777,7 @@ private struct FinancesMainTabView: View {
             Button {
                 viewModel.handle(.showAddAccountSheet(nil))
             } label: {
-                Text(String(localized: "finances.main.empty_intro.add_product"))
+                Text(financesLocalized("finances.main.empty_intro.add_product"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                     .frame(maxWidth: .infinity)
@@ -803,7 +807,7 @@ private struct FinancesMainTabView: View {
                 Button {
                     selectedTab = .dynamics
                 } label: {
-                    Text(String(localized: "finances.main.empty_intro.open_dynamics"))
+                    Text(financesLocalized("finances.main.empty_intro.open_dynamics"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppColors.textSecondary)
                         .frame(maxWidth: .infinity)

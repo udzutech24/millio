@@ -29517,6 +29517,7 @@
     },
     "profile.auth.account_details" : {
       "comment" : "Account details screen title",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -29534,6 +29535,7 @@
     },
     "profile.auth.connected" : {
       "comment" : "Compact connected state title in profile\nConnected state title",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -29557,6 +29559,7 @@
     },
     "profile.auth.connected.subtitle" : {
       "comment" : "Connected state subtitle",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -29573,7 +29576,7 @@
       }
     },
     "profile.auth.details" : {
-      "comment" : "Account details entry button title\nAccount details row accessory title",
+      "comment" : "Account details entry button title",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -29597,6 +29600,7 @@
     },
     "profile.auth.email" : {
       "comment" : "Account detail field title for email",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -29614,6 +29618,7 @@
     },
     "profile.auth.email_missing" : {
       "comment" : "Fallback email text",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -29637,6 +29642,7 @@
     },
     "profile.auth.exit_guest" : {
       "comment" : "Exit guest mode button title",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -29660,6 +29666,7 @@
     },
     "profile.auth.guest.subtitle" : {
       "comment" : "Guest mode subtitle",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -29683,6 +29690,7 @@
     },
     "profile.auth.guest.title" : {
       "comment" : "Guest mode title",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -29706,6 +29714,7 @@
     },
     "profile.auth.last_login" : {
       "comment" : "Account detail field title for last login",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -29723,6 +29732,7 @@
     },
     "profile.auth.logout" : {
       "comment" : "Logout button",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -29740,6 +29750,7 @@
     },
     "profile.auth.name" : {
       "comment" : "Account detail field title for name",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -29757,6 +29768,7 @@
     },
     "profile.auth.not_signed_in" : {
       "comment" : "Signed-out auth state title",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -29780,6 +29792,7 @@
     },
     "profile.auth.not_signed_in.subtitle" : {
       "comment" : "Signed-out auth state subtitle",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

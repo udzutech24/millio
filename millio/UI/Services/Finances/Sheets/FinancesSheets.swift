@@ -281,9 +281,9 @@ struct SavingsGoalSettingsView: View {
                 VStack(spacing: 20) {
                     // Настройки цели
                     VStack(alignment: .leading, spacing: 10) {
-                        FinancesSectionHeader(title: String(localized: "finances.savings_goal.settings_section"))
+                        FinancesSectionHeader(title: FinancesL10n.tr("finances.savings_goal.settings_section"))
                         FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
-                            Toggle(String(localized: "finances.savings_goal.enabled"), isOn: $isEnabled)
+                            Toggle(FinancesL10n.tr("finances.savings_goal.enabled"), isOn: $isEnabled)
                                 .tint(AppColors.toggleOnGreen)
                                 .foregroundStyle(AppColors.textPrimary)
                         }
@@ -294,7 +294,7 @@ struct SavingsGoalSettingsView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             FinancesSectionHeader(title: FinancesL10n.format("finances.savings_goal.amount_section", viewModel.state.displayCurrency))
                             FinancesGlassCard {
-                                TextField(String(localized: "finances.savings_goal.amount_placeholder"), text: $goalAmountDisplayText)
+                                TextField(FinancesL10n.tr("finances.savings_goal.amount_placeholder"), text: $goalAmountDisplayText)
                                     .keyboardType(.decimalPad)
                                     .foregroundStyle(AppColors.textPrimary)
                                     .padding(.vertical, 14)
@@ -313,12 +313,12 @@ struct SavingsGoalSettingsView: View {
                             let remaining = max(0, amount - viewModel.state.totalAmount)
 
                             VStack(alignment: .leading, spacing: 10) {
-                                FinancesSectionHeader(title: String(localized: "finances.savings_goal.progress_section"))
+                                FinancesSectionHeader(title: FinancesL10n.tr("finances.savings_goal.progress_section"))
                                 FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                                     VStack(alignment: .leading, spacing: 16) {
                                         VStack(spacing: 8) {
                                             HStack {
-                                                Text(String(localized: "finances.savings_goal.current_amount"))
+                                                Text(FinancesL10n.tr("finances.savings_goal.current_amount"))
                                                     .font(.system(size: 14, weight: .medium))
                                                     .foregroundStyle(AppColors.textSecondary)
                                                 Spacer()
@@ -328,7 +328,7 @@ struct SavingsGoalSettingsView: View {
                                             }
 
                                             HStack {
-                                                Text(String(localized: "finances.savings_goal.remaining"))
+                                                Text(FinancesL10n.tr("finances.savings_goal.remaining"))
                                                     .font(.system(size: 14, weight: .medium))
                                                     .foregroundStyle(AppColors.textSecondary)
                                                 Spacer()
@@ -369,7 +369,7 @@ struct SavingsGoalSettingsView: View {
                 .padding(.top, 16)
                 .padding(.horizontal, 16)
             }
-            .navigationTitle(String(localized: "finances.savings_goal.title"))
+            .navigationTitle(FinancesL10n.tr("finances.savings_goal.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -394,7 +394,7 @@ struct SavingsGoalSettingsView: View {
                         .opacity(0.45)
 
                     Button(action: saveGoalSettings) {
-                        Text(String(localized: "finances.common.save"))
+                        Text(FinancesL10n.tr("finances.common.save"))
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                             .frame(maxWidth: .infinity)

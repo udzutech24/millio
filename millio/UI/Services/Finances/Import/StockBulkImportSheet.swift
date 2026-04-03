@@ -614,7 +614,7 @@ struct StockBulkImportSheet: View {
 
                 screenshotInstructionsOverlay
             }
-            .navigationTitle(String(localized: "finances.mass_import.title"))
+            .navigationTitle(FinancesL10n.tr("finances.mass_import.title"))
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {
                 bottomActionBar
@@ -661,7 +661,7 @@ struct StockBulkImportSheet: View {
                     }
                     .foregroundStyle(viewModel.addableCount > 0 ? Color.green : AppColors.textSecondary)
                     .disabled(viewModel.addableCount == 0 || viewModel.isProcessing)
-                    .accessibilityLabel(Text(String(localized: "finances.mass_import.add_button")))
+                    .accessibilityLabel(Text(FinancesL10n.tr("finances.mass_import.add_button")))
                 }
             }
             .onChange(of: selectedPhotoItems) { _, newItems in
@@ -955,7 +955,7 @@ struct StockBulkImportSheet: View {
                 VStack(spacing: 0) {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(String(localized: "finances.mass_import.group"))
+                            Text(FinancesL10n.tr("finances.mass_import.group"))
                                 .font(.system(size: 17, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Text(
@@ -967,7 +967,7 @@ struct StockBulkImportSheet: View {
                         Spacer()
                         HStack(spacing: 10) {
                             Menu {
-                                Button(String(localized: "finances.mass_import.group_none")) {
+                                Button(FinancesL10n.tr("finances.mass_import.group_none")) {
                                     viewModel.selectedGroup = nil
                                 }
                                 ForEach(selectableGroups, id: \.groupUniqueID) { group in
@@ -977,7 +977,7 @@ struct StockBulkImportSheet: View {
                                 }
                             } label: {
                                 HStack(spacing: 6) {
-                                    Text(viewModel.selectedGroup?.name ?? String(localized: "finances.mass_import.group_none"))
+                                    Text(viewModel.selectedGroup?.name ?? FinancesL10n.tr("finances.mass_import.group_none"))
                                     Image(systemName: "chevron.up.chevron.down")
                                 }
                                 .font(.system(size: 17, weight: .semibold))
@@ -1013,7 +1013,7 @@ struct StockBulkImportSheet: View {
                 VStack(spacing: 0) {
                     Toggle(isOn: $viewModel.includeInTotal) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(String(localized: "finances.mass_import.include_in_total"))
+                            Text(FinancesL10n.tr("finances.mass_import.include_in_total"))
                                 .font(.system(size: 17, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Text(
@@ -1054,7 +1054,7 @@ struct StockBulkImportSheet: View {
                             matching: .images
                         ) {
                             Label(
-                                String(localized: "finances.mass_import.pick_screenshots"),
+                                FinancesL10n.tr("finances.mass_import.pick_screenshots"),
                                 systemImage: "photo.on.rectangle.angled"
                             )
                             .frame(maxWidth: .infinity)
@@ -1097,7 +1097,7 @@ struct StockBulkImportSheet: View {
                 VStack(spacing: 0) {
                     Toggle(isOn: $viewModel.mergeDuplicates) {
                         settingsToggleContent(
-                            title: String(localized: "finances.mass_import.merge_duplicates"),
+                            title: FinancesL10n.tr("finances.mass_import.merge_duplicates"),
                             subtitle: StockBulkImportLayoutPolicy.mergeDuplicatesHint
                         )
                     }
@@ -1109,7 +1109,7 @@ struct StockBulkImportSheet: View {
 
                     Toggle(isOn: $viewModel.showProblemsOnly) {
                         settingsToggleContent(
-                            title: String(localized: "finances.mass_import.show_problems"),
+                            title: FinancesL10n.tr("finances.mass_import.show_problems"),
                             subtitle: StockBulkImportLayoutPolicy.showProblemsHint
                         )
                     }
@@ -1240,7 +1240,7 @@ struct StockBulkImportSheet: View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
                 TextField(
-                    String(localized: "finances.mass_import.field_ticker"),
+                    FinancesL10n.tr("finances.mass_import.field_ticker"),
                     text: tickerTextBinding(for: row.id)
                 )
                 .textInputAutocapitalization(.characters)
@@ -1306,7 +1306,7 @@ struct StockBulkImportSheet: View {
 
             HStack(spacing: 10) {
                 compactField(
-                    title: String(localized: "finances.mass_import.field_market"),
+                    title: FinancesL10n.tr("finances.mass_import.field_market"),
                     text: Binding(
                         get: { row.marketText },
                         set: { newValue in
@@ -1315,7 +1315,7 @@ struct StockBulkImportSheet: View {
                     )
                 )
                 compactField(
-                    title: String(localized: "finances.mass_import.field_quantity"),
+                    title: FinancesL10n.tr("finances.mass_import.field_quantity"),
                     text: Binding(
                         get: { row.quantityText },
                         set: { viewModel.updateQuantity($0, for: row.id) }
@@ -1323,7 +1323,7 @@ struct StockBulkImportSheet: View {
                     keyboard: .decimalPad
                 )
                 compactField(
-                    title: String(localized: "finances.mass_import.field_buy_price"),
+                    title: FinancesL10n.tr("finances.mass_import.field_buy_price"),
                     text: Binding(
                         get: { row.buyPriceText },
                         set: { viewModel.updateBuyPrice($0, for: row.id) }
@@ -1331,7 +1331,7 @@ struct StockBulkImportSheet: View {
                     keyboard: .decimalPad
                 )
                 compactField(
-                    title: String(localized: "finances.mass_import.field_current_price"),
+                    title: FinancesL10n.tr("finances.mass_import.field_current_price"),
                     text: Binding(
                         get: { row.currentPriceText },
                         set: { viewModel.updateCurrentPrice($0, for: row.id) }

@@ -54,6 +54,24 @@ struct CalendarRangeQuickPresetTests {
         #expect(CalendarRangePickerCopy.endDateLabel(locale: Locale(identifier: "en_US")) == "End date")
     }
 
+    @Test("Calendar range date labels format against the app locale instead of device locale")
+    func endpointDateFormattingUsesRequestedLocale() {
+        let date = makeDate(year: 2026, month: 4, day: 1)
+
+        #expect(CalendarRangeFormatting.endpointDate(date, locale: Locale(identifier: "en_US")) == "1 April")
+        #expect(CalendarRangeFormatting.endpointDate(date, locale: Locale(identifier: "ru_RU")) == "1 апреля")
+        #expect(CalendarRangeFormatting.endpointDate(date, locale: Locale(identifier: "zh_Hans_CN")) == "4月1日")
+    }
+
+    @Test("Calendar range month title uses the app locale for month names")
+    func monthTitleUsesRequestedLocale() {
+        let date = makeDate(year: 2026, month: 4, day: 1)
+
+        #expect(CalendarRangeFormatting.monthTitle(for: date, locale: Locale(identifier: "en_US")) == "April 2026")
+        #expect(CalendarRangeFormatting.monthTitle(for: date, locale: Locale(identifier: "ru_RU")) == "Апрель 2026")
+        #expect(CalendarRangeFormatting.monthTitle(for: date, locale: Locale(identifier: "zh_Hans_CN")) == "2026年4月")
+    }
+
     private func makeDate(year: Int, month: Int, day: Int) -> Date {
         calendar.date(from: DateComponents(year: year, month: month, day: day))!
     }

@@ -1145,6 +1145,7 @@ private struct HistoryDateRangeSheet: View {
     @Binding var endDate: Date?
     let resetToDefaultRange: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @State private var draftStartDate: Date = Calendar.current.startOfDay(for: Date())
     @State private var draftEndDate: Date = Calendar.current.startOfDay(for: Date())
 
@@ -1154,7 +1155,7 @@ private struct HistoryDateRangeSheet: View {
                 GradientBackground()
 
                 CalendarRangePickerPanel(
-                    title: CalendarRangePickerCopy.sheetTitle(),
+                    title: CalendarRangePickerCopy.sheetTitle(locale: locale),
                     subtitle: cashflowHistoryTr("cashflow.custom_period.calendar_hint"),
                     startDate: $draftStartDate,
                     endDate: $draftEndDate,

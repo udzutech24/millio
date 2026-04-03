@@ -14,6 +14,7 @@ struct CashflowCustomPeriodSheetView: View {
     @Binding var draftEndDate: Date
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
 
     var body: some View {
         NavigationStack {
@@ -21,7 +22,7 @@ struct CashflowCustomPeriodSheetView: View {
                 GradientBackground()
 
                 CalendarRangePickerPanel(
-                    title: CalendarRangePickerCopy.sheetTitle(),
+                    title: CalendarRangePickerCopy.sheetTitle(locale: locale),
                     subtitle: String(localized: "cashflow.custom_period.calendar_hint"),
                     startDate: $draftStartDate,
                     endDate: $draftEndDate,

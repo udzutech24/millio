@@ -12,35 +12,35 @@ struct ProfileAuthSection: View {
     }
 
     private var connectedTitle: String {
-        String(localized: "profile.auth.connected", defaultValue: "Signed in with Apple", comment: "Compact connected state title in profile")
+        ProfileAuthL10n.connectedTitle()
     }
 
     private var emailMissingTitle: String {
-        String(localized: "profile.auth.email_missing", defaultValue: "No email provided", comment: "Fallback email text")
+        ProfileAuthL10n.emailMissingTitle()
     }
 
     private var guestTitle: String {
-        String(localized: "profile.auth.guest.title", defaultValue: "Guest Mode", comment: "Guest mode title")
+        ProfileAuthL10n.guestTitle()
     }
 
     private var guestSubtitle: String {
-        String(localized: "profile.auth.guest.subtitle", defaultValue: "Use Millio now and connect your Apple Account later.", comment: "Guest mode subtitle")
+        ProfileAuthL10n.guestSubtitle()
     }
 
     private var exitGuestTitle: String {
-        String(localized: "profile.auth.exit_guest", defaultValue: "Leave Guest Mode", comment: "Exit guest mode button title")
+        ProfileAuthL10n.exitGuestTitle()
     }
 
     private var detailsTitle: String {
-        String(localized: "profile.auth.details", defaultValue: "View details", comment: "Account details row accessory title")
+        ProfileAuthL10n.detailsTitle()
     }
 
     private var notSignedInTitle: String {
-        String(localized: "profile.auth.not_signed_in", defaultValue: "Not signed in", comment: "Signed-out auth state title")
+        ProfileAuthL10n.notSignedInTitle()
     }
 
     private var notSignedInSubtitle: String {
-        String(localized: "profile.auth.not_signed_in.subtitle", defaultValue: "Sign in with Apple to enable account sync. iCloud backup works separately.", comment: "Signed-out auth state subtitle")
+        ProfileAuthL10n.notSignedInSubtitle()
     }
 
     var body: some View {

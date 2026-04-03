@@ -296,7 +296,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
 
     private func scheduleBackgroundTask(_ operation: @escaping @MainActor (FinanceDynamicsViewModel) async -> Void) {
         let taskID = UUID()
-        backgroundTasks[taskID] = Task { [weak self] in
+        backgroundTasks[taskID] = Task(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             await operation(self)
             self.finishBackgroundTask(taskID)
@@ -387,7 +387,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             state.selectedDate = date
             selectionUpdateTask?.cancel()
             let selectedDateSnapshot = date
-            selectionUpdateTask = Task { [weak self] in
+            selectionUpdateTask = Task(priority: .userInitiated) { [weak self] in
                 guard let self else { return }
                 await self.updateCurrentBalanceAndDelta(for: selectedDateSnapshot)
             }

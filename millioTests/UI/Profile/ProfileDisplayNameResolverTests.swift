@@ -80,11 +80,15 @@ struct ProfileDisplayNameResolverTests {
             lastLoginAt: nil
         )
 
-        let value = ProfileDisplayNameResolver.headerDisplayName(
-            storedDisplayName: "Guest",
-            authUser: user
-        )
+        for language in [Language.english, .russian, .simplifiedChinese] {
+            AppLanguageTestSupport.withLanguage(language) {
+                let value = ProfileDisplayNameResolver.headerDisplayName(
+                    storedDisplayName: "Guest",
+                    authUser: user
+                )
 
-        #expect(value == SettingsManager.defaultProfileDisplayName)
+                #expect(value == SettingsManager.defaultProfileDisplayName(for: language))
+            }
+        }
     }
 }

@@ -12,6 +12,7 @@ import SwiftUI
 struct FinanceDynamicsPeriodSelectorView: View {
     @ObservedObject var viewModel: FinanceDynamicsViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
 
     @State private var draftStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
     @State private var draftEndDate: Date = Date()
@@ -22,7 +23,7 @@ struct FinanceDynamicsPeriodSelectorView: View {
                 GradientBackground()
 
                 CalendarRangePickerPanel(
-                    title: CalendarRangePickerCopy.sheetTitle(),
+                    title: CalendarRangePickerCopy.sheetTitle(locale: locale),
                     subtitle: String(localized: "finances.dynamics.custom_period.subtitle"),
                     startDate: $draftStartDate,
                     endDate: $draftEndDate,

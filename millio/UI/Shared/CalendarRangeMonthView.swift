@@ -240,7 +240,7 @@ enum CalendarRangeQuickPreset: CaseIterable, Hashable {
     case last90Days
     case yearToDate
 
-    func title(locale: Locale = .autoupdatingCurrent) -> String {
+    func title(locale: Locale = AppLocalization.currentAppLocale) -> String {
         switch self {
         case .today:
             return AppLocalization.string("calendar_range.preset.today", locale: locale, fallback: "Today")
@@ -282,16 +282,56 @@ enum CalendarRangeQuickPreset: CaseIterable, Hashable {
     }
 }
 
+enum CalendarRangeFormatting {
+    static func calendar(for locale: Locale) -> Calendar {
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.locale = locale
+        return calendar
+    }
+
+    static func endpointDate(_ date: Date, locale: Locale) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateFormat = endpointDateFormat(for: locale)
+        return formatter.string(from: date)
+    }
+
+    static func monthTitle(for date: Date, locale: Locale) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateFormat = monthTitleFormat(for: locale)
+        return formatter.string(from: date).capitalized(with: formatter.locale)
+    }
+
+    private static func endpointDateFormat(for locale: Locale) -> String {
+        switch LocalizationSupport.effectiveLanguage(for: locale) {
+        case Language.simplifiedChinese.rawValue:
+            return "M月d日"
+        default:
+            return "d MMMM"
+        }
+    }
+
+    private static func monthTitleFormat(for locale: Locale) -> String {
+        switch LocalizationSupport.effectiveLanguage(for: locale) {
+        case Language.simplifiedChinese.rawValue:
+            return "yyyy年M月"
+        default:
+            return "LLLL yyyy"
+        }
+    }
+}
+
 enum CalendarRangePickerCopy {
-    static func sheetTitle(locale: Locale = .autoupdatingCurrent) -> String {
+    static func sheetTitle(locale: Locale = AppLocalization.currentAppLocale) -> String {
         AppLocalization.string("calendar_range.sheet.title", locale: locale, fallback: "Choose period")
     }
 
-    static func startDateLabel(locale: Locale = .autoupdatingCurrent) -> String {
+    static func startDateLabel(locale: Locale = AppLocalization.currentAppLocale) -> String {
         AppLocalization.string("calendar_range.sheet.start_date", locale: locale, fallback: "Start date")
     }
 
-    static func endDateLabel(locale: Locale = .autoupdatingCurrent) -> String {
+    static func endDateLabel(locale: Locale = AppLocalization.currentAppLocale) -> String {
         AppLocalization.string("calendar_range.sheet.end_date", locale: locale, fallback: "End date")
     }
 }
@@ -360,10 +400,13 @@ struct CalendarRangeMonthView: View {
     var activeEndpoint: Binding<CalendarRangeSelectionEndpoint>? = nil
     var theme: CalendarRangeTheme = .neutral
     var highlightsSingleDaySelection: Bool = true
+    @Environment(\.locale) private var locale
 
     @State private var focusMonthAnchor: Date = Calendar.current.startOfDay(for: Date())
 
-    private var calendar: Calendar { .current }
+    private var calendar: Calendar {
+        CalendarRangeFormatting.calendar(for: locale)
+    }
 
     private var today: Date {
         calendar.startOfDay(for: Date())
@@ -544,10 +587,7 @@ struct CalendarRangeMonthView: View {
     }
 
     private func monthTitle(for date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
-        formatter.setLocalizedDateFormatFromTemplate("LLLL yyyy")
-        return formatter.string(from: date).capitalized(with: formatter.locale)
+        CalendarRangeFormatting.monthTitle(for: date, locale: locale)
     }
 }
 

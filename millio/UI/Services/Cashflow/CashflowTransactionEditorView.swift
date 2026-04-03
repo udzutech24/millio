@@ -370,6 +370,9 @@ struct CashflowTransactionEditorView: View {
         .onChange(of: transactionDate) { _, _ in
             validateAvailableBalance()
             refreshTransferRateSuggestion()
+            // Compact DatePicker stays expanded after selection on iOS.
+            // Explicitly dismiss the active responder so the calendar closes.
+            InputDismissalSupport.dismissActiveResponder()
         }
         .onChange(of: selectedTransactionType) { _, _ in
             if selectedTransactionType != .income && selectedTransactionType != .expense {
