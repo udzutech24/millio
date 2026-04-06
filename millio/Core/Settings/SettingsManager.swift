@@ -46,6 +46,7 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     private let lastLaunchSplashShownAtKey = "lastLaunchSplashShownAt"
     private let guestModeEnabledKey = "guestModeEnabled"
     private let debugMenuUnlockedKey = "debugMenuUnlocked"
+    private let mainScreenLayoutModeKey = "mainScreenLayoutMode"
     private static let legacyDefaultProfileDisplayNames: Set<String> = ["Гость", "Guest"]
     private let defaults: UserDefaults
 
@@ -356,6 +357,23 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
             logger.info("Debug menu unlocked: \(newValue)")
         }
     }
+
+    /// Preferred visual mode for the main screen.
+    var mainScreenLayoutMode: MainScreenLayoutMode {
+        get {
+            guard
+                let raw = defaults.string(forKey: mainScreenLayoutModeKey),
+                let mode = MainScreenLayoutMode(rawValue: raw)
+            else {
+                return .focus
+            }
+            return mode
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: mainScreenLayoutModeKey)
+            logger.info("Main screen layout mode updated: \(newValue.rawValue)")
+        }
+    }
     
     static func normalizeCurrencyCodes(_ codes: [String]) -> [String] {
         var seen = Set<String>()
@@ -421,6 +439,7 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
         lastLaunchSplashShownAt = nil
         isGuestModeEnabled = false
         isDebugMenuUnlocked = false
+        mainScreenLayoutMode = .focus
 
         // Модульные display-валюты и прочие временные UX-флаги.
         defaults.removeObject(forKey: "card_display_currency")

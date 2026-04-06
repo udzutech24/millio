@@ -10,24 +10,26 @@ import Combine
 
 /// Состояние главного экрана
 struct MainAppState {
-    // Пока пустое, можно добавить состояние по мере необходимости
+    var layoutMode: MainScreenLayoutMode
 }
 
 /// ViewModel для главного экрана
 @MainActor
 final class MainAppViewModel: ViewModelProtocol {
-    @Published var state = MainAppState()
+    @Published var state: MainAppState
     
     private let router: AppRouter
     
     init(router: AppRouter) {
         self.router = router
+        self.state = MainAppState(layoutMode: SettingsManager.shared.mainScreenLayoutMode)
     }
     
     enum Action {
         case navigateToService(AppRoute)
         case navigateToProfile
         case navigateToSubscription
+        case setLayoutMode(MainScreenLayoutMode)
     }
     
     func handle(_ action: Action) {
@@ -38,6 +40,10 @@ final class MainAppViewModel: ViewModelProtocol {
             router.push(.profile)
         case .navigateToSubscription:
             router.push(.subscription)
+        case .setLayoutMode(let mode):
+            guard state.layoutMode != mode else { return }
+            state.layoutMode = mode
+            SettingsManager.shared.mainScreenLayoutMode = mode
         }
     }
 }

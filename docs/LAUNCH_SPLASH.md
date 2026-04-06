@@ -24,4 +24,5 @@
 - План haptic вынесен в `UI/Launching/LaunchSplashHapticsPlan.swift`.
 - Минимальная длительность splash задается в `Core/UseCases/AppLifecycleUseCase.swift` (по умолчанию 2.2s, в тестах отключается автоматически).
 - Политика показа splash (режим и дата последнего показа) хранится в `SettingsManager`.
+- В режиме `Раз в день` отметка последнего показа сохраняется сразу после решения показать splash, чтобы force-quit во время запуска не вызывал повторный показ в тот же день.
 - План покрыт юнит-тестами в `millioTests/UI/Launching/LaunchSplashHapticsPlanTests.swift`.

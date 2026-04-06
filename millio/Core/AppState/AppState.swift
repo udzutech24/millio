@@ -73,6 +73,11 @@ final class AppState {
         }
     }
     var launchSplashDisplayMode: LaunchSplashDisplayMode = .always
+    var mainScreenLayoutMode: MainScreenLayoutMode = .classic {
+        didSet {
+            SettingsManager.shared.mainScreenLayoutMode = mainScreenLayoutMode
+        }
+    }
     var isAppLocked: Bool = false
     var isGuestModeEnabled: Bool = false {
         didSet {
@@ -128,6 +133,7 @@ final class AppState {
         self.isAppLockEnabled = SettingsManager.shared.isAppLockEnabled
         self.isBiometricUnlockEnabled = SettingsManager.shared.isBiometricUnlockEnabled
         self.launchSplashDisplayMode = SettingsManager.shared.launchSplashDisplayMode
+        self.mainScreenLayoutMode = SettingsManager.shared.mainScreenLayoutMode
         self.selectedLanguage = LanguageManager.shared.currentLanguage
         self.primaryCurrencyCode = SettingsManager.shared.primaryCurrencyCode
         self.profileDisplayName = SettingsManager.shared.profileDisplayName
