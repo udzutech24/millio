@@ -68,17 +68,17 @@ struct RestoreView: View {
             }
         }
         .confirmationDialog(
-            "Продолжить без восстановления?",
+            BackupL10n.tr("backup.restore.confirm.title", fallback: "Continue Without Restoring?"),
             isPresented: $showSkipConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Продолжить без восстановления", role: .destructive) {
+            Button(BackupL10n.tr("backup.restore.confirm.action", fallback: "Continue Without Restoring"), role: .destructive) {
                 appState.lifecycle = .ready
                 dismiss()
             }
-            Button("Отмена", role: .cancel) {}
+            Button(BackupL10n.tr("backup.restore.confirm.cancel", fallback: "Cancel"), role: .cancel) {}
         } message: {
-            Text("Локальные данные останутся как есть.")
+            Text(BackupL10n.tr("backup.restore.confirm.message", fallback: "Local data will remain as is."))
         }
         .task {
             await refreshBackupStatusIfNeeded()
@@ -92,12 +92,12 @@ struct RestoreView: View {
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(AppColors.brandPrimary)
 
-                Text("Восстановление")
+                Text(BackupL10n.tr("backup.restore.header.title", fallback: "Restore"))
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(AppColors.textPrimary)
             }
 
-            Text("Выберите копию. Восстановление заменит текущие локальные данные.")
+            Text(BackupL10n.tr("backup.restore.header.subtitle", fallback: "Select a backup. Restoring will replace your current local data."))
                 .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(AppColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -113,11 +113,11 @@ struct RestoreView: View {
                     .scaleEffect(1.2)
                     .tint(AppColors.textPrimary)
 
-                Text("Восстанавливаем данные")
+                Text(BackupL10n.tr("backup.restore.progress.title", fallback: "Restoring Data"))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
 
-                Text("Подождите, база будет заменена выбранной копией.")
+                Text(BackupL10n.tr("backup.restore.progress.subtitle", fallback: "Please wait, the database will be replaced with the selected backup."))
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .multilineTextAlignment(.center)
@@ -132,23 +132,25 @@ struct RestoreView: View {
             FinancesGlassCard(accentColor: AppColors.brandPrimary, cornerRadius: 22, contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
                 VStack(alignment: .leading, spacing: 10) {
                     statusPill(
-                        title: version.isPinned ? "Сохраненная версия" : "Последняя копия",
+                        title: version.isPinned
+                            ? BackupL10n.tr("backup.restore.version.pinned", fallback: "Saved Version")
+                            : BackupL10n.tr("backup.restore.version.latest", fallback: "Latest Backup"),
                         icon: version.isPinned ? "pin.fill" : "clock.fill",
                         color: version.isPinned ? AppColors.toggleOnGreen : AppColors.brandPrimary
                     )
 
                     HStack(spacing: 10) {
                         restoreMetric(
-                            title: "Дата",
+                            title: BackupL10n.tr("backup.restore.metric.date", fallback: "Date"),
                             value: version.date.formatted(date: .abbreviated, time: .shortened)
                         )
                         restoreMetric(
-                            title: "Размер",
+                            title: BackupL10n.tr("backup.restore.metric.size", fallback: "Size"),
                             value: ByteCountFormatter.string(fromByteCount: version.size, countStyle: .file)
                         )
                     }
 
-                    Text("Локальные данные будут полностью заменены.")
+                    Text(BackupL10n.tr("backup.restore.warning.replace", fallback: "Local data will be completely replaced."))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                 }
@@ -163,7 +165,7 @@ struct RestoreView: View {
                             }
                         } label: {
                             HStack(spacing: 8) {
-                                Text("Выбрать другую копию")
+                                Text(BackupL10n.tr("backup.restore.action.pick_another", fallback: "Select Another Backup"))
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(AppColors.textPrimary)
                                 Spacer()
@@ -224,7 +226,7 @@ struct RestoreView: View {
             }
 
             FinancesGlassCard(cornerRadius: 20, contentPadding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)) {
-                SecureField("Кодовая фраза (если есть)", text: $backupPassphrase)
+                SecureField(BackupL10n.tr("backup.restore.passphrase.placeholder", fallback: "Passphrase (if any)"), text: $backupPassphrase)
                     .textContentType(.password)
                     .privacySensitive()
                     .foregroundStyle(AppColors.textPrimary)
@@ -233,10 +235,10 @@ struct RestoreView: View {
             }
 
             SlideToConfirmControl(
-                title: "Восстановить из копии",
-                subtitle: "Сдвиньте, чтобы заменить локальные данные",
-                loadingTitle: "Восстанавливаем данные...",
-                loadingSubtitle: "Не закрывайте приложение, пока идет замена",
+                title: BackupL10n.tr("backup.restore.slide.title", fallback: "Restore From Backup"),
+                subtitle: BackupL10n.tr("backup.restore.slide.subtitle", fallback: "Slide to replace local data"),
+                loadingTitle: BackupL10n.tr("backup.restore.slide.loading.title", fallback: "Restoring data..."),
+                loadingSubtitle: BackupL10n.tr("backup.restore.slide.loading.subtitle", fallback: "Don't close the app while replacing"),
                 icon: "arrow.right",
                 gradientColors: AppColors.financesGradient,
                 isEnabled: !isRestoring,
@@ -248,7 +250,7 @@ struct RestoreView: View {
             Button {
                 showSkipConfirmation = true
             } label: {
-                Text("Продолжить без восстановления")
+                Text(BackupL10n.tr("backup.restore.action.skip", fallback: "Continue Without Restoring"))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
                     .frame(maxWidth: .infinity)
@@ -263,7 +265,11 @@ struct RestoreView: View {
             FinancesGlassCard(accentColor: AppColors.warning, cornerRadius: 22, contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
                 VStack(alignment: .leading, spacing: 8) {
                     statusPill(
-                        title: backupLookupTimedOut ? "Поиск еще идет" : (appState.isICloudAvailable ? "Копия не найдена" : "iCloud недоступен"),
+                        title: backupLookupTimedOut
+                            ? BackupL10n.tr("backup.restore.lookup.timedout", fallback: "Still Searching")
+                            : (appState.isICloudAvailable
+                                ? BackupL10n.tr("backup.restore.empty.status.not_found", fallback: "Backup Not Found")
+                                : BackupL10n.tr("backup.restore.empty.title.icloud_unavailable", fallback: "iCloud is unavailable")),
                         icon: backupLookupTimedOut ? "hourglass.circle.fill" : (appState.isICloudAvailable ? "exclamationmark.circle.fill" : "icloud.slash.fill"),
                         color: AppColors.warning
                     )
@@ -280,7 +286,7 @@ struct RestoreView: View {
             }
 
             ActionButton(
-                title: "Повторить поиск",
+                title: BackupL10n.tr("backup.restore.action.retry", fallback: "Retry Search"),
                 icon: .system("arrow.clockwise"),
                 gradientColors: AppColors.financesGradient
             ) {
@@ -290,7 +296,7 @@ struct RestoreView: View {
             Button {
                 showSkipConfirmation = true
             } label: {
-                Text("Продолжить без восстановления")
+                Text(BackupL10n.tr("backup.restore.action.skip", fallback: "Continue Without Restoring"))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
                     .frame(maxWidth: .infinity)

@@ -25,12 +25,12 @@ enum CashflowTransactionType: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .income: return String(localized: "Income")
-        case .expense: return String(localized: "Expense")
-        case .transfer: return String(localized: "Transfer")
-        case .balanceAdjustment: return String(localized: "Asset value adjustment")
-        case .cardBalanceAdjustment: return String(localized: "Account balance adjustment")
-        case .creditDebtAdjustment: return String(localized: "Debt adjustment")
+        case .income: return CashflowLocalization.typeIncome
+        case .expense: return CashflowLocalization.typeExpense
+        case .transfer: return CashflowLocalization.typeTransfer
+        case .balanceAdjustment: return CashflowLocalization.typeBalanceAdjustment
+        case .cardBalanceAdjustment: return CashflowLocalization.typeCardBalanceAdjustment
+        case .creditDebtAdjustment: return CashflowLocalization.typeDebtAdjustment
         }
     }
     
@@ -58,14 +58,14 @@ enum CashflowRecurrenceRule: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .none: return String(localized: "Do not repeat")
+        case .none: return CashflowLocalization.recurrenceNone
         case .weekly:
             return String(
                 localized: "cashflow.recurrence.weekly",
                 defaultValue: "Weekly",
                 comment: "Weekly recurrence rule label"
             )
-        case .monthly: return String(localized: "Monthly")
+        case .monthly: return CashflowLocalization.recurrenceMonthly
         case .quarterly:
             return String(
                 localized: "cashflow.recurrence.quarterly",

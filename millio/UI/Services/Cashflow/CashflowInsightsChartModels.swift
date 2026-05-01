@@ -24,12 +24,9 @@ enum CashflowInsightsGranularity: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .year:
-            return String(localized: "Year")
-        case .month:
-            return String(localized: "Month")
-        case .week:
-            return String(localized: "Week")
+        case .year:  return CashflowLocalization.periodYear
+        case .month: return CashflowLocalization.periodMonth
+        case .week:  return CashflowLocalization.periodWeek
         }
     }
 }
@@ -111,14 +108,14 @@ enum CashflowInsightsChartBuilder {
             selectedPeriodStart: selectedPeriodStart,
             bars: bars,
             expenseCard: makeCard(
-                title: String(localized: "Expense"),
+                title: CashflowLocalization.typeExpense,
                 currentAmount: currentExpense,
                 previousAmount: previousExpense,
                 previousLabel: previousLabel,
                 treatsGrowthAsPositive: false
             ),
             incomeCard: makeCard(
-                title: String(localized: "Income"),
+                title: CashflowLocalization.typeIncome,
                 currentAmount: currentIncome,
                 previousAmount: previousIncome,
                 previousLabel: previousLabel,
@@ -461,14 +458,14 @@ enum CashflowInsightsChartBuilder {
             selectedPeriodStart: selectedPeriodStart,
             bars: bars,
             expenseCard: makeCard(
-                title: String(localized: "Expense"),
+                title: CashflowLocalization.typeExpense,
                 currentAmount: currentExpense,
                 previousAmount: previousExpense,
                 previousLabel: previousLabel,
                 treatsGrowthAsPositive: false
             ),
             incomeCard: makeCard(
-                title: String(localized: "Income"),
+                title: CashflowLocalization.typeIncome,
                 currentAmount: currentIncome,
                 previousAmount: previousIncome,
                 previousLabel: previousLabel,

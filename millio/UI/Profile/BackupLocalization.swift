@@ -282,6 +282,121 @@ private enum BackupInlineCatalog {
             ru: "Резервная копия не найдена",
             zhHans: "未找到备份"
         ),
+        "backup.restore.confirm.title": .init(
+            en: "Continue Without Restoring?",
+            ru: "Продолжить без восстановления?",
+            zhHans: "确定不恢复吗？"
+        ),
+        "backup.restore.confirm.action": .init(
+            en: "Continue Without Restoring",
+            ru: "Продолжить без восстановления",
+            zhHans: "继续且不恢复"
+        ),
+        "backup.restore.confirm.cancel": .init(
+            en: "Cancel",
+            ru: "Отмена",
+            zhHans: "取消"
+        ),
+        "backup.restore.confirm.message": .init(
+            en: "Local data will remain as is.",
+            ru: "Локальные данные останутся как есть.",
+            zhHans: "本地数据将保持不变。"
+        ),
+        "backup.restore.header.title": .init(
+            en: "Restore",
+            ru: "Восстановление",
+            zhHans: "恢复"
+        ),
+        "backup.restore.header.subtitle": .init(
+            en: "Select a backup. Restoring will replace your current local data.",
+            ru: "Выберите копию. Восстановление заменит текущие локальные данные.",
+            zhHans: "选择备份。恢复操作将替换当前本地数据。"
+        ),
+        "backup.restore.progress.title": .init(
+            en: "Restoring Data",
+            ru: "Восстанавливаем данные",
+            zhHans: "正在恢复数据"
+        ),
+        "backup.restore.progress.subtitle": .init(
+            en: "Please wait, the database will be replaced with the selected backup.",
+            ru: "Подождите, база будет заменена выбранной копией.",
+            zhHans: "请稍候，数据库将被所选备份替换。"
+        ),
+        "backup.restore.version.pinned": .init(
+            en: "Saved Version",
+            ru: "Сохраненная версия",
+            zhHans: "已保存版本"
+        ),
+        "backup.restore.version.latest": .init(
+            en: "Latest Backup",
+            ru: "Последняя копия",
+            zhHans: "最新备份"
+        ),
+        "backup.restore.metric.date": .init(
+            en: "Date",
+            ru: "Дата",
+            zhHans: "日期"
+        ),
+        "backup.restore.metric.size": .init(
+            en: "Size",
+            ru: "Размер",
+            zhHans: "大小"
+        ),
+        "backup.restore.warning.replace": .init(
+            en: "Local data will be completely replaced.",
+            ru: "Локальные данные будут полностью заменены.",
+            zhHans: "本地数据将被完全替换。"
+        ),
+        "backup.restore.action.pick_another": .init(
+            en: "Select Another Backup",
+            ru: "Выбрать другую копию",
+            zhHans: "选择其他备份"
+        ),
+        "backup.restore.passphrase.placeholder": .init(
+            en: "Passphrase (if any)",
+            ru: "Кодовая фраза (если есть)",
+            zhHans: "口令短语（如有）"
+        ),
+        "backup.restore.slide.title": .init(
+            en: "Restore From Backup",
+            ru: "Восстановить из копии",
+            zhHans: "从备份恢复"
+        ),
+        "backup.restore.slide.subtitle": .init(
+            en: "Slide to replace local data",
+            ru: "Сдвиньте, чтобы заменить локальные данные",
+            zhHans: "滑动以替换本地数据"
+        ),
+        "backup.restore.slide.loading.title": .init(
+            en: "Restoring data...",
+            ru: "Восстанавливаем данные...",
+            zhHans: "正在恢复数据..."
+        ),
+        "backup.restore.slide.loading.subtitle": .init(
+            en: "Don't close the app while replacing",
+            ru: "Не закрывайте приложение, пока идет замена",
+            zhHans: "替换完成前请勿关闭应用"
+        ),
+        "backup.restore.action.skip": .init(
+            en: "Continue Without Restoring",
+            ru: "Продолжить без восстановления",
+            zhHans: "继续且不恢复"
+        ),
+        "backup.restore.lookup.timedout": .init(
+            en: "Still Searching",
+            ru: "Поиск еще идет",
+            zhHans: "正在搜索中"
+        ),
+        "backup.restore.empty.status.not_found": .init(
+            en: "Backup Not Found",
+            ru: "Копия не найдена",
+            zhHans: "未找到备份"
+        ),
+        "backup.restore.action.retry": .init(
+            en: "Retry Search",
+            ru: "Повторить поиск",
+            zhHans: "重试搜索"
+        ),
         "common.done": .init(
             en: "Done",
             ru: "Готово",

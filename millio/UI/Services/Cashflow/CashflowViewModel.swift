@@ -347,13 +347,13 @@ enum ChartPeriod: String, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .month: return String(localized: "Month")
-        case .quarter: return String(localized: "Quarter")
-        case .year: return String(localized: "Year")
-        case .specificMonth: return String(localized: "Month")
-        case .specificQuarter: return String(localized: "Quarter")
-        case .specificYear: return String(localized: "Year")
-        case .custom: return String(localized: "Custom period")
+        case .month: return CashflowLocalization.periodMonth
+        case .quarter: return CashflowLocalization.periodQuarter
+        case .year: return CashflowLocalization.periodYear
+        case .specificMonth: return CashflowLocalization.periodMonth
+        case .specificQuarter: return CashflowLocalization.periodQuarter
+        case .specificYear: return CashflowLocalization.periodYear
+        case .custom: return CashflowLocalization.periodCustom
         }
     }
 }
@@ -2145,12 +2145,12 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     func incomeCategoryDisplayName(for raw: String?) -> String {
-        guard let raw else { return String(localized: "Uncategorized") }
+        guard let raw else { return CashflowLocalization.uncategorized }
         return categoryOption(for: raw, kind: .income).displayName
     }
 
     func expenseCategoryDisplayName(for raw: String?) -> String {
-        guard let raw else { return String(localized: "Uncategorized") }
+        guard let raw else { return CashflowLocalization.uncategorized }
         return categoryOption(for: raw, kind: .expense).displayName
     }
 
