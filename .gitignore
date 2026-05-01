@@ -38,5 +38,10 @@ build/
 
 # Agent / tool artifacts
 .agents/
-.claude/
 graphify-out/
+
+# Claude Code — командные части (settings.json, commands, hooks, skills/CATALOG.md) в репо.
+# Локальные части — игнорируем.
+.claude/settings.local.json
+.claude/telemetry/
+.claude/local/
