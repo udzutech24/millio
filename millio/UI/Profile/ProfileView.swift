@@ -495,34 +495,6 @@ struct ProfileView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("profile.dailyReminderLink")
 
-        case .homeLayout:
-            Menu {
-                ForEach(MainScreenLayoutMode.allCases, id: \.self) { mode in
-                    Button {
-                        appState.mainScreenLayoutMode = mode
-                    } label: {
-                        if mode == appState.mainScreenLayoutMode {
-                            Label(homeLayoutModeTitle(for: mode), systemImage: "checkmark")
-                        } else {
-                            Text(homeLayoutModeTitle(for: mode))
-                        }
-                    }
-                }
-            } label: {
-                settingsRowText(
-                    item: .homeLayout,
-                    title: homeLayoutTitle
-                ) {
-                    rowValueText(
-                        homeLayoutModeTitle(for: appState.mainScreenLayoutMode),
-                        accent: true
-                    )
-                    chevron
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("profile.homeLayoutMenu")
-
         case .quickSetup:
             Button {
                 showQuickSetupSheet = true
@@ -881,31 +853,6 @@ struct ProfileView: View {
             locale: profileLocale,
             fallback: sectionID.fallbackTitle
         )
-    }
-
-    private var homeLayoutTitle: String {
-        AppLocalization.string(
-            "profile.home_layout",
-            locale: profileLocale,
-            fallback: "Home screen"
-        )
-    }
-
-    private func homeLayoutModeTitle(for mode: MainScreenLayoutMode) -> String {
-        switch mode {
-        case .classic:
-            AppLocalization.string(
-                MainLocalization.layoutClassic,
-                locale: profileLocale,
-                fallback: "Classic"
-            )
-        case .focus:
-            AppLocalization.string(
-                MainLocalization.layoutFocus,
-                locale: profileLocale,
-                fallback: "Focus"
-            )
-        }
     }
 }
 

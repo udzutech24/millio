@@ -73,24 +73,6 @@ struct SettingsAndCurrencyDefaultsTests {
         #expect(isolated.manager.isBiometricUnlockEnabled == false)
     }
 
-    @Test("SettingsManager mainScreenLayoutMode defaults to classic")
-    func testMainScreenLayoutModeDefault() {
-        let isolated = makeIsolatedSettingsManager()
-        defer { isolated.cleanup() }
-
-        isolated.defaults.removeObject(forKey: "mainScreenLayoutMode")
-        #expect(isolated.manager.mainScreenLayoutMode == .classic)
-    }
-
-    @Test("SettingsManager mainScreenLayoutMode persists selected mode")
-    func testMainScreenLayoutModePersists() {
-        let isolated = makeIsolatedSettingsManager()
-        defer { isolated.cleanup() }
-
-        isolated.manager.mainScreenLayoutMode = .focus
-        #expect(isolated.manager.mainScreenLayoutMode == .focus)
-    }
-
     @Test("SettingsManager dailyReminderSettings defaults to disabled expense reminder")
     func testDailyReminderSettingsDefault() {
         let isolated = makeIsolatedSettingsManager()

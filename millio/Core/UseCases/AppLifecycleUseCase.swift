@@ -68,10 +68,8 @@ final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
         }
         let now = nowProvider()
         if shouldShowLaunchSplash(now: now) {
-            // Mark the splash as consumed before the delay completes so a force-quit
-            // during launch does not cause a second splash on the same day.
-            splashPreferences.lastLaunchSplashShownAt = now
             await enforceMinimumLaunchDuration(since: overallStart)
+            splashPreferences.lastLaunchSplashShownAt = now
         }
         appState.lifecycle = nextLifecycle
 

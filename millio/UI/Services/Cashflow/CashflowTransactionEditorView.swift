@@ -94,7 +94,6 @@ struct CashflowTransactionEditorView: View {
     @State private var showRecurrenceRulePicker: Bool = false
     @State private var showCryptoProAlert: Bool = false
     @State private var showAffectBalanceHelpAlert: Bool = false
-    @State private var datePickerReloadID = UUID()
     @FocusState private var isAmountFieldFocused: Bool
 
     private let primarySecondaryText = Color.white.opacity(0.78)
@@ -371,7 +370,9 @@ struct CashflowTransactionEditorView: View {
         .onChange(of: transactionDate) { _, _ in
             validateAvailableBalance()
             refreshTransferRateSuggestion()
-            collapseCompactDatePicker()
+            // Compact DatePicker stays expanded after selection on iOS.
+            // Explicitly dismiss the active responder so the calendar closes.
+            InputDismissalSupport.dismissActiveResponder()
         }
         .onChange(of: selectedTransactionType) { _, _ in
             if selectedTransactionType != .income && selectedTransactionType != .expense {
@@ -636,7 +637,6 @@ struct CashflowTransactionEditorView: View {
                         DatePicker("", selection: $transactionDate, displayedComponents: .date)
                             .labelsHidden()
                             .tint(AppColors.textTertiary)
-                            .id(datePickerReloadID)
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 16)
@@ -700,15 +700,6 @@ struct CashflowTransactionEditorView: View {
                 .padding(.vertical, 10)
                 .padding(.horizontal, 16)
             }
-        }
-    }
-
-    private func collapseCompactDatePicker() {
-        // Recreate the compact picker after a successful date selection so its
-        // popover collapses immediately for income and expense flows.
-        DispatchQueue.main.async {
-            datePickerReloadID = UUID()
-            InputDismissalSupport.dismissActiveResponder()
         }
     }
 

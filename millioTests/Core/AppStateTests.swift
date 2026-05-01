@@ -64,24 +64,6 @@ struct AppStateTests {
         appState.lastBackupDate = date
         #expect(appState.lastBackupDate == date)
     }
-
-    @Test("Main screen layout mode persists through AppState")
-    func testMainScreenLayoutModePersistsThroughAppState() {
-        let original = SettingsManager.shared.mainScreenLayoutMode
-        defer {
-            SettingsManager.shared.mainScreenLayoutMode = original
-        }
-
-        SettingsManager.shared.mainScreenLayoutMode = .classic
-
-        let appState = AppState()
-        #expect(appState.mainScreenLayoutMode == .classic)
-
-        appState.mainScreenLayoutMode = .focus
-
-        #expect(appState.mainScreenLayoutMode == .focus)
-        #expect(SettingsManager.shared.mainScreenLayoutMode == .focus)
-    }
     
     @Test("Language selection works")
     func testLanguageSelection() {
@@ -689,44 +671,6 @@ struct AppLifecycleUseCaseTests {
 
         #expect(appState.lifecycle == .ready)
         #expect(splashPrefs.lastLaunchSplashShownAt == now)
-    }
-
-    @Test("initialize сразу помечает splash как показанный в режиме раз в день")
-    func testInitializeMarksDailySplashShownBeforeDelayCompletes() async {
-        let defaults = UserDefaults.standard
-        let key = "hasCompletedOnboarding"
-        let previous = defaults.object(forKey: key)
-        defer {
-            if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) }
-        }
-        defaults.set(true, forKey: key)
-
-        let now = Date(timeIntervalSince1970: 1_741_170_000)
-        let appState = AppState()
-        appState.isBackupEnabled = false
-
-        let splashPrefs = FakeLaunchSplashPreferences(mode: .oncePerDay, lastShownAt: nil)
-        let useCase = AppLifecycleUseCase(
-            appState: appState,
-            backupManager: FakeBackupManager(),
-            splashPreferences: splashPrefs,
-            calendar: Calendar(identifier: .gregorian),
-            nowProvider: { now },
-            minimumLaunchDuration: 0.2
-        )
-
-        let initializeTask = Task {
-            await useCase.initialize()
-        }
-
-        try? await Task.sleep(nanoseconds: 50_000_000)
-
-        #expect(splashPrefs.lastLaunchSplashShownAt == now)
-        #expect(appState.lifecycle == .launching)
-
-        await initializeTask.value
-
-        #expect(appState.lifecycle == .ready)
     }
 
     @Test("EntitlementPolicy временно снимает лимит тикеров во время beta")

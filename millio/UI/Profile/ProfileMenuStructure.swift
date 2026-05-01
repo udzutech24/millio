@@ -79,7 +79,6 @@ enum ProfileMenuItemID: String, Identifiable {
     case backup
     case security
     case dailyReminders
-    case homeLayout
     case quickSetup
     case launchSplash
     case faq
@@ -110,8 +109,6 @@ enum ProfileMenuItemID: String, Identifiable {
             return "lock.shield"
         case .dailyReminders:
             return "bell"
-        case .homeLayout:
-            return "square.grid.2x2"
         case .quickSetup:
             return "sparkles.rectangle.stack"
         case .launchSplash:
@@ -155,8 +152,6 @@ enum ProfileMenuItemID: String, Identifiable {
             return .green
         case .dailyReminders:
             return .orange
-        case .homeLayout:
-            return .blue
         case .quickSetup:
             return .purple
         case .launchSplash:
@@ -229,7 +224,6 @@ enum ProfileMenuStructure {
             ProfileMenuSection(
                 id: .experience,
                 items: [
-                    .homeLayout,
                     .quickSetup,
                     .launchSplash
                 ]
