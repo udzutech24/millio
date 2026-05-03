@@ -279,7 +279,9 @@ struct InvestmentViewModelTests {
             isFavorite: true,
             marketData: nil,
             createCashflowTransaction: true,
-            uniqueID: nil
+            uniqueID: nil,
+            isDeposit: false,
+            depositData: nil
         ))
 
         #expect(viewModel.state.investments.count == 1)
@@ -314,7 +316,9 @@ struct InvestmentViewModelTests {
                 providerRaw: "market-backend"
             ),
             createCashflowTransaction: false,
-            uniqueID: nil
+            uniqueID: nil,
+            isDeposit: false,
+            depositData: nil
         ))
 
         let investment = try #require(viewModel.state.investments.first)
@@ -355,7 +359,9 @@ struct InvestmentViewModelTests {
             isFavorite: false,
             marketData: nil,
             createCashflowTransaction: true,
-            uniqueID: investment.investmentUniqueID
+            uniqueID: investment.investmentUniqueID,
+            isDeposit: false,
+            depositData: nil
         ))
 
         // Проверяем что создалась транзакция
@@ -406,7 +412,9 @@ struct InvestmentViewModelTests {
                 providerRaw: "market-backend"
             ),
             createCashflowTransaction: false,
-            uniqueID: investment.investmentUniqueID
+            uniqueID: investment.investmentUniqueID,
+            isDeposit: false,
+            depositData: nil
         ))
 
         let descriptor = FetchDescriptor<CashflowTransaction>()
@@ -467,7 +475,9 @@ struct InvestmentViewModelTests {
                 providerRaw: "market-backend"
             ),
             createCashflowTransaction: true,
-            uniqueID: investment.investmentUniqueID
+            uniqueID: investment.investmentUniqueID,
+            isDeposit: false,
+            depositData: nil
         ))
 
         let descriptor = FetchDescriptor<CashflowTransaction>()

@@ -21,9 +21,12 @@ struct InvestmentState {
     
     /// Показывать ли экран добавления/редактирования
     var showInvestmentEditor: Bool = false
-    
+
     /// Редактируемая инвестиция (nil = новая инвестиция)
     var editingInvestment: Investment? = nil
+
+    /// Флаг: создаётся новый вклад (isDeposit = true при новой, сбрасывается при открытии редактора)
+    var isCreatingDeposit: Bool = false
     
     /// Показывать ли sheet выбора валюты для отображения
     var showDisplayCurrencySheet: Bool = false
@@ -63,11 +66,23 @@ struct InvestmentMarketData: Equatable {
     var providerRaw: String?
 }
 
+// MARK: - Deposit Data
+
+/// Данные вклада, передаваемые при создании/обновлении инвестиции-вклада.
+struct InvestmentDepositData {
+    var interestRate: Double?
+    var startDate: Date
+    var endDate: Date?
+    var incomeInCashflow: Bool
+    var capitalizationRaw: String
+    var notifyDaysBefore: Int
+}
+
 // MARK: - Investment Actions
 
 enum InvestmentAction {
     case loadInvestments
-    case addInvestment
+    case addInvestment(isDeposit: Bool = false)
     case editInvestment(Investment)
     case deleteInvestment(Investment)
     case toggleFavorite(Investment)
@@ -83,7 +98,8 @@ enum InvestmentAction {
         marketData: InvestmentMarketData?,
         createCashflowTransaction: Bool,
         uniqueID: String?,
-        isDeposit: Bool
+        isDeposit: Bool,
+        depositData: InvestmentDepositData?
     )
     case showInvestmentEditor
     case hideInvestmentEditor
@@ -118,11 +134,13 @@ final class InvestmentViewModel: ViewModelProtocol {
         case .loadInvestments:
             loadInvestments()
             
-        case .addInvestment:
+        case .addInvestment(let isDeposit):
             state.editingInvestment = nil
+            state.isCreatingDeposit = isDeposit
             state.showInvestmentEditor = true
-            
+
         case .editInvestment(let investment):
+            state.isCreatingDeposit = false
             state.editingInvestment = investment
             state.showInvestmentEditor = true
             
@@ -144,7 +162,8 @@ final class InvestmentViewModel: ViewModelProtocol {
             let marketData,
             let createCashflowTransaction,
             let uniqueID,
-            let isDeposit
+            let isDeposit,
+            let depositData
         ):
             updateInvestment(
                 name: name,
@@ -158,7 +177,8 @@ final class InvestmentViewModel: ViewModelProtocol {
                 marketData: marketData,
                 createCashflowTransaction: createCashflowTransaction,
                 uniqueID: uniqueID,
-                isDeposit: isDeposit
+                isDeposit: isDeposit,
+                depositData: depositData
             )
             
         case .showInvestmentEditor:
@@ -326,7 +346,8 @@ final class InvestmentViewModel: ViewModelProtocol {
         marketData: InvestmentMarketData?,
         createCashflowTransaction: Bool,
         uniqueID: String?,
-        isDeposit: Bool
+        isDeposit: Bool,
+        depositData: InvestmentDepositData? = nil
     ) {
         var editedInvestment: Investment? = nil
         var oldAmount: Double = 0.0
@@ -334,6 +355,7 @@ final class InvestmentViewModel: ViewModelProtocol {
         var quantityWasChanged: Bool = false
         var didCreateTransaction: Bool = false
         var assetChangeSnapshotBefore: CashflowAssetChangeSnapshot?
+        var createdNewInvestment: Investment? = nil
         
         if let existing = state.editingInvestment {
             if existing.uniqueID.isEmpty {
@@ -392,6 +414,15 @@ final class InvestmentViewModel: ViewModelProtocol {
                 newInvestment.uniqueID = uniqueID
             }
             newInvestment.isDeposit = isDeposit
+            // Применяем deposit-поля при создании вклада
+            if let dd = depositData {
+                newInvestment.depositInterestRate = dd.interestRate
+                newInvestment.depositStartDate = dd.startDate
+                newInvestment.depositEndDate = dd.endDate
+                newInvestment.depositIncomeInCashflow = dd.incomeInCashflow
+                newInvestment.depositCapitalizationRaw = dd.capitalizationRaw
+                newInvestment.depositNotifyDaysBefore = dd.notifyDaysBefore
+            }
             applyMarketData(
                 marketData,
                 to: newInvestment,
@@ -401,6 +432,7 @@ final class InvestmentViewModel: ViewModelProtocol {
             newInvestment.initialAmount = newInvestment.amount
             newInvestment.hasInitialAmount = true
             modelContext.insert(newInvestment)
+            createdNewInvestment = newInvestment
         }
         
         // Создание CashflowTransaction если нужно (перед save для атомарности)
@@ -437,9 +469,14 @@ final class InvestmentViewModel: ViewModelProtocol {
         // Атомарное сохранение всех изменений (Investment и CashflowTransaction)
         do {
             try modelContext.save()
+            // Синхронизируем cashflow-доход для нового вклада (если depositData задан)
+            if let inv = createdNewInvestment, inv.isDeposit {
+                syncDepositIncome(for: inv)
+            }
             loadInvestments()
             state.showInvestmentEditor = false
             state.editingInvestment = nil
+            state.isCreatingDeposit = false
             EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             if didCreateTransaction {
                 EventBus.shared.publish(FinanceEvent.transactionsUpdated)

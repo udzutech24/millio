@@ -96,7 +96,9 @@ struct InvestmentEditorView: View {
     }
 
     private var isDepositMode: Bool {
-        viewModel.state.editingInvestment?.isDeposit == true
+        // При редактировании существующего вклада — проверяем флаг модели.
+        // При создании нового вклада — editingInvestment ещё nil, используем isCreatingDeposit.
+        viewModel.state.editingInvestment?.isDeposit == true || viewModel.state.isCreatingDeposit
     }
 
     private var depositMonthlyIncome: Double {
@@ -1102,6 +1104,20 @@ struct InvestmentEditorView: View {
         }
         let depositSyncTarget = isDepositMode ? viewModel.state.editingInvestment : nil
 
+        // При создании нового вклада editingInvestment ещё nil —
+        // берём isDeposit из isCreatingDeposit-флага state.
+        let effectiveIsDeposit = viewModel.state.editingInvestment?.isDeposit ?? viewModel.state.isCreatingDeposit
+
+        // Собираем deposit-поля для передачи в action (нужно при создании нового вклада)
+        let depositData: InvestmentDepositData? = effectiveIsDeposit ? InvestmentDepositData(
+            interestRate: parseNumber(depositInterestRateText),
+            startDate: depositStartDate,
+            endDate: depositHasEndDate ? depositEndDate : nil,
+            incomeInCashflow: depositIncomeInCashflow,
+            capitalizationRaw: depositCapitalization.rawValue,
+            notifyDaysBefore: depositNotifyDaysBefore
+        ) : nil
+
         viewModel.handle(.updateInvestment(
             name: name,
             investmentType: selectedInvestmentType,
@@ -1114,7 +1130,8 @@ struct InvestmentEditorView: View {
             marketData: marketData,
             createCashflowTransaction: createCashflowTransaction,
             uniqueID: nil,
-            isDeposit: viewModel.state.editingInvestment?.isDeposit ?? false
+            isDeposit: effectiveIsDeposit,
+            depositData: depositData
         ))
 
         if let inv = depositSyncTarget {

@@ -583,7 +583,7 @@ struct FinanceAddAccountView: View {
                                 if let editingInvestment {
                                     vm.handle(.editInvestment(editingInvestment))
                                 } else {
-                                    vm.handle(.addInvestment)
+                                    vm.handle(.addInvestment(isDeposit: selectedInvestmentPreset == .deposit))
                                 }
                                 investmentViewModel = vm
                             }
@@ -1395,7 +1395,8 @@ struct FinanceAddAccountView: View {
             marketData: investmentData.marketData,
             createCashflowTransaction: investmentData.createCashflowTransaction,
             uniqueID: createdInvestmentID,
-            isDeposit: selectedInvestmentPreset == .deposit
+            isDeposit: selectedInvestmentPreset == .deposit,
+            depositData: nil
         ))
         
         guard investmentViewModel.state.investments.contains(where: { $0.investmentUniqueID == createdInvestmentID }) else { return }
@@ -1427,7 +1428,8 @@ struct FinanceAddAccountView: View {
             marketData: investmentData.marketData,
             createCashflowTransaction: investmentData.createCashflowTransaction,
             uniqueID: investment.investmentUniqueID,
-            isDeposit: investment.isDeposit
+            isDeposit: investment.isDeposit,
+            depositData: nil
         ))
 
         viewModel.handle(.addAccountToGroup(
