@@ -282,9 +282,6 @@ final class FinanceViewModel: ViewModelProtocol {
     private var cardByID: [String: Card] = [:]
     private var creditByID: [String: Credit] = [:]
     private var investmentByID: [String: Investment] = [:]
-    private var allCardByID: [String: Card] = [:]
-    private var allCreditByID: [String: Credit] = [:]
-    private var allInvestmentByID: [String: Investment] = [:]
     private var lastManualStockRefreshAt: Date?
 
     private static let manualStockRefreshCooldown: TimeInterval = 15
@@ -327,7 +324,40 @@ final class FinanceViewModel: ViewModelProtocol {
                 self?.state.editingGroup = nil
             },
             onArchiveUnderlying: { [weak self] account, date in
-                self?.updateUnderlyingArchiveState(for: account, archivedAt: date)
+                self?.accountService.updateUnderlyingArchiveState(for: account, archivedAt: date)
+            }
+        )
+    }()
+
+    // accountService использует lazy из-за замыканий на self
+    private(set) lazy var accountService: FinanceAccountService = {
+        FinanceAccountService(
+            modelContext: self.modelContext,
+            ungroupedGroupName: self.ungroupedGroupName,
+            groupsProvider: { [weak self] in self?.state.groups ?? [] },
+            nextOrderProvider: { [weak self] group in self?.groupService.nextAccountOrder(in: group) ?? 0 },
+            onAccountsLoaded: { [weak self] payload in
+                self?.state.availableCards = payload.availableCards
+                self?.state.archivedCards = payload.archivedCards
+                self?.state.availableCredits = payload.availableCredits
+                self?.state.archivedCredits = payload.archivedCredits
+                self?.state.availableInvestments = payload.availableInvestments
+                self?.state.archivedInvestments = payload.archivedInvestments
+            },
+            onCachesRebuilt: { [weak self] payload in
+                self?.cardByID = payload.cardByID
+                self?.creditByID = payload.creditByID
+                self?.investmentByID = payload.investmentByID
+            },
+            onLoadGroups: { [weak self] in self?.loadGroups() },
+            onUpdateUnattachedItems: { [weak self] in self?.updateUnattachedItems() },
+            onCalculateTotal: { [weak self] in self?.calculateTotalAmount() },
+            onScheduleGroupTotalRefresh: { [weak self] groupID in
+                self?.scheduleGroupTotalRefresh(for: groupID)
+            },
+            onDismissAddAccountSheet: { [weak self] in
+                self?.state.showAddAccountSheet = false
+                self?.state.selectedGroupForAccount = nil
             }
         )
     }()
@@ -671,111 +701,9 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private func loadAccounts() {
-        // Загружаем карты, кредиты и активы
-        let allCards = CardCatalog.fetchAll(in: modelContext)
-        state.availableCards = allCards.filter { $0.archivedAt == nil }
-        state.archivedCards = allCards.filter { $0.archivedAt != nil }
-        
-        let creditDescriptor = FetchDescriptor<Credit>()
-        let allCredits = (try? modelContext.fetch(creditDescriptor)) ?? []
-        state.availableCredits = allCredits.filter { $0.archivedAt == nil }
-        state.archivedCredits = allCredits.filter { $0.archivedAt != nil }
-        normalizeCreditsIncludeInTotal(state.availableCredits + state.archivedCredits)
-        
-        let investmentDescriptor = FetchDescriptor<Investment>()
-        let allInvestments = (try? modelContext.fetch(investmentDescriptor)) ?? []
-        normalizeMarketAssetIdentities(allInvestments)
-        normalizeMarketQuoteLookupKeys(allInvestments)
-        state.availableInvestments = allInvestments.filter { $0.archivedAt == nil }
-        state.archivedInvestments = allInvestments.filter { $0.archivedAt != nil }
-
-        rebuildAccountCaches()
-        rebuildAllAccountCaches(
-            cards: allCards,
-            credits: allCredits,
-            investments: allInvestments
-        )
-        cleanupInvalidFinanceAccounts()
-        
-        // Обновляем менеджеры
-        CardManager.shared.setup(modelContext: modelContext)
-        CreditManager.shared.setup(modelContext: modelContext)
-        InvestmentManager.shared.setup(modelContext: modelContext)
-        
-        // Вычисляем непривязанные элементы
-        updateUnattachedItems()
+        accountService.loadAccounts()
     }
 
-    private func normalizeCreditsIncludeInTotal(_ credits: [Credit]) {
-        var requiresSave = false
-        for credit in credits where !credit.includeInTotal {
-            credit.includeInTotal = true
-            credit.updatedAt = Date()
-            requiresSave = true
-        }
-        if requiresSave {
-            do {
-                try modelContext.save()
-            } catch {
-                AppLogger.log(.error, category: "Finance", "Failed to normalize credits includeInTotal: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    private func normalizeMarketAssetIdentities(_ investments: [Investment]) {
-        var requiresSave = false
-        let assetCatalogStore = AssetCatalogStore(modelContext: modelContext)
-
-        for investment in investments where investment.isMarketPriced {
-            requiresSave = assetCatalogStore.migrateInvestmentIfNeeded(investment) || requiresSave
-        }
-
-        guard requiresSave else { return }
-        do {
-            try modelContext.save()
-        } catch {
-            AppLogger.log(.error, category: "Finance", "Failed to normalize market asset identities: \(error.localizedDescription)")
-        }
-    }
-
-    private func normalizeMarketQuoteLookupKeys(_ investments: [Investment]) {
-        var requiresSave = false
-
-        for investment in investments where investment.isMarketPriced {
-            let existingLookupKey = investment.marketQuoteLookupKey?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .uppercased() ?? ""
-            if !existingLookupKey.isEmpty {
-                continue
-            }
-
-            let rawSymbol = investment.marketSymbol?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .uppercased() ?? ""
-            guard !rawSymbol.isEmpty else { continue }
-            if investment.marketExchange?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false &&
-                rawSymbol.hasSuffix(".US") {
-                continue
-            }
-
-            let normalizedKey = MarketInstrumentIdentity.canonicalQuoteLookupKey(
-                symbol: rawSymbol,
-                exchange: investment.marketExchange
-            )
-            if !normalizedKey.isEmpty, investment.marketQuoteLookupKey != normalizedKey {
-                investment.marketQuoteLookupKey = normalizedKey
-                requiresSave = true
-            }
-        }
-
-        guard requiresSave else { return }
-        do {
-            try modelContext.save()
-        } catch {
-            AppLogger.log(.error, category: "Finance", "Failed to normalize market quote lookup keys: \(error.localizedDescription)")
-        }
-    }
-    
     /// Обновить списки непривязанных элементов
     private func updateUnattachedItems() {
         // Получаем все привязанные счета из всех групп
@@ -849,193 +777,6 @@ final class FinanceViewModel: ViewModelProtocol {
         await calculateTotalAmountAsync()
     }
 
-    /// Перестраиваем кэш счетов по ID после загрузки данных
-    private func rebuildAccountCaches() {
-        cardByID = [:]
-        creditByID = [:]
-        investmentByID = [:]
-
-        for card in state.availableCards {
-            cardByID[card.cardUniqueID] = card
-        }
-        for credit in state.availableCredits {
-            creditByID[credit.creditUniqueID] = credit
-        }
-        for investment in state.availableInvestments {
-            investmentByID[investment.investmentUniqueID] = investment
-        }
-    }
-
-    /// Перестраиваем кэш всех счетов (включая архивные) для валидности связей
-    private func rebuildAllAccountCaches(cards: [Card], credits: [Credit], investments: [Investment]) {
-        allCardByID = [:]
-        allCreditByID = [:]
-        allInvestmentByID = [:]
-        
-        for card in cards {
-            allCardByID[card.cardUniqueID] = card
-        }
-        for credit in credits {
-            allCreditByID[credit.creditUniqueID] = credit
-        }
-        for investment in investments {
-            allInvestmentByID[investment.investmentUniqueID] = investment
-        }
-    }
-
-    /// Удаляем "сиротские" связи, чтобы не накапливать мусор в базе
-    private func cleanupInvalidFinanceAccounts() {
-        let descriptor = FetchDescriptor<FinanceAccount>()
-        guard let accounts = try? modelContext.fetch(descriptor) else { return }
-
-        var didMutate = false
-        var removedCount = 0
-        var dedupedCount = 0
-        var reassignedToUngroupedCount = 0
-        var createdMissingCardLinksCount = 0
-        var createdMissingCreditLinksCount = 0
-        var createdMissingInvestmentLinksCount = 0
-
-        var ungroupedGroup: FinanceGroup?
-        func resolveUngroupedGroup() -> FinanceGroup {
-            if let ungroupedGroup { return ungroupedGroup }
-            let group = FinanceSystemGroups.ensureUngroupedGroup(in: modelContext)
-            ungroupedGroup = group
-            return group
-        }
-
-        var linkedCardIDs = Set(accounts.compactMap { account in
-            account.accountType == .card ? account.accountID : nil
-        })
-        var linkedCreditIDs = Set(accounts.compactMap { account in
-            account.accountType == .credit ? account.accountID : nil
-        })
-        var linkedInvestmentIDs = Set(accounts.compactMap { account in
-            account.accountType == .investment ? account.accountID : nil
-        })
-
-        let groupedAccounts = Dictionary(
-            grouping: accounts,
-            by: { "\($0.accountTypeRaw)|\($0.accountID)" }
-        )
-
-        for duplicates in groupedAccounts.values where duplicates.count > 1 {
-            let survivor = duplicates.max { lhs, rhs in
-                financeAccountDeduplicationRank(lhs) < financeAccountDeduplicationRank(rhs)
-            }
-
-            for duplicate in duplicates where duplicate.persistentModelID != survivor?.persistentModelID {
-                modelContext.delete(duplicate)
-                dedupedCount += 1
-                didMutate = true
-            }
-        }
-
-        for account in accounts {
-            if account.modelContext == nil {
-                continue
-            }
-            // `group == nil` — невалидное состояние. Нормализуем в системную "Без группы",
-            // иначе счет будет теряться из основного списка (это проявляется на массовом импорте акций).
-            if account.group == nil {
-                account.group = resolveUngroupedGroup()
-                account.updatedAt = Date()
-                reassignedToUngroupedCount += 1
-                didMutate = true
-            }
-
-            // Если целевой объект не найден — удаляем связь
-            switch account.accountType {
-            case .card:
-                if allCardByID[account.accountID] == nil {
-                    modelContext.delete(account)
-                    removedCount += 1
-                    didMutate = true
-                }
-            case .credit:
-                if allCreditByID[account.accountID] == nil {
-                    modelContext.delete(account)
-                    removedCount += 1
-                    didMutate = true
-                }
-            case .investment:
-                if allInvestmentByID[account.accountID] == nil {
-                    modelContext.delete(account)
-                    removedCount += 1
-                    didMutate = true
-                }
-            }
-        }
-
-        // Восстанавливаем отсутствующие связи для продуктов:
-        // раньше они могли "пропасть" из групп из-за cleanup/dangling links, после чего
-        // счет исчезал с главного экрана и переставал влиять на Итого.
-        for card in allCardByID.values where card.archivedAt == nil {
-            guard !linkedCardIDs.contains(card.cardUniqueID) else { continue }
-            let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
-            account.group = resolveUngroupedGroup()
-            modelContext.insert(account)
-            linkedCardIDs.insert(card.cardUniqueID)
-            createdMissingCardLinksCount += 1
-            didMutate = true
-        }
-
-        for credit in allCreditByID.values where credit.archivedAt == nil {
-            guard !linkedCreditIDs.contains(credit.creditUniqueID) else { continue }
-            let account = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
-            account.group = resolveUngroupedGroup()
-            modelContext.insert(account)
-            linkedCreditIDs.insert(credit.creditUniqueID)
-            createdMissingCreditLinksCount += 1
-            didMutate = true
-        }
-
-        for investment in allInvestmentByID.values where investment.archivedAt == nil {
-            guard !linkedInvestmentIDs.contains(investment.investmentUniqueID) else { continue }
-            let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-            account.group = resolveUngroupedGroup()
-            modelContext.insert(account)
-            linkedInvestmentIDs.insert(investment.investmentUniqueID)
-            createdMissingInvestmentLinksCount += 1
-            didMutate = true
-        }
-
-        guard didMutate else { return }
-
-        do {
-            try modelContext.save()
-            if dedupedCount > 0 {
-                AppLogger.log(.info, category: "Finance", "Removed \(dedupedCount) duplicate finance account links")
-            }
-            if removedCount > 0 {
-                AppLogger.log(.info, category: "Finance", "Removed \(removedCount) invalid finance account links")
-            }
-            if reassignedToUngroupedCount > 0 {
-                AppLogger.log(.info, category: "Finance", "Reassigned \(reassignedToUngroupedCount) finance account links to ungrouped group")
-            }
-            if createdMissingCardLinksCount > 0 {
-                AppLogger.log(.info, category: "Finance", "Created \(createdMissingCardLinksCount) missing card finance account links")
-            }
-            if createdMissingCreditLinksCount > 0 {
-                AppLogger.log(.info, category: "Finance", "Created \(createdMissingCreditLinksCount) missing credit finance account links")
-            }
-            if createdMissingInvestmentLinksCount > 0 {
-                AppLogger.log(.info, category: "Finance", "Created \(createdMissingInvestmentLinksCount) missing investment finance account links")
-            }
-            loadGroups()
-        } catch {
-            AppLogger.log(.error, category: "Finance", "Failed to cleanup finance accounts: \(error.localizedDescription)")
-        }
-    }
-
-    private func financeAccountDeduplicationRank(_ account: FinanceAccount) -> (Int, Int, Date, Date) {
-        let isGrouped = account.group != nil ? 1 : 0
-        let isNonSystemGroup: Int = {
-            guard let group = account.group else { return 0 }
-            return group.name == ungroupedGroupName ? 0 : 1
-        }()
-        return (isNonSystemGroup, isGrouped, account.updatedAt, account.createdAt)
-    }
     
     private func calculateTotalAmount() {
         scheduleBackgroundTask { viewModel in
@@ -2047,162 +1788,28 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     private func addAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
-        let targetGroup = group ?? FinanceSystemGroups.ensureUngroupedGroup(in: modelContext)
-        let nextOrder = groupService.nextAccountOrder(in: targetGroup)
-        
-        // Проверяем, не добавлен ли уже этот счет в любую группу
-        let allAccountsDescriptor = FetchDescriptor<FinanceAccount>()
-        if let allAccounts = try? modelContext.fetch(allAccountsDescriptor) {
-            let existingAccount = allAccounts.first { account in
-                account.accountType == accountType && account.accountID == accountID
-            }
-            
-            if let existing = existingAccount {
-                // Перемещаем счет в новую группу
-                existing.group = targetGroup
-                if targetGroup.usesManualAccountOrdering {
-                    existing.order = nextOrder
-                }
-                existing.updatedAt = Date()
-            } else {
-                // Создаем новый счет
-                let account = FinanceAccount(accountType: accountType, accountID: accountID)
-                account.group = targetGroup
-                account.order = nextOrder
-                modelContext.insert(account)
-            }
-        } else {
-            // Создаем новый счет
-            let account = FinanceAccount(accountType: accountType, accountID: accountID)
-            account.group = targetGroup
-            account.order = nextOrder
-            modelContext.insert(account)
-        }
-        
-        do {
-            try modelContext.save()
-            loadGroups()
-            loadAccounts() // Обновляем список счетов
-            updateUnattachedItems() // Обновляем списки непривязанных элементов
-            calculateTotalAmount() // Пересчитываем общую сумму
-            
-            // Пересчитываем сумму группы, в которую был добавлен счет
-            scheduleGroupTotalRefresh(for: targetGroup.groupUniqueID)
-            
-            state.showAddAccountSheet = false
-            state.selectedGroupForAccount = nil
-        } catch {
-            AppLogger.log(.error, category: "Finance", "Failed to add account: \(error.localizedDescription)")
-        }
+        accountService.addAccountToGroup(accountType: accountType, accountID: accountID, group: group)
     }
-    
-    private func removeAccountFromGroup(_ account: FinanceAccount) {
-        // Находим группу, к которой принадлежал счет
-        let accountGroup = state.groups.first { group in
-            group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
-        }
 
-        let kind = updateUnderlyingArchiveState(for: account, archivedAt: Date())
-        modelContext.delete(account)
-        
-        do {
-            try modelContext.save()
-            loadGroups()
-            loadAccounts() // Обновляем список счетов
-            updateUnattachedItems() // Обновляем списки непривязанных элементов
-            calculateTotalAmount() // Пересчитываем общую сумму
-            
-            // Пересчитываем сумму группы, из которой был удален счет
-            if let groupID = accountGroup?.groupUniqueID {
-                scheduleGroupTotalRefresh(for: groupID)
-            }
-            if kind == .card {
-                EventBus.shared.publish(FinanceEvent.cardsUpdated)
-            }
-            if kind == .credit {
-                EventBus.shared.publish(FinanceEvent.creditsUpdated)
-            }
-        } catch {
-            AppLogger.log(.error, category: "Finance", "Failed to remove account: \(error.localizedDescription)")
-        }
+    private func removeAccountFromGroup(_ account: FinanceAccount) {
+        let kind = accountService.removeAccountFromGroup(account)
+        if kind == .card { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
+        if kind == .credit { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
     }
 
     private func deleteAccountPermanently(_ account: FinanceAccount) {
-        let accountGroup = state.groups.first { group in
-            group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
-        }
-        let kind = updateUnderlyingArchiveState(for: account, archivedAt: Date())
-
-        do {
-            try modelContext.save()
-            loadGroups()
-            loadAccounts()
-            updateUnattachedItems()
-            calculateTotalAmount()
-
-            if let groupID = accountGroup?.groupUniqueID {
-                scheduleGroupTotalRefresh(for: groupID)
-            }
-            if kind == .card {
-                EventBus.shared.publish(FinanceEvent.cardsUpdated)
-            }
-            if kind == .credit {
-                EventBus.shared.publish(FinanceEvent.creditsUpdated)
-            }
-        } catch {
-            AppLogger.log(.error, category: "Finance", "Failed to delete account permanently: \(error.localizedDescription)")
-        }
-    }
-
-    enum UnderlyingAccountKind {
-        case card
-        case credit
-        case investment
-        case none
+        let kind = accountService.deleteAccountPermanently(account)
+        if kind == .card { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
+        if kind == .credit { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
     }
 
     @discardableResult
     func updateUnderlyingArchiveState(for account: FinanceAccount, archivedAt: Date?) -> UnderlyingAccountKind {
-        updateUnderlyingArchiveState(accountType: account.accountType, accountID: account.accountID, archivedAt: archivedAt)
-    }
-
-    @discardableResult
-    private func updateUnderlyingArchiveState(accountType: FinanceAccountType, accountID: String, archivedAt: Date?) -> UnderlyingAccountKind {
-        switch accountType {
-        case .card:
-            let card = allCardByID[accountID] ?? ((try? modelContext.fetch(FetchDescriptor<Card>())) ?? []).first { $0.cardUniqueID == accountID }
-            if let card {
-                card.archivedAt = archivedAt
-                card.updatedAt = Date()
-            }
-            return .card
-        case .credit:
-            let credit = allCreditByID[accountID] ?? ((try? modelContext.fetch(FetchDescriptor<Credit>())) ?? []).first { $0.creditUniqueID == accountID }
-            if let credit {
-                credit.archivedAt = archivedAt
-                credit.updatedAt = Date()
-            }
-            return .credit
-        case .investment:
-            let investment = allInvestmentByID[accountID] ?? ((try? modelContext.fetch(FetchDescriptor<Investment>())) ?? []).first { $0.investmentUniqueID == accountID }
-            if let investment {
-                investment.archivedAt = archivedAt
-                investment.updatedAt = Date()
-            }
-            return .investment
-        }
+        accountService.updateUnderlyingArchiveState(for: account, archivedAt: archivedAt)
     }
 
     private func restoreArchivedAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
-        let kind = updateUnderlyingArchiveState(accountType: accountType, accountID: accountID, archivedAt: nil)
-        addAccountToGroup(accountType: accountType, accountID: accountID, group: group)
-
-        if kind == .card {
-            EventBus.shared.publish(FinanceEvent.cardsUpdated)
-        }
-        if kind == .credit {
-            EventBus.shared.publish(FinanceEvent.creditsUpdated)
-        }
+        accountService.restoreArchivedAccountToGroup(accountType: accountType, accountID: accountID, group: group)
     }
 
     private func editAccount(_ account: FinanceAccount) {
