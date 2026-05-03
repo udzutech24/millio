@@ -329,6 +329,29 @@ final class FinanceViewModel: ViewModelProtocol {
         )
     }()
 
+    // groupService использует lazy из-за замыканий на self
+    private(set) lazy var groupService: FinanceGroupService = {
+        FinanceGroupService(
+            modelContext: self.modelContext,
+            ungroupedGroupName: self.ungroupedGroupName,
+            groupsProvider: { [weak self] in self?.state.groups ?? [] },
+            accountInfoResolver: { [weak self] account in self?.getAccountInfo(account: account) != nil },
+            onLoadGroups: { [weak self] in self?.loadGroups() },
+            onLoadAccounts: { [weak self] in self?.loadAccounts() },
+            onCalculateTotal: { [weak self] in self?.calculateTotalAmount() },
+            onScheduleGroupTotalRefresh: { [weak self] groupID, currency in
+                self?.scheduleGroupTotalRefresh(for: groupID, fallbackCurrency: currency)
+            },
+            onDismissGroupEditor: { [weak self] in
+                self?.state.showGroupEditor = false
+                self?.state.editingGroup = nil
+            },
+            onArchiveUnderlying: { [weak self] account, date in
+                self?.updateUnderlyingArchiveState(for: account, archivedAt: date)
+            }
+        )
+    }()
+
     // Делегаты к savingsGoalService для обратной совместимости
     private var storedSavingsGoalEnabled: Bool {
         get { savingsGoalService.storedEnabled }
@@ -406,10 +429,16 @@ final class FinanceViewModel: ViewModelProtocol {
             state.showGroupEditor = true
             
         case .deleteGroup(let group):
-            deleteGroup(group)
-            
+            groupService.deleteGroup(group)
+
         case .updateGroup(let name, let colorHex, let displayCurrency):
-            updateGroup(name: name, colorHex: colorHex, displayCurrency: displayCurrency)
+            groupService.updateGroup(
+                name: name,
+                colorHex: colorHex,
+                displayCurrency: displayCurrency,
+                editingGroup: state.editingGroup,
+                displayCurrencyFallback: state.displayCurrency
+            )
             
         case .hideGroupEditor:
             state.showGroupEditor = false
@@ -504,7 +533,7 @@ final class FinanceViewModel: ViewModelProtocol {
             }
 
         case .moveGroup(let sourceGroupID, let destinationIndex):
-            moveGroup(sourceGroupID: sourceGroupID, destinationIndex: destinationIndex)
+            groupService.moveGroup(sourceGroupID: sourceGroupID, destinationIndex: destinationIndex)
 
         case .moveAccount(let sourceAccountID, let destinationIndex, let groupID):
             moveAccount(sourceAccountID: sourceAccountID, destinationIndex: destinationIndex, groupID: groupID)
@@ -1276,37 +1305,13 @@ final class FinanceViewModel: ViewModelProtocol {
     /// Группы, которые нужно показывать в списке финансов.
     /// Системная "Без группы" скрывается, если в ней нет видимых счетов.
     func visibleGroupsForList() -> [FinanceGroup] {
-        state.groups.filter { !shouldHideGroupInList($0) }
-    }
-
-    private func shouldHideGroupInList(_ group: FinanceGroup) -> Bool {
-        guard group.name == ungroupedGroupName else { return false }
-        return visibleAccountsForGroup(group).isEmpty
-    }
-
-    private func visibleAccountsForGroup(_ group: FinanceGroup) -> [FinanceAccount] {
-        orderedAccounts(for: group).filter { getAccountInfo(account: $0) != nil }
+        groupService.visibleGroupsForList()
     }
 
     func orderedAccounts(for group: FinanceGroup) -> [FinanceAccount] {
-        let accounts = (group.accounts ?? []).filter { getAccountInfo(account: $0) != nil }
-        if group.usesManualAccountOrdering {
-            return accounts.sorted { lhs, rhs in
-                if lhs.order != rhs.order {
-                    return lhs.order < rhs.order
-                }
-                return lhs.createdAt < rhs.createdAt
-            }
-        }
-
-        return accounts.sorted { lhs, rhs in
-            let lhsAmount = getAccountInfo(account: lhs)?.amount ?? 0
-            let rhsAmount = getAccountInfo(account: rhs)?.amount ?? 0
-            if lhsAmount != rhsAmount {
-                return lhsAmount > rhsAmount
-            }
-            return lhs.createdAt < rhs.createdAt
-        }
+        groupService.orderedAccounts(for: group, amountResolver: { [weak self] account in
+            self?.getAccountInfo(account: account)?.amount ?? 0
+        })
     }
 
     private func scheduleGroupTotalRefresh(for groupUniqueID: String, fallbackCurrency: String? = nil) {
@@ -2298,102 +2303,6 @@ final class FinanceViewModel: ViewModelProtocol {
             .uppercased() ?? ""
     }
     
-    private func deleteGroup(_ group: FinanceGroup) {
-        let now = Date()
-        var didAffectCards = false
-        var didAffectCredits = false
-
-        if let accounts = group.accounts {
-            for account in accounts {
-                let kind = updateUnderlyingArchiveState(for: account, archivedAt: now)
-                switch kind {
-                case .card:
-                    didAffectCards = true
-                case .credit:
-                    didAffectCredits = true
-                case .investment, .none:
-                    break
-                }
-
-                modelContext.delete(account)
-            }
-        }
-
-        modelContext.delete(group)
-
-        do {
-            try modelContext.save()
-            loadGroups()
-            loadAccounts()
-            calculateTotalAmount()
-
-            if didAffectCards {
-                EventBus.shared.publish(FinanceEvent.cardsUpdated)
-            }
-            if didAffectCredits {
-                EventBus.shared.publish(FinanceEvent.creditsUpdated)
-            }
-        } catch {
-            AppLogger.log(.error, category: "Finance", "Failed to delete group: \(error.localizedDescription)")
-        }
-    }
-    
-    private func updateGroup(name: String, colorHex: String, displayCurrency: String?) {
-        let groupToUpdate: FinanceGroup
-        if let existing = state.editingGroup {
-            existing.name = name
-            existing.colorHex = colorHex
-            existing.displayCurrency = displayCurrency
-            existing.updatedAt = Date()
-            groupToUpdate = existing
-        } else {
-            let maxOrder = state.groups.map { $0.order }.max() ?? -1
-            let newGroup = FinanceGroup(name: name, colorHex: colorHex, order: maxOrder + 1)
-            newGroup.displayCurrency = displayCurrency
-            modelContext.insert(newGroup)
-            groupToUpdate = newGroup
-        }
-        
-        do {
-            try modelContext.save()
-            loadGroups()
-            state.showGroupEditor = false
-            state.editingGroup = nil
-            // Пересчитываем сумму группы если изменилась валюта
-            scheduleGroupTotalRefresh(
-                for: groupToUpdate.groupUniqueID,
-                fallbackCurrency: displayCurrency ?? state.displayCurrency
-            )
-        } catch {
-            AppLogger.log(.error, category: "Finance", "Failed to save group: \(error.localizedDescription)")
-        }
-    }
-
-    private func moveGroup(sourceGroupID: String, destinationIndex: Int) {
-        var groups = visibleGroupsForList()
-        guard let sourceIndex = groups.firstIndex(where: { $0.groupUniqueID == sourceGroupID }) else {
-            return
-        }
-
-        let movedGroup = groups.remove(at: sourceIndex)
-        let boundedDestination = min(max(destinationIndex, 0), groups.count)
-        groups.insert(movedGroup, at: boundedDestination)
-
-        for (index, group) in groups.enumerated() {
-            group.order = index
-            group.updatedAt = Date()
-        }
-
-        normalizeHiddenGroupOrders(excluding: groups.map(\.groupUniqueID))
-
-        do {
-            try modelContext.save()
-            loadGroups()
-        } catch {
-            AppLogger.log(.error, category: "Finance", "Failed to reorder groups: \(error.localizedDescription)")
-        }
-    }
-
     private func moveAccount(sourceAccountID: String, destinationIndex: Int, groupID: String) {
         guard let group = state.groups.first(where: { $0.groupUniqueID == groupID }) else {
             return
@@ -2423,29 +2332,9 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
 
-    private func normalizeHiddenGroupOrders(excluding visibleGroupIDs: [String]) {
-        let hiddenGroups = state.groups
-            .filter { !visibleGroupIDs.contains($0.groupUniqueID) }
-            .sorted { lhs, rhs in
-                if lhs.order != rhs.order {
-                    return lhs.order < rhs.order
-                }
-                return lhs.createdAt < rhs.createdAt
-            }
-
-        let startIndex = visibleGroupIDs.count
-        for (offset, group) in hiddenGroups.enumerated() {
-            group.order = startIndex + offset
-        }
-    }
-
-    private func nextAccountOrder(in group: FinanceGroup) -> Int {
-        ((group.accounts ?? []).map(\.order).max() ?? -1) + 1
-    }
-
     private func addAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
         let targetGroup = group ?? FinanceSystemGroups.ensureUngroupedGroup(in: modelContext)
-        let nextOrder = nextAccountOrder(in: targetGroup)
+        let nextOrder = groupService.nextAccountOrder(in: targetGroup)
         
         // Проверяем, не добавлен ли уже этот счет в любую группу
         let allAccountsDescriptor = FetchDescriptor<FinanceAccount>()
@@ -2551,7 +2440,7 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
 
-    private enum UnderlyingAccountKind {
+    enum UnderlyingAccountKind {
         case card
         case credit
         case investment
@@ -2559,7 +2448,7 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     @discardableResult
-    private func updateUnderlyingArchiveState(for account: FinanceAccount, archivedAt: Date?) -> UnderlyingAccountKind {
+    func updateUnderlyingArchiveState(for account: FinanceAccount, archivedAt: Date?) -> UnderlyingAccountKind {
         updateUnderlyingArchiveState(accountType: account.accountType, accountID: account.accountID, archivedAt: archivedAt)
     }
 
