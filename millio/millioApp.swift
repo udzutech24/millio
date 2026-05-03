@@ -374,6 +374,7 @@ struct millioApp: App {
         InvestmentFeatureRegistration.register()
         FinanceFeatureRegistration.register()
         CashflowFeatureRegistration.register()
+        UserSubscriptionsFeatureRegistration.register()
     }
 
     private static func makeModelContainer(for scope: DataScope) -> ModelContainer? {

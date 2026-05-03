@@ -97,6 +97,9 @@ enum AppColors {
     
     /// Градиент для кнопки "Игры"
     static let gamesGradient = [Color.green, Color.cyan]
+
+    /// Градиент для кнопки "Подписки"
+    static let subscriptionsGradient = [Color(hex: "FF6B35"), Color(hex: "FF2D55")]
     
     // MARK: - Action Button Gradients
     
