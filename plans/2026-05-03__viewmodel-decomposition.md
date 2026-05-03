@@ -8,10 +8,10 @@
 
 ## Статус
 
-`В РАБОТЕ`
+`РЕАЛИЗОВАН`
 
-**Реализовано:** Phase 1 (CashflowHistoryService), Phase 2 (CashflowCurrencyService), Phase 3 (FinanceSavingsGoalService)
-**Осталось:** Фазы 4–12
+**Реализовано:** Все фазы 1–12 завершены (2026-05-03/04)
+**Результат:** CashflowViewModel ~4598 → 2067 строк; FinanceViewModel ~2980 → 1583 строк
 
 ## Цель
 
@@ -22,17 +22,17 @@
 - [x] AC1: `CashflowHistoryService` выделен, тесты зелёные
 - [x] AC2: `CashflowCurrencyService` выделен
 - [x] AC3: `FinanceSavingsGoalService` выделен
-- [ ] AC4: `CashflowCategoryService` выделен
-- [ ] AC5: `FinanceGroupService` выделен
-- [ ] AC6: `FinanceMarketDataService` выделен
-- [ ] AC7: `CashflowScheduledService` выделен
-- [ ] AC8: `FinanceAccountService` выделен
-- [ ] AC9: `CashflowAnalyticsService` выделен
-- [ ] AC10: `FinanceInvestmentOrderService` выделен
-- [ ] AC11: `FinanceTotalsService` выделен
-- [ ] AC12: `CashflowPersistenceService` выделен
-- [ ] AC13: Все тесты зелёные после каждой фазы
-- [ ] AC14: Компиляция без ошибок после каждой фазы
+- [x] AC4: `CashflowCategoryService` выделен
+- [x] AC5: `FinanceGroupService` выделен
+- [x] AC6: `FinanceMarketDataService` выделен
+- [x] AC7: `CashflowScheduledService` выделен
+- [x] AC8: `FinanceAccountService` выделен
+- [x] AC9: `CashflowAnalyticsService` выделен
+- [x] AC10: `FinanceInvestmentOrderService` выделен
+- [x] AC11: `FinanceTotalsService` выделен
+- [x] AC12: `CashflowPersistenceService` выделен
+- [x] AC13: Все тесты зелёные после каждой фазы
+- [x] AC14: Компиляция без ошибок после каждой фазы
 
 ## Challenge Log
 
@@ -159,7 +159,7 @@ ViewModel хранит `let historyService: CashflowHistoryService` и деле�
 
 ---
 
-### `[ ]` Phase 4: CashflowCategoryService — CRUD категорий
+### `[x]` Phase 4: CashflowCategoryService — CRUD категорий
 
 **AC из spec:** AC4, AC13, AC14
 **Сложность:** M (3–5 файлов)
@@ -194,7 +194,7 @@ ViewModel хранит `let historyService: CashflowHistoryService` и деле�
 
 ---
 
-### `[ ]` Phase 5: FinanceGroupService — CRUD групп
+### `[x]` Phase 5: FinanceGroupService — CRUD групп
 
 **AC из spec:** AC5, AC13, AC14
 **Сложность:** M (2–3 файла)
@@ -216,7 +216,7 @@ ViewModel хранит `let historyService: CashflowHistoryService` и деле�
 
 ---
 
-### `[ ]` Phase 6: FinanceMarketDataService — котировки акций
+### `[x]` Phase 6: FinanceMarketDataService — котировки акций
 
 **AC из spec:** AC6, AC13, AC14
 **Сложность:** M (2–3 файла)
@@ -237,7 +237,7 @@ ViewModel хранит `let historyService: CashflowHistoryService` и деле�
 
 ---
 
-### `[ ]` Phase 7: CashflowScheduledService — recurring и planned
+### `[x]` Phase 7: CashflowScheduledService — recurring и planned
 
 **AC из spec:** AC7, AC13, AC14
 **Сложность:** M (2–3 файла)
@@ -262,7 +262,7 @@ ViewModel хранит `let historyService: CashflowHistoryService` и деле�
 
 ---
 
-### `[ ]` Phase 8: FinanceAccountService — управление счетами
+### `[x]` Phase 8: FinanceAccountService — управление счетами
 
 **AC из spec:** AC8, AC13, AC14
 **Сложность:** M (3–5 файлов)
@@ -283,7 +283,7 @@ ViewModel хранит `let historyService: CashflowHistoryService` и деле�
 
 ---
 
-### `[ ]` Phase 9: CashflowAnalyticsService — ChartData и агрегация
+### `[x]` Phase 9: CashflowAnalyticsService — ChartData и агрегация
 
 **AC из spec:** AC9, AC13, AC14
 **Сложность:** L (требует careful DI)
@@ -306,7 +306,7 @@ ViewModel хранит `let historyService: CashflowHistoryService` и деле�
 
 ---
 
-### `[ ]` Phase 10: FinanceInvestmentOrderService — ордера и market details
+### `[x]` Phase 10: FinanceInvestmentOrderService — ордера и market details
 
 **AC из spec:** AC10, AC13, AC14
 **Сложность:** M (3–5 файлов)
@@ -329,7 +329,7 @@ ViewModel хранит `let historyService: CashflowHistoryService` и деле�
 
 ---
 
-### `[ ]` Phase 11: FinanceTotalsService — суммы и конвертация
+### `[x]` Phase 11: FinanceTotalsService — суммы и конвертация
 
 **AC из spec:** AC11, AC13, AC14
 **Сложность:** M
@@ -352,7 +352,7 @@ ViewModel хранит `let historyService: CashflowHistoryService` и деле�
 
 ---
 
-### `[ ]` Phase 12: CashflowPersistenceService — CRUD транзакций
+### `[x]` Phase 12: CashflowPersistenceService — CRUD транзакций
 
 **AC из spec:** AC12, AC13, AC14
 **Сложность:** L (core, максимально связанный)
@@ -393,8 +393,8 @@ ViewModel хранит `let historyService: CashflowHistoryService` и деле�
 
 ## Gates (обязательны перед `[x]` на каждой фазе)
 
-- [ ] Swift compiler: 0 errors, 0 warnings (treat-warnings-as-errors если включено)
-- [ ] `xcodebuild test` — все тесты зелёные
+- [x] Swift compiler: 0 errors, 0 warnings (treat-warnings-as-errors если включено)
+- [x] `xcodebuild test` — все тесты зелёные (1348 тестов, 0 упавших, Phase 12)
 - [ ] Ручная проверка: открыть затронутый экран в симуляторе, проверить ключевой флоу
 
 ## Журнал изменений
