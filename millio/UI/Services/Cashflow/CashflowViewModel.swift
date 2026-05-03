@@ -467,7 +467,10 @@ final class CashflowViewModel: ViewModelProtocol {
     private var isDueAutoApplyInProgress: Bool = false
     private var chartUpdateRevision: Int = 0
     private let dueAutoApplyCheckpointKey = "cashflow_due_auto_apply_checkpoint_v1"
-    
+
+    // MARK: - Services
+    let historyService: CashflowHistoryService
+
     init(
         modelContext: ModelContext,
         notificationManager: NotificationManagerProtocol? = nil,
@@ -477,6 +480,7 @@ final class CashflowViewModel: ViewModelProtocol {
     ) {
         self.modelContext = modelContext
         self.historicalRateStore = HistoricalRateStore(modelContext: modelContext)
+        self.historyService = CashflowHistoryService(modelContext: modelContext)
         self.notificationManager = notificationManager ?? NotificationManager.shared
         self.now = now
         self.assetsSnapshotProvider = assetsSnapshotProvider
@@ -902,203 +906,19 @@ final class CashflowViewModel: ViewModelProtocol {
     // MARK: - History
 
     func historyTransactions(matching query: CashflowHistoryQuery) -> [CashflowTransaction] {
-        let normalizedQuery = query.searchText
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-        let cardsByID = Dictionary(uniqueKeysWithValues: state.allCards.map { ($0.cardUniqueID, $0.name.lowercased()) })
-        let dateRange = normalizedHistoryDateRange(start: query.startDate, end: query.endDate)
-        let normalizedCategoryRawValue = query.categoryRawValue?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let usesCategoryFilter = !(normalizedCategoryRawValue?.isEmpty ?? true)
-
-        return state.filteredTransactions.filter { transaction in
-            if shouldHideLinkedSettlementTransactionInHistory(transaction) {
-                return false
-            }
-            guard query.typeFilter.matches(transaction.transactionType) else {
-                return false
-            }
-            if (query.typeFilter == .income || query.typeFilter == .expense)
-                && !transaction.shouldAffectCashflowTotals {
-                return false
-            }
-
-            if let cardID = query.cardID,
-               !historyTransactionMatchesCardFilter(transaction, cardID: cardID) {
-                return false
-            }
-
-            if usesCategoryFilter,
-               !historyTransactionMatchesCategoryFilter(
-                transaction,
-                categoryRawValue: normalizedCategoryRawValue,
-                typeFilter: query.typeFilter
-               ) {
-                return false
-            }
-
-            if let dateRange {
-                let transactionDate = Calendar.current.startOfDay(for: transaction.transactionDate)
-                guard transactionDate >= dateRange.start && transactionDate <= dateRange.end else {
-                    return false
+        historyService.historyTransactions(
+            matching: query,
+            in: state.filteredTransactions,
+            allCards: state.allCards,
+            categoryNameResolver: { [weak self] raw, type in
+                guard let self else { return raw ?? "" }
+                switch type {
+                case .income: return self.incomeCategoryDisplayName(for: raw)
+                case .expense: return self.expenseCategoryDisplayName(for: raw)
+                default: return raw ?? ""
                 }
             }
-
-            guard !normalizedQuery.isEmpty else {
-                return true
-            }
-            return historyTransactionMatchesSearch(
-                transaction,
-                query: normalizedQuery,
-                cardsByID: cardsByID
-            )
-        }
-    }
-
-    private func shouldHideLinkedSettlementTransactionInHistory(_ transaction: CashflowTransaction) -> Bool {
-        guard let operationGroupID = transaction.operationGroupID,
-              !operationGroupID.isEmpty else {
-            return false
-        }
-        guard transaction.transactionType == .expense || transaction.transactionType == .income else {
-            return false
-        }
-        guard transaction.shouldAffectCashflowTotals == false else {
-            return false
-        }
-
-        return state.filteredTransactions.contains { candidate in
-            candidate.operationGroupID == operationGroupID
-                && candidate.hasAssetChangeSnapshot
-        }
-    }
-
-    private func historyTransactionMatchesCardFilter(_ transaction: CashflowTransaction, cardID: String) -> Bool {
-        switch transaction.transactionType {
-        case .income, .expense, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
-            if transaction.cardID == cardID {
-                return true
-            }
-            return linkedHistoryTransactions(for: transaction).contains { linked in
-                linked.cardID == cardID || linked.toCardID == cardID
-            }
-        case .transfer:
-            return transaction.cardID == cardID || transaction.toCardID == cardID
-        }
-    }
-
-    private func normalizedHistoryDateRange(start: Date?, end: Date?) -> (start: Date, end: Date)? {
-        let calendar = Calendar.current
-        switch (start, end) {
-        case let (startDate?, endDate?):
-            let normalizedStart = calendar.startOfDay(for: min(startDate, endDate))
-            let normalizedEnd = calendar.startOfDay(for: max(startDate, endDate))
-            return (start: normalizedStart, end: normalizedEnd)
-        case let (startDate?, nil):
-            let normalized = calendar.startOfDay(for: startDate)
-            return (start: normalized, end: normalized)
-        case let (nil, endDate?):
-            let normalized = calendar.startOfDay(for: endDate)
-            return (start: normalized, end: normalized)
-        case (nil, nil):
-            return nil
-        }
-    }
-
-    private func historyTransactionMatchesCategoryFilter(
-        _ transaction: CashflowTransaction,
-        categoryRawValue: String?,
-        typeFilter: CashflowHistoryTypeFilter
-    ) -> Bool {
-        guard let categoryRawValue, !categoryRawValue.isEmpty else {
-            return true
-        }
-
-        switch typeFilter {
-        case .income:
-            return transaction.transactionType == .income
-                && (transaction.incomeCategoryRaw ?? IncomeCategory.other.rawValue) == categoryRawValue
-        case .expense:
-            return transaction.transactionType == .expense
-                && (transaction.expenseCategoryRaw ?? ExpenseCategory.other.rawValue) == categoryRawValue
-        case .all:
-            switch transaction.transactionType {
-            case .income:
-                return (transaction.incomeCategoryRaw ?? IncomeCategory.other.rawValue) == categoryRawValue
-            case .expense:
-                return (transaction.expenseCategoryRaw ?? ExpenseCategory.other.rawValue) == categoryRawValue
-            case .transfer, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
-                return false
-            }
-        case .transfer, .assetBalanceChange, .accountBalanceCorrection:
-            return false
-        }
-    }
-
-    private func historyTransactionMatchesSearch(
-        _ transaction: CashflowTransaction,
-        query: String,
-        cardsByID: [String: String]
-    ) -> Bool {
-        if let note = transaction.note?.lowercased(), note.contains(query) {
-            return true
-        }
-
-        let incomeCategory = incomeCategoryDisplayName(for: transaction.incomeCategoryRaw).lowercased()
-        if incomeCategory.contains(query) {
-            return true
-        }
-
-        let expenseCategory = expenseCategoryDisplayName(for: transaction.expenseCategoryRaw).lowercased()
-        if expenseCategory.contains(query) {
-            return true
-        }
-
-        if transaction.transactionType.displayName.lowercased().contains(query) {
-            return true
-        }
-
-        let amountWithoutFraction = String(format: "%.0f", transaction.amount)
-        if amountWithoutFraction.contains(query) {
-            return true
-        }
-
-        let fromCardName = cardsByID[transaction.cardID ?? ""]
-        if let fromCardName, fromCardName.contains(query) {
-            return true
-        }
-
-        let toCardName = cardsByID[transaction.toCardID ?? ""]
-        if let toCardName, toCardName.contains(query) {
-            return true
-        }
-
-        let linkedTransactions = linkedHistoryTransactions(for: transaction)
-        for linked in linkedTransactions {
-            let linkedFromCardName = cardsByID[linked.cardID ?? ""]
-            if let linkedFromCardName, linkedFromCardName.contains(query) {
-                return true
-            }
-
-            let linkedToCardName = cardsByID[linked.toCardID ?? ""]
-            if let linkedToCardName, linkedToCardName.contains(query) {
-                return true
-            }
-        }
-
-        return false
-    }
-
-    private func linkedHistoryTransactions(for transaction: CashflowTransaction) -> [CashflowTransaction] {
-        guard let operationGroupID = transaction.operationGroupID,
-              !operationGroupID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return []
-        }
-
-        return state.filteredTransactions.filter {
-            $0.persistentModelID != transaction.persistentModelID
-                && $0.operationGroupID == operationGroupID
-        }
+        )
     }
     
     private func updateChartData() {
