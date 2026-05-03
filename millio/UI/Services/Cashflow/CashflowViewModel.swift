@@ -442,6 +442,14 @@ enum CashflowAction {
     case dismissDeleteBalanceUpdateError
 }
 
+// MARK: - Transfer Exchange Suggestion
+
+struct TransferExchangeSuggestion: Equatable {
+    let rate: Double
+    let rateDate: Date
+    let isLiveRate: Bool
+}
+
 // MARK: - Cashflow ViewModel
 
 @MainActor
@@ -470,6 +478,16 @@ final class CashflowViewModel: ViewModelProtocol {
 
     // MARK: - Services
     let historyService: CashflowHistoryService
+    // currencyService использует lazy, т.к. замыкания захватывают self
+    private(set) lazy var currencyService: CashflowCurrencyService = {
+        CashflowCurrencyService(
+            historicalRateStore: self.historicalRateStore,
+            now: self.now,
+            cardResolver: { [weak self] cardID in self?.card(for: cardID) },
+            displayCurrencyProvider: { [weak self] in self?.state.displayCurrency ?? "" },
+            onEstimatedRateWarning: { [weak self] date in self?.markEstimatedRateWarning(on: date) }
+        )
+    }()
 
     init(
         modelContext: ModelContext,
@@ -3152,25 +3170,7 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     private func convertAmount(value: Double, from: String, to: String) async -> Double {
-        if from == to {
-            return value
-        }
-        
-        if let converted = await CurrencyRateService.shared.convert(
-            amount: value,
-            from: from,
-            to: to
-        ) {
-            return converted
-        }
-        
-        return value
-    }
-
-    struct TransferExchangeSuggestion: Equatable {
-        let rate: Double
-        let rateDate: Date
-        let isLiveRate: Bool
+        await currencyService.convertAmount(value: value, from: from, to: to)
     }
 
     func suggestedTransferExchangeInfo(
@@ -3178,62 +3178,15 @@ final class CashflowViewModel: ViewModelProtocol {
         to targetCurrency: String,
         on date: Date
     ) async -> TransferExchangeSuggestion? {
-        let source = normalizedCurrencyCode(sourceCurrency) ?? sourceCurrency
-        let target = normalizedCurrencyCode(targetCurrency) ?? targetCurrency
-        let normalizedDate = Calendar.current.startOfDay(for: date)
-        let today = Calendar.current.startOfDay(for: now())
-
-        guard source != target else {
-            return TransferExchangeSuggestion(rate: 1.0, rateDate: normalizedDate, isLiveRate: false)
-        }
-
-        let shouldPreferHistorical = normalizedDate < today
-
-        func makeHistoricalSuggestion() async -> TransferExchangeSuggestion? {
-            let historical = await historicalRateStore.getRate(
-                on: date,
-                from: source,
-                to: target
-            )
-            guard let rate = historical.rate, rate > 0 else { return nil }
-            return TransferExchangeSuggestion(
-                rate: rate,
-                rateDate: historical.rateDate ?? normalizedDate,
-                isLiveRate: false
-            )
-        }
-
-        if shouldPreferHistorical, let historicalSuggestion = await makeHistoricalSuggestion() {
-            return historicalSuggestion
-        }
-
-        if let liveRate = await CurrencyRateService.shared.convert(
-            amount: 1,
-            from: source,
-            to: target
-        ), liveRate > 0 {
-            return TransferExchangeSuggestion(
-                rate: liveRate,
-                rateDate: today,
-                isLiveRate: true
-            )
-        }
-
-        return await makeHistoricalSuggestion()
-    }
-
-    private struct ExchangeInfo {
-        let rate: Double?
-        let rateDate: Date?
-        let rateCurrency: String?
+        await currencyService.suggestedTransferExchangeInfo(
+            from: sourceCurrency,
+            to: targetCurrency,
+            on: date
+        )
     }
 
     private func normalizedCurrencyCode(_ currency: String?) -> String? {
-        guard let currency else { return nil }
-        let normalized = currency
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-        return normalized.isEmpty ? nil : normalized
+        currencyService.normalizedCurrencyCode(currency)
     }
 
     private enum CardBalanceEffectDirection {
@@ -3271,132 +3224,22 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     private func convertAmountForValidation(amount: Double, from: String, to: String, on date: Date) async throws -> Double {
-        if from == to {
-            return amount
-        }
-        
-        let result = await historicalRateStore.getRate(on: date, from: from, to: to)
-        if let rate = result.rate {
-            return amount * rate
-        }
-        
-        if let converted = await CurrencyRateService.shared.convert(
-            amount: amount,
-            from: from,
-            to: to
-        ) {
-            return converted
-        }
-        
-        AppLogger.log(.error, category: "Cashflow", "Currency conversion failed: from=\(from) to=\(to) date=\(date), no rate from historical store or rate service")
-        throw ConversionError.rateUnavailable(from: from, to: to, date: date)
+        try await currencyService.convertAmountForValidation(amount: amount, from: from, to: to, on: date)
     }
-    
-    private func resolveExchangeInfo(for transaction: CashflowTransaction) async -> ExchangeInfo {
-        if transaction.transactionType == .transfer,
-           let targetCurrency = normalizedCurrencyCode(card(for: transaction.toCardID ?? "")?.currency) {
-            let sourceCurrency = normalizedCurrencyCode(transaction.currency) ?? targetCurrency
-            let rateDate = Calendar.current.startOfDay(for: transaction.transactionDate)
 
-            if sourceCurrency == targetCurrency {
-                return ExchangeInfo(rate: 1.0, rateDate: rateDate, rateCurrency: targetCurrency)
-            }
-
-            if let explicitRate = transaction.exchangeRate,
-               explicitRate > 0,
-               normalizedCurrencyCode(transaction.exchangeRateCurrency) == targetCurrency {
-                return ExchangeInfo(
-                    rate: explicitRate,
-                    rateDate: transaction.exchangeRateDate ?? rateDate,
-                    rateCurrency: targetCurrency
-                )
-            }
-
-            let result = await historicalRateStore.getRate(
-                on: transaction.transactionDate,
-                from: sourceCurrency,
-                to: targetCurrency
-            )
-
-            return ExchangeInfo(
-                rate: result.rate,
-                rateDate: result.rateDate ?? rateDate,
-                rateCurrency: result.rate != nil ? targetCurrency : nil
-            )
-        }
-
-        let targetCurrency = state.displayCurrency
-        
-        guard transaction.currency != targetCurrency else {
-            return ExchangeInfo(rate: 1.0, rateDate: Calendar.current.startOfDay(for: transaction.transactionDate), rateCurrency: targetCurrency)
-        }
-        
-        let result = await historicalRateStore.getRate(
-            on: transaction.transactionDate,
-            from: transaction.currency,
-            to: targetCurrency
-        )
-        
-        return ExchangeInfo(
-            rate: result.rate,
-            rateDate: result.rateDate,
-            rateCurrency: result.rate != nil ? targetCurrency : nil
-        )
+    private func resolveExchangeInfo(for transaction: CashflowTransaction) async -> CashflowExchangeInfo {
+        await currencyService.resolveExchangeInfo(for: transaction)
     }
-    
+
     private func convertAmountForTransaction(_ transaction: CashflowTransaction, to currency: String) async -> Double {
-        if transaction.currency == currency {
-            return transaction.amount
-        }
-        
-        if let rate = transaction.exchangeRate,
-           let rateCurrency = transaction.exchangeRateCurrency,
-           rateCurrency == currency {
-            return transaction.amount * rate
-        }
-        
-        let result = await historicalRateStore.getRate(
-            on: transaction.transactionDate,
-            from: transaction.currency,
-            to: currency
-        )
-
-        if result.resolution != .exact {
-            markEstimatedRateWarning(on: result.rateDate ?? transaction.transactionDate)
-        }
-        
-        if let rate = result.rate {
-            return transaction.amount * rate
-        }
-        
-        if let converted = await CurrencyRateService.shared.convert(
-            amount: transaction.amount,
-            from: transaction.currency,
-            to: currency
-        ) {
-            markEstimatedRateWarning(on: now())
-            return converted
-        }
-
-        return transaction.amount
+        await currencyService.convertAmountForTransaction(transaction, to: currency)
     }
 
     private func transferReceivedAmount(
         for transaction: CashflowTransaction,
         in cardCurrency: String
     ) async throws -> Double {
-        if let rate = transaction.exchangeRate,
-           rate > 0,
-           normalizedCurrencyCode(transaction.exchangeRateCurrency) == normalizedCurrencyCode(cardCurrency) {
-            return transaction.amount * rate
-        }
-
-        return try await convertAmountForValidation(
-            amount: transaction.amount,
-            from: transaction.currency,
-            to: cardCurrency,
-            on: transaction.transactionDate
-        )
+        try await currencyService.transferReceivedAmount(for: transaction, in: cardCurrency)
     }
 
     private func markEstimatedRateWarning(on date: Date) {
@@ -3415,24 +3258,7 @@ final class CashflowViewModel: ViewModelProtocol {
         asOf date: Date,
         locale: Locale = AppLocalization.currentAppLocale
     ) -> String {
-        let base = AppLocalization.string("finances.dynamics.warning.estimated_rate", locale: locale)
-        let baseWithoutTrailingDot = base
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
-
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        let template = LocalizationSupport.effectiveLanguage(for: locale) == Language.english.rawValue
-            ? "Mdyyyy"
-            : "dMMyyyy"
-        formatter.setLocalizedDateFormatFromTemplate(template)
-        let dateText = formatter.string(from: date)
-        let suffixFormat = AppLocalization.string(
-            "finances.dynamics.warning.estimated_rate.as_of",
-            locale: locale,
-            fallback: "as of %@"
-        )
-        return "\(baseWithoutTrailingDot) \(String(format: suffixFormat, locale: locale, dateText))"
+        CashflowCurrencyService.estimatedRateWarningText(asOf: date, locale: locale)
     }
     
     private func deleteTransactionAsync(_ transaction: CashflowTransaction, recalculate: Bool) async {
