@@ -287,6 +287,19 @@ final class FinanceViewModel: ViewModelProtocol {
     private static let manualStockRefreshCooldown: TimeInterval = 15
 
     // MARK: - Services
+    // totalsService использует lazy из-за замыканий на self
+    private(set) lazy var totalsService: FinanceTotalsService = {
+        FinanceTotalsService(
+            currencyService: self.currencyService,
+            groupsProvider: { [weak self] in self?.state.groups ?? [] },
+            displayCurrencyProvider: { [weak self] in self?.state.displayCurrency ?? "USD" },
+            secondaryDisplayCurrencyProvider: { [weak self] in self?.state.secondaryDisplayCurrency },
+            cardByIDProvider: { [weak self] in self?.cardByID ?? [:] },
+            creditByIDProvider: { [weak self] in self?.creditByID ?? [:] },
+            investmentByIDProvider: { [weak self] in self?.investmentByID ?? [:] }
+        )
+    }()
+
     // savingsGoalService использует lazy, т.к. замыкания захватывают self
     private(set) lazy var savingsGoalService: FinanceSavingsGoalService = {
         FinanceSavingsGoalService(
@@ -821,198 +834,23 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     func calculateTotalAmountAsync() async {
-        let displayCurrency = state.displayCurrency
-        var total: Double = 0.0
-        var warnings: [String] = []
-        
         state.currencyConversionWarning = nil
-        
-        // Собираем все валюты из всех групп
-        var allCurrenciesNeeded = Set<String>()
-        for group in state.groups {
-            let currencies = await collectCurrenciesFromGroup(group: group)
-            allCurrenciesNeeded.formUnion(currencies)
-            // Добавляем валюту группы
-            let groupCurrency = group.displayCurrency ?? state.displayCurrency
-            allCurrenciesNeeded.insert(groupCurrency)
-        }
-        // Добавляем displayCurrency
-        allCurrenciesNeeded.insert(displayCurrency)
-        // Добавляем secondaryDisplayCurrency, если задан
-        if let secondaryCurrency = state.secondaryDisplayCurrency {
-            allCurrenciesNeeded.insert(secondaryCurrency)
-        }
-        
-        // Не форсим сетевое обновление здесь: быстрые локальные правки (сумма/группа)
-        // должны пересчитываться мгновенно на кэше курсов.
-        
-        // Для каждого group вычисляем сумму в его валюте (или в state.displayCurrency, если не задана)
-        for group in state.groups {
-            let groupCurrency = group.displayCurrency ?? state.displayCurrency
-            let groupTotalInGroupCurrency = await calculateGroupTotal(group: group, in: groupCurrency)
-            let normalizedGroupCurrency = normalizedConversionCurrency(groupCurrency)
-            let normalizedDisplayCurrency = normalizedConversionCurrency(displayCurrency)
-            
-            // Конвертируем сумму группы в displayCurrency если нужно
-            if normalizedGroupCurrency == normalizedDisplayCurrency {
-                total += groupTotalInGroupCurrency
-            } else {
-                if let rate = await currencyService.getRate(from: normalizedGroupCurrency, to: normalizedDisplayCurrency), rate > 0 {
-                    total += groupTotalInGroupCurrency * rate
-                } else {
-                    // Если курс недоступен, просто пропускаем сумму этой группы и добавляем предупреждение
-                    warnings.append(FinancesL10n.format("finances.warning.rate_unavailable", groupCurrency, displayCurrency))
-                    AppLogger.log(
-                        .warning,
-                        category: "Finance",
-                        "[Conversion] Failed to convert group amount \"\(group.name)\" from \(groupCurrency) to \(displayCurrency). Amount ignored."
-                    )
-                }
-            }
-        }
-        
-        state.totalAmount = total
-        
-        // Рассчитываем сумму в дополнительной валюте, если она задана
-        if let secondaryCurrency = state.secondaryDisplayCurrency {
-            var secondaryTotal: Double = 0.0
-            for group in state.groups {
-                let groupCurrency = group.displayCurrency ?? state.displayCurrency
-                let groupTotalInGroupCurrency = await calculateGroupTotal(group: group, in: groupCurrency)
-                let normalizedGroupCurrency = normalizedConversionCurrency(groupCurrency)
-                let normalizedSecondaryCurrency = normalizedConversionCurrency(secondaryCurrency)
-                
-                if normalizedGroupCurrency == normalizedSecondaryCurrency {
-                    secondaryTotal += groupTotalInGroupCurrency
-                } else {
-                    if let rate = await currencyService.getRate(from: normalizedGroupCurrency, to: normalizedSecondaryCurrency), rate > 0 {
-                        secondaryTotal += groupTotalInGroupCurrency * rate
-                    } else {
-                        warnings.append(FinancesL10n.format("finances.warning.rate_unavailable", groupCurrency, secondaryCurrency))
-                        AppLogger.log(
-                            .warning,
-                            category: "Finance",
-                            "[Conversion] Failed to convert group amount \"\(group.name)\" from \(groupCurrency) to \(secondaryCurrency). Amount ignored."
-                        )
-                    }
-                }
-            }
-            state.secondaryTotalAmount = secondaryTotal
-        } else {
-            state.secondaryTotalAmount = 0.0
-        }
-        
-        if !warnings.isEmpty {
-            state.currencyConversionWarning = warnings.joined(separator: "\n")
+        let snapshot = await totalsService.calculateTotalsSnapshot()
+        state.totalAmount = snapshot.totalAmount
+        state.secondaryTotalAmount = snapshot.secondaryTotalAmount
+        if let warning = snapshot.currencyConversionWarning {
+            state.currencyConversionWarning = warning
         }
     }
-    
+
     /// Подсчитать сумму группы в указанной валюте
     func calculateGroupTotal(group: FinanceGroup, in currency: String) async -> Double {
-        var total: Double = 0.0
-        let targetCurrency = normalizedConversionCurrency(currency)
-        
-        guard let accounts = group.accounts else { return 0.0 }
-        
-        for account in accounts {
-            let amount = await getAccountAmount(account: account)
-            let sourceCurrency = normalizedConversionCurrency(amount.currency)
-            
-            // Пропускаем нулевые значения
-            guard abs(amount.value) > 0.01 else { continue }
-            
-            if sourceCurrency == targetCurrency {
-                // Валюта совпадает с целевой - добавляем напрямую
-                total += amount.value
-            } else {
-                // Конвертируем валюту в целевую валюту группы
-                // Сначала проверяем доступность курса
-                let rate = await currencyService.getRate(from: sourceCurrency, to: targetCurrency)
-                
-                if let rate = rate, rate > 0 {
-                    // Курс доступен - выполняем конвертацию
-                    let converted = amount.value * rate
-                    total += converted
-                } else {
-                    // Курс недоступен - пропускаем сумму
-                }
-            }
-        }
-        
-        return total
+        await totalsService.calculateGroupTotal(group: group, in: currency)
     }
-    
-    /// Собрать все уникальные валюты из счетов группы
-    private func collectCurrenciesFromGroup(group: FinanceGroup) async -> Set<String> {
-        var currencies: Set<String> = []
-        
-        guard let accounts = group.accounts else { return currencies }
-        
-        for account in accounts {
-            let amount = await getAccountAmount(account: account)
-            // Добавляем валюту только если сумма не нулевая
-            if abs(amount.value) > 0.01 {
-                currencies.insert(normalizedConversionCurrency(amount.currency))
-            }
-        }
-        
-        return currencies
-    }
-    
-    /// Получить сумму счета
-    private func getAccountAmount(account: FinanceAccount) async -> (value: Double, currency: String) {
-        switch account.accountType {
-        case .card:
-            if let card = cardByID[account.accountID] {
-                let snapshot = CardSnapshotFactory.make(from: card)
-                return (snapshot.netWorthAmount, snapshot.currency)
-            }
-            
-        case .credit:
-            if let credit = creditByID[account.accountID] {
-                // Для кредитов учитываем остаток долга как отрицательное значение
-                return (-credit.remainingAmount, credit.currency)
-            }
-            
-        case .investment:
-            if let investment = investmentByID[account.accountID] {
-                // Учитываем только если includeInTotal = true
-                if investment.includeInTotal {
-                    let value = investment.investmentType == .positive ? investment.amount : -investment.amount
-                    return (value, resolvedInvestmentCurrency(investment))
-                }
-            }
-        }
-        
-        return (0.0, "RUB")
-    }
+
 
     private func normalizedConversionCurrency(_ currency: String) -> String {
-        let trimmed = currency
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-        guard !trimmed.isEmpty else { return "USD" }
-
-        let stablecoinToUSD: Set<String> = ["USDT", "USDC", "BUSD", "TUSD", "FDUSD", "DAI"]
-        if stablecoinToUSD.contains(trimmed) {
-            return "USD"
-        }
-
-        if trimmed.contains("/") {
-            let parts = trimmed.split(separator: "/").map(String.init)
-            if let quote = parts.last {
-                return normalizedConversionCurrency(quote)
-            }
-        }
-
-        if trimmed.contains("-") {
-            let parts = trimmed.split(separator: "-").map(String.init)
-            if let quote = parts.last {
-                return normalizedConversionCurrency(quote)
-            }
-        }
-
-        return trimmed
+        totalsService.normalizedConversionCurrency(currency)
     }
     
     /// Получить информацию о счете для отображения
@@ -1156,39 +994,7 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     private func resolvedInvestmentCurrency(_ investment: Investment) -> String {
-        let normalizedCurrency = investment.currency
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-        if !normalizedCurrency.isEmpty {
-            return normalizedCurrency
-        }
-
-        if let marketCurrency = investment.marketCurrency?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased(),
-           !marketCurrency.isEmpty {
-            return marketCurrency
-        }
-
-        if let marketSymbol = investment.marketSymbol?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased(),
-           !marketSymbol.isEmpty {
-            if marketSymbol.contains("/") {
-                let parts = marketSymbol.split(separator: "/").map(String.init)
-                if let quote = parts.last, !quote.isEmpty {
-                    return quote
-                }
-            }
-            if marketSymbol.contains("-") {
-                let parts = marketSymbol.split(separator: "-").map(String.init)
-                if let quote = parts.last, !quote.isEmpty {
-                    return quote
-                }
-            }
-        }
-
-        return state.displayCurrency
+        totalsService.resolvedInvestmentCurrency(investment, displayCurrency: state.displayCurrency)
     }
 
     static func eligibleSettlementCards(
