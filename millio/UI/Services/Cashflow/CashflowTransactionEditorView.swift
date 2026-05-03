@@ -94,6 +94,7 @@ struct CashflowTransactionEditorView: View {
     @State private var showRecurrenceRulePicker: Bool = false
     @State private var showCryptoProAlert: Bool = false
     @State private var showAffectBalanceHelpAlert: Bool = false
+    @State private var showDatePickerSheet: Bool = false
     @FocusState private var isAmountFieldFocused: Bool
 
     private let primarySecondaryText = Color.white.opacity(0.78)
@@ -462,6 +463,33 @@ struct CashflowTransactionEditorView: View {
                 defaultWeekday: defaultWeeklyRecurrenceWeekday
             )
         }
+        .sheet(isPresented: $showDatePickerSheet) {
+            datePickerSheet
+        }
+    }
+
+    private var datePickerSheet: some View {
+        NavigationStack {
+            VStack {
+                DatePicker(
+                    String(localized: "cashflow.editor.date"),
+                    selection: $transactionDate,
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.graphical)
+                .padding()
+                Spacer()
+            }
+            .navigationTitle(String(localized: "cashflow.editor.date"))
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(String(localized: "cashflow.common.done")) {
+                        showDatePickerSheet = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     private var resolvedNavigationTitle: String {
@@ -634,9 +662,13 @@ struct CashflowTransactionEditorView: View {
                         Text(String(localized: "cashflow.editor.date"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        DatePicker("", selection: $transactionDate, displayedComponents: .date)
-                            .labelsHidden()
-                            .tint(AppColors.textTertiary)
+                        Button {
+                            showDatePickerSheet = true
+                        } label: {
+                            Text(transactionDate, style: .date)
+                                .font(.system(size: 15))
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 16)
