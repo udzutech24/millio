@@ -821,6 +821,9 @@ struct CashflowTransactionsHistoryView: View {
         .onChange(of: searchText) { _, _ in
             resetPagination()
         }
+        .onChange(of: isSearchActive) { _, _ in
+            resetPagination()
+        }
         .onChange(of: selectedFilter) { _, _ in
             resetPagination()
             resetSummarySelectionAndPlaceholder()

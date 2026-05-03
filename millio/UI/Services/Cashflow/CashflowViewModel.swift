@@ -1048,9 +1048,17 @@ final class CashflowViewModel: ViewModelProtocol {
         if incomeCategory.contains(query) {
             return true
         }
+        // Поиск по raw-значению категории (для кроссязычного поиска)
+        if let incomeCategoryRaw = transaction.incomeCategoryRaw?.lowercased(), incomeCategoryRaw.contains(query) {
+            return true
+        }
 
         let expenseCategory = expenseCategoryDisplayName(for: transaction.expenseCategoryRaw).lowercased()
         if expenseCategory.contains(query) {
+            return true
+        }
+        // Поиск по raw-значению категории (для кроссязычного поиска)
+        if let expenseCategoryRaw = transaction.expenseCategoryRaw?.lowercased(), expenseCategoryRaw.contains(query) {
             return true
         }
 
