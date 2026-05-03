@@ -1362,7 +1362,8 @@ struct CashflowTransactionEditorView: View {
 
         switch selectedTransactionType {
         case .income, .expense:
-            return (selectedCardID != nil || selectedInvestmentID != nil) && !isAmountOverBalance
+            let balanceOk = !shouldValidateBalance || !isAmountOverBalance
+            return (selectedCardID != nil || selectedInvestmentID != nil) && balanceOk
         case .transfer:
             return selectedCardID != nil
                 && selectedToCardID != nil

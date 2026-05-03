@@ -85,7 +85,9 @@ enum CashflowSelectableAccountResolver {
         switch transactionType {
         case .income:
             combinedOptions = cardOptions + investmentOptions
-        case .expense, .transfer:
+        case .expense:
+            combinedOptions = cardOptions + investmentOptions
+        case .transfer:
             combinedOptions = cardOptions
         case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
             combinedOptions = []

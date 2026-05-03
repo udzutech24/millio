@@ -1394,7 +1394,8 @@ struct FinanceAddAccountView: View {
             isFavorite: investmentData.isFavorite,
             marketData: investmentData.marketData,
             createCashflowTransaction: investmentData.createCashflowTransaction,
-            uniqueID: createdInvestmentID
+            uniqueID: createdInvestmentID,
+            isDeposit: selectedInvestmentPreset == .deposit
         ))
         
         guard investmentViewModel.state.investments.contains(where: { $0.investmentUniqueID == createdInvestmentID }) else { return }
@@ -1425,7 +1426,8 @@ struct FinanceAddAccountView: View {
             isFavorite: investmentData.isFavorite,
             marketData: investmentData.marketData,
             createCashflowTransaction: investmentData.createCashflowTransaction,
-            uniqueID: investment.investmentUniqueID
+            uniqueID: investment.investmentUniqueID,
+            isDeposit: investment.isDeposit
         ))
 
         viewModel.handle(.addAccountToGroup(
