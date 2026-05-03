@@ -319,29 +319,32 @@ final class FinanceViewModel: ViewModelProtocol {
     private var lastManualStockRefreshAt: Date?
 
     private static let manualStockRefreshCooldown: TimeInterval = 15
-    
+
+    // MARK: - Services
+    // savingsGoalService использует lazy, т.к. замыкания захватывают self
+    private(set) lazy var savingsGoalService: FinanceSavingsGoalService = {
+        FinanceSavingsGoalService(
+            defaults: self.defaults,
+            currencyRateService: self.currencyService
+        )
+    }()
+
+    // Делегаты к savingsGoalService для обратной совместимости
     private var storedSavingsGoalEnabled: Bool {
-        get { defaults.bool(forKey: "finance_savings_goal_enabled") }
-        set { defaults.set(newValue, forKey: "finance_savings_goal_enabled") }
+        get { savingsGoalService.storedEnabled }
+        set { savingsGoalService.storedEnabled = newValue }
     }
-    
+
     private var storedSavingsGoalAmount: Double {
-        get { defaults.double(forKey: "finance_savings_goal_amount") }
-        set { defaults.set(newValue, forKey: "finance_savings_goal_amount") }
+        get { savingsGoalService.storedAmount }
+        set { savingsGoalService.storedAmount = newValue }
     }
 
     private var storedSavingsGoalCurrency: String {
-        get {
-            let value = defaults.string(forKey: "finance_savings_goal_currency")
-            let normalized = normalizedCurrencyCode(value ?? state.displayCurrency)
-            return normalized.isEmpty ? "USD" : normalized
-        }
-        set {
-            let normalized = normalizedCurrencyCode(newValue)
-            defaults.set(normalized.isEmpty ? "USD" : normalized, forKey: "finance_savings_goal_currency")
-        }
+        get { savingsGoalService.storedCurrency }
+        set { savingsGoalService.storedCurrency = newValue }
     }
-    
+
     private var storedAmountHidden: Bool {
         get { defaults.bool(forKey: "finance_amount_hidden") }
         set { defaults.set(newValue, forKey: "finance_amount_hidden") }
@@ -630,35 +633,12 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     private func convertSavingsGoalAmountIfNeeded(from sourceCurrency: String, to targetCurrency: String) async {
-        let source = normalizedConversionCurrency(sourceCurrency)
-        let target = normalizedConversionCurrency(targetCurrency)
-
-        guard !source.isEmpty, !target.isEmpty else { return }
-        guard state.savingsGoalAmount > 0 else {
-            storedSavingsGoalCurrency = targetCurrency
-            return
-        }
-        guard source != target else {
-            storedSavingsGoalCurrency = targetCurrency
-            return
-        }
-
-        guard let rate = await currencyService.getRate(from: source, to: target), rate > 0 else {
-            AppLogger.log(
-                .warning,
-                category: "Finance",
-                "Failed to convert savings goal amount from \(sourceCurrency) to \(targetCurrency): rate unavailable"
-            )
-            return
-        }
-
-        let convertedAmount = state.savingsGoalAmount * rate
-        guard convertedAmount.isFinite, convertedAmount > 0 else { return }
-
-        let roundedAmount = max(1.0, convertedAmount.rounded())
-        state.savingsGoalAmount = roundedAmount
-        storedSavingsGoalAmount = roundedAmount
-        storedSavingsGoalCurrency = targetCurrency
+        guard let result = await savingsGoalService.convertIfNeeded(
+            currentAmount: state.savingsGoalAmount,
+            from: sourceCurrency,
+            to: targetCurrency
+        ) else { return }
+        state.savingsGoalAmount = result.newAmount
     }
     
     private func loadGroups() {
