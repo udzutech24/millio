@@ -1115,7 +1115,7 @@ struct InvestmentEditorView: View {
             endDate: depositHasEndDate ? depositEndDate : nil,
             incomeInCashflow: depositIncomeInCashflow,
             capitalizationRaw: depositCapitalization.rawValue,
-            notifyDaysBefore: depositNotifyDaysBefore
+            notifyDaysBefore: depositNotifyDaysBefore ?? 0
         ) : nil
 
         viewModel.handle(.updateInvestment(
