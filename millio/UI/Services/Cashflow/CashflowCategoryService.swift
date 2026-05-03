@@ -18,6 +18,7 @@ final class CashflowCategoryService {
 
     private let modelContext: ModelContext
     private let categoryPinPrefs: CashflowCategoryPinPrefs
+    let categoryOrderPrefs: CashflowCategoryOrderPrefs
     private let bulkExpenseMerchantPrefs: CashflowBulkExpenseMerchantCategoryPrefs
     private let now: () -> Date
 
@@ -35,6 +36,7 @@ final class CashflowCategoryService {
     init(
         modelContext: ModelContext,
         categoryPinPrefs: CashflowCategoryPinPrefs,
+        categoryOrderPrefs: CashflowCategoryOrderPrefs = CashflowCategoryOrderPrefs(),
         bulkExpenseMerchantPrefs: CashflowBulkExpenseMerchantCategoryPrefs,
         now: @escaping () -> Date,
         customCategoriesProvider: @escaping () -> [CashflowCustomCategory],
@@ -43,6 +45,7 @@ final class CashflowCategoryService {
     ) {
         self.modelContext = modelContext
         self.categoryPinPrefs = categoryPinPrefs
+        self.categoryOrderPrefs = categoryOrderPrefs
         self.bulkExpenseMerchantPrefs = bulkExpenseMerchantPrefs
         self.now = now
         self.customCategoriesProvider = customCategoriesProvider
@@ -97,11 +100,41 @@ final class CashflowCategoryService {
             matching: query,
             includeHiddenSystem: includeHiddenSystem
         )
+        if query.trimmingCharacters(in: .whitespaces).isEmpty,
+           let customOrder = categoryOrderPrefs.customOrder(for: kind) {
+            return Self.sortCategoryOptionsWithCustomOrder(
+                options,
+                customOrder: customOrder,
+                pinnedRawValues: categoryPinPrefs.pinnedRawValues(for: kind)
+            )
+        }
         return Self.sortCategoryOptions(
             options,
             totalsByCategory: totalsByCategory,
             pinnedRawValues: categoryPinPrefs.pinnedRawValues(for: kind)
         )
+    }
+
+    /// Сортирует по пользовательскому порядку; элементы не вошедшие в порядок — в конце по алфавиту.
+    static func sortCategoryOptionsWithCustomOrder(
+        _ options: [CashflowCategoryOption],
+        customOrder: [String],
+        pinnedRawValues: Set<String>
+    ) -> [CashflowCategoryOption] {
+        let orderIndex: [String: Int] = Dictionary(
+            uniqueKeysWithValues: customOrder.enumerated().map { ($0.element, $0.offset) }
+        )
+        return options.sorted { lhs, rhs in
+            let lhsPinned = pinnedRawValues.contains(lhs.rawValue)
+            let rhsPinned = pinnedRawValues.contains(rhs.rawValue)
+            if lhsPinned != rhsPinned { return lhsPinned }
+
+            let li = orderIndex[lhs.rawValue] ?? Int.max
+            let ri = orderIndex[rhs.rawValue] ?? Int.max
+            if li != ri { return li < ri }
+
+            return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        }
     }
 
     static func sortCategoryOptions(

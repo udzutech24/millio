@@ -1597,6 +1597,20 @@ final class CashflowViewModel: ViewModelProtocol {
         objectWillChange.send()
     }
 
+    func setCategoryOrder(_ rawValues: [String], for kind: CashflowCategoryKind) {
+        categoryService.categoryOrderPrefs.setOrder(rawValues, for: kind)
+        objectWillChange.send()
+    }
+
+    func clearCategoryOrder(for kind: CashflowCategoryKind) {
+        categoryService.categoryOrderPrefs.clearOrder(for: kind)
+        objectWillChange.send()
+    }
+
+    func categoryCustomOrder(for kind: CashflowCategoryKind) -> [String]? {
+        categoryService.categoryOrderPrefs.customOrder(for: kind)
+    }
+
     static func sortCategoryOptions(
         _ options: [CashflowCategoryOption],
         totalsByCategory: [String: Double],
