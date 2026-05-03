@@ -2564,7 +2564,7 @@ private struct FinanceDynamicsContentView: View {
         let quietFill = Color.white.opacity(0.05)
         return HStack(spacing: 6) {
             // Кнопки периодов
-            ForEach([DynamicsPeriod.all, .day, .week, .month, .year], id: \.self) { period in
+            ForEach([DynamicsPeriod.day, .week, .month, .year, .all], id: \.self) { period in
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         viewModel.handle(.setPeriod(period))

@@ -26,7 +26,7 @@ struct FinanceDynamicsState {
     var availableCurrencies: [String] = []
     
     /// Период отображения
-    var period: DynamicsPeriod = .all
+    var period: DynamicsPeriod = .week
     
     /// Кастомный период (если period == .custom)
     var customPeriod: (start: Date, end: Date)? = nil
