@@ -73,7 +73,7 @@ struct CashflowTransactionEditorView: View {
     @State private var note: String = ""
     @State private var recurrenceRule: CashflowRecurrenceRule = .none
     @State private var recurrenceWeekdays: Set<CashflowRecurrenceWeekday> = []
-    @State private var shouldAffectCardBalance: Bool = true
+    @State private var shouldAffectCardBalance: Bool = false
     @State private var availableCurrencies: [String] = []
     @State private var isLoadingCurrencies: Bool = false
     @State private var isAmountOverBalance: Bool = false
@@ -177,7 +177,7 @@ struct CashflowTransactionEditorView: View {
             }
             _recurrenceRule = State(initialValue: initialRecurrenceRule ?? .none)
             _recurrenceWeekdays = State(initialValue: [])
-            _shouldAffectCardBalance = State(initialValue: true)
+            _shouldAffectCardBalance = State(initialValue: false)
         } else {
             let initialCurrency = Self.defaultEditorCurrency(
                 displayCurrency: viewModel.state.displayCurrency,
@@ -188,7 +188,7 @@ struct CashflowTransactionEditorView: View {
             _transactionDate = State(initialValue: initialTransactionDate ?? Date())
             _recurrenceRule = State(initialValue: initialRecurrenceRule ?? .none)
             _recurrenceWeekdays = State(initialValue: [])
-            _shouldAffectCardBalance = State(initialValue: true)
+            _shouldAffectCardBalance = State(initialValue: false)
         }
     }
 
