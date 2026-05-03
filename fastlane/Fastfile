@@ -49,6 +49,14 @@ platform :ios do
       notify_external_testers: false,
       changelog: options[:changelog]
     )
+
+    git_commit(
+      path: [
+        "millio.xcodeproj/project.pbxproj",
+        "millioCurrencyWidgetExtension/Info.plist"
+      ],
+      message: "chore(build): bump build number to #{new_build_number}"
+    )
   end
 end
 
@@ -87,9 +95,10 @@ def resolve_build_number(api_key:, version:)
     UI.important("Could not fetch latest TestFlight build number: #{error.message}")
   end
 
-  local_build = get_build_number(
-    xcodeproj: "millio.xcodeproj"
-  ).to_i
-
-  [latest_remote.to_i, local_build].max + 1
+  if latest_remote
+    latest_remote.to_i + 1
+  else
+    local_build = get_build_number(xcodeproj: "millio.xcodeproj").to_i
+    local_build + 1
+  end
 end
