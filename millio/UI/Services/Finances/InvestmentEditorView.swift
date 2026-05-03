@@ -56,6 +56,15 @@ struct InvestmentEditorView: View {
     @State private var showCryptoProAlert = false
     @State private var showDeleteConfirmation = false
 
+    // MARK: - Deposit @State
+    @State private var depositInterestRateText: String = ""
+    @State private var depositStartDate: Date = Date()
+    @State private var depositEndDate: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+    @State private var depositHasEndDate: Bool = false
+    @State private var depositIncomeInCashflow: Bool = false
+    @State private var depositCapitalization: DepositCapitalization = .none
+    @State private var depositNotifyDaysBefore: Int? = nil
+
     private let marketDataClient: MarketDataClientProtocol
     private let marketRefreshCooldown: TimeInterval = 10
 
@@ -84,6 +93,22 @@ struct InvestmentEditorView: View {
             return false
         }
         return editing.category == .stocks || editing.category == .crypto
+    }
+
+    private var isDepositMode: Bool {
+        viewModel.state.editingInvestment?.isDeposit == true
+    }
+
+    private var depositMonthlyIncome: Double {
+        guard let rate = parseNumber(depositInterestRateText), rate > 0,
+              let amt = parseNumber(amountText), amt > 0 else { return 0 }
+        switch depositCapitalization {
+        case .none:
+            return ((amt * rate / 100.0 / 12.0) * 100).rounded() / 100
+        case .monthly:
+            let monthly = pow(1.0 + rate / 100.0 / 12.0, 12.0) - 1.0
+            return ((amt * monthly / 12.0) * 100).rounded() / 100
+        }
     }
 
     private var marketInstrumentTitle: LocalizedStringKey {
@@ -129,6 +154,9 @@ struct InvestmentEditorView: View {
                     VStack(spacing: 24) {
                         mainInfoSection
                         investmentParamsSection
+                        if isDepositMode {
+                            depositIncomeSection
+                        }
                         additionalSection
 
                         if canDeleteInvestment {
@@ -211,6 +239,17 @@ struct InvestmentEditorView: View {
                     lastKnownUnitPrice = editing.lastKnownUnitPrice
                     lastKnownPriceUpdatedAt = editing.lastKnownPriceUpdatedAt
                     marketProviderRaw = editing.marketProviderRaw
+
+                    if editing.isDeposit {
+                        depositInterestRateText = editing.depositInterestRate.map { String($0) } ?? ""
+                        depositStartDate = editing.depositStartDate ?? Date()
+                        let end = editing.depositEndDate
+                        depositHasEndDate = end != nil
+                        depositEndDate = end ?? Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+                        depositIncomeInCashflow = editing.depositIncomeInCashflow
+                        depositCapitalization = DepositCapitalization(rawValue: editing.depositCapitalizationRaw) ?? .none
+                        depositNotifyDaysBefore = editing.depositNotifyDaysBefore
+                    }
                 }
 
                 loadAvailableCurrencies()
@@ -637,6 +676,151 @@ struct InvestmentEditorView: View {
         }
     }
     
+    // MARK: - Deposit Income Section
+
+    @ViewBuilder
+    private var depositIncomeSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: String(localized: "finances.deposit.section.income_title"))
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    // Ставка
+                    HStack {
+                        Text(String(localized: "finances.deposit.field.rate"))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        TextField("0", text: $depositInterestRateText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(maxWidth: 90)
+                        Text("%")
+                            .foregroundStyle(AppColors.textTertiary)
+                            .font(.system(size: 15))
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    // Дата открытия
+                    DatePicker(
+                        String(localized: "finances.deposit.field.start_date"),
+                        selection: $depositStartDate,
+                        displayedComponents: .date
+                    )
+                    .foregroundStyle(AppColors.textPrimary)
+                    .tint(AppColors.textPrimary)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    // Срок вклада
+                    Toggle(String(localized: "finances.deposit.field.has_end_date"), isOn: $depositHasEndDate)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .tint(AppColors.toggleOnGreen)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    // Капитализация
+                    HStack {
+                        Text(String(localized: "finances.deposit.field.capitalization"))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Picker(String(localized: "finances.deposit.field.capitalization"), selection: $depositCapitalization) {
+                            ForEach(DepositCapitalization.allCases, id: \.self) { cap in
+                                Text(cap.displayName).tag(cap)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(AppColors.brandPrimary)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+
+                    if depositHasEndDate {
+                        FinancesRowDivider()
+                        DatePicker(
+                            String(localized: "finances.deposit.field.end_date"),
+                            selection: $depositEndDate,
+                            in: depositStartDate...,
+                            displayedComponents: .date
+                        )
+                        .foregroundStyle(AppColors.textPrimary)
+                        .tint(AppColors.textPrimary)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+
+                        FinancesRowDivider()
+
+                        // Уведомление о конце срока
+                        HStack {
+                            Text(String(localized: "finances.deposit.field.notify"))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            Picker(String(localized: "finances.deposit.field.notify"), selection: Binding(
+                                get: { DepositNotifyDays(rawValue: depositNotifyDaysBefore ?? 0) ?? .off },
+                                set: { depositNotifyDaysBefore = $0 == .off ? nil : $0.rawValue }
+                            )) {
+                                ForEach(DepositNotifyDays.allCases, id: \.self) { opt in
+                                    Text(opt.displayName).tag(opt)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .tint(AppColors.brandPrimary)
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                    }
+
+                    if depositMonthlyIncome > 0 {
+                        FinancesRowDivider()
+                        // Плановый доход
+                        HStack {
+                            Text(String(localized: "finances.deposit.monthly_income_label"))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .font(.system(size: 14))
+                            Spacer()
+                            Text("~\(String(format: "%.2f", depositMonthlyIncome)) \(selectedCurrency)/мес")
+                                .foregroundStyle(AppColors.textPrimary)
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+
+                        FinancesRowDivider()
+
+                        // Тоггл Cashflow
+                        Toggle(String(localized: "finances.deposit.cashflow_toggle"), isOn: $depositIncomeInCashflow)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .tint(AppColors.toggleOnGreen)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+
+                        if depositIncomeInCashflow {
+                            FinancesRowDivider()
+                            HStack {
+                                Image(systemName: "calendar.badge.checkmark")
+                                    .foregroundStyle(AppColors.toggleOnGreen)
+                                    .font(.system(size: 13))
+                                Text(String(format: String(localized: "finances.deposit.cashflow_preview"),
+                                            String(format: "%.2f", depositMonthlyIncome),
+                                            selectedCurrency))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .font(.system(size: 13))
+                            }
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 16)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private var additionalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: String(localized: "finances.editor.section.additional"))
@@ -907,6 +1091,17 @@ struct InvestmentEditorView: View {
             effectiveCategory = selectedCategory
         }
 
+        // Сохраняем deposit-поля перед handle (SwiftData персистит их при modelContext.save внутри handle)
+        if isDepositMode, let editing = viewModel.state.editingInvestment {
+            editing.depositInterestRate = parseNumber(depositInterestRateText)
+            editing.depositStartDate = depositStartDate
+            editing.depositEndDate = depositHasEndDate ? depositEndDate : nil
+            editing.depositIncomeInCashflow = depositIncomeInCashflow
+            editing.depositCapitalizationRaw = depositCapitalization.rawValue
+            editing.depositNotifyDaysBefore = depositNotifyDaysBefore
+        }
+        let depositSyncTarget = isDepositMode ? viewModel.state.editingInvestment : nil
+
         viewModel.handle(.updateInvestment(
             name: name,
             investmentType: selectedInvestmentType,
@@ -918,8 +1113,14 @@ struct InvestmentEditorView: View {
             isFavorite: isFavorite,
             marketData: marketData,
             createCashflowTransaction: createCashflowTransaction,
-            uniqueID: nil
+            uniqueID: nil,
+            isDeposit: viewModel.state.editingInvestment?.isDeposit ?? false
         ))
+
+        if let inv = depositSyncTarget {
+            viewModel.syncDepositIncome(for: inv)
+            viewModel.syncDepositNotification(for: inv)
+        }
 
         if let onClose {
             onClose()

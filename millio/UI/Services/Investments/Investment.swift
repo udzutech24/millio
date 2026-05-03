@@ -185,7 +185,33 @@ final class Investment: Persistable {
 
     /// Стабильный идентификатор для связей между сущностями
     var uniqueID: String = ""
-    
+
+    // MARK: - Deposit fields
+
+    /// Флаг, что это вклад (банковский депозит)
+    var isDeposit: Bool = false
+
+    /// Процентная ставка по вкладу, % годовых
+    var depositInterestRate: Double?
+
+    /// Дата открытия вклада
+    var depositStartDate: Date?
+
+    /// Дата закрытия вклада (nil = бессрочно)
+    var depositEndDate: Date?
+
+    /// Планировать доход по вкладу в Cashflow как recurring income
+    var depositIncomeInCashflow: Bool = false
+
+    /// uniqueID связанной запланированной транзакции Cashflow
+    var depositLinkedScheduledID: String?
+
+    /// Тип капитализации процентов ("none" | "monthly")
+    var depositCapitalizationRaw: String = "none"
+
+    /// За сколько дней до конца срока уведомить (nil = выключено)
+    var depositNotifyDaysBefore: Int?
+
     var investmentType: InvestmentType {
         get { InvestmentType(rawValue: investmentTypeRaw) ?? .positive }
         set { investmentTypeRaw = newValue.rawValue }
@@ -426,5 +452,37 @@ final class Investment: Persistable {
         dict["categoryRaw"] as? String != nil &&
         dict["amount"] as? Double != nil &&
         dict["currency"] as? String != nil
+    }
+}
+
+// MARK: - Deposit Capitalization
+
+enum DepositCapitalization: String, CaseIterable {
+    case none = "none"
+    case monthly = "monthly"
+
+    var displayName: String {
+        switch self {
+        case .none: return String(localized: "finances.deposit.capitalization.none", defaultValue: "Без капитализации")
+        case .monthly: return String(localized: "finances.deposit.capitalization.monthly", defaultValue: "Ежемесячная")
+        }
+    }
+}
+
+// MARK: - Deposit Notify Options
+
+enum DepositNotifyDays: Int, CaseIterable {
+    case off = 0
+    case sevenDays = 7
+    case fourteenDays = 14
+    case thirtyDays = 30
+
+    var displayName: String {
+        switch self {
+        case .off: return String(localized: "finances.deposit.notify.off", defaultValue: "Выключено")
+        case .sevenDays: return String(localized: "finances.deposit.notify.7days", defaultValue: "За 7 дней")
+        case .fourteenDays: return String(localized: "finances.deposit.notify.14days", defaultValue: "За 14 дней")
+        case .thirtyDays: return String(localized: "finances.deposit.notify.30days", defaultValue: "За 30 дней")
+        }
     }
 }

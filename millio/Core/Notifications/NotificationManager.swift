@@ -353,4 +353,47 @@ final class NotificationManager: NotificationManagerProtocol {
         formatter.timeStyle = .none
         return formatter.string(from: date)
     }
+
+    // MARK: - Deposit Maturity Notifications (Phase 9)
+
+    private static let depositNotificationPrefix = "deposit_maturity_"
+
+    func scheduleDepositMaturityNotification(
+        identifier: String,
+        investmentName: String,
+        endDate: Date,
+        daysBefore: Int,
+        fireDate: Date
+    ) async {
+        let authorized = await requestAuthorization()
+        guard authorized else { return }
+
+        let notifID = Self.depositNotificationPrefix + identifier
+        let content = UNMutableNotificationContent()
+        content.title = String(localized: "finances.deposit.notification.title", defaultValue: "millio")
+        let locale = Locale.current
+        let formattedEnd = formattedDate(endDate, locale: locale)
+        content.body = String(format: String(
+            localized: "finances.deposit.notification.body",
+            defaultValue: "Вклад «%@» заканчивается через %d дн. (%@)"
+        ), investmentName, daysBefore, formattedEnd)
+        content.sound = .default
+
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        let request = UNNotificationRequest(identifier: notifID, content: content, trigger: trigger)
+
+        do {
+            try await notificationCenter.add(request)
+            logger.info("Scheduled deposit maturity notification for \(identifier) at \(fireDate)")
+        } catch {
+            logger.error("Failed to schedule deposit notification: \(error.localizedDescription)")
+        }
+    }
+
+    func cancelDepositMaturityNotification(for identifier: String) {
+        let notifID = Self.depositNotificationPrefix + identifier
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: [notifID])
+        notificationCenter.removeDeliveredNotifications(withIdentifiers: [notifID])
+    }
 }

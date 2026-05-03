@@ -82,6 +82,7 @@
     },
     "0": {},
     "Account balance adjustment": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -273,6 +274,7 @@
       }
     },
     "Asset value adjustment": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -10535,6 +10537,98 @@
         }
       }
     },
+    "cashflow.common.period.custom": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom period"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Произвольный период"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义周期"
+          }
+        }
+      }
+    },
+    "cashflow.common.period.week": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Week"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Неделя"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "周"
+          }
+        }
+      }
+    },
+    "cashflow.common.recurrence.monthly": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monthly"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ежемесячно"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每月"
+          }
+        }
+      }
+    },
+    "cashflow.common.recurrence.none": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Do not repeat"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не повторять"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不重复"
+          }
+        }
+      }
+    },
     "cashflow.common.reset": {
       "extractionState": "manual",
       "localizations": {
@@ -10598,6 +10692,167 @@
           "stringUnit": {
             "state": "translated",
             "value": "设置"
+          }
+        }
+      }
+    },
+    "cashflow.common.type.balance_adjustment": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asset value adjustment"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Корректировка стоимости актива"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "资产价值调整"
+          }
+        }
+      }
+    },
+    "cashflow.common.type.card_balance_adjustment": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account balance adjustment"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Корректировка баланса счёта"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "账户余额调整"
+          }
+        }
+      }
+    },
+    "cashflow.common.type.debt_adjustment": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Debt adjustment"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Корректировка долга"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "债务调整"
+          }
+        }
+      }
+    },
+    "cashflow.common.type.expense": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expense"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Расход"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支出"
+          }
+        }
+      }
+    },
+    "cashflow.common.type.income": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Income"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доход"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收入"
+          }
+        }
+      }
+    },
+    "cashflow.common.type.transfer": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transfer"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перевод"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转账"
+          }
+        }
+      }
+    },
+    "cashflow.common.uncategorized": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uncategorized"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Без категории"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未分类"
           }
         }
       }
@@ -16321,6 +16576,7 @@
       }
     },
     "Custom period": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -16354,6 +16610,7 @@
       }
     },
     "Debt adjustment": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -16518,6 +16775,7 @@
       }
     },
     "Do not repeat": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -16676,6 +16934,7 @@
       }
     },
     "Expense": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -27589,6 +27848,7 @@
       }
     },
     "Income": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -28380,6 +28640,7 @@
       }
     },
     "Monthly": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -33148,6 +33409,7 @@
       }
     },
     "Quarter": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -38338,6 +38600,7 @@
       }
     },
     "Transfer": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -38394,6 +38657,7 @@
       }
     },
     "Uncategorized": {
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -38655,8 +38919,6 @@
         }
       }
     },
-    "Восстанавливаем данные": {},
-    "Восстановление": {},
     "Восстановление данных": {
       "extractionState": "stale",
       "localizations": {
@@ -38752,7 +39014,6 @@
         }
       }
     },
-    "Выберите копию. Восстановление заменит текущие локальные данные.": {},
     "Выберите хотя бы одну категорию": {
       "comment": "A message displayed when a user hasn't selected any categories for cashback.",
       "extractionState": "stale",
@@ -38825,7 +39086,6 @@
         }
       }
     },
-    "Выбрать другую копию": {},
     "Выбрать карту": {
       "extractionState": "stale",
       "localizations": {
@@ -39270,7 +39530,6 @@
         }
       }
     },
-    "Кодовая фраза (если есть)": {},
     "Криптовалюты доступны в PRO": {
       "extractionState": "stale",
       "localizations": {
@@ -39288,8 +39547,6 @@
         }
       }
     },
-    "Локальные данные будут полностью заменены.": {},
-    "Локальные данные останутся как есть.": {},
     "Можно добавить позже": {
       "extractionState": "stale",
       "localizations": {
@@ -39722,7 +39979,6 @@
         }
       }
     },
-    "Подождите, база будет заменена выбранной копией.": {},
     "Пожалуйста, подождите": {
       "extractionState": "stale",
       "localizations": {
@@ -39854,8 +40110,6 @@
         }
       }
     },
-    "Продолжить без восстановления": {},
-    "Продолжить без восстановления?": {},
     "Продолжить работу с приложением": {
       "extractionState": "stale",
       "localizations": {
@@ -40295,244 +40549,692 @@
         }
       }
     },
-    "cashflow.common.period.week": {
+    "finances.deposit.section.income_title": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Week"
+            "value": "Interest Income"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Неделя"
+            "value": "Процентный доход"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "周"
+            "value": "利息收入"
           }
         }
       }
     },
-    "cashflow.common.period.custom": {
+    "finances.deposit.field.rate": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Custom period"
+            "value": "Annual Rate, %"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Произвольный период"
+            "value": "Ставка, % годовых"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "自定义周期"
+            "value": "年利率，%"
           }
         }
       }
     },
-    "cashflow.common.type.income": {
+    "finances.deposit.field.start_date": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Income"
+            "value": "Start Date"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Доход"
+            "value": "Дата открытия"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "收入"
+            "value": "开始日期"
           }
         }
       }
     },
-    "cashflow.common.type.expense": {
+    "finances.deposit.field.end_date": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Expense"
+            "value": "End Date"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Расход"
+            "value": "Дата закрытия"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "支出"
+            "value": "结束日期"
           }
         }
       }
     },
-    "cashflow.common.type.transfer": {
+    "finances.deposit.field.has_end_date": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transfer"
+            "value": "Fixed Term"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Перевод"
+            "value": "Срок вклада"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "转账"
+            "value": "固定期限"
           }
         }
       }
     },
-    "cashflow.common.type.balance_adjustment": {
+    "finances.deposit.monthly_income_label": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Asset value adjustment"
+            "value": "Planned Income"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Корректировка стоимости актива"
+            "value": "Плановый доход"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "资产价值调整"
+            "value": "计划收入"
           }
         }
       }
     },
-    "cashflow.common.type.card_balance_adjustment": {
+    "finances.deposit.cashflow_toggle": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Account balance adjustment"
+            "value": "Plan in Cashflow"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Корректировка баланса счёта"
+            "value": "Планировать в Cashflow"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "账户余额调整"
+            "value": "在现金流中计划"
           }
         }
       }
     },
-    "cashflow.common.type.debt_adjustment": {
+    "finances.deposit.cashflow_preview": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Debt adjustment"
+            "value": "~%@ %@/mo · Interest"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Корректировка долга"
+            "value": "~%@ %@/мес · Проценты"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "债务调整"
+            "value": "~%@ %@/月 · 利息"
           }
         }
       }
     },
-    "cashflow.common.recurrence.none": {
+    "finances.deposit.field.capitalization": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Do not repeat"
+            "value": "Capitalization"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Не повторять"
+            "value": "Капитализация"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "不重复"
+            "value": "资本化"
           }
         }
       }
     },
-    "cashflow.common.recurrence.monthly": {
+    "finances.deposit.field.notify": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Monthly"
+            "value": "Remind Before"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ежемесячно"
+            "value": "Напомнить за"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "每月"
+            "value": "提前提醒"
           }
         }
       }
     },
-    "cashflow.common.uncategorized": {
+    "finances.deposit.capitalization.none": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uncategorized"
+            "value": "Simple Interest"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Без категории"
+            "value": "Без капитализации"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "未分类"
+            "value": "单利"
+          }
+        }
+      }
+    },
+    "finances.deposit.capitalization.monthly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compound Monthly"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ежемесячная"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每月复利"
+          }
+        }
+      }
+    },
+    "finances.deposit.notify.off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выключено"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
+          }
+        }
+      }
+    },
+    "finances.deposit.notify.7days": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "7 days before"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "За 7 дней"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提前7天"
+          }
+        }
+      }
+    },
+    "finances.deposit.notify.14days": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "14 days before"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "За 14 дней"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提前14天"
+          }
+        }
+      }
+    },
+    "finances.deposit.notify.30days": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 days before"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "За 30 дней"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提前30天"
+          }
+        }
+      }
+    },
+    "finances.deposit.notification.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "millio"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "millio"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "millio"
+          }
+        }
+      }
+    },
+    "finances.deposit.notification.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deposit «%@» matures in %d days (%@)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вклад «%@» заканчивается через %d дн. (%@)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存款「%@」将在%d天后到期（%@）"
+          }
+        }
+      }
+    },
+    "finances.deposit.forecast.rate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rate"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ставка"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "利率"
+          }
+        }
+      }
+    },
+    "finances.deposit.forecast.monthly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monthly Income"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доход в месяц"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "月收入"
+          }
+        }
+      }
+    },
+    "finances.deposit.forecast.total": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total Income"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "За весь срок"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "总收入"
+          }
+        }
+      }
+    },
+    "finances.deposit.forecast.earned": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earned So Far"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Накоплено с начала"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已累积"
+          }
+        }
+      }
+    },
+    "finances.deposit.forecast.remaining": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remaining"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Осталось получить"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剩余"
+          }
+        }
+      }
+    },
+    "finances.deposit.forecast.section_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Income Forecast"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прогноз дохода"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收入预测"
+          }
+        }
+      }
+    },
+    "finances.deposit.forecast.term": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Term"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Срок"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "期限"
+          }
+        }
+      }
+    },
+    "finances.deposit.forecast.next_payment": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next Payment"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Следующее поступление"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下次收款"
+          }
+        }
+      }
+    },
+    "finances.deposit.forecast.tax_estimate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "~%@ NDFL/yr (est.)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "~%@ ₽ НДФЛ/год"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "~%@/年 税"
+          }
+        }
+      }
+    },
+    "finances.deposit.forecast.tax_disclaimer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimate only"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ориентировочно"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅供参考"
+          }
+        }
+      }
+    },
+    "finances.deposit.params.days_remaining": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d days left"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d дн. осталось"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还剩%d天"
+          }
+        }
+      }
+    },
+    "finances.deposit.params.matured": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Matured"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Срок истёк"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已到期"
           }
         }
       }

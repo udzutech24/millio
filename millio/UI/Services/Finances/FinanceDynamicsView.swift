@@ -228,8 +228,49 @@ private struct FinanceDynamicsContentView: View {
     // Кэшированные значения для графика
     @State private var cachedSelectedPoint: (date: Date, value: Double)? = nil
 
+    // Ставка ЦБ для расчёта НДФЛ по вкладу (Phase 8)
+    @AppStorage("deposit_cbr_rate") private var cbrRate: Double = 21.0
+
     private var isAmountHidden: Bool {
         financeViewModel.state.isAmountHidden
+    }
+
+    /// Вклад для текущего одиночного аккаунта (nil если не вклад)
+    private var depositInvestment: Investment? {
+        guard viewModel.state.isSingleAccountMode,
+              let account = initialAccount else { return nil }
+        return financeViewModel.state.availableInvestments
+            .first { $0.investmentUniqueID == account.accountID && $0.isDeposit }
+    }
+
+    /// Прогнозные точки роста вклада (для пунктирной линии на графике)
+    private var depositProjectedPoints: [ChartDataPoint]? {
+        guard let deposit = depositInvestment,
+              let rate = deposit.depositInterestRate, rate > 0,
+              let endDate = deposit.depositEndDate else { return nil }
+        let startDate = deposit.depositStartDate ?? Date()
+        let today = Date()
+        guard endDate > today else { return nil }
+        let cap = DepositCapitalization(rawValue: deposit.depositCapitalizationRaw) ?? .none
+        var points: [ChartDataPoint] = []
+        var date = today
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yy"
+        while date <= endDate {
+            let months = max(0, Calendar.current.dateComponents([.month], from: startDate, to: date).month ?? 0)
+            let income: Double
+            switch cap {
+            case .none:
+                income = deposit.amount * rate / 100.0 / 12.0 * Double(months)
+            case .monthly:
+                income = deposit.amount * (pow(1.0 + rate / 100.0 / 12.0, Double(months)) - 1.0)
+            }
+            points.append(ChartDataPoint(date: date, value: deposit.amount + income, label: formatter.string(from: date)))
+            if let next = Calendar.current.date(byAdding: .month, value: 1, to: date) {
+                date = next
+            } else { break }
+        }
+        return points.isEmpty ? nil : points
     }
 
     private enum TradePriceMode: String, CaseIterable, Hashable {
@@ -460,7 +501,17 @@ private struct FinanceDynamicsContentView: View {
                     }
                 }
 
+                // Полоса параметров вклада (Phase 5)
+                if let deposit = depositInvestment {
+                    depositParamsStrip(for: deposit)
+                }
+
                 dynamicsListCard
+
+                // Блок прогноза дохода по вкладу (Phase 5 + 8)
+                if let deposit = depositInvestment {
+                    depositForecastSection(for: deposit)
+                }
 
                 if shouldShowDeleteAccountFooter, let account = initialAccount {
                     deleteAccountFooterButton(account: account)
@@ -2157,6 +2208,92 @@ private struct FinanceDynamicsContentView: View {
         dismiss()
     }
 
+    // MARK: - Deposit Blocks (Phase 5, 6, 8)
+
+    @ViewBuilder
+    private func depositParamsStrip(for deposit: Investment) -> some View {
+        let rate = deposit.depositInterestRate ?? 0
+        let today = Date()
+        let hasEndDate = deposit.depositEndDate != nil
+        let daysRemaining: Int? = deposit.depositEndDate.map {
+            max(0, Calendar.current.dateComponents([.day], from: today, to: $0).day ?? 0)
+        }
+        let isMatured = daysRemaining.map { $0 == 0 } ?? false
+
+        VStack(alignment: .leading, spacing: 8) {
+            // Строка параметров
+            HStack(spacing: 6) {
+                Image(systemName: "percent")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.toggleOnGreen)
+                Text("\(rate, specifier: "%.2g")% \(String(localized: "finances.deposit.params.per_year", defaultValue: "годовых"))")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppColors.textPrimary)
+
+                if hasEndDate, let end = deposit.depositEndDate {
+                    Text("·")
+                        .foregroundStyle(AppColors.textTertiary)
+                    Image(systemName: "calendar")
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppColors.textTertiary)
+                    Text(end, style: .date)
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+
+                Spacer()
+
+                if isMatured {
+                    Text(String(localized: "finances.deposit.params.matured"))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.warning)
+                } else if let days = daysRemaining {
+                    Text(String(format: String(localized: "finances.deposit.params.days_remaining"), days))
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppColors.textTertiary)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+
+            // Progress bar срока
+            if let end = deposit.depositEndDate,
+               let start = deposit.depositStartDate {
+                let total = end.timeIntervalSince(start)
+                let elapsed = today.timeIntervalSince(start)
+                let progress = total > 0 ? min(max(elapsed / total, 0), 1) : 0
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.white.opacity(0.1))
+                            .frame(height: 4)
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(AppColors.toggleOnGreen.opacity(0.8))
+                            .frame(width: geo.size.width * progress, height: 4)
+                    }
+                }
+                .frame(height: 4)
+                .padding(.horizontal, 16)
+            }
+        }
+        .padding(.vertical, 8)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(AppColors.toggleOnGreen.opacity(0.2), lineWidth: 0.8)
+                )
+        }
+    }
+
+    @ViewBuilder
+    private func depositForecastSection(for deposit: Investment) -> some View {
+        if let rate = deposit.depositInterestRate, rate > 0 {
+            DepositForecastView(deposit: deposit, rate: rate, cbrRate: cbrRate)
+        }
+    }
+
     private func singleAccountActionBar(account: FinanceAccount) -> some View {
         HStack(spacing: 8) {
             let canSave = canSaveInlineAccountEdit(for: account)
@@ -2437,7 +2574,8 @@ private struct FinanceDynamicsContentView: View {
                 } else {
                     cachedSelectedPoint = nil
                 }
-            }
+            },
+            projectedPoints: depositProjectedPoints
         )
     }
 
@@ -3537,5 +3675,155 @@ private struct ScrollOffsetKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
+    }
+}
+
+// MARK: - Deposit Forecast View (Phase 5 + 8)
+
+private struct DepositForecastView: View {
+    let deposit: Investment
+    let rate: Double
+    let cbrRate: Double
+
+    private var cap: DepositCapitalization {
+        DepositCapitalization(rawValue: deposit.depositCapitalizationRaw) ?? .none
+    }
+    private var amount: Double { deposit.amount }
+    private var currency: String { deposit.currency }
+
+    private var monthlyIncome: Double {
+        switch cap {
+        case .none: return (amount * rate / 100.0 / 12.0 * 100).rounded() / 100
+        case .monthly:
+            let m = pow(1.0 + rate / 100.0 / 12.0, 12.0) - 1.0
+            return (amount * m / 12.0 * 100).rounded() / 100
+        }
+    }
+
+    private var today: Date { Date() }
+    private var startDate: Date { deposit.depositStartDate ?? today }
+
+    private var elapsedMonths: Int {
+        max(0, Calendar.current.dateComponents([.month], from: startDate, to: today).month ?? 0)
+    }
+
+    private var termMonths: Int? {
+        deposit.depositEndDate.map {
+            max(0, Calendar.current.dateComponents([.month], from: startDate, to: $0).month ?? 0)
+        }
+    }
+
+    private var totalIncome: Double? {
+        termMonths.map { months in
+            switch cap {
+            case .none: return monthlyIncome * Double(months)
+            case .monthly: return amount * (pow(1.0 + rate / 100.0 / 12.0, Double(months)) - 1.0)
+            }
+        }
+    }
+
+    private var earnedSoFar: Double {
+        switch cap {
+        case .none: return monthlyIncome * Double(elapsedMonths)
+        case .monthly: return amount * (pow(1.0 + rate / 100.0 / 12.0, Double(elapsedMonths)) - 1.0)
+        }
+    }
+
+    private var remaining: Double? { totalIncome.map { $0 - earnedSoFar } }
+
+    private var yearlyIncome: Double { monthlyIncome * 12 }
+    private var taxFreeLimit: Double { cbrRate / 100.0 * 1_000_000 }
+    private var estimatedTax: Double? {
+        yearlyIncome > taxFreeLimit ? (yearlyIncome - taxFreeLimit) * 0.13 : nil
+    }
+
+    private func nextPaymentDate() -> Date {
+        var candidate = startDate
+        while candidate <= today {
+            candidate = Calendar.current.date(byAdding: .month, value: 1, to: candidate) ?? today
+        }
+        return candidate
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: String(localized: "finances.deposit.forecast.section_title"))
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    row(label: String(localized: "finances.deposit.forecast.rate"),
+                        value: "\(String(format: "%.2g", rate))%")
+                    FinancesRowDivider()
+                    row(label: String(localized: "finances.deposit.forecast.monthly"),
+                        value: "\(String(format: "%.2f", monthlyIncome)) \(currency)")
+
+                    if let total = totalIncome {
+                        FinancesRowDivider()
+                        row(label: String(localized: "finances.deposit.forecast.total"),
+                            value: "\(String(format: "%.2f", total)) \(currency)")
+                    }
+
+                    FinancesRowDivider()
+                    row(label: String(localized: "finances.deposit.forecast.earned"),
+                        value: "\(String(format: "%.2f", earnedSoFar)) \(currency)")
+
+                    if let rem = remaining {
+                        FinancesRowDivider()
+                        row(label: String(localized: "finances.deposit.forecast.remaining"),
+                            value: "\(String(format: "%.2f", rem)) \(currency)")
+                    }
+
+                    if let tax = estimatedTax {
+                        FinancesRowDivider()
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(String(format: String(localized: "finances.deposit.forecast.tax_estimate",
+                                                           defaultValue: "~%@ НДФЛ/год"),
+                                            String(format: "%.0f", tax)))
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                Text(String(localized: "finances.deposit.forecast.tax_disclaimer"))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(AppColors.textTertiary)
+                            }
+                            Spacer()
+                        }
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 16)
+                    }
+
+                    if deposit.depositIncomeInCashflow {
+                        FinancesRowDivider()
+                        HStack {
+                            Image(systemName: "calendar.badge.checkmark")
+                                .foregroundStyle(AppColors.toggleOnGreen)
+                                .font(.system(size: 13))
+                            Text(String(localized: "finances.deposit.forecast.next_payment"))
+                                .font(.system(size: 14))
+                                .foregroundStyle(AppColors.textSecondary)
+                            Spacer()
+                            Text(nextPaymentDate(), style: .date)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                        }
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 16)
+                    }
+                }
+            }
+        }
+    }
+
+    private func row(label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 14))
+                .foregroundStyle(AppColors.textSecondary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppColors.textPrimary)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
     }
 }

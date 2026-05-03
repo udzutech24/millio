@@ -111,6 +111,9 @@ struct FinanceChartContainerView: View {
     /// Колбэк при выборе точки
     let onSelectPoint: ((Date, Double)?) -> Void
 
+    /// Прогнозные точки для вклада (пунктирная линия, nil = не показывать)
+    var projectedPoints: [ChartDataPoint]? = nil
+
     private var interpolationMethod: InterpolationMethod {
         switch FinanceChartStyle.curve {
         case .monotone:
@@ -202,6 +205,19 @@ struct FinanceChartContainerView: View {
                     x: 0,
                     y: FinanceChartStyle.lineShadowYOffset
                 )
+            }
+
+            // Прогнозная линия для вклада (пунктир)
+            if let projected = projectedPoints {
+                ForEach(projected) { item in
+                    LineMark(
+                        x: .value(FinancesL10n.tr("finances.chart.axis.date"), item.date),
+                        y: .value(FinancesL10n.tr("finances.chart.axis.total"), item.value)
+                    )
+                    .interpolationMethod(interpolationMethod)
+                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                    .foregroundStyle(Color(hex: "F5C543").opacity(0.8))
+                }
             }
         }
         .chartPlotStyle { plotArea in

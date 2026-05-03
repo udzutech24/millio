@@ -82,7 +82,8 @@ enum InvestmentAction {
         isFavorite: Bool,
         marketData: InvestmentMarketData?,
         createCashflowTransaction: Bool,
-        uniqueID: String?
+        uniqueID: String?,
+        isDeposit: Bool
     )
     case showInvestmentEditor
     case hideInvestmentEditor
@@ -142,7 +143,8 @@ final class InvestmentViewModel: ViewModelProtocol {
             let isFavorite,
             let marketData,
             let createCashflowTransaction,
-            let uniqueID
+            let uniqueID,
+            let isDeposit
         ):
             updateInvestment(
                 name: name,
@@ -155,7 +157,8 @@ final class InvestmentViewModel: ViewModelProtocol {
                 isFavorite: isFavorite,
                 marketData: marketData,
                 createCashflowTransaction: createCashflowTransaction,
-                uniqueID: uniqueID
+                uniqueID: uniqueID,
+                isDeposit: isDeposit
             )
             
         case .showInvestmentEditor:
@@ -268,13 +271,31 @@ final class InvestmentViewModel: ViewModelProtocol {
     }
     
     private func deleteInvestment(_ investment: Investment) {
+        // При архивации удаляем linked scheduled Cashflow-транзакцию
+        if investment.isDeposit, let seriesID = investment.depositLinkedScheduledID {
+            let descriptor = FetchDescriptor<CashflowTransaction>(
+                predicate: #Predicate { $0.recurrenceSeriesID == seriesID }
+            )
+            let linked = (try? modelContext.fetch(descriptor)) ?? []
+            for tx in linked { modelContext.delete(tx) }
+            investment.depositLinkedScheduledID = nil
+        }
+
+        // Отменяем уведомление о конце срока
+        if investment.isDeposit {
+            NotificationManager.shared.cancelDepositMaturityNotification(for: investment.investmentUniqueID)
+        }
+
         investment.archivedAt = Date()
         investment.updatedAt = Date()
-        
+
         do {
             try modelContext.save()
             loadInvestments()
             EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+            if investment.isDeposit {
+                EventBus.shared.publish(FinanceEvent.transactionsUpdated)
+            }
         } catch {
             AppLogger.log(.error, category: "Investment", "Failed to delete investment: \(error.localizedDescription)")
         }
@@ -304,7 +325,8 @@ final class InvestmentViewModel: ViewModelProtocol {
         isFavorite: Bool,
         marketData: InvestmentMarketData?,
         createCashflowTransaction: Bool,
-        uniqueID: String?
+        uniqueID: String?,
+        isDeposit: Bool
     ) {
         var editedInvestment: Investment? = nil
         var oldAmount: Double = 0.0
@@ -369,6 +391,7 @@ final class InvestmentViewModel: ViewModelProtocol {
             if let uniqueID, !uniqueID.isEmpty {
                 newInvestment.uniqueID = uniqueID
             }
+            newInvestment.isDeposit = isDeposit
             applyMarketData(
                 marketData,
                 to: newInvestment,
@@ -529,6 +552,90 @@ final class InvestmentViewModel: ViewModelProtocol {
         transaction.exchangeRateDate = Calendar.current.startOfDay(for: transaction.transactionDate)
         if normalizedSource == normalizedTarget {
             transaction.exchangeRate = 1.0
+        }
+    }
+
+    // MARK: - Deposit Income Sync (Phase 3)
+
+    func syncDepositIncome(for investment: Investment) {
+        guard investment.isDeposit else { return }
+
+        let monthlyIncome = depositMonthlyIncome(for: investment)
+        let shouldHave = investment.depositIncomeInCashflow && monthlyIncome > 0.01
+
+        if let seriesID = investment.depositLinkedScheduledID {
+            let descriptor = FetchDescriptor<CashflowTransaction>(
+                predicate: #Predicate { $0.recurrenceSeriesID == seriesID }
+            )
+            let existing = (try? modelContext.fetch(descriptor)) ?? []
+            if shouldHave {
+                for tx in existing {
+                    tx.amount = monthlyIncome
+                    tx.updatedAt = Date()
+                }
+            } else {
+                for tx in existing { modelContext.delete(tx) }
+                investment.depositLinkedScheduledID = nil
+            }
+        }
+
+        if shouldHave && investment.depositLinkedScheduledID == nil {
+            let seriesID = UUID().uuidString
+            let startDate = investment.depositStartDate ?? Date()
+            let transaction = CashflowTransaction(
+                transactionType: .income,
+                amount: monthlyIncome,
+                currency: investment.currency,
+                transactionDate: startDate,
+                investmentID: investment.investmentUniqueID,
+                incomeCategory: .interest,
+                recurrenceRule: .monthly,
+                recurrenceSeriesID: seriesID,
+                affectsCardBalance: false
+            )
+            modelContext.insert(transaction)
+            investment.depositLinkedScheduledID = seriesID
+        }
+
+        do {
+            try modelContext.save()
+            EventBus.shared.publish(FinanceEvent.transactionsUpdated)
+        } catch {
+            AppLogger.log(.error, category: "Investment", "Failed to sync deposit income: \(error.localizedDescription)")
+        }
+    }
+
+    private func depositMonthlyIncome(for investment: Investment) -> Double {
+        guard let rate = investment.depositInterestRate, rate > 0, investment.amount > 0 else { return 0 }
+        let cap = DepositCapitalization(rawValue: investment.depositCapitalizationRaw) ?? .none
+        switch cap {
+        case .none:
+            return ((investment.amount * rate / 100.0 / 12.0) * 100).rounded() / 100
+        case .monthly:
+            let monthly = pow(1.0 + rate / 100.0 / 12.0, 12.0) - 1.0
+            return ((investment.amount * monthly / 12.0) * 100).rounded() / 100
+        }
+    }
+
+    // MARK: - Deposit Maturity Notification (Phase 9)
+
+    func syncDepositNotification(for investment: Investment) {
+        guard investment.isDeposit else { return }
+        let id = investment.investmentUniqueID
+        NotificationManager.shared.cancelDepositMaturityNotification(for: id)
+        guard let endDate = investment.depositEndDate,
+              let daysBefore = investment.depositNotifyDaysBefore,
+              daysBefore > 0 else { return }
+        let fireDate = Calendar.current.date(byAdding: .day, value: -daysBefore, to: endDate) ?? endDate
+        guard fireDate > Date() else { return }
+        Task {
+            await NotificationManager.shared.scheduleDepositMaturityNotification(
+                identifier: id,
+                investmentName: investment.name,
+                endDate: endDate,
+                daysBefore: daysBefore,
+                fireDate: fireDate
+            )
         }
     }
 }
