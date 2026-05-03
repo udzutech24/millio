@@ -471,7 +471,6 @@ final class CashflowViewModel: ViewModelProtocol {
     
     private var eventSubscriptionID: UUID?
     private var restoreReloadTask: Task<Void, Never>?
-    private var chartUpdateRevision: Int = 0
 
     // MARK: - Services
     let historyService: CashflowHistoryService
@@ -499,6 +498,29 @@ final class CashflowViewModel: ViewModelProtocol {
                 self?.loadSystemCategoryOverrides()
                 self?.loadTransactions()
             }
+        )
+    }()
+    // analyticsService использует lazy из-за замыканий на self
+    private(set) lazy var analyticsService: CashflowAnalyticsService = {
+        CashflowAnalyticsService(
+            modelContext: self.modelContext,
+            now: self.now,
+            transactionsProvider: { [weak self] in self?.state.transactions ?? [] },
+            convertAmountForTransaction: { [weak self] transaction, currency in
+                guard let self else { return 0 }
+                return await self.currencyService.convertAmountForTransaction(transaction, to: currency)
+            },
+            incomeCategoryDisplayNameResolver: { [weak self] raw in
+                self?.incomeCategoryDisplayName(for: raw) ?? ""
+            },
+            expenseCategoryDisplayNameResolver: { [weak self] raw in
+                self?.expenseCategoryDisplayName(for: raw) ?? ""
+            },
+            assetsSnapshotProvider: self.assetsSnapshotProvider,
+            resolveAssetsSnapshotFromFinance: { [weak self] start, end in
+                await self?.resolveAssetsSnapshotFromFinance(startDate: start, endDate: end)
+            },
+            onLoadBudgetPlanForCurrentPeriod: { [weak self] in self?.loadBudgetPlanForCurrentPeriod() }
         )
     }()
     // scheduledService использует lazy из-за замыканий на self
@@ -924,12 +946,11 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     private func nextChartUpdateRevision() -> Int {
-        chartUpdateRevision += 1
-        return chartUpdateRevision
+        analyticsService.nextChartUpdateRevision()
     }
 
     private func isCurrentChartUpdateRevision(_ revision: Int) -> Bool {
-        revision == chartUpdateRevision && !Task.isCancelled
+        analyticsService.isCurrentChartUpdateRevision(revision)
     }
 
     // MARK: - History
@@ -966,132 +987,31 @@ final class CashflowViewModel: ViewModelProtocol {
         guard isCurrentChartUpdateRevision(revision) else { return }
 
         loadBudgetPlanForCurrentPeriod()
-        let (startDate, endDate) = getDateRange()
-        let calendar = Calendar.current
-        let startDay = calendar.startOfDay(for: startDate)
-        let endDay = calendar.startOfDay(for: endDate)
-        let endExclusive = calendar.date(byAdding: .day, value: 1, to: endDay) ?? endDay
-        
-        // Рассчитываем общие суммы за период и детализацию по категориям
-        var totalIncome: Double = 0.0
-        var totalExpense: Double = 0.0
-        var incomeByCategory: [String: Double] = [:]
-        var expenseByCategory: [String: Double] = [:]
-        var expenseByCategoryRaw: [String: Double] = [:]
-        var incomeByDay: [Date: Double] = [:]
-        var expenseByDay: [Date: Double] = [:]
-        var convertedTransactions: [CashflowConvertedTransaction] = []
-        
-        for transaction in state.transactions {
-            switch transaction.transactionType {
-            case .income:
-                guard transaction.shouldAffectCashflowTotals else { continue }
-                let converted = await convertAmountForTransaction(
-                    transaction,
-                    to: state.displayCurrency
-                )
-                convertedTransactions.append(
-                    CashflowConvertedTransaction(
-                        id: transaction.transactionUniqueID,
-                        date: transaction.transactionDate,
-                        income: converted,
-                        expense: 0
-                    )
-                )
-                if transaction.transactionDate >= startDay && transaction.transactionDate < endExclusive {
-                    totalIncome += converted
-                    let day = calendar.startOfDay(for: transaction.transactionDate)
-                    incomeByDay[day, default: 0.0] += converted
-                    let title = incomeCategoryDisplayName(for: transaction.incomeCategoryRaw)
-                    incomeByCategory[title, default: 0.0] += converted
-                }
-                
-            case .expense:
-                guard transaction.shouldAffectCashflowTotals else { continue }
-                let converted = await convertAmountForTransaction(
-                    transaction,
-                    to: state.displayCurrency
-                )
-                convertedTransactions.append(
-                    CashflowConvertedTransaction(
-                        id: transaction.transactionUniqueID,
-                        date: transaction.transactionDate,
-                        income: 0,
-                        expense: converted
-                    )
-                )
-                if transaction.transactionDate >= startDay && transaction.transactionDate < endExclusive {
-                    totalExpense += converted
-                    let day = calendar.startOfDay(for: transaction.transactionDate)
-                    expenseByDay[day, default: 0.0] += converted
-                    let title = expenseCategoryDisplayName(for: transaction.expenseCategoryRaw)
-                    expenseByCategory[title, default: 0.0] += converted
-                    let raw = transaction.expenseCategoryRaw ?? ExpenseCategory.other.rawValue
-                    expenseByCategoryRaw[raw, default: 0.0] += converted
-                }
-                
-            case .transfer, .balanceAdjustment:
-                break
-            case .cardBalanceAdjustment, .creditDebtAdjustment:
-                break
-            }
-        }
-
-        guard isCurrentChartUpdateRevision(revision) else { return }
-        state.totalIncome = totalIncome
-        state.totalExpense = totalExpense
-        state.periodBalance = totalIncome - totalExpense
-        state.incomeBreakdown = incomeByCategory
-            .map { CashflowCategoryBreakdownEntry(title: $0.key, convertedAmount: $0.value) }
-            .sorted { $0.convertedAmount > $1.convertedAmount }
-        state.expenseBreakdown = expenseByCategory
-            .map { CashflowCategoryBreakdownEntry(title: $0.key, convertedAmount: $0.value) }
-            .sorted { $0.convertedAmount > $1.convertedAmount }
-        if let plan = state.activeBudgetPlan {
-            state.budgetSnapshot = BudgetProgressCalculator.calculate(
-                totalSpent: totalExpense,
-                totalLimit: plan.totalLimitAmount,
-                categorySpentByRawValue: expenseByCategoryRaw,
-                categoryLimits: state.activeBudgetCategoryLimits,
-                categoryTitleResolver: { [weak self] raw in
-                    self?.expenseCategoryDisplayName(for: raw) ?? raw
-                }
-            )
-        } else {
-            state.budgetSnapshot = nil
-        }
-
-        let normalizedStart = startDay
-        let normalizedEnd = endDay
-        var points: [CashflowChartPoint] = []
-        var cursor = normalizedStart
-        while cursor <= normalizedEnd {
-            let income = incomeByDay[cursor, default: 0.0]
-            let expense = expenseByDay[cursor, default: 0.0]
-            let balance = income - expense
-            points.append(
-                CashflowChartPoint(
-                    id: cursor,
-                    date: cursor,
-                    income: income,
-                    expense: expense,
-                    balance: balance
-                )
-            )
-            guard let nextDay = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
-            cursor = nextDay
-        }
-        guard isCurrentChartUpdateRevision(revision) else { return }
-        state.chartPoints = points
-        state.convertedTransactions = convertedTransactions.sorted { $0.date < $1.date }
-
-        let snapshotEndDate = calendar.date(
-            bySettingHour: 23,
-            minute: 59,
-            second: 59,
-            of: endDay
-        ) ?? endDay
-        await updateAssetsBreakdown(startDate: startDay, endDate: snapshotEndDate, expectedRevision: revision)
+        let input = CashflowChartInput(
+            chartPeriod: state.chartPeriod,
+            selectedMonth: state.selectedMonth,
+            selectedQuarter: state.selectedQuarter,
+            selectedYear: state.selectedYear,
+            customStartDate: state.customStartDate,
+            customEndDate: state.customEndDate,
+            activeBudgetPlan: state.activeBudgetPlan,
+            activeBudgetCategoryLimits: state.activeBudgetCategoryLimits,
+            displayCurrency: state.displayCurrency
+        )
+        guard let snapshot = await analyticsService.updateChartDataAsync(input: input, expectedRevision: revision) else { return }
+        state.totalIncome = snapshot.totalIncome
+        state.totalExpense = snapshot.totalExpense
+        state.periodBalance = snapshot.periodBalance
+        state.incomeBreakdown = snapshot.incomeBreakdown
+        state.expenseBreakdown = snapshot.expenseBreakdown
+        state.budgetSnapshot = snapshot.budgetSnapshot
+        state.chartPoints = snapshot.chartPoints
+        state.convertedTransactions = snapshot.convertedTransactions
+        state.assetsAtPeriodStart = snapshot.assetsAtPeriodStart
+        state.assetsAtPeriodEnd = snapshot.assetsAtPeriodEnd
+        state.contributedExpense = snapshot.contributedExpense
+        state.assetValueChange = snapshot.assetValueChange
+        state.periodTotalChange = snapshot.periodTotalChange
     }
     
     func currentDateRange() -> (Date, Date) {
@@ -1151,11 +1071,11 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     func monthlyIncomeTotal(for month: Date, in currency: String? = nil) async -> Double {
-        await monthlyTotal(for: .income, month: month, in: currency)
+        await analyticsService.monthlyTotal(for: .income, month: month, displayCurrency: currency ?? state.displayCurrency)
     }
 
     func monthlyExpenseTotal(for month: Date, in currency: String? = nil) async -> Double {
-        await monthlyTotal(for: .expense, month: month, in: currency)
+        await analyticsService.monthlyTotal(for: .expense, month: month, displayCurrency: currency ?? state.displayCurrency)
     }
 
     func incomePlanSummary(
@@ -1167,7 +1087,7 @@ final class CashflowViewModel: ViewModelProtocol {
         let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
         let monthEnd = calendar.date(byAdding: DateComponents(month: 1, second: -1), to: monthStart) ?? monthStart
         let cutoff = min(now(), monthEnd)
-        let actualTransactions = monthlyTransactions(for: .income, month: month)
+        let actualTransactions = analyticsService.monthlyTransactions(for: .income, month: month)
             .filter { transaction in
                 transaction.shouldAffectCashflowTotals && transaction.transactionDate <= cutoff
             }
@@ -1409,13 +1329,13 @@ final class CashflowViewModel: ViewModelProtocol {
         }
 
         let sortedEntries = request.entries.sorted { $0.sourceOrderIndex < $1.sourceOrderIndex }
-        let existingTransactions = bulkExpenseImportTransactions(
+        let existingTransactions = analyticsService.bulkExpenseImportTransactions(
             cardID: request.cardID,
             month: request.month,
             affectsCardBalance: request.shouldAffectCardBalance
         )
         let nowDate = now()
-        let transactionDates = Self.bulkExpenseTransactionDates(
+        let transactionDates = CashflowAnalyticsService.bulkExpenseTransactionDates(
             for: request.month,
             count: sortedEntries.count,
             referenceDate: nowDate,
@@ -1441,7 +1361,7 @@ final class CashflowViewModel: ViewModelProtocol {
         var existingByReferenceKey: [String: CashflowTransaction] = [:]
         for transaction in existingTransactions {
             guard let categoryRaw = transaction.expenseCategoryRaw else { continue }
-            for key in Self.bulkExpenseImportLookupKeys(
+            for key in CashflowAnalyticsService.bulkExpenseImportLookupKeys(
                 cardID: request.cardID,
                 month: request.month,
                 categoryRaw: categoryRaw,
@@ -1463,7 +1383,7 @@ final class CashflowViewModel: ViewModelProtocol {
         )
 
         for (index, entry) in sortedEntries.enumerated() {
-            let referenceKey = Self.bulkExpenseImportReferenceKey(
+            let referenceKey = CashflowAnalyticsService.bulkExpenseImportReferenceKey(
                 cardID: request.cardID,
                 month: request.month,
                 categoryRaw: entry.expenseCategoryRaw,
@@ -1530,26 +1450,7 @@ final class CashflowViewModel: ViewModelProtocol {
         month: Date,
         affectsCardBalance: Bool
     ) -> [CashflowBulkExpenseStoredCategoryEntry] {
-        bulkExpenseImportTransactions(
-            cardID: cardID,
-            month: month,
-            affectsCardBalance: affectsCardBalance
-        )
-            .compactMap { transaction in
-                guard let categoryRaw = transaction.expenseCategoryRaw else { return nil }
-                return CashflowBulkExpenseStoredCategoryEntry(
-                    categoryRaw: categoryRaw,
-                    amount: transaction.amount,
-                    note: transaction.note,
-                    affectsCardBalance: transaction.affectsCardBalance
-                )
-            }
-            .sorted { lhs, rhs in
-                if lhs.categoryRaw == rhs.categoryRaw {
-                    return lhs.amount > rhs.amount
-                }
-                return lhs.categoryRaw < rhs.categoryRaw
-            }
+        analyticsService.bulkExpenseImportStoredEntries(cardID: cardID, month: month, affectsCardBalance: affectsCardBalance)
     }
 
     func bulkExpenseImportBaselineCategoryTotals(
@@ -1557,17 +1458,7 @@ final class CashflowViewModel: ViewModelProtocol {
         month: Date,
         affectsCardBalance: Bool
     ) -> [String: Double] {
-        monthlyTransactions(for: .expense, month: month)
-            .filter { transaction in
-                transaction.cardID == cardID
-                    && transaction.affectsCardBalance == affectsCardBalance
-                    && transaction.shouldAffectCashflowTotals
-                    && transaction.importSourceRaw != CashflowBulkExpenseImportTransactionSource.monthlyCategoryRollup.rawValue
-            }
-            .reduce(into: [String: Double]()) { result, transaction in
-                let categoryRaw = transaction.expenseCategoryRaw ?? ExpenseCategory.other.rawValue
-                result[categoryRaw, default: 0] += transaction.amount
-            }
+        analyticsService.bulkExpenseImportBaselineCategoryTotals(cardID: cardID, month: month, affectsCardBalance: affectsCardBalance)
     }
 
     func learnedBulkExpenseCategoryRaw(for merchantTitle: String) -> String? {
@@ -1585,33 +1476,7 @@ final class CashflowViewModel: ViewModelProtocol {
         month: Date,
         in currency: String? = nil
     ) async -> [String: Double] {
-        let targetType: CashflowTransactionType = kind == .income ? .income : .expense
-        let targetCurrency = currency ?? state.displayCurrency
-        let filtered = monthlyTransactions(for: targetType, month: month)
-            .filter(\.shouldAffectCashflowTotals)
-
-        let previousWarning = state.currencyConversionWarning
-        let previousWarningDate = state.currencyConversionWarningDate
-        defer {
-            state.currencyConversionWarning = previousWarning
-            state.currencyConversionWarningDate = previousWarningDate
-        }
-
-        var totals: [String: Double] = [:]
-        for transaction in filtered {
-            let categoryRaw: String = {
-                switch kind {
-                case .income:
-                    return transaction.incomeCategoryRaw ?? IncomeCategory.other.rawValue
-                case .expense:
-                    return transaction.expenseCategoryRaw ?? ExpenseCategory.other.rawValue
-                }
-            }()
-            let convertedAmount = await convertAmountForTransaction(transaction, to: targetCurrency)
-            totals[categoryRaw, default: 0] += convertedAmount
-        }
-
-        return totals
+        await analyticsService.monthlyCategoryTotals(for: kind, month: month, displayCurrency: currency ?? state.displayCurrency)
     }
 
     // MARK: - Scheduled Transactions
@@ -1657,91 +1522,11 @@ final class CashflowViewModel: ViewModelProtocol {
         month: Date,
         in currency: String? = nil
     ) async -> Double {
-        let targetCurrency = currency ?? state.displayCurrency
-        let filtered = monthlyTransactions(for: type, month: month)
-            .filter(\.shouldAffectCashflowTotals)
-
-        let previousWarning = state.currencyConversionWarning
-        let previousWarningDate = state.currencyConversionWarningDate
-        defer {
-            state.currencyConversionWarning = previousWarning
-            state.currencyConversionWarningDate = previousWarningDate
-        }
-
-        var total: Double = 0
-        for transaction in filtered {
-            total += await convertAmountForTransaction(transaction, to: targetCurrency)
-        }
-        return total
+        await analyticsService.monthlyTotal(for: type, month: month, displayCurrency: currency ?? state.displayCurrency)
     }
 
     private func monthlyTransactions(for type: CashflowTransactionType, month: Date) -> [CashflowTransaction] {
-        let calendar = Calendar.current
-        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
-        let monthEnd = calendar.date(byAdding: DateComponents(month: 1, second: -1), to: monthStart) ?? monthStart
-
-        return state.transactions.filter { transaction in
-            transaction.transactionType == type
-            && transaction.transactionDate >= monthStart
-            && transaction.transactionDate <= monthEnd
-        }
-    }
-
-    static func bulkExpenseTransactionDates(
-        for month: Date,
-        count: Int,
-        referenceDate: Date,
-        calendar: Calendar
-    ) -> [Date] {
-        guard count > 0 else { return [] }
-
-        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
-        let monthEnd = calendar.date(byAdding: DateComponents(month: 1, second: -1), to: monthStart) ?? monthStart
-        let isCurrentMonth = calendar.isDate(monthStart, equalTo: referenceDate, toGranularity: .month)
-        let anchor = isCurrentMonth ? min(referenceDate, monthEnd) : monthEnd
-
-        return (0..<count).map { offset in
-            calendar.date(byAdding: .minute, value: -offset, to: anchor) ?? anchor
-        }.sorted()
-    }
-
-    static func bulkExpenseImportReferenceKey(
-        cardID: String,
-        month: Date,
-        categoryRaw: String,
-        affectsCardBalance: Bool,
-        calendar: Calendar = .current
-    ) -> String {
-        let monthStart = monthStart(for: month, calendar: calendar)
-        let components = calendar.dateComponents([.year, .month], from: monthStart)
-        let year = components.year ?? 0
-        let month = components.month ?? 0
-        let balanceMode = affectsCardBalance ? "balance-on" : "balance-off"
-        return "bulk-expense|\(cardID)|\(year)-\(String(format: "%02d", month))|\(balanceMode)|\(categoryRaw)"
-    }
-
-    private static func bulkExpenseImportLookupKeys(
-        cardID: String,
-        month: Date,
-        categoryRaw: String,
-        affectsCardBalance: Bool,
-        calendar: Calendar = .current
-    ) -> [String] {
-        let monthStart = monthStart(for: month, calendar: calendar)
-        let components = calendar.dateComponents([.year, .month], from: monthStart)
-        let year = components.year ?? 0
-        let month = components.month ?? 0
-        let legacyKey = "bulk-expense|\(cardID)|\(year)-\(String(format: "%02d", month))|\(categoryRaw)"
-        return [
-            bulkExpenseImportReferenceKey(
-                cardID: cardID,
-                month: monthStart,
-                categoryRaw: categoryRaw,
-                affectsCardBalance: affectsCardBalance,
-                calendar: calendar
-            ),
-            legacyKey
-        ]
+        analyticsService.monthlyTransactions(for: type, month: month)
     }
 
     // MARK: - Categories
@@ -2000,59 +1785,18 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     private func getDateRange() -> (Date, Date) {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: now())
-        
-        switch state.chartPeriod {
-        case .month:
-            let reference = now()
-            let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: reference)) ?? reference
-            let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth) ?? reference
-            return (startOfMonth, min(endOfMonth, today))
-            
-        case .quarter:
-            let reference = now()
-            let components = calendar.dateComponents([.year, .month], from: reference)
-            let month = components.month ?? calendar.component(.month, from: reference)
-            let year = components.year ?? calendar.component(.year, from: reference)
-            let quarter = (month - 1) / 3
-            let startMonth = quarter * 3 + 1
-            let startOfQuarter = calendar.date(from: DateComponents(year: year, month: startMonth, day: 1)) ?? reference
-            let endOfQuarter = calendar.date(byAdding: DateComponents(month: 3, day: -1), to: startOfQuarter) ?? reference
-            return (startOfQuarter, endOfQuarter)
-            
-        case .year:
-            let reference = now()
-            let startOfYear = calendar.date(from: calendar.dateComponents([.year], from: reference)) ?? reference
-            let endOfYear = calendar.date(byAdding: DateComponents(year: 1, day: -1), to: startOfYear) ?? reference
-            return (startOfYear, endOfYear)
-            
-        case .specificMonth:
-            let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: state.selectedMonth)) ?? state.selectedMonth
-            let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth) ?? state.selectedMonth
-            if calendar.isDate(startOfMonth, equalTo: today, toGranularity: .month) {
-                return (startOfMonth, today)
-            }
-            return (startOfMonth, endOfMonth)
-            
-        case .specificQuarter:
-            let month = calendar.component(.month, from: state.selectedQuarter)
-            let quarter = (month - 1) / 3
-            let startMonth = quarter * 3 + 1
-            let startOfQuarter = calendar.date(from: DateComponents(year: calendar.component(.year, from: state.selectedQuarter), month: startMonth, day: 1)) ?? state.selectedQuarter
-            let endOfQuarter = calendar.date(byAdding: DateComponents(month: 3, day: -1), to: startOfQuarter) ?? state.selectedQuarter
-            return (startOfQuarter, endOfQuarter)
-            
-        case .specificYear:
-            let startOfYear = calendar.date(from: calendar.dateComponents([.year], from: state.selectedYear)) ?? state.selectedYear
-            let endOfYear = calendar.date(byAdding: DateComponents(year: 1, day: -1), to: startOfYear) ?? state.selectedYear
-            return (startOfYear, endOfYear)
-            
-        case .custom:
-            let start = min(state.customStartDate, state.customEndDate)
-            let end = max(state.customStartDate, state.customEndDate)
-            return (calendar.startOfDay(for: start), calendar.startOfDay(for: end))
-        }
+        let input = CashflowChartInput(
+            chartPeriod: state.chartPeriod,
+            selectedMonth: state.selectedMonth,
+            selectedQuarter: state.selectedQuarter,
+            selectedYear: state.selectedYear,
+            customStartDate: state.customStartDate,
+            customEndDate: state.customEndDate,
+            activeBudgetPlan: state.activeBudgetPlan,
+            activeBudgetCategoryLimits: state.activeBudgetCategoryLimits,
+            displayCurrency: state.displayCurrency
+        )
+        return analyticsService.getDateRange(input: input)
     }
 
     /// Дефолтный период Cashflow: текущий календарный месяц до сегодняшнего дня.
@@ -2102,32 +1846,6 @@ final class CashflowViewModel: ViewModelProtocol {
         state.customStartDate = range.start
         state.customEndDate = range.end
         state.chartPeriod = .specificMonth
-    }
-
-    private func updateAssetsBreakdown(startDate: Date, endDate: Date, expectedRevision: Int? = nil) async {
-        let revision = expectedRevision ?? chartUpdateRevision
-        guard isCurrentChartUpdateRevision(revision) else { return }
-
-        let snapshot: (start: Double, end: Double)?
-        if let assetsSnapshotProvider {
-            snapshot = await assetsSnapshotProvider(startDate, endDate, state.displayCurrency)
-        } else {
-            snapshot = await resolveAssetsSnapshotFromFinance(startDate: startDate, endDate: endDate)
-        }
-
-        guard isCurrentChartUpdateRevision(revision) else { return }
-        let startAssets = snapshot?.start ?? 0.0
-        let endAssets = snapshot?.end ?? 0.0
-        let periodTotalChange = endAssets - startAssets
-        let income = state.totalIncome
-        let expense = state.totalExpense
-        let valueChange = periodTotalChange - income + expense
-
-        state.assetsAtPeriodStart = startAssets
-        state.assetsAtPeriodEnd = endAssets
-        state.contributedExpense = expense
-        state.assetValueChange = valueChange
-        state.periodTotalChange = periodTotalChange
     }
 
     private func resolveAssetsSnapshotFromFinance(startDate: Date, endDate: Date) async -> (start: Double, end: Double)? {
@@ -2486,42 +2204,12 @@ final class CashflowViewModel: ViewModelProtocol {
         calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
     }
 
-    private func bulkExpenseImportTransactions(
-        cardID: String,
-        month: Date,
-        affectsCardBalance: Bool? = nil
-    ) -> [CashflowTransaction] {
-        let calendar = Calendar.current
-        let monthStart = Self.monthStart(for: month, calendar: calendar)
-        let descriptor = FetchDescriptor<CashflowTransaction>()
-        let allTransactions = (try? modelContext.fetch(descriptor)) ?? []
-        return allTransactions.filter { transaction in
-            guard transaction.transactionType == .expense,
-                  transaction.cardID == cardID,
-                  transaction.importSourceRaw == CashflowBulkExpenseImportTransactionSource.monthlyCategoryRollup.rawValue,
-                  Self.isSameMonth(transaction.transactionDate, monthStart, calendar: calendar) else {
-                return false
-            }
-
-            guard let affectsCardBalance else {
-                return true
-            }
-            return transaction.affectsCardBalance == affectsCardBalance
-        }
-    }
-
     private static func endOfDay(for date: Date, calendar: Calendar) -> Date {
         let startOfDay = calendar.startOfDay(for: date)
         guard let nextDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
             return date
         }
         return nextDay.addingTimeInterval(-0.001)
-    }
-
-    private static func isSameMonth(_ lhs: Date, _ rhs: Date, calendar: Calendar) -> Bool {
-        let left = calendar.dateComponents([.year, .month], from: lhs)
-        let right = calendar.dateComponents([.year, .month], from: rhs)
-        return left.year == right.year && left.month == right.month
     }
 
     private func convertAmount(value: Double, from: String, to: String) async -> Double {

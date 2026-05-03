@@ -609,7 +609,7 @@ struct CashflowBulkExpenseImportTests {
             expenseCategoryRaw: ExpenseCategory.groceries.rawValue,
             note: "Импорт",
             importSourceRaw: CashflowBulkExpenseImportTransactionSource.monthlyCategoryRollup.rawValue,
-            importReferenceKey: CashflowViewModel.bulkExpenseImportReferenceKey(
+            importReferenceKey: CashflowAnalyticsService.bulkExpenseImportReferenceKey(
                 cardID: card.cardUniqueID,
                 month: month,
                 categoryRaw: ExpenseCategory.groceries.rawValue,
@@ -779,7 +779,7 @@ struct CashflowBulkExpenseImportTests {
         let month = calendar.date(from: DateComponents(year: 2026, month: 2, day: 1)) ?? Date()
         let referenceDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 11, hour: 12)) ?? Date()
 
-        let dates = CashflowViewModel.bulkExpenseTransactionDates(
+        let dates = CashflowAnalyticsService.bulkExpenseTransactionDates(
             for: month,
             count: 3,
             referenceDate: referenceDate,
