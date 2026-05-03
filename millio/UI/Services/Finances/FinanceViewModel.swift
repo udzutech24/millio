@@ -362,6 +362,42 @@ final class FinanceViewModel: ViewModelProtocol {
         )
     }()
 
+    // investmentOrderService использует lazy из-за замыканий на self
+    private(set) lazy var investmentOrderService: FinanceInvestmentOrderService = {
+        FinanceInvestmentOrderService(
+            modelContext: self.modelContext,
+            nowProvider: self.nowProvider,
+            investmentByIDProvider: { [weak self] in self?.investmentByID ?? [:] },
+            cardByIDProvider: { [weak self] in self?.cardByID ?? [:] },
+            availableCardsProvider: { [weak self] in self?.state.availableCards ?? [] },
+            availableInvestmentsProvider: { [weak self] in self?.state.availableInvestments ?? [] },
+            groupsProvider: { [weak self] in self?.state.groups ?? [] },
+            resolvedInvestmentCurrency: { [weak self] investment in
+                self?.resolvedInvestmentCurrency(investment) ?? investment.currency
+            },
+            normalizedConversionCurrency: { [weak self] currency in
+                self?.normalizedConversionCurrency(currency) ?? currency
+            },
+            normalizedCurrencyCode: { [weak self] currency in
+                self?.normalizedCurrencyCode(currency) ?? currency
+            },
+            investmentDisplayName: { [weak self] investment in
+                self?.investmentDisplayName(investment) ?? investment.name
+            },
+            onLoadAccounts: { [weak self] in self?.loadAccounts() },
+            onCalculateTotalAmount: { [weak self] in self?.calculateTotalAmount() },
+            onScheduleGroupTotalRefresh: { [weak self] groupID in
+                self?.scheduleGroupTotalRefresh(for: groupID)
+            },
+            onPublishAccountChangedEvent: { [weak self] accountType in
+                self?.publishAccountChangedEvent(for: accountType)
+            },
+            onUpdateTradeCelebration: { [weak self] celebration in
+                self?.state.tradeCelebration = celebration
+            }
+        )
+    }()
+
     // Делегаты к savingsGoalService для обратной совместимости
     private var storedSavingsGoalEnabled: Bool {
         get { savingsGoalService.storedEnabled }
@@ -580,7 +616,7 @@ final class FinanceViewModel: ViewModelProtocol {
             updateCreditCardQuickFields(account: account, creditLimit: creditLimit, debt: debt)
 
         case .executeInvestmentOrder(let account, let side, let quantity, let unitPrice, let funding):
-            executeInvestmentOrder(
+            investmentOrderService.executeInvestmentOrder(
                 account: account,
                 side: side,
                 quantity: quantity,
@@ -589,7 +625,7 @@ final class FinanceViewModel: ViewModelProtocol {
             )
 
         case .updateMarketInvestmentDetails(let account, let quantity, let unitPrice, let purchaseUnitPrice):
-            updateMarketInvestmentDetails(
+            investmentOrderService.updateMarketInvestmentDetails(
                 account: account,
                 quantity: quantity,
                 unitPrice: unitPrice,
@@ -1159,14 +1195,7 @@ final class FinanceViewModel: ViewModelProtocol {
         from cards: [Card],
         investmentCurrency: String
     ) -> [Card] {
-        let normalizedInvestmentCurrency = investmentCurrency
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-
-        return cards.filter { card in
-            card.archivedAt == nil
-                && card.currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == normalizedInvestmentCurrency
-        }
+        FinanceInvestmentOrderService.eligibleSettlementCards(from: cards, investmentCurrency: investmentCurrency)
     }
 
     static func eligibleSettlementAccounts(
@@ -1175,168 +1204,12 @@ final class FinanceViewModel: ViewModelProtocol {
         investmentCurrency: String,
         excludingInvestmentID: String? = nil
     ) -> [CashflowSelectableAccount] {
-        let cardOptions = eligibleSettlementCards(
-            from: cards,
-            investmentCurrency: investmentCurrency
-        ).map {
-            CashflowSelectableAccount(
-                kind: .card(cardID: $0.cardUniqueID),
-                title: $0.name,
-                currency: $0.currency,
-                isFavorite: $0.isFavorite,
-                prioritySortOrder: $0.priority.sortOrder,
-                updatedAt: $0.updatedAt
-            )
-        }
-
-        let normalizedCurrency = investmentCurrency
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-        let investmentOptions = investments
-            .filter { investment in
-                investment.archivedAt == nil
-                    && investment.isCashflowAccount
-                    && investment.investmentUniqueID != excludingInvestmentID
-                    && investment.currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == normalizedCurrency
-            }
-            .map {
-                CashflowSelectableAccount(
-                    kind: .investment(investmentID: $0.investmentUniqueID),
-                    title: $0.name,
-                    currency: $0.currency,
-                    isFavorite: $0.isFavorite,
-                    prioritySortOrder: $0.priority.sortOrder,
-                    updatedAt: $0.updatedAt
-                )
-            }
-
-        return (cardOptions + investmentOptions).sorted { lhs, rhs in
-            if lhs.prioritySortOrder != rhs.prioritySortOrder {
-                return lhs.prioritySortOrder < rhs.prioritySortOrder
-            }
-            if lhs.isFavorite != rhs.isFavorite {
-                return lhs.isFavorite
-            }
-            if lhs.updatedAt != rhs.updatedAt {
-                return lhs.updatedAt > rhs.updatedAt
-            }
-            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
-        }
-    }
-
-    private func normalizedInvestmentOrderFunding(
-        _ funding: InvestmentOrderFunding,
-        cards: [Card],
-        investments: [Investment],
-        investmentID: String,
-        investmentCurrency: String
-    ) -> InvestmentOrderFunding {
-        guard funding.shouldAffectCardBalance else {
-            return .ignored
-        }
-
-        let eligibleAccounts = Self.eligibleSettlementAccounts(
+        FinanceInvestmentOrderService.eligibleSettlementAccounts(
             cards: cards,
             investments: investments,
             investmentCurrency: investmentCurrency,
-            excludingInvestmentID: investmentID
+            excludingInvestmentID: excludingInvestmentID
         )
-        guard !eligibleAccounts.isEmpty else {
-            return .ignored
-        }
-
-        if let settlementAccountKind = funding.settlementAccountKind,
-           eligibleAccounts.contains(where: { $0.kind == settlementAccountKind }) {
-            return InvestmentOrderFunding(
-                settlementAccountKind: settlementAccountKind,
-                shouldAffectCardBalance: true
-            )
-        }
-
-        let preferredAccount = eligibleAccounts.first
-        return InvestmentOrderFunding(
-            settlementAccountKind: preferredAccount?.kind,
-            shouldAffectCardBalance: preferredAccount != nil
-        )
-    }
-
-    private enum InvestmentSettlementAccount {
-        case card(Card)
-        case investment(Investment)
-
-        var accountType: FinanceAccountType {
-            switch self {
-            case .card:
-                return .card
-            case .investment:
-                return .investment
-            }
-        }
-
-        var accountID: String {
-            switch self {
-            case .card(let card):
-                return card.cardUniqueID
-            case .investment(let investment):
-                return investment.investmentUniqueID
-            }
-        }
-
-        var currency: String {
-            switch self {
-            case .card(let card):
-                return card.currency
-            case .investment(let investment):
-                return investment.currency
-            }
-        }
-
-        var availableAmount: Double {
-            switch self {
-            case .card(let card):
-                return card.balance
-            case .investment(let investment):
-                return investment.amount
-            }
-        }
-    }
-
-    private func settlementAccount(
-        for funding: InvestmentOrderFunding,
-        investmentCurrency: String
-    ) -> InvestmentSettlementAccount? {
-        guard funding.shouldAffectCardBalance,
-              let settlementAccountKind = funding.settlementAccountKind else {
-            return nil
-        }
-
-        let normalizedInvestmentCurrency = normalizedCurrencyCode(investmentCurrency)
-        switch settlementAccountKind {
-        case .card(let cardID):
-            guard let card = cardByID[cardID],
-                  normalizedCurrencyCode(card.currency) == normalizedInvestmentCurrency else {
-                return nil
-            }
-            return .card(card)
-        case .investment(let investmentID):
-            guard let investment = investmentByID[investmentID],
-                  investment.isCashflowAccount,
-                  normalizedCurrencyCode(investment.currency) == normalizedInvestmentCurrency else {
-                return nil
-            }
-            return .investment(investment)
-        }
-    }
-
-    private func stampFrozenRate(on transaction: CashflowTransaction, targetCurrency: String) {
-        let normalizedSource = normalizedConversionCurrency(transaction.currency)
-        let normalizedTarget = normalizedConversionCurrency(targetCurrency)
-        transaction.currency = normalizedSource
-        transaction.exchangeRateCurrency = normalizedTarget
-        transaction.exchangeRateDate = Calendar.current.startOfDay(for: transaction.transactionDate)
-        if normalizedSource == normalizedTarget {
-            transaction.exchangeRate = 1.0
-        }
     }
 
     private func formatMarketNumber(_ value: Double, maximumFractionDigits: Int) -> String {
@@ -1397,288 +1270,22 @@ final class FinanceViewModel: ViewModelProtocol {
         return parts[0]
     }
 
-    private func executeInvestmentOrder(
-        account: FinanceAccount,
-        side: InvestmentOrderSide,
-        quantity: Double,
-        unitPrice: Double,
-        funding: InvestmentOrderFunding
-    ) {
-        guard quantity > 0, unitPrice >= 0 else {
-            return
-        }
-        guard account.accountType == .investment,
-              let investment = investmentByID[account.accountID],
-              investment.isMarketPriced else {
-            return
-        }
-
-        let investmentCurrency = resolvedInvestmentCurrency(investment)
-        let totalAmount = quantity * unitPrice
-        let normalizedFunding = normalizedInvestmentOrderFunding(
-            funding,
-            cards: state.availableCards,
-            investments: state.availableInvestments,
-            investmentID: investment.investmentUniqueID,
-            investmentCurrency: investmentCurrency
-        )
-        guard !normalizedFunding.shouldAffectCardBalance || normalizedFunding.settlementAccountKind != nil else {
-            return
-        }
-        let settlementAccountForOrder = settlementAccount(
-            for: normalizedFunding,
-            investmentCurrency: investmentCurrency
-        )
-        if normalizedFunding.shouldAffectCardBalance, settlementAccountForOrder == nil {
-            return
-        }
-        if let settlementAccountForOrder,
-           side == .buy,
-           settlementAccountForOrder.availableAmount + 0.0000001 < totalAmount {
-            return
-        }
-
-        let oldAmount = investment.amount
-        let transactionDate = nowProvider()
-        if !investment.hasInitialAmount {
-            investment.initialAmount = investment.amount
-            investment.hasInitialAmount = true
-        }
-
-        let snapshotBefore = marketAssetSnapshot(for: investment)
-        let settlementAmountBefore = settlementAccountForOrder?.availableAmount
-        let didApply: Bool
-        switch side {
-        case .buy:
-            didApply = investment.applyBuy(quantity: quantity, unitPrice: unitPrice)
-        case .sell:
-            didApply = investment.applySell(quantity: quantity, unitPrice: unitPrice)
-        }
-        guard didApply else {
-            return
-        }
-        investment.updatedAt = transactionDate
-
-        if let settlementAccountForOrder {
-            switch settlementAccountForOrder {
-            case .card(let card):
-                if !card.hasInitialBalance {
-                    card.initialBalance = card.balance
-                    card.hasInitialBalance = true
-                }
-                switch side {
-                case .buy:
-                    card.balance = max(0, card.balance - totalAmount)
-                case .sell:
-                    card.balance += totalAmount
-                }
-                card.updatedAt = transactionDate
-            case .investment(let settlementInvestment):
-                if !settlementInvestment.hasInitialAmount {
-                    settlementInvestment.initialAmount = settlementInvestment.amount
-                    settlementInvestment.hasInitialAmount = true
-                }
-                switch side {
-                case .buy:
-                    settlementInvestment.amount = max(0, settlementInvestment.amount - totalAmount)
-                case .sell:
-                    settlementInvestment.amount += totalAmount
-                }
-                settlementInvestment.updatedAt = transactionDate
-            }
-        }
-
-        do {
-            var didCreateTransaction = false
-            var changedAccountTypes: Set<FinanceAccountType> = [.investment]
-            let difference = investment.amount - oldAmount
-            let operationGroupID = UUID().uuidString
-            if abs(difference) > 0.01 {
-                let note = side == .buy
-                    ? String(localized: "finances.transaction.note.investment_buy")
-                    : String(localized: "finances.transaction.note.investment_sell")
-                let transaction = CashflowTransaction(
-                    transactionType: .balanceAdjustment,
-                    amount: difference,
-                    currency: investment.currency,
-                    transactionDate: transactionDate,
-                    investmentID: investment.investmentUniqueID,
-                    note: note,
-                    operationGroupID: operationGroupID
-                )
-                transaction.applyAssetChangeSnapshot(
-                    before: snapshotBefore,
-                    after: marketAssetSnapshot(for: investment)
-                )
-                stampFrozenRate(on: transaction, targetCurrency: investmentCurrency)
-                transaction.hasAppliedBalanceEffect = true
-                modelContext.insert(transaction)
-                didCreateTransaction = true
-            }
-
-            if let settlementAccountForOrder {
-                let note = side == .buy
-                    ? String(localized: "finances.transaction.note.investment_buy")
-                    : String(localized: "finances.transaction.note.investment_sell")
-                let settlementCardID: String?
-                switch settlementAccountForOrder {
-                case .card(let card):
-                    settlementCardID = card.cardUniqueID
-                case .investment:
-                    settlementCardID = nil
-                }
-                let settlementTransaction = CashflowTransaction(
-                    transactionType: side == .buy ? .expense : .income,
-                    amount: totalAmount,
-                    currency: investmentCurrency,
-                    transactionDate: transactionDate,
-                    cardID: settlementCardID,
-                    // Keep the order leg attached to the traded investment so
-                    // audit/history queries can reconstruct the full operation.
-                    investmentID: investment.investmentUniqueID,
-                    incomeCategory: side == .sell ? .investment : nil,
-                    expenseCategory: side == .buy ? .other : nil,
-                    note: note,
-                    operationGroupID: operationGroupID,
-                    affectsCashflowTotals: false
-                )
-                stampFrozenRate(on: settlementTransaction, targetCurrency: settlementAccountForOrder.currency)
-                settlementTransaction.hasAppliedBalanceEffect = true
-                modelContext.insert(settlementTransaction)
-                didCreateTransaction = true
-                changedAccountTypes.insert(settlementAccountForOrder.accountType)
-            }
-
-            try modelContext.save()
-            loadAccounts()
-            calculateTotalAmount()
-            state.tradeCelebration = FinanceTradeCelebration(
-                side: side,
-                investmentName: investmentDisplayName(investment),
-                investmentCategory: investment.category,
-                totalAmount: totalAmount,
-                currency: investmentCurrency
-            )
-
-            var affectedGroupIDs: Set<String> = []
-            for group in state.groups {
-                guard let groupAccounts = group.accounts else { continue }
-                if groupAccounts.contains(where: { $0.accountType == .investment && $0.accountID == account.accountID }) {
-                    affectedGroupIDs.insert(group.groupUniqueID)
-                }
-                if let settlementAccountForOrder,
-                   groupAccounts.contains(where: {
-                       $0.accountType == settlementAccountForOrder.accountType
-                           && $0.accountID == settlementAccountForOrder.accountID
-                   }) {
-                    affectedGroupIDs.insert(group.groupUniqueID)
-                }
-            }
-            for groupID in affectedGroupIDs {
-                scheduleGroupTotalRefresh(for: groupID)
-            }
-
-            for accountType in changedAccountTypes {
-                publishAccountChangedEvent(for: accountType)
-            }
-
-            if didCreateTransaction {
-                EventBus.shared.publish(FinanceEvent.transactionsUpdated)
-            }
-        } catch {
-            if let settlementAccountForOrder, let settlementAmountBefore {
-                switch settlementAccountForOrder {
-                case .card(let card):
-                    card.balance = settlementAmountBefore
-                case .investment(let settlementInvestment):
-                    settlementInvestment.amount = settlementAmountBefore
-                }
-            }
-            AppLogger.log(.error, category: "Finance", "Failed to execute market order: \(error.localizedDescription)")
-        }
-    }
-
-    private func updateMarketInvestmentDetails(
-        account: FinanceAccount,
-        quantity: Double,
-        unitPrice: Double,
-        purchaseUnitPrice: Double?
-    ) {
-        guard account.accountType == .investment,
-              let investment = investmentByID[account.accountID],
-              investment.isMarketPriced,
-              quantity > 0,
-              unitPrice > 0 else {
-            return
-        }
-
-        let snapshotBefore = marketAssetSnapshot(for: investment)
-        let oldAmount = investment.amount
-        if !investment.hasInitialAmount {
-            investment.initialAmount = investment.amount
-            investment.hasInitialAmount = true
-        }
-
-        investment.marketQuantity = quantity
-        investment.lastKnownUnitPrice = unitPrice
-        investment.lastKnownPriceUpdatedAt = Date()
-
-        if let purchaseUnitPrice, purchaseUnitPrice > 0 {
-            investment.averagePurchaseUnitPrice = purchaseUnitPrice
-            investment.totalPurchaseCost = purchaseUnitPrice * quantity
-        } else {
-            investment.averagePurchaseUnitPrice = nil
-            investment.totalPurchaseCost = nil
-        }
-
-        investment.recalculateAmountFromPosition()
-        investment.updatedAt = Date()
-
-        do {
-            var didCreateTransaction = false
-            let difference = investment.amount - oldAmount
-            if abs(difference) > 0.01 {
-                let transaction = CashflowTransaction(
-                    transactionType: .balanceAdjustment,
-                    amount: difference,
-                    currency: investment.currency,
-                    transactionDate: Date(),
-                    investmentID: investment.investmentUniqueID,
-                    note: String(localized: "finances.transaction.note.market_position_edit")
-                )
-                transaction.applyAssetChangeSnapshot(
-                    before: snapshotBefore,
-                    after: marketAssetSnapshot(for: investment)
-                )
-                stampFrozenRate(on: transaction, targetCurrency: resolvedInvestmentCurrency(investment))
-                transaction.hasAppliedBalanceEffect = true
-                modelContext.insert(transaction)
-                didCreateTransaction = true
-            }
-
-            try modelContext.save()
-            loadAccounts()
-            calculateTotalAmount()
-
-            if let accountGroupID = state.groups.first(where: { group in
-                group.accounts?.contains(where: { $0.id == account.id }) == true
-            })?.groupUniqueID {
-                scheduleGroupTotalRefresh(for: accountGroupID)
-            }
-
-            if didCreateTransaction {
-                EventBus.shared.publish(FinanceEvent.transactionsUpdated)
-            }
-        } catch {
-            AppLogger.log(.error, category: "Finance", "Failed to update market investment details: \(error.localizedDescription)")
-        }
-    }
-    
     /// Прогрев котировок на старте приложения без принудительного запроса в сеть.
     /// Обновление будет использовано из локального кэша, а сеть подключится только при реальной необходимости.
     func warmupRemoteDataForStartup() async {
         await refreshCurrencyQuotes(forceRefresh: false)
         await marketDataService.refreshStockPrices(forceRefresh: false)
+    }
+
+    private func stampFrozenRate(on transaction: CashflowTransaction, targetCurrency: String) {
+        let normalizedSource = normalizedConversionCurrency(transaction.currency)
+        let normalizedTarget = normalizedConversionCurrency(targetCurrency)
+        transaction.currency = normalizedSource
+        transaction.exchangeRateCurrency = normalizedTarget
+        transaction.exchangeRateDate = Calendar.current.startOfDay(for: transaction.transactionDate)
+        if normalizedSource == normalizedTarget {
+            transaction.exchangeRate = 1.0
+        }
     }
 
     private func marketAssetSnapshot(
