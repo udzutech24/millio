@@ -267,7 +267,7 @@ struct FinanceCreateInvestmentView: View {
                             return
                         }
                         investmentViewModel = InvestmentViewModel(modelContext: modelContext)
-                        investmentViewModel?.handle(.addInvestment)
+                        investmentViewModel?.handle(.addInvestment())
                     }
             }
         }
