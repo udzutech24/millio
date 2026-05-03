@@ -22,6 +22,7 @@ enum AppRoute: Hashable {
     // Other screens
     case profile
     case subscription
+    case userSubscriptions
 }
 
 @Observable

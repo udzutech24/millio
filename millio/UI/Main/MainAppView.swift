@@ -347,6 +347,8 @@ struct MainAppView: View {
             ProfileView(router: router)
         case .subscription:
             SubscriptionView()
+        case .userSubscriptions:
+            NavigationStack { UserSubscriptionsView() }
         default:
             EmptyView()
         }

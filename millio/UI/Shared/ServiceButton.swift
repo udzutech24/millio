@@ -32,13 +32,19 @@ struct ServiceButton: View {
         Button(action: action) {
             HStack(spacing: ServiceButtonStyle.contentSpacing) {
                 ZStack {
-                    Image(icon)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(
-                            width: ServiceButtonStyle.iconSize,
-                            height: ServiceButtonStyle.iconSize
-                        )
+                    if UIImage(named: icon) != nil {
+                        Image(icon)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(
+                                width: ServiceButtonStyle.iconSize,
+                                height: ServiceButtonStyle.iconSize
+                            )
+                    } else {
+                        Image(systemName: icon)
+                            .font(.system(size: ServiceButtonStyle.iconSize * 0.72, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.9))
+                    }
                 }
                 .frame(
                     width: ServiceButtonStyle.iconContainerSize,
