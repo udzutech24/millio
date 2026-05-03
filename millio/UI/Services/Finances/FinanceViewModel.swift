@@ -155,38 +155,7 @@ struct FinanceState {
     var tradeCelebration: FinanceTradeCelebration? = nil
 }
 
-private struct StockRefreshIssues {
-    var notFoundSymbols: Set<String> = []
-    var priceUnavailableSymbols: Set<String> = []
-    var providerErrorSymbols: Set<String> = []
-    var authErrorSymbols: Set<String> = []
-    var networkErrorSymbols: Set<String> = []
-    var httpErrorSymbols: Set<String> = []
-    var decodingErrorSymbols: Set<String> = []
-    var clientErrorSymbols: Set<String> = []
-
-    var hasIssues: Bool {
-        !notFoundSymbols.isEmpty ||
-        !priceUnavailableSymbols.isEmpty ||
-        !providerErrorSymbols.isEmpty ||
-        !authErrorSymbols.isEmpty ||
-        !networkErrorSymbols.isEmpty ||
-        !httpErrorSymbols.isEmpty ||
-        !decodingErrorSymbols.isEmpty ||
-        !clientErrorSymbols.isEmpty
-    }
-
-    mutating func remove(symbol: String) {
-        notFoundSymbols.remove(symbol)
-        priceUnavailableSymbols.remove(symbol)
-        providerErrorSymbols.remove(symbol)
-        authErrorSymbols.remove(symbol)
-        networkErrorSymbols.remove(symbol)
-        httpErrorSymbols.remove(symbol)
-        decodingErrorSymbols.remove(symbol)
-        clientErrorSymbols.remove(symbol)
-    }
-}
+// StockRefreshIssues перемещён в FinanceMarketDataService.swift
 
 enum InvestmentOrderSide: Hashable {
     case buy
@@ -326,6 +295,17 @@ final class FinanceViewModel: ViewModelProtocol {
         FinanceSavingsGoalService(
             defaults: self.defaults,
             currencyRateService: self.currencyService
+        )
+    }()
+
+    // marketDataService использует lazy из-за замыканий на self
+    private(set) lazy var marketDataService: FinanceMarketDataService = {
+        FinanceMarketDataService(
+            modelContext: self.modelContext,
+            marketDataClient: self.marketDataClient,
+            nowProvider: self.nowProvider,
+            onLoadAccounts: { [weak self] in self?.loadAccounts() },
+            onRefreshGroupTotals: { [weak self] in await self?.refreshGroupTotalsAndAmounts() }
         )
     }()
 
@@ -1957,7 +1937,7 @@ final class FinanceViewModel: ViewModelProtocol {
     /// Обновление будет использовано из локального кэша, а сеть подключится только при реальной необходимости.
     func warmupRemoteDataForStartup() async {
         await refreshCurrencyQuotes(forceRefresh: false)
-        await refreshStockPrices(forceRefresh: false)
+        await marketDataService.refreshStockPrices(forceRefresh: false)
     }
 
     private func marketAssetSnapshot(
@@ -2009,189 +1989,10 @@ final class FinanceViewModel: ViewModelProtocol {
     func refreshStockPrices() async {
         state.isLoadingRates = true
         defer { state.isLoadingRates = false }
-        let now = nowProvider()
-        if let lastManualStockRefreshAt,
-           now.timeIntervalSince(lastManualStockRefreshAt) < Self.manualStockRefreshCooldown {
-            AppLogger.log(.info, category: "Finance", "Skipping manual stock refresh due to cooldown")
-            return
-        }
-        lastManualStockRefreshAt = now
-        let issues = await refreshStockPrices(forceRefresh: true)
-        presentRefreshIssueIfNeeded(message: stockRefreshIssueMessage(for: issues))
+        let message = await marketDataService.refreshStockPricesManual()
+        presentRefreshIssueIfNeeded(message: message)
     }
 
-    /// Лимит символов в одном запросе к backend (market/quotes).
-    private static let quoteBatchSize = 8
-
-    @discardableResult
-    private func refreshStockPrices(forceRefresh: Bool) async -> StockRefreshIssues {
-        let descriptor = FetchDescriptor<Investment>()
-        let activeStocks = ((try? modelContext.fetch(descriptor)) ?? []).filter {
-            $0.archivedAt == nil && $0.category == .stocks && $0.isMarketPriced
-        }
-
-        guard !activeStocks.isEmpty else {
-            await refreshGroupTotalsAndAmounts()
-            return StockRefreshIssues()
-        }
-
-        var didUpdateAnyPrice = false
-        var issues = StockRefreshIssues()
-
-        // Собираем уникальные символы и отображение символ -> бумаги (для ошибок по батчу)
-        var stockToLookupSymbols: [(stock: Investment, symbols: [String])] = []
-        var symbolToStocks: [String: [Investment]] = [:]
-        var allSymbolsOrdered: [String] = []
-        var seenSymbols: Set<String> = []
-
-        for stock in activeStocks {
-            let lookupSymbols = stockQuoteRequestSymbols(for: stock)
-            guard !lookupSymbols.isEmpty else {
-                issues.notFoundSymbols.insert(stock.name.trimmingCharacters(in: .whitespacesAndNewlines))
-                continue
-            }
-            stockToLookupSymbols.append((stock, lookupSymbols))
-            for s in lookupSymbols {
-                let key = s.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-                if !seenSymbols.contains(key) {
-                    seenSymbols.insert(key)
-                    allSymbolsOrdered.append(key)
-                }
-                symbolToStocks[key, default: []].append(stock)
-            }
-        }
-
-        var quotesBySymbol: [String: AssetSummary] = [:]
-        var aborted = false
-        var stocksAssignedIssueInCatch = Set<ObjectIdentifier>()
-
-        for chunkStart in stride(from: 0, to: allSymbolsOrdered.count, by: Self.quoteBatchSize) {
-            guard !aborted else { break }
-            let chunk = Array(allSymbolsOrdered[chunkStart ..< min(chunkStart + Self.quoteBatchSize, allSymbolsOrdered.count)])
-            do {
-                let quotes = try await marketDataClient.fetchQuotes(symbols: chunk)
-                var matchedRequestedSymbols: Set<String> = []
-
-                for quote in quotes {
-                    let keys = quote.quoteLookupKeys
-                    for key in keys {
-                        quotesBySymbol[key] = quote
-                    }
-                    matchedRequestedSymbols.formUnion(chunk.filter { keys.contains($0) })
-                }
-
-                let unmatchedRequestedSymbols = chunk.filter { matchedRequestedSymbols.contains($0) == false }
-                if quotes.count != chunk.count || !unmatchedRequestedSymbols.isEmpty {
-                    let requestedSymbolsLine = chunk.joined(separator: ",")
-                    let unmatchedSymbolsLine = unmatchedRequestedSymbols.joined(separator: ",")
-                    let returnedSummary = quotes.map { quote in
-                        let canonical = quote.canonicalSymbol ?? "nil"
-                        let provider = quote.providerSymbol ?? "nil"
-                        let exchange = quote.exchange ?? "nil"
-                        return "\(quote.symbol){status=\(quote.resolutionStatus.rawValue),canonical=\(canonical),provider=\(provider),exchange=\(exchange)}"
-                    }
-                    .joined(separator: ",")
-                    AppLogger.log(
-                        .warning,
-                        category: "Finance",
-                        "Quote batch mismatch requested=\(requestedSymbolsLine) returnedCount=\(quotes.count) unmatched=\(unmatchedSymbolsLine) returned=\(returnedSummary)"
-                    )
-                }
-            } catch {
-                let issueCategory = stockRefreshIssueCategory(for: error)
-                let requestID = MarketDataErrorPresentation.requestID(for: error) ?? "none"
-                AppLogger.log(
-                    .warning,
-                    category: "Finance",
-                    "Batch quote failed: category=\(issueCategory.rawValue) requestId=\(requestID) error=\(error.localizedDescription)"
-                )
-                if shouldAbortQuoteAliasRefresh(after: error) {
-                    aborted = true
-                }
-                for symbol in chunk {
-                    for stock in symbolToStocks[symbol] ?? [] {
-                        if stocksAssignedIssueInCatch.insert(ObjectIdentifier(stock)).inserted {
-                            assignStockRefreshIssue(issueCategory, symbol: stockDisplaySymbol(stock), to: &issues)
-                        }
-                    }
-                }
-            }
-        }
-
-        for (stock, lookupSymbols) in stockToLookupSymbols {
-            var refreshed = false
-            var lastIssueCategory: MarketDataIssueCategory?
-            for symbol in lookupSymbols {
-                let key = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-                guard let quote = quotesBySymbol[key] else { continue }
-                switch quote.resolutionStatus {
-                case .fresh, .stale:
-                    guard let price = quote.price, price > 0 else {
-                        if lastIssueCategory == nil {
-                            lastIssueCategory = MarketDataErrorPresentation.category(for: quote) ?? .priceUnavailable
-                        }
-                        continue
-                    }
-                    stock.lastKnownUnitPrice = price
-                    stock.lastKnownPriceUpdatedAt = quote.updatedAtDate ?? Date()
-                    stock.marketQuoteLookupKey = quote.canonicalQuoteLookupKey
-                    stock.marketExchange = quote.exchange ?? stock.marketExchange
-                    stock.marketMICCode = quote.micCode ?? stock.marketMICCode
-                    stock.marketCurrency = quote.currency ?? stock.marketCurrency
-                    stock.marketProviderRaw = quote.providerSymbol == nil ? stock.marketProviderRaw : "market-backend"
-                    stock.recalculateAmountFromPosition()
-                    stock.updatedAt = Date()
-                    didUpdateAnyPrice = true
-                    refreshed = true
-                    issues.remove(symbol: stockDisplaySymbol(stock))
-                    break
-                case .notFound:
-                    if lastIssueCategory == nil {
-                        lastIssueCategory = .notFound
-                    }
-                    continue
-                case .providerError:
-                    if lastIssueCategory == nil {
-                        lastIssueCategory = .providerError
-                    }
-                    AppLogger.log(.warning, category: "Finance", "Provider error while refreshing stock quote for \(symbol)")
-                    continue
-                }
-            }
-            if !refreshed, !stocksAssignedIssueInCatch.contains(ObjectIdentifier(stock)) {
-                assignStockRefreshIssue(lastIssueCategory, symbol: stockDisplaySymbol(stock), to: &issues)
-            }
-        }
-
-        if didUpdateAnyPrice {
-            do {
-                try modelContext.save()
-            } catch {
-                AppLogger.log(.error, category: "Finance", "Failed to save refreshed stock quotes: \(error.localizedDescription)")
-            }
-        }
-
-        loadAccounts()
-        await refreshGroupTotalsAndAmounts()
-        return normalizedStockRefreshIssues(issues)
-    }
-
-    /// Backward-compatible alias. Prefer `refreshCurrencyQuotes()`.
-
-    private func shouldAbortQuoteAliasRefresh(after error: Error) -> Bool {
-        guard let marketError = error as? MarketAPIClientError else {
-            return false
-        }
-
-        switch marketError {
-        case .backend(let statusCode, let message, _):
-            return statusCode == 429 || message.localizedCaseInsensitiveContains("Too Many Requests")
-        case .transport(let message):
-            return message.localizedCaseInsensitiveContains("Too Many Requests")
-        default:
-            return false
-        }
-    }
     func refreshRates() async {
         await refreshCurrencyQuotes()
     }
@@ -2216,93 +2017,6 @@ final class FinanceViewModel: ViewModelProtocol {
         return normalized.isEmpty ? nil : normalized
     }
 
-    private func normalizedStockRefreshIssues(_ issues: StockRefreshIssues) -> StockRefreshIssues {
-        StockRefreshIssues(
-            notFoundSymbols: normalizedStockRefreshSymbols(issues.notFoundSymbols),
-            priceUnavailableSymbols: normalizedStockRefreshSymbols(issues.priceUnavailableSymbols),
-            providerErrorSymbols: normalizedStockRefreshSymbols(issues.providerErrorSymbols),
-            authErrorSymbols: normalizedStockRefreshSymbols(issues.authErrorSymbols),
-            networkErrorSymbols: normalizedStockRefreshSymbols(issues.networkErrorSymbols),
-            httpErrorSymbols: normalizedStockRefreshSymbols(issues.httpErrorSymbols),
-            decodingErrorSymbols: normalizedStockRefreshSymbols(issues.decodingErrorSymbols),
-            clientErrorSymbols: normalizedStockRefreshSymbols(issues.clientErrorSymbols)
-        )
-    }
-
-    private func normalizedStockRefreshSymbols(_ values: Set<String>) -> Set<String> {
-        Set(
-            values
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-        )
-    }
-
-    private func stockRefreshIssueMessage(for issues: StockRefreshIssues) -> String? {
-        guard issues.hasIssues else { return nil }
-        if !issues.authErrorSymbols.isEmpty {
-            // Auth failures need explicit user-visible treatment even when other
-            // quote issues happened in the same refresh batch.
-            return MarketDataErrorPresentation.message(for: .authError)
-        }
-
-        // Partial quote refresh failures are expected during background updates.
-        // We keep the last successful prices and avoid surfacing a global warning toast.
-        return nil
-    }
-
-    private func appendStockRefreshSymbols(
-        _ values: [String],
-        category: MarketDataIssueCategory,
-        to parts: inout [String]
-    ) {
-        guard !values.isEmpty else { return }
-        let label = MarketDataErrorPresentation.listLabel(for: category)
-        parts.append("\(label): \(values.joined(separator: ", "))")
-    }
-
-    private func stockRefreshIssueCategory(for error: Error) -> MarketDataIssueCategory {
-        MarketDataErrorPresentation.category(for: error)
-    }
-
-    private func assignStockRefreshIssue(
-        _ category: MarketDataIssueCategory?,
-        symbol: String,
-        to issues: inout StockRefreshIssues
-    ) {
-        switch category ?? .notFound {
-        case .notFound:
-            issues.notFoundSymbols.insert(symbol)
-        case .priceUnavailable:
-            issues.priceUnavailableSymbols.insert(symbol)
-        case .providerError:
-            issues.providerErrorSymbols.insert(symbol)
-        case .authError:
-            issues.authErrorSymbols.insert(symbol)
-        case .networkError:
-            issues.networkErrorSymbols.insert(symbol)
-        case .httpError:
-            issues.httpErrorSymbols.insert(symbol)
-        case .decodeError:
-            issues.decodingErrorSymbols.insert(symbol)
-        case .clientError:
-            issues.clientErrorSymbols.insert(symbol)
-        }
-    }
-
-    private func stockQuoteRequestSymbols(for investment: Investment) -> [String] {
-        guard let symbol = ProviderInstrumentResolver(modelContext: modelContext)
-            .preferredRefreshSymbol(for: investment) else {
-            return []
-        }
-        return [symbol]
-    }
-
-    private func stockDisplaySymbol(_ investment: Investment) -> String {
-        investment.marketSymbol?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased() ?? ""
-    }
-    
     private func moveAccount(sourceAccountID: String, destinationIndex: Int, groupID: String) {
         guard let group = state.groups.first(where: { $0.groupUniqueID == groupID }) else {
             return
