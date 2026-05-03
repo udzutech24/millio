@@ -538,6 +538,7 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var categoryFeedbackSequence: Int = 0
     @State private var hasCompletedInitialLoad: Bool = false
     @State private var suppressNextCategoryTap: Bool = false
+    @State private var showReorderSheet: Bool = false
     @FocusState private var isSearchFieldFocused: Bool
     private let outerCornerRadius: CGFloat = 22
     private let innerCornerRadius: CGFloat = 16
@@ -593,6 +594,7 @@ private struct CashflowCategoryTransactionSheet: View {
                             headerSection
                             monthlyTotalSection
                             managementSection
+                            categoriesSectionHeader
                             categoriesSection
                         }
                         .padding(.horizontal, 16)
@@ -1060,6 +1062,39 @@ private struct CashflowCategoryTransactionSheet: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+    }
+
+    private var hasCustomCategoryOrder: Bool {
+        viewModel.categoryCustomOrder(for: kind.categoryKind) != nil
+    }
+
+    private var categoriesSectionHeader: some View {
+        HStack {
+            Spacer()
+            Button {
+                showReorderSheet = true
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.system(size: 13, weight: .medium))
+                    Text(
+                        hasCustomCategoryOrder
+                        ? String(localized: "cashflow.category.reorder.edit", defaultValue: "Edit order")
+                        : String(localized: "cashflow.category.reorder.sort", defaultValue: "Sort")
+                    )
+                    .font(.system(size: 13, weight: .medium))
+                }
+                .foregroundStyle(
+                    hasCustomCategoryOrder
+                    ? AnyShapeStyle(Color.accentColor)
+                    : AnyShapeStyle(AppColors.textSecondary)
+                )
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showReorderSheet) {
+                CashflowCategoryReorderSheet(viewModel: viewModel, kind: kind.categoryKind)
+            }
+        }
     }
 
     private var categoriesSection: some View {
@@ -2527,5 +2562,68 @@ private struct CashflowCategoryQuickCreateSheet: View {
 private extension Calendar {
     func startOfMonth(for date: Date) -> Date {
         self.date(from: dateComponents([.year, .month], from: date)) ?? date
+    }
+}
+
+// MARK: - CashflowCategoryReorderSheet
+
+private struct CashflowCategoryReorderSheet: View {
+    @ObservedObject var viewModel: CashflowViewModel
+    let kind: CashflowCategoryKind
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var items: [CashflowCategoryOption] = []
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(items) { option in
+                    HStack(spacing: 12) {
+                        CashflowCategoryIconView(
+                            icon: option.icon,
+                            fontSize: 18,
+                            fontWeight: .regular,
+                            tint: AnyShapeStyle(AppColors.textPrimary)
+                        )
+                        Text(option.displayName)
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                    }
+                    .listRowBackground(Color(white: 0.12))
+                }
+                .onMove { source, destination in
+                    items.move(fromOffsets: source, toOffset: destination)
+                    viewModel.setCategoryOrder(items.map(\.rawValue), for: kind)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Color.black)
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle(
+                kind == .expense
+                ? String(localized: "cashflow.category.reorder.title.expense", defaultValue: "Expense order")
+                : String(localized: "cashflow.category.reorder.title.income", defaultValue: "Income order")
+            )
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(String(localized: "cashflow.category.reorder.reset", defaultValue: "Reset")) {
+                        viewModel.clearCategoryOrder(for: kind)
+                        items = viewModel.orderedCategoryOptions(for: kind)
+                    }
+                    .foregroundStyle(AppColors.textSecondary)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(String(localized: "cashflow.common.done", defaultValue: "Done")) {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .onAppear {
+            items = viewModel.orderedCategoryOptions(for: kind)
+        }
     }
 }
