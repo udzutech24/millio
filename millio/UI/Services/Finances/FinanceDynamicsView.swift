@@ -228,9 +228,6 @@ private struct FinanceDynamicsContentView: View {
     // Кэшированные значения для графика
     @State private var cachedSelectedPoint: (date: Date, value: Double)? = nil
 
-    // Ставка ЦБ для расчёта НДФЛ по вкладу (Phase 8)
-    @AppStorage("deposit_cbr_rate") private var cbrRate: Double = 21.0
-
     private var isAmountHidden: Bool {
         financeViewModel.state.isAmountHidden
     }
@@ -2290,7 +2287,7 @@ private struct FinanceDynamicsContentView: View {
     @ViewBuilder
     private func depositForecastSection(for deposit: Investment) -> some View {
         if let rate = deposit.depositInterestRate, rate > 0 {
-            DepositForecastView(deposit: deposit, rate: rate, cbrRate: cbrRate)
+            DepositForecastView(deposit: deposit, rate: rate)
         }
     }
 
@@ -3683,7 +3680,6 @@ private struct ScrollOffsetKey: PreferenceKey {
 private struct DepositForecastView: View {
     let deposit: Investment
     let rate: Double
-    let cbrRate: Double
 
     private var cap: DepositCapitalization {
         DepositCapitalization(rawValue: deposit.depositCapitalizationRaw) ?? .none
@@ -3731,12 +3727,6 @@ private struct DepositForecastView: View {
 
     private var remaining: Double? { totalIncome.map { $0 - earnedSoFar } }
 
-    private var yearlyIncome: Double { monthlyIncome * 12 }
-    private var taxFreeLimit: Double { cbrRate / 100.0 * 1_000_000 }
-    private var estimatedTax: Double? {
-        yearlyIncome > taxFreeLimit ? (yearlyIncome - taxFreeLimit) * 0.13 : nil
-    }
-
     private func nextPaymentDate() -> Date {
         var candidate = startDate
         while candidate <= today {
@@ -3770,25 +3760,6 @@ private struct DepositForecastView: View {
                         FinancesRowDivider()
                         row(label: String(localized: "finances.deposit.forecast.remaining"),
                             value: "\(String(format: "%.2f", rem)) \(currency)")
-                    }
-
-                    if let tax = estimatedTax {
-                        FinancesRowDivider()
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(String(format: String(localized: "finances.deposit.forecast.tax_estimate",
-                                                           defaultValue: "~%@ НДФЛ/год"),
-                                            String(format: "%.0f", tax)))
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                Text(String(localized: "finances.deposit.forecast.tax_disclaimer"))
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(AppColors.textTertiary)
-                            }
-                            Spacer()
-                        }
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 16)
                     }
 
                     if deposit.depositIncomeInCashflow {
