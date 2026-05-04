@@ -47,9 +47,10 @@ struct ServiceItemTests {
 
         let manager = ServiceOrderManager()
         let ids = manager.getOrderedServices().map { $0.id }
+        let allServiceIDs = Set(ServiceItem.allServices().map { $0.id })
 
         #expect(ids.prefix(2) == ["finances", "cashback"])
-        #expect(Set(ids) == Set(["finances", "courses", "cashback", "cashflow"]))
+        #expect(Set(ids) == allServiceIDs)
         #expect(!ids.contains("credits"))
         #expect(!ids.contains("cards"))
         #expect(!ids.contains("investments"))
@@ -63,13 +64,16 @@ struct ServiceItemTests {
         defer { defaults.removeObject(forKey: storageKey) }
 
         let manager = ServiceOrderManager()
-        let customOrder = ["cashflow", "finances", "cashback", "courses"]
+        let existingIDs = ServiceItem.allServices().map { $0.id }
+        let customOrder = Array(existingIDs.prefix(4).reversed())
 
         manager.saveOrder(customOrder)
         let loadedOrder = manager.loadOrder()
         let orderedServices = manager.getOrderedServices().map { $0.id }
 
         #expect(loadedOrder == customOrder)
-        #expect(orderedServices == customOrder)
+        // Первые 4 — в сохранённом порядке; новые сервисы добавляются в конец
+        #expect(orderedServices.prefix(4) == ArraySlice(customOrder))
+        #expect(Set(orderedServices) == Set(existingIDs))
     }
 }
