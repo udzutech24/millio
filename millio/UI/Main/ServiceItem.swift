@@ -49,13 +49,6 @@ struct ServiceItem: Identifiable, Equatable {
                 icon: "loans",
                 gradientColors: AppColors.cashflowGradient
             ),
-            ServiceItem(
-                id: "userSubscriptions",
-                route: .userSubscriptions,
-                titleKey: "main.service.subscriptions",
-                icon: "creditcard.fill",
-                gradientColors: AppColors.subscriptionsGradient
-            )
         ]
     }
 }

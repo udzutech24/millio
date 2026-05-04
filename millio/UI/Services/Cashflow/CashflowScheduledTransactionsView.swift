@@ -224,6 +224,9 @@ struct CashflowScheduledTransactionsView: View {
     @ViewBuilder
     private var plannerContent: some View {
         listCard(plannerOverviewSection)
+        if kind == .expense {
+            listCard(subscriptionsNavRow)
+        }
         listCard(plannerModePicker)
 
         if plannerDisplayMode == .calendar {
@@ -394,6 +397,44 @@ struct CashflowScheduledTransactionsView: View {
                         .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
         )
+    }
+
+    private var subscriptionsNavRow: some View {
+        NavigationLink {
+            UserSubscriptionsView()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "creditcard.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.subscriptionsGradient.first ?? .orange)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle()
+                            .fill((AppColors.subscriptionsGradient.first ?? .orange).opacity(0.14))
+                    )
+
+                Text(String(localized: "subscriptions.title", defaultValue: "Subscriptions"))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var plannerModePicker: some View {
