@@ -159,6 +159,9 @@ struct RootTabView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    profileButton
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     financeSettingsButton
                 }
