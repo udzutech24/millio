@@ -356,11 +356,7 @@ private struct FinancesMainTabView: View {
 
             ScrollView {
                 LazyVStack(spacing: FinancesMainLayoutPolicy.sectionSpacing) {
-                    overviewHeroModule
-
-                    if !visibleGroups.isEmpty {
-                        overviewSnapshotSection
-                    }
+                    overviewUnifiedModule(hasSnapshot: !visibleGroups.isEmpty)
 
                     groupsListSection(visibleGroups)
                 }
@@ -401,26 +397,23 @@ private struct FinancesMainTabView: View {
         }
     }
     
-    // MARK: - Hero Overview Module
+    // MARK: - Unified Hero + Overview Module
 
-    private var overviewHeroModule: some View {
-        VStack(alignment: .leading, spacing: 16) {
+    private func overviewUnifiedModule(hasSnapshot: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
             totalAmountSection
+
+            if hasSnapshot {
+                FinanceOverviewCardView(
+                    financeViewModel: viewModel,
+                    chrome: .embedded
+                )
+                .padding(.top, 10)
+            }
         }
-        .padding(22)
+        .padding(18)
         .background(heroModuleBackground)
         .clipShape(RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.heroCornerRadius, style: .continuous))
-    }
-
-    private var overviewSnapshotSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            FinanceOverviewCardView(
-                financeViewModel: viewModel,
-                chrome: .embedded
-            )
-            .padding(16)
-            .background(sectionModuleBackground)
-        }
     }
     
     // MARK: - Total Amount Section

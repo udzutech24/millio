@@ -62,13 +62,11 @@ enum FinanceOverviewLedgerStyle {
             amountFontSize: 19,
             progressHeight: 10,
             minProgressWidth: 28,
-            horizontalPadding: 16,
-            verticalPadding: 16,
-            cornerRadius: 20,
-            contentSpacing: 12,
-            // Keep the compact debit/credit pills visually balanced:
-            // the space below the progress bar should be close to the top inset.
-            minHeight: 102,
+            horizontalPadding: 14,
+            verticalPadding: 12,
+            cornerRadius: 16,
+            contentSpacing: 10,
+            minHeight: 88,
             chevronFontSize: 15
         )
     }

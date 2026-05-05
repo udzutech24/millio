@@ -517,7 +517,7 @@ struct FinanceOverviewCardView: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .stroke(isExpanded ? color.opacity(0.34) : Color.white.opacity(0.08), lineWidth: 0.9)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
                     )
             )
         }
@@ -577,10 +577,10 @@ struct FinanceOverviewCardView: View {
             .padding(.vertical, metrics.verticalPadding)
             .background(
                 RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
-                    .fill(Color.white.opacity(0.025))
+                    .fill(Color.white.opacity(0.04))
                     .overlay(
                         RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(0.07), lineWidth: 0.9)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
                     )
             )
         }

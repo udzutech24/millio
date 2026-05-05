@@ -829,27 +829,16 @@ private struct CashflowContentView: View {
     }
 
     private func financeCardBackground(cornerRadius: CGFloat) -> some View {
-        let borderGradient = LinearGradient(
-            colors: [neonCyan.opacity(0.72), neonViolet.opacity(0.62)],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-
-        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(panelFill)
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(borderGradient, lineWidth: 1)
-            )
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(.ultraThinMaterial.opacity(0.28))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 0.7)
+                    .stroke(Color.white.opacity(0.09), lineWidth: 0.7)
             )
-            .shadow(color: neonCyan.opacity(0.08), radius: 8, x: 0, y: 0)
     }
 
     private func financeInnerBackground(cornerRadius: CGFloat) -> some View {
@@ -863,10 +852,10 @@ private struct CashflowContentView: View {
 
     private var periodControlBackground: some View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.white.opacity(0.06))
+            .fill(Color.white.opacity(0.08))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 0.7)
             )
     }
 
@@ -1138,10 +1127,10 @@ private struct CashflowContentView: View {
                     .frame(height: 50)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.white.opacity(0.06))
+                            .fill(Color.white.opacity(0.08))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(neonCyan.opacity(0.45), lineWidth: 1)
+                                    .stroke(Color.white.opacity(0.12), lineWidth: 0.7)
                             )
                     )
             }
@@ -2032,12 +2021,10 @@ private struct CashflowActionButton: View {
             HStack(spacing: 6) {
                 ZStack {
                     Circle()
-                        .fill(Color.black.opacity(0.95))
-                    Circle()
-                        .stroke(gradientStroke.opacity(0.65), lineWidth: 1.1)
+                        .fill(gradientStroke.opacity(0.18))
                     Image(systemName: icon)
-                        .font(.system(size: compactMetrics ? 15 : 16, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.92))
+                        .font(.system(size: compactMetrics ? 15 : 16, weight: .semibold))
+                        .foregroundStyle(gradientStroke)
                 }
                 .frame(width: compactMetrics ? 34 : 38, height: compactMetrics ? 34 : 38)
 
@@ -2059,24 +2046,16 @@ private struct CashflowActionButton: View {
     }
 
     private var buttonBackground: some View {
-        let fillColor: Color = Color.black.opacity(style == .primary ? 0.24 : 0.20)
-        let strokeOpacity: Double = style == .primary ? 0.95 : 0.72
-        let strokeWidth: CGFloat = style == .primary ? 1.6 : 1.2
-        let materialOpacity: Double = style == .primary ? 0.26 : 0.22
-        let shadowOpacity: Double = style == .primary ? 0.10 : 0.08
-        let shadowRadius: CGFloat = style == .primary ? 10 : 6
-
-        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(fillColor)
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(gradientStroke.opacity(strokeOpacity), lineWidth: strokeWidth)
-            }
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(Color.white.opacity(0.06))
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.ultraThinMaterial.opacity(materialOpacity))
+                    .fill(.ultraThinMaterial.opacity(0.20))
             )
-            .shadow(color: gradientAccent.opacity(shadowOpacity), radius: shadowRadius, x: 0, y: 0)
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 0.7)
+            }
     }
 
     private var gradientAccent: Color {

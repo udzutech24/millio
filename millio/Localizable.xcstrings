@@ -112,6 +112,9 @@
         }
       }
     },
+    "📋" : {
+
+    },
     "0" : {
 
     },
@@ -10039,6 +10042,61 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已固定分类"
+          }
+        }
+      }
+    },
+    "cashflow.category.reorder.edit" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Edit order"
+          }
+        }
+      }
+    },
+    "cashflow.category.reorder.reset" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reset"
+          }
+        }
+      }
+    },
+    "cashflow.category.reorder.sort" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sort"
+          }
+        }
+      }
+    },
+    "cashflow.category.reorder.title.expense" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Expense order"
+          }
+        }
+      }
+    },
+    "cashflow.category.reorder.title.income" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Income order"
           }
         }
       }
@@ -39119,6 +39177,226 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在试用结束前，你已拥有临时 PRO 访问权限"
+          }
+        }
+      }
+    },
+    "subscriptions.add.first" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Add subscription"
+          }
+        }
+      }
+    },
+    "subscriptions.cycle.monthly" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Monthly"
+          }
+        }
+      }
+    },
+    "subscriptions.cycle.quarterly" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Quarterly"
+          }
+        }
+      }
+    },
+    "subscriptions.cycle.weekly" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weekly"
+          }
+        }
+      }
+    },
+    "subscriptions.cycle.yearly" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Yearly"
+          }
+        }
+      }
+    },
+    "subscriptions.editor.active" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Active"
+          }
+        }
+      }
+    },
+    "subscriptions.editor.amount" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Amount"
+          }
+        }
+      }
+    },
+    "subscriptions.editor.currency" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Currency"
+          }
+        }
+      }
+    },
+    "subscriptions.editor.cycle" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Billing"
+          }
+        }
+      }
+    },
+    "subscriptions.editor.delete" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete subscription"
+          }
+        }
+      }
+    },
+    "subscriptions.editor.emoji" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Emoji"
+          }
+        }
+      }
+    },
+    "subscriptions.editor.name" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Service name"
+          }
+        }
+      }
+    },
+    "subscriptions.editor.next_charge" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Next charge date"
+          }
+        }
+      }
+    },
+    "subscriptions.editor.title.add" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New subscription"
+          }
+        }
+      }
+    },
+    "subscriptions.editor.title.edit" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Edit"
+          }
+        }
+      }
+    },
+    "subscriptions.empty.subtitle" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Track your recurring services — Netflix, Spotify, and others."
+          }
+        }
+      }
+    },
+    "subscriptions.empty.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No subscriptions yet"
+          }
+        }
+      }
+    },
+    "subscriptions.status.paused" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Paused"
+          }
+        }
+      }
+    },
+    "subscriptions.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Subscriptions"
+          }
+        }
+      }
+    },
+    "subscriptions.total.monthly" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Per month"
           }
         }
       }
