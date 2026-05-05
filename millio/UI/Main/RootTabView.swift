@@ -167,10 +167,10 @@ struct RootTabView: View {
     private var chipsBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                chipButton(icon: "arrow.2.squarepath", title: "Курсы") {
+                chipButton(icon: "arrow.2.squarepath", titleKey: MainLocalization.serviceCourses) {
                     financesPath.append(FinancesStackRoute.courses)
                 }
-                chipButton(icon: "percent", title: "Кешбэк") {
+                chipButton(icon: "percent", titleKey: MainLocalization.serviceCashback) {
                     financesPath.append(FinancesStackRoute.cashback)
                 }
             }
@@ -179,12 +179,12 @@ struct RootTabView: View {
         }
     }
 
-    private func chipButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+    private func chipButton(icon: String, titleKey: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .medium))
-                Text(title)
+                Text(MainLocalization.text(titleKey))
                     .font(.system(size: 13, weight: .semibold))
             }
             .foregroundStyle(AppColors.textPrimary)
