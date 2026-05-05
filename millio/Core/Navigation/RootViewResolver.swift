@@ -72,7 +72,7 @@ struct RootViewResolver: View {
             case .restoring:
                 RestoreView(appState: appState, router: router)
             case .ready:
-                MainAppView(router: router)
+                RootTabView(router: router)
             case .error:
                 if case .error(let error) = appState.lifecycle {
                     ErrorView(error: error, appState: appState, router: router)

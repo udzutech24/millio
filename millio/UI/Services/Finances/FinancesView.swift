@@ -12,7 +12,7 @@ private func financesLocalized(_ key: String) -> String {
     FinancesL10n.tr(key)
 }
 
-enum FinancesTab: String {
+enum FinancesInternalTab: String {
     case main = "main"
     case dynamics = "dynamics"
 }
@@ -172,7 +172,7 @@ struct FinancesView: View {
 
 private struct FinancesContentViewInternal: View {
     @ObservedObject var viewModel: FinanceViewModel
-    @State private var selectedTab: FinancesTab = .main
+    @State private var selectedTab: FinancesInternalTab = .main
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -187,7 +187,7 @@ private struct FinancesContentViewInternal: View {
                         imageName: "credit-card"
                     )
                 }
-                .tag(FinancesTab.main)
+                .tag(FinancesInternalTab.main)
             
             // Вкладка 2: Динамика
             FinanceDynamicsTabView(financeViewModel: viewModel)
@@ -197,7 +197,7 @@ private struct FinancesContentViewInternal: View {
                         imageName: "trending-up"
                     )
                 }
-                .tag(FinancesTab.dynamics)
+                .tag(FinancesInternalTab.dynamics)
         }
         .toolbarBackground(.visible, for: .tabBar)
         .toolbarBackground(Color.black.opacity(0.52), for: .tabBar)
@@ -213,7 +213,7 @@ private struct FinancesContentViewInternal: View {
     }
 }
 
-private struct FinancesSettingsSheet: View {
+struct FinancesSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     let isDailyAuditAvailable: Bool
     let onOpenSavingsGoal: () -> Void
@@ -332,9 +332,10 @@ private struct FinancesSettingsSheet: View {
 
 // MARK: - Finances Main Tab View
 
-private struct FinancesMainTabView: View {
+struct FinancesMainTabView: View {
     @ObservedObject var viewModel: FinanceViewModel
-    @Binding var selectedTab: FinancesTab
+    @Binding var selectedTab: FinancesInternalTab
+    var onNavigateToDynamics: (() -> Void)? = nil
     @State private var draggedGroupID: String?
     @State private var isEmptyIntroHidden: Bool = FinancesEmptyStateIntroPrefs().isHidden()
     @State private var isRefreshActionOverlayPresented: Bool = false
@@ -798,7 +799,11 @@ private struct FinancesMainTabView: View {
 
             if !isEmptyIntroHidden {
                 Button {
-                    selectedTab = .dynamics
+                    if let onNavigateToDynamics {
+                        onNavigateToDynamics()
+                    } else {
+                        selectedTab = .dynamics
+                    }
                 } label: {
                     Text(financesLocalized("finances.main.empty_intro.open_dynamics"))
                         .font(.system(size: 14, weight: .semibold))
@@ -860,7 +865,7 @@ private struct FinancesMainTabView: View {
 
 // MARK: - Finance Dynamics Tab View
 
-private struct FinanceDynamicsTabView: View {
+struct FinanceDynamicsTabView: View {
     @ObservedObject var financeViewModel: FinanceViewModel
     
     var body: some View {
