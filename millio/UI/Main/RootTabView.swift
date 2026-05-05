@@ -115,6 +115,12 @@ struct RootTabView: View {
                 onOpenConverter: { dashboardPath.append(FinancesStackRoute.courses) },
                 onOpenCashback: { dashboardPath.append(FinancesStackRoute.cashback) }
             )
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    profileButton
+                }
+            }
             .navigationDestination(for: FinancesStackRoute.self) { route in
                 switch route {
                 case .courses:
@@ -153,9 +159,6 @@ struct RootTabView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    profileButton
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     financeSettingsButton
                 }
