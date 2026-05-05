@@ -13,11 +13,18 @@ struct RootTabBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Финансы
+            // Дашборд
+            tabButton(
+                tab: .dashboard,
+                icon: "house",
+                label: "Дашборд"
+            )
+
+            // Счета
             tabButton(
                 tab: .finances,
                 icon: "creditcard",
-                label: "Финансы"
+                label: "Счета"
             )
 
             // Динамика

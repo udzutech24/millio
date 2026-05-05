@@ -88,6 +88,10 @@ struct RootTabView: View {
     private var tabContent: some View {
         // Показываем только активный таб — ZStack с opacity для сохранения состояния
         ZStack {
+            dashboardTab
+                .opacity(router.selectedTab == .dashboard ? 1 : 0)
+                .allowsHitTesting(router.selectedTab == .dashboard)
+
             financesTab
                 .opacity(router.selectedTab == .finances ? 1 : 0)
                 .allowsHitTesting(router.selectedTab == .finances)
@@ -99,6 +103,14 @@ struct RootTabView: View {
             cashflowTab
                 .opacity(router.selectedTab == .cashflow ? 1 : 0)
                 .allowsHitTesting(router.selectedTab == .cashflow)
+        }
+    }
+
+    // MARK: - Dashboard Tab
+
+    private var dashboardTab: some View {
+        NavigationStack {
+            DashboardView()
         }
     }
 
@@ -279,7 +291,7 @@ struct RootTabView: View {
         NavigationStack(path: $cashflowPath) {
             ZStack {
                 GradientBackground()
-                CashflowView()
+                CashflowView(isTabMode: true)
                     .padding(.bottom, 72)
             }
         }

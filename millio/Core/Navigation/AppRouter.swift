@@ -30,7 +30,7 @@ enum AppRoute: Hashable {
 final class AppRouter {
     var currentRoute: AppRoute = .onboarding
     var navigationPath = NavigationPath()
-    var selectedTab: RootTab = .finances
+    var selectedTab: RootTab = .dashboard
     var pendingFABAction: FABAction? = nil
 
     func navigate(to route: AppRoute) {

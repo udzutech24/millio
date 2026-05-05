@@ -90,15 +90,18 @@ enum CashflowExpandedChartLayoutPolicy {
 }
 
 struct CashflowView: View {
+    var isTabMode: Bool = false
+
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @State private var viewModel: CashflowViewModel?
-    
+
     var body: some View {
         Group {
             if let viewModel = viewModel {
                 CashflowContentView(
-                    viewModel: viewModel
+                    viewModel: viewModel,
+                    isTabMode: isTabMode
                 )
             } else {
                 ProgressView()
@@ -159,6 +162,7 @@ struct CashflowView: View {
 
 private struct CashflowContentView: View {
     @ObservedObject var viewModel: CashflowViewModel
+    var isTabMode: Bool = false
     @Environment(\.dismiss) private var dismiss
     @Environment(AppRouter.self) private var router
     @Environment(AppState.self) private var appState
@@ -714,41 +718,43 @@ private struct CashflowContentView: View {
         let itemSize: CGFloat = 28
         let iconSize: CGFloat = 18
 
-        ToolbarItem(placement: .topBarLeading) {
-            HStack(spacing: 6) {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: iconSize, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.95))
-                        .frame(width: itemSize, height: itemSize)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(String(localized: "cashflow.accessibility.back")))
-
-                Button {
-                    showQuickNavigationPopover.toggle()
-                } label: {
-                    Image(systemName: "square.grid.2x2")
-                        .font(.system(size: iconSize - 2, weight: .regular))
-                        .foregroundStyle(Color.white.opacity(0.90))
-                        .frame(width: itemSize, height: itemSize)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(String(localized: "cashflow.accessibility.quick_navigation")))
-                .popover(isPresented: $showQuickNavigationPopover, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
-                    MiniAppQuickNavigationPopover(
-                        destinations: MiniAppNavigation.destinations(excluding: currentRoute)
-                    ) { destination in
-                        showQuickNavigationPopover = false
-                        MiniAppNavigation.navigate(to: destination.route, from: currentRoute, router: router)
+        if !isTabMode {
+            ToolbarItem(placement: .topBarLeading) {
+                HStack(spacing: 6) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: iconSize, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.95))
+                            .frame(width: itemSize, height: itemSize)
                     }
-                    .presentationCompactAdaptation(.popover)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(String(localized: "cashflow.accessibility.back")))
+
+                    Button {
+                        showQuickNavigationPopover.toggle()
+                    } label: {
+                        Image(systemName: "square.grid.2x2")
+                            .font(.system(size: iconSize - 2, weight: .regular))
+                            .foregroundStyle(Color.white.opacity(0.90))
+                            .frame(width: itemSize, height: itemSize)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(String(localized: "cashflow.accessibility.quick_navigation")))
+                    .popover(isPresented: $showQuickNavigationPopover, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+                        MiniAppQuickNavigationPopover(
+                            destinations: MiniAppNavigation.destinations(excluding: currentRoute)
+                        ) { destination in
+                            showQuickNavigationPopover = false
+                            MiniAppNavigation.navigate(to: destination.route, from: currentRoute, router: router)
+                        }
+                        .presentationCompactAdaptation(.popover)
+                    }
                 }
+                .padding(.horizontal, 10)
+                .frame(height: 40)
             }
-            .padding(.horizontal, 10)
-            .frame(height: 40)
         }
 
         ToolbarItem(placement: .topBarTrailing) {
