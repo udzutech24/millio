@@ -2514,7 +2514,6 @@
       }
     },
     "Cancel" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -28968,6 +28967,52 @@
         }
       }
     },
+    "main.dashboard.placeholder.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Summary coming soon"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скоро здесь появится сводка"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "摘要即将推出"
+          }
+        }
+      }
+    },
+    "main.dashboard.placeholder.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dashboard"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дашборд"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主页"
+          }
+        }
+      }
+    },
     "main.history.accessibility" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -29263,52 +29308,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "账户"
-          }
-        }
-      }
-    },
-    "main.dashboard.placeholder.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dashboard"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Дашборд"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "主页"
-          }
-        }
-      }
-    },
-    "main.dashboard.placeholder.subtitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Summary coming soon"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Скоро здесь появится сводка"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "摘要即将推出"
           }
         }
       }
@@ -40321,9 +40320,6 @@
         }
       }
     },
-    "Дашборд" : {
-
-    },
     "Диагностика Premium" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -40480,9 +40476,6 @@
           }
         }
       }
-    },
-    "Доход" : {
-
     },
     "Закрепить" : {
       "extractionState" : "stale",
@@ -41394,9 +41387,6 @@
         }
       }
     },
-    "Расход" : {
-
-    },
     "Редактировать" : {
       "comment" : "A button that navigates to a view for editing an existing credit.",
       "extractionState" : "stale",
@@ -41487,9 +41477,6 @@
           }
         }
       }
-    },
-    "Скоро здесь появится сводка" : {
-
     },
     "Скрыть" : {
       "extractionState" : "stale",
