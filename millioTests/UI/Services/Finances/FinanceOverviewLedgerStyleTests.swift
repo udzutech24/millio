@@ -76,11 +76,11 @@ struct FinanceOverviewLedgerStyleTests {
         #expect(metrics.amountFontSize == 19)
         #expect(metrics.progressHeight == 10)
         #expect(metrics.minProgressWidth == 28)
-        #expect(metrics.horizontalPadding == 16)
-        #expect(metrics.verticalPadding == 16)
-        #expect(metrics.cornerRadius == 20)
-        #expect(metrics.contentSpacing == 12)
-        #expect(metrics.minHeight == 102)
+        #expect(metrics.horizontalPadding == 14)
+        #expect(metrics.verticalPadding == 12)
+        #expect(metrics.cornerRadius == 16)
+        #expect(metrics.contentSpacing == 10)
+        #expect(metrics.minHeight == 88)
         #expect(metrics.chevronFontSize == 15)
     }
 }
