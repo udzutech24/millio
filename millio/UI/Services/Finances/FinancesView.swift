@@ -323,7 +323,7 @@ struct FinancesSettingsSheet: View {
 #Preview {
     let schema = AppSchema.create()
     let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-    let container = try ModelContainer(for: schema, configurations: [configuration])
+    let container = try! ModelContainer(for: schema, configurations: [configuration])
     
     FinancesView()
         .modelContainer(container)
