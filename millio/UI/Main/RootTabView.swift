@@ -21,6 +21,7 @@ struct RootTabView: View {
     @Environment(\.modelContext) private var modelContext
 
     // Отдельные стеки для каждого таба
+    @State private var dashboardPath = NavigationPath()
     @State private var financesPath = NavigationPath()
     @State private var dynamicsPath = NavigationPath()
     @State private var cashflowPath = NavigationPath()
@@ -109,8 +110,19 @@ struct RootTabView: View {
     // MARK: - Dashboard Tab
 
     private var dashboardTab: some View {
-        NavigationStack {
-            DashboardView()
+        NavigationStack(path: $dashboardPath) {
+            DashboardView(
+                onOpenConverter: { dashboardPath.append(FinancesStackRoute.courses) },
+                onOpenCashback: { dashboardPath.append(FinancesStackRoute.cashback) }
+            )
+            .navigationDestination(for: FinancesStackRoute.self) { route in
+                switch route {
+                case .courses:
+                    CoursesView()
+                case .cashback:
+                    CashbackView()
+                }
+            }
         }
     }
 
@@ -122,9 +134,6 @@ struct RootTabView: View {
                 GradientBackground()
 
                 VStack(spacing: 0) {
-                    // ChipsBar
-                    chipsBar
-
                     // Основной контент
                     if let vm = financeViewModel {
                         FinancesMainTabView(
@@ -172,46 +181,6 @@ struct RootTabView: View {
         .onChange(of: appState.primaryCurrencyCode) { oldValue, newValue in
             financeViewModel?.handle(.syncPrimaryCurrencyChange(old: oldValue, new: newValue))
         }
-    }
-
-    // MARK: - Chips Bar
-
-    private var chipsBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                chipButton(icon: "arrow.2.squarepath", titleKey: MainLocalization.serviceCourses) {
-                    financesPath.append(FinancesStackRoute.courses)
-                }
-                chipButton(icon: "percent", titleKey: MainLocalization.serviceCashback) {
-                    financesPath.append(FinancesStackRoute.cashback)
-                }
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 8)
-        }
-    }
-
-    private func chipButton(icon: String, titleKey: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .medium))
-                Text(MainLocalization.text(titleKey))
-                    .font(.system(size: 13, weight: .semibold))
-            }
-            .foregroundStyle(AppColors.textPrimary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(Color.white.opacity(0.12))
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.white.opacity(0.20), lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Profile Button

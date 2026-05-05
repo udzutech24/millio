@@ -191,7 +191,7 @@ private struct CashbackContentViewInternal: View {
             Spacer(minLength: 0)
 
             VStack(spacing: 20) {
-                Image(ServiceItem.cashbackIconAssetName)
+                Image("cashback")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 120, height: 120)
