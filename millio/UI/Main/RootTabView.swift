@@ -263,7 +263,7 @@ struct RootTabView: View {
         NavigationStack(path: $cashflowPath) {
             ZStack {
                 GradientBackground()
-                CashflowView(isTabMode: true)
+                CashflowView(isTabMode: true, sharedViewModel: cashflowViewModel)
                     .padding(.bottom, 72)
             }
         }

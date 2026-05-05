@@ -17,21 +17,21 @@ struct RootTabBar: View {
             tabButton(
                 tab: .dashboard,
                 icon: "house",
-                label: "Дашборд"
+                label: MainLocalization.text(MainLocalization.tabDashboard)
             )
 
             // Счета
             tabButton(
                 tab: .finances,
                 icon: "creditcard",
-                label: "Счета"
+                label: MainLocalization.text(MainLocalization.tabFinances)
             )
 
             // Динамика
             tabButton(
                 tab: .dynamics,
                 icon: "chart.line.uptrend.xyaxis",
-                label: "Динамика"
+                label: MainLocalization.text(MainLocalization.tabDynamics)
             )
 
             // FAB [+]
@@ -41,7 +41,7 @@ struct RootTabBar: View {
             tabButton(
                 tab: .cashflow,
                 icon: "arrow.left.arrow.right",
-                label: "Кэшфлоу"
+                label: MainLocalization.text(MainLocalization.serviceCashflow)
             )
         }
         .padding(.horizontal, 12)
@@ -57,9 +57,9 @@ struct RootTabBar: View {
             .ignoresSafeArea(edges: .bottom)
         )
         .confirmationDialog("", isPresented: $showFABDialog) {
-            Button("Доход") { onFABAction(.income) }
-            Button("Расход") { onFABAction(.expense) }
-            Button("Отмена", role: .cancel) {}
+            Button(MainLocalization.text(MainLocalization.quickActionIncome)) { onFABAction(.income) }
+            Button(MainLocalization.text(MainLocalization.quickActionExpense)) { onFABAction(.expense) }
+            Button("Cancel", role: .cancel) {}
         }
     }
 

@@ -91,16 +91,21 @@ enum CashflowExpandedChartLayoutPolicy {
 
 struct CashflowView: View {
     var isTabMode: Bool = false
+    /// Внешний VM от RootTabView — используется, чтобы FAB-шиты и вкладка
+    /// работали с одним экземпляром. Если nil, View создаёт собственный.
+    var sharedViewModel: CashflowViewModel? = nil
 
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
-    @State private var viewModel: CashflowViewModel?
+    @State private var localViewModel: CashflowViewModel?
+
+    private var activeViewModel: CashflowViewModel? { sharedViewModel ?? localViewModel }
 
     var body: some View {
         Group {
-            if let viewModel = viewModel {
+            if let vm = activeViewModel {
                 CashflowContentView(
-                    viewModel: viewModel,
+                    viewModel: vm,
                     isTabMode: isTabMode
                 )
             } else {
@@ -109,17 +114,21 @@ struct CashflowView: View {
             }
         }
         .onAppear {
-            if viewModel == nil {
-                viewModel = CashflowViewModel(modelContext: modelContext)
+            if sharedViewModel == nil, localViewModel == nil {
+                localViewModel = CashflowViewModel(modelContext: modelContext)
             }
-            viewModel?.handle(.syncDisplayCurrencyWithPrimary(appState.primaryCurrencyCode))
+            activeViewModel?.handle(.syncDisplayCurrencyWithPrimary(appState.primaryCurrencyCode))
             // Перезагружаем данные при каждом появлении экрана
-            viewModel?.handle(.loadCards)
-            viewModel?.handle(.loadTransactions)
+            activeViewModel?.handle(.loadCards)
+            activeViewModel?.handle(.loadTransactions)
             consumePendingQuickActions()
         }
+        // Когда RootTabView передаёт свой VM — освобождаем локальный
+        .onChange(of: sharedViewModel != nil) { _, isShared in
+            if isShared { localViewModel = nil }
+        }
         .onChange(of: appState.primaryCurrencyCode) { oldValue, newValue in
-            viewModel?.handle(.syncPrimaryCurrencyChange(old: oldValue, new: newValue))
+            activeViewModel?.handle(.syncPrimaryCurrencyChange(old: oldValue, new: newValue))
         }
         .onChange(of: appState.pendingOpenCashflowExpense) { _, newValue in
             guard newValue else { return }
@@ -134,26 +143,26 @@ struct CashflowView: View {
             consumePendingQuickActions()
         }
         .onDisappear {
-            viewModel?.handle(.syncDisplayCurrencyWithPrimary(appState.primaryCurrencyCode))
+            activeViewModel?.handle(.syncDisplayCurrencyWithPrimary(appState.primaryCurrencyCode))
         }
     }
 
     private func consumePendingQuickActions() {
-        guard let viewModel else { return }
+        guard let vm = activeViewModel else { return }
 
         if appState.pendingOpenCashflowExpense {
             appState.pendingOpenCashflowExpense = false
-            viewModel.handle(.addTransaction(.expense))
+            vm.handle(.addTransaction(.expense))
         }
 
         if appState.pendingOpenCashflowIncome {
             appState.pendingOpenCashflowIncome = false
-            viewModel.handle(.addTransaction(.income))
+            vm.handle(.addTransaction(.income))
         }
 
         if appState.pendingOpenCashflowHistory {
             appState.pendingOpenCashflowHistory = false
-            viewModel.handle(.showTransactionsHistory)
+            vm.handle(.showTransactionsHistory)
         }
     }
 }

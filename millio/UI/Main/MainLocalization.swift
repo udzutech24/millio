@@ -21,6 +21,13 @@ enum MainLocalization {
     static let serviceCashback = "main.service.cashback"
     static let serviceCashflow = "main.service.cashflow"
 
+    static let tabDashboard = "main.tab.dashboard"
+    static let tabFinances = "main.tab.finances"
+    static let tabDynamics = "main.tab.dynamics"
+
+    static let dashboardPlaceholderTitle = "main.dashboard.placeholder.title"
+    static let dashboardPlaceholderSubtitle = "main.dashboard.placeholder.subtitle"
+
     static func text(_ key: String) -> String {
         AppLocalization.string(key, locale: AppLocalization.currentAppLocale)
     }

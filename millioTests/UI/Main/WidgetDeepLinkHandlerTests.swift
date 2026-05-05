@@ -14,7 +14,7 @@ struct WidgetDeepLinkHandlerTests {
     @Test("AppWidgetDeepLinkHandler прокидывает pending-флаг расхода")
     func appDeepLinkExpenseSetsPendingFlag() {
         let appState = AppState()
-        let url = CurrencyWidgetShared.deepLinkURL(for: .addExpense)!
+        let url = try #require(CurrencyWidgetShared.deepLinkURL(for: .addExpense))
 
         AppWidgetDeepLinkHandler.handle(url: url, appState: appState)
 
@@ -26,7 +26,7 @@ struct WidgetDeepLinkHandlerTests {
     @Test("AppWidgetDeepLinkHandler прокидывает pending-флаг конвертера")
     func appDeepLinkConverterSetsPendingFlag() {
         let appState = AppState()
-        let url = CurrencyWidgetShared.deepLinkURL(for: .openConverter)!
+        let url = try #require(CurrencyWidgetShared.deepLinkURL(for: .openConverter))
 
         AppWidgetDeepLinkHandler.handle(url: url, appState: appState)
 

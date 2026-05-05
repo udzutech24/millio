@@ -26,11 +26,11 @@ struct DashboardView: View {
                         .font(.system(size: 48, weight: .thin))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.35))
 
-                    Text("Дашборд")
+                    Text(MainLocalization.text(MainLocalization.dashboardPlaceholderTitle))
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.55))
 
-                    Text("Скоро здесь появится сводка")
+                    Text(MainLocalization.text(MainLocalization.dashboardPlaceholderSubtitle))
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.30))
                 }
