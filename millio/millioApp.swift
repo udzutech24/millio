@@ -468,7 +468,6 @@ struct millioApp: App {
         targetScope: DataScope,
         currentScope: DataScope
     ) {
-        guard case .user = targetScope else { return }
         guard Self.exportedModelCount(in: targetContainer) == 0 else { return }
         let targetRepository = DataRepository(
             modelContext: targetContainer.mainContext,
@@ -491,7 +490,7 @@ struct millioApp: App {
             do {
                 let payload = try sourceRepository.exportAllData()
                 try targetRepository.importAllData(payload)
-                logger.info("Migrated data into user-scoped store from \(source.label, privacy: .public)")
+                logger.info("Migrated data into \(targetScope.storeConfigurationName, privacy: .public) from \(source.label, privacy: .public)")
                 return
             } catch {
                 logger.error("Failed to migrate data from \(source.label, privacy: .public): \(error.localizedDescription, privacy: .public)")
