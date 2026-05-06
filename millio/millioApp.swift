@@ -336,7 +336,14 @@ struct millioApp: App {
 
         activeDataScope = targetScope
         activeModelContainer = targetContainer
+        // Если стор был пересоздан из-за смены схемы (есть .bak-файл), считаем что
+        // "старого стора не было" — это позволяет автоматически предложить restore из iCloud.
+        #if DEBUG
+        let storeWasRebuilt = Self.bakStoreExists(for: targetScope)
+        activeScopeStoreExistedBeforeBinding = didTargetStoreExistBeforeBinding && !storeWasRebuilt
+        #else
         activeScopeStoreExistedBeforeBinding = didTargetStoreExistBeforeBinding
+        #endif
 
         if let backendRuntime, let binding {
             applyDependencyBinding(binding, backendRuntime: backendRuntime)
@@ -457,6 +464,14 @@ struct millioApp: App {
         guard let storeURL = storeURL(for: scope) else { return false }
         return FileManager.default.fileExists(atPath: storeURL.path)
     }
+
+    #if DEBUG
+    private static func bakStoreExists(for scope: DataScope) -> Bool {
+        guard let storeURL = storeURL(for: scope) else { return false }
+        let bakURL = storeURL.deletingPathExtension().appendingPathExtension("bak.store")
+        return FileManager.default.fileExists(atPath: bakURL.path)
+    }
+    #endif
 
     #if DEBUG
     /// Переименовывает несовместимый стор в .bak и создаёт пустой новый.

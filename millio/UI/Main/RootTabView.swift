@@ -78,8 +78,10 @@ struct RootTabView: View {
             }
         }
         .sheet(isPresented: $showProfileSheet) {
-            ProfileView(router: router)
-                .environment(appState)
+            NavigationStack {
+                ProfileView(router: router)
+                    .environment(appState)
+            }
         }
     }
 
