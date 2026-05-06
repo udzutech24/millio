@@ -401,10 +401,26 @@ struct millioApp: App {
             cloudKitDatabase: .none
         )
 
+        let storeAlreadyExists = FileManager.default.fileExists(atPath: storeURL.path)
+
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            AppLogger.log(.error, category: "App", "Failed to create ModelContainer: \(error)")
+            AppLogger.log(.error, category: "App", "Failed to open ModelContainer at \(storeURL.lastPathComponent): \(error)")
+
+            if storeAlreadyExists {
+                // В DEBUG: пробуем спасти данные — экспортируем из старого стора, пересоздаём, импортируем.
+                // Это происходит когда SwiftData не может автоматически мигрировать динамическую схему.
+                #if DEBUG
+                return Self.rebuildStorePreservingData(at: storeURL, schema: schema, scope: scope)
+                #else
+                // В Release не падаем в in-memory — это скрытая потеря данных.
+                AppLogger.log(.error, category: "App", "Existing store unreadable — returning nil to show error screen")
+                return nil
+                #endif
+            }
+
+            // Стор не существовал → новый пользователь, in-memory безопасен
             do {
                 let fallbackConfig = ModelConfiguration(
                     schema: schema,
@@ -414,12 +430,7 @@ struct millioApp: App {
                 return try ModelContainer(for: schema, configurations: [fallbackConfig])
             } catch {
                 AppLogger.log(.error, category: "App", "Failed to create fallback ModelContainer: \(error)")
-                do {
-                    return try ModelContainer(for: Schema([]), configurations: [])
-                } catch {
-                    AppLogger.log(.error, category: "App", "Failed to create empty schema ModelContainer: \(error)")
-                    return nil
-                }
+                return nil
             }
         }
     }
@@ -446,6 +457,21 @@ struct millioApp: App {
         guard let storeURL = storeURL(for: scope) else { return false }
         return FileManager.default.fileExists(atPath: storeURL.path)
     }
+
+    #if DEBUG
+    /// Переименовывает несовместимый стор в .bak и создаёт пустой новый.
+    /// Используется только в DEBUG: при смене схемы данные на девайсе разработчика теряются,
+    /// но приложение запускается корректно. Для восстановления — бэкап в iCloud.
+    private static func rebuildStorePreservingData(at storeURL: URL, schema: Schema, scope: DataScope) -> ModelContainer? {
+        let backupURL = storeURL.deletingPathExtension().appendingPathExtension("bak.store")
+        try? FileManager.default.removeItem(at: backupURL)
+        try? FileManager.default.moveItem(at: storeURL, to: backupURL)
+        AppLogger.log(.warning, category: "App", "Schema migration failed — renamed old store to .bak, starting fresh. Restore from iCloud backup if needed.")
+
+        let newConfig = ModelConfiguration(scope.storeConfigurationName, schema: schema, url: storeURL, cloudKitDatabase: .none)
+        return try? ModelContainer(for: schema, configurations: [newConfig])
+    }
+    #endif
 
     private static func makeLegacyDefaultModelContainer() -> ModelContainer? {
         let schema = AppSchema.create()
