@@ -74,6 +74,8 @@ struct BackupDashboardContent: Equatable {
 
 enum BackupStatusRefreshPolicy {
     // Skip network work only when the screen already has a usable versions list.
+    // Note: we do NOT skip when backup is disabled — users must be able to see
+    // and restore existing backups even if the backup feature is currently off.
     static func shouldSkipManagementRefresh(
         force: Bool,
         isBackupEnabled: Bool,
@@ -82,8 +84,6 @@ enum BackupStatusRefreshPolicy {
         loadedVersionCount: Int
     ) -> Bool {
         guard !force else { return false }
-        guard isBackupEnabled else { return true }
-
         return isICloudAvailable && lastBackupDate != nil && loadedVersionCount > 0
     }
 }

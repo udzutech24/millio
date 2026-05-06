@@ -90,7 +90,7 @@ struct BackupManagementView: View {
     }
 
     private var canRestoreSelectedVersion: Bool {
-        isBackupOperational
+        appState.isICloudAvailable
             && selectedRestoreRecordName != nil
             && !isBusy
             && deletingRecordName == nil

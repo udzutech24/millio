@@ -92,6 +92,19 @@ struct BackupExperienceModelsTests {
         )
     }
 
+    @Test("Management refresh does not skip when backup is disabled — restore must remain accessible")
+    func testManagementRefreshDoesNotSkipWhenBackupDisabled() {
+        #expect(
+            BackupStatusRefreshPolicy.shouldSkipManagementRefresh(
+                force: false,
+                isBackupEnabled: false,
+                isICloudAvailable: false,
+                lastBackupDate: nil,
+                loadedVersionCount: 0
+            ) == false
+        )
+    }
+
     @Test("Backup layout stacks metric tiles on narrow screens")
     func testBackupLayoutStacksMetricsOnNarrowScreens() {
         #expect(BackupManagementLayout.shouldStackMetrics(availableWidth: 359) == true)
