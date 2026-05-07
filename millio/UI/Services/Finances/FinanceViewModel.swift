@@ -743,7 +743,6 @@ final class FinanceViewModel: ViewModelProtocol {
                 guard group.name == ungroupedGroupName else { return true }
                 return !(group.accounts?.isEmpty ?? true)
             }
-            // Обновляем списки непривязанных элементов после загрузки групп
             updateUnattachedItems()
             calculateTotalAmount()
         }

@@ -385,8 +385,6 @@ struct millioApp: App {
     }
 
     private static func makeModelContainer(for scope: DataScope) -> ModelContainer? {
-        let schema = AppSchema.create()
-
         let fileManager = FileManager.default
         if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             do {
@@ -401,9 +399,10 @@ struct millioApp: App {
             return nil
         }
 
+        // schema не передаём в конфиг — AppMigrationPlan предоставляет актуальную схему.
+        // SwiftData мигрирует существующие сторы (включая unversioned → V1 → V2) без потери данных.
         let modelConfiguration = ModelConfiguration(
             scope.storeConfigurationName,
-            schema: schema,
             url: storeURL,
             cloudKitDatabase: .none
         )
@@ -411,17 +410,17 @@ struct millioApp: App {
         let storeAlreadyExists = FileManager.default.fileExists(atPath: storeURL.path)
 
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return try AppMigrationPlan.makeContainer(configuration: modelConfiguration)
         } catch {
+            // Сюда попадаем только при реальной коррупции стора, не при schema mismatch:
+            // schema mismatch теперь обрабатывается AppMigrationPlan автоматически.
             AppLogger.log(.error, category: "App", "Failed to open ModelContainer at \(storeURL.lastPathComponent): \(error)")
 
             if storeAlreadyExists {
-                // В DEBUG: пробуем спасти данные — экспортируем из старого стора, пересоздаём, импортируем.
-                // Это происходит когда SwiftData не может автоматически мигрировать динамическую схему.
                 #if DEBUG
+                let schema = AppSchema.create()
                 return Self.rebuildStorePreservingData(at: storeURL, schema: schema, scope: scope)
                 #else
-                // В Release не падаем в in-memory — это скрытая потеря данных.
                 AppLogger.log(.error, category: "App", "Existing store unreadable — returning nil to show error screen")
                 return nil
                 #endif
@@ -429,12 +428,7 @@ struct millioApp: App {
 
             // Стор не существовал → новый пользователь, in-memory безопасен
             do {
-                let fallbackConfig = ModelConfiguration(
-                    schema: schema,
-                    isStoredInMemoryOnly: true,
-                    cloudKitDatabase: .none
-                )
-                return try ModelContainer(for: schema, configurations: [fallbackConfig])
+                return try AppMigrationPlan.makeInMemoryContainer()
             } catch {
                 AppLogger.log(.error, category: "App", "Failed to create fallback ModelContainer: \(error)")
                 return nil
@@ -489,14 +483,12 @@ struct millioApp: App {
     #endif
 
     private static func makeLegacyDefaultModelContainer() -> ModelContainer? {
-        let schema = AppSchema.create()
         let legacyConfiguration = ModelConfiguration(
-            schema: schema,
             isStoredInMemoryOnly: false,
             cloudKitDatabase: .none
         )
         do {
-            return try ModelContainer(for: schema, configurations: [legacyConfiguration])
+            return try AppMigrationPlan.makeContainer(configuration: legacyConfiguration)
         } catch {
             AppLogger.log(.warning, category: "App", "Legacy SwiftData container unavailable: \(error.localizedDescription)")
             return nil
