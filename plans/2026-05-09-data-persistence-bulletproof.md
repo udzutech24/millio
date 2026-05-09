@@ -1,9 +1,9 @@
 # Plan: Bulletproof Data Persistence
 
 **Date:** 2026-05-09
-**Status:** НЕ НАЧАТ
+**Status:** РЕАЛИЗОВАН
 **Spec:** [`specs/2026-05-09-data-persistence-bulletproof.md`](../specs/2026-05-09-data-persistence-bulletproof.md)
-**Branch:** `feature/data-persistence-bulletproof`
+**Branch:** `develop` (hotfix + phases 1–4 на develop напрямую — критический баг)
 
 ---
 
@@ -19,7 +19,7 @@
 
 ---
 
-## Phase 0 — Hotfix (1 сессия, СРОЧНО) `[ ]`
+## Phase 0 — Hotfix (1 сессия, СРОЧНО) `[x]`
 
 **Цель:** остановить кровотечение; сохранить что можно.
 
@@ -63,7 +63,7 @@ if !diff.isEmpty {
 
 ---
 
-## Phase 1 — Single Source of Truth (1 сессия) `[ ]`
+## Phase 1 — Single Source of Truth (1 сессия) `[x]`
 
 **Цель:** устранить архитектурную причину (два независимых списка моделей).
 
@@ -127,7 +127,7 @@ typealias AppSchemaCurrent = AppSchemaV2
 
 ---
 
-## Phase 2 — Auth/Scope Resilience (1 сессия) `[ ]`
+## Phase 2 — Auth/Scope Resilience (1 сессия) `[x]`
 
 **Цель:** не сбрасываться в `.guest` при временном сбое auth.
 
@@ -186,7 +186,7 @@ ScopeCache.save(resolvedScope)
 
 ---
 
-## Phase 3 — Schema Consistency Tests (1 сессия) `[ ]`
+## Phase 3 — Schema Consistency Tests (1 сессия) `[x]`
 
 **Цель:** любое будущее расхождение схем → красный тест.
 
@@ -250,7 +250,7 @@ func testV1toV2MigrationPreservesData() throws {
 
 ---
 
-## Phase 4 — Safer DEBUG Rebuild (0.5 сессии) `[ ]`
+## Phase 4 — Safer DEBUG Rebuild (0.5 сессии) `[x]`
 
 **Цель:** когда `rebuildStorePreservingData` всё же срабатывает — разработчик сразу видит это.
 
@@ -306,8 +306,8 @@ return Self.rebuildStorePreservingData(...)
 | Дата | Фаза | Результат |
 |------|------|-----------|
 | 2026-05-09 | Диагноз + Spec + Plan | Root Cause A подтверждён, план создан |
-| — | Phase 0 | — |
-| — | Phase 1 | — |
-| — | Phase 2 | — |
-| — | Phase 3 | — |
-| — | Phase 4 | — |
+| 2026-05-09 | Phase 0 | Cashback.self добавлен в V1/V2/makeContainer — коммит `8d537d53` |
+| 2026-05-09 | Phase 1 | AppSchemaCurrent typealias + AppSchema.create() от V2.models — коммит `6caf0062` |
+| 2026-05-09 | Phase 2 | ScopeCache + synchronizeDataScope guard + logout clear — коммит `6caf0062` |
+| 2026-05-09 | Phase 3 | SchemaConsistencyTests (3 теста) — коммит `6caf0062` |
+| 2026-05-09 | Phase 4 | CRITICAL log в rebuildStorePreservingData с путём .bak — коммит `6caf0062` |
