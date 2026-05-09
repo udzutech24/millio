@@ -257,6 +257,111 @@ struct BackupRestoreIntegrityTests {
         #expect(accounts.first?.group?.updatedAt == Date(timeIntervalSince1970: 2))
     }
     
+    // MARK: - Round-trip
+
+    @Test("DataRepository: Card+Group видны через fetch после export→clear→import")
+    func testFullRoundTripDataLayerCardAndGroupVisibleAfterRestore() async throws {
+        let registryState = ModelTypeRegistry.shared.captureState()
+        defer { ModelTypeRegistry.shared.restoreState(registryState) }
+        FinanceFeatureRegistration.register()
+        CashflowFeatureRegistration.register()
+        CardFeatureRegistration.register()
+        CreditFeatureRegistration.register()
+        InvestmentFeatureRegistration.register()
+
+        let container = makeContainer()
+        let context = container.mainContext
+        try resetAll(in: context)
+
+        let group = FinanceGroup(name: "Основная", colorHex: "#FFFFFF", order: 0)
+        context.insert(group)
+        let card = Card(
+            name: "Тест",
+            cardNumber: "1234",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 500
+        )
+        context.insert(card)
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        context.insert(account)
+        try context.save()
+
+        let backupData = try DataRepository.exportAllData(from: context)
+        let repository = DataRepository(modelContext: context, modelContainer: container)
+
+        try await repository.clearAllDataAsync()
+        let groupsAfterClear = try context.fetch(FetchDescriptor<FinanceGroup>())
+        #expect(groupsAfterClear.isEmpty, "Store должен быть пустым после clearAllData")
+
+        try await repository.importAllDataAsync(backupData)
+
+        let groups = try context.fetch(FetchDescriptor<FinanceGroup>())
+        let cards = try context.fetch(FetchDescriptor<Card>())
+        #expect(groups.count == 1, "Должна быть 1 группа после restore")
+        #expect(groups.first?.name == "Основная")
+        #expect(cards.count == 1, "Должна быть 1 карта после restore")
+        #expect(cards.first?.balance == 500)
+    }
+
+    @Test("FinanceViewModel: state.groups и availableCards видны после restoreCompleted")
+    func testFinanceViewModelShowsDataAfterRestoreRoundTrip() async throws {
+        let registryState = ModelTypeRegistry.shared.captureState()
+        defer { ModelTypeRegistry.shared.restoreState(registryState) }
+        FinanceFeatureRegistration.register()
+        CashflowFeatureRegistration.register()
+        CardFeatureRegistration.register()
+        CreditFeatureRegistration.register()
+        InvestmentFeatureRegistration.register()
+
+        let container = makeContainer()
+        let context = container.mainContext
+        try resetAll(in: context)
+
+        let group = FinanceGroup(name: "Основная", colorHex: "#FFFFFF", order: 0)
+        context.insert(group)
+        let card = Card(
+            name: "Тест",
+            cardNumber: "1234",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 500
+        )
+        context.insert(card)
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        context.insert(account)
+        try context.save()
+
+        let backupData = try DataRepository.exportAllData(from: context)
+        let repository = DataRepository(modelContext: context, modelContainer: container)
+
+        let viewModel = FinanceViewModel(modelContext: context, skipInitialLoad: true)
+
+        try await repository.clearAllDataAsync()
+        try await repository.importAllDataAsync(backupData)
+
+        EventBus.shared.publish(BackupEvent.restoreCompleted)
+
+        // FinanceViewModel обрабатывает событие через fire-and-forget Task — ждём
+        var stateVisible = false
+        for _ in 0..<50 {
+            await Task.yield()
+            if !viewModel.state.groups.isEmpty {
+                stateVisible = true
+                break
+            }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+
+        #expect(stateVisible, "FinanceViewModel.state.groups должны появиться после restoreCompleted")
+        #expect(viewModel.state.groups.first?.name == "Основная")
+        #expect(!viewModel.state.availableCards.isEmpty, "availableCards должны появиться после restoreCompleted")
+    }
+
     @Test("runIfNeeded выполняется только один раз и выставляет флаг в UserDefaults")
     func testDataIntegrityCleanerRunIfNeededRunsOnce() throws {
         let defaults = UserDefaults.standard

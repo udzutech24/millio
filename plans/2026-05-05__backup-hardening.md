@@ -1,104 +1,95 @@
-# Plan: backup-hardening
+# Plan: backup-restore-fix
 
-**Slug:** `backup-hardening` (kebab-case, соответствует имени файла `2026-05-05__backup-hardening.md`)
-**Дата создания:** 2026-05-05 (не меняется при обновлениях)
-**Stage:** 3 / Planning
-**Spec:** [`specs/2026-05-05-name.md`](../specs/)
-**Research:** [`thoughts/research/2026-05-05-name.md`](../thoughts/research/)
+**Slug:** `backup-restore-fix`
+**Дата создания:** 2026-05-05
+**Stage:** 3 / Planning → Implementation
+**Связан с:** `BACKUP_HARDENING_AUDIT.md`, анализ 2026-05-09
 
 ## Статус
 
-`НЕ НАЧАТ` / `В РАБОТЕ` / `РЕАЛИЗОВАН` / `ЗАБЛОКИРОВАН`
+`В РАБОТЕ`
 
-**Реализовано:** [список фаз/кусков, которые уже готовы — ведётся по ходу работы]
-**Осталось:** [что ещё не сделано]
-**Блокер** (если `ЗАБЛОКИРОВАН`): [что и почему]
+**Реализовано:** —
+**Осталось:** Phase 1 → Phase 2 → Phase 3
 
 ## Цель
 
-[Одна фраза — зачем это делаем, какую проблему закрывает.]
+Починить backup/restore flow: данные из iCloud-бэкапа не восстанавливаются ни автоматически (нет launch-time recovery), ни надёжно вручную (UI просит "закройте и откройте приложение" вместо авто-перезагрузки).
 
-## Acceptance Criteria (из spec)
+## Acceptance Criteria
 
-- [ ] AC1: ...
-- [ ] AC2: ...
-- [ ] AC3: ...
+- [ ] AC1: Integration test round-trip проходит — Card/Group/Account создан, экспортирован, store очищен, импортирован, FinanceViewModel видит данные через fetch.
+- [ ] AC2: После ручного restore через BackupManagementView данные видны в UI **без перезапуска** приложения.
+- [ ] AC3: При запуске с пустым store + существующим iCloud-бэкапом приложение автоматически переходит в `.restoring` flow.
+- [ ] AC4: "Close and reopen the app" сообщение удалено / заменено на адекватное.
 
 ## Challenge Log
 
-Три вопроса перед финализацией плана:
-
 ### 1. Решает ли план проблему из spec?
-[Пройдись по каждому AC. Для каждого — какая фаза закрывает. Если хоть один не покрыт — план неполный.]
+- AC1 → Phase 1 (integration test)
+- AC2+AC4 → Phase 2 (UI reload после ручного restore)
+- AC3 → Phase 3 (presentRestoreFlowIfNeeded)
 
-### 2. Это самое эффективное решение?
-- **Альтернатива A:** ... (плюсы / минусы / трудоёмкость)
-- **Альтернатива B:** ... (плюсы / минусы / трудоёмкость)
-- **Выбрано:** [вариант], потому что ...
+### 2. Самое эффективное решение?
+- **Вариант A:** Принудительно перезапускать app после restore (UIApplication reset). Минус: плохой UX, сложно тестировать.
+- **Вариант B:** После restore publish event → VMs перечитывают store. Плюс: уже частично реализовано, тестируемо, zero-restart. **Выбрано.**
 
 ### 3. Нет ли кода ради кода?
-[Каждое изменение должно обслуживать AC. Drive-by рефакторинг — отдельная задача.]
+Каждая фаза закрывает конкретный AC. Drive-by рефакторинг — нет.
 
 ## Фазы
 
 **Состояния:** `[ ]` не начато · `[~]` в работе · `[x]` готово
 
-### `[ ]` Phase 1: [название]
+---
 
-**AC из spec:** [какой покрывает]
+### `[ ]` Phase 1: Integration test — round-trip Card+Group через DataRepository
+
+**AC:** AC1
 
 **Файлы:**
-- `path/to/file.ts` — [что делаем]
-- ...
+- `millioTests/Core/BackupRestoreIntegrityTests.swift` — добавить тест `testFullRoundTripCardAndGroupVisibleAfterRestore`
 
 **Шаги:**
-1. `[ ]` Написать тесты (TDD)
-2. `[ ]` Имплементация
-3. `[ ]` Self-audit (пройтись по AC)
-4. `[ ]` Verification (deep bug hunt)
-5. `[ ]` Impact analysis
-6. `[ ]` Коммит: `feat: ...`
-
-**Что сделано / осталось:** [заполняется по ходу]
-
-**Guard phrase для старта:** «Реализуй Phase 1 по плану.»
+1. `[ ]` Написать тест: insert Card + FinanceGroup + FinanceAccount → exportAllData → clearAllData → importAllData → fetch и проверить count + конкретные значения
+2. `[ ]` Запустить — убедиться что проходит (data layer работает)
+3. `[ ]` Написать тест: то же + FinanceViewModel.loadAccounts() → проверить state
+4. `[ ]` Коммит: `test(backup): round-trip integration test for Card+Group restore`
 
 ---
 
-### `[ ]` Phase 2: [название]
+### `[ ]` Phase 2: Убрать "Close and reopen" — надёжный UI reload после ручного restore
 
-[Аналогично Phase 1]
+**AC:** AC2, AC4
+
+**Файлы:**
+- `millio/UI/Profile/BackupManagementView.swift` — убрать showRestoreSuccessPrompt с "Close and reopen", заменить на dismiss + navigation back
+- `millio/UI/Services/Finances/FinanceViewModel.swift` — убедиться что `restoreCompleted` → `loadGroups` + `loadAccounts` вызывается на MainActor после save
+
+**Шаги:**
+1. `[ ]` Проверить: `FinanceViewModel.loadGroups()` + `loadAccounts()` на MainActor после restoreCompleted — fetch видит новые объекты?
+2. `[ ]` Обновить BackupManagementView: убрать "Close and reopen" alert
+3. `[ ]` Коммит: `fix(backup): remove restart-required prompt, reload UI after restore`
 
 ---
 
-## Edge Cases (Think Several Steps Ahead)
+### `[ ]` Phase 3: Подключить presentRestoreFlowIfNeeded — launch-time auto-recovery
 
-- [ ] Нулевые данные
-- [ ] Огромные данные
-- [ ] Конкурентные запросы / race conditions
-- [ ] Неожиданное поведение пользователя
-- [ ] Обратная совместимость
-- [ ] Миграции данных
-- [ ] Откат / retry / частичные сбои
+**AC:** AC3
 
-## Gates (обязательны перед `[x]` на фазе)
+**Файлы:**
+- `millio/millioApp.swift` — вызвать `presentRestoreFlowIfNeeded()` после `synchronizeDataScope` и в `rebindDataScope`
 
-- [ ] `npx tsc --noEmit` — 0 type errors
-- [ ] `npm run lint` — 0 lint errors
-- [ ] `npm test` — все тесты green
-- [ ] (для M/L) `npx madge --circular src/` — нет циклических зависимостей
+**Шаги:**
+1. `[ ]` Добавить вызов в `initializeColdStart` (line ~196) после `synchronizeDataScope`
+2. `[ ]` Добавить вызов в `rebindDataScope` (line ~382) после `applyDependencyBinding`
+3. `[ ]` Добавить тест LaunchRecoveryPolicy для сценария "пустой store + есть бэкап + онбординг завершён"
+4. `[ ]` Коммит: `feat(backup): auto-present restore flow on launch when store is empty`
 
-## Журнал изменений
+---
 
-[Опционально, но полезно между чатами. Формат: `2026-05-05 — что поменялось в плане / какая фаза сдвинулась / почему`.]
+## Журнал
 
-- `2026-05-05` — создан план, Phase 1 начата.
-- ...
-
-## Итог (заполняется при завершении)
-
-**Результат:** `РЕАЛИЗОВАН` / `ЗАБЛОКИРОВАН` / `ОТМЕНЁН`
-**Что реализовано:** [список]
-**Что не реализовано и почему:** [если неполностью]
-**Дата завершения:** 2026-05-05
-**Архивируем:** `mv plans/2026-05-05__backup-hardening.md plans/archive/`
+| Дата | Что сделано |
+|------|------------|
+| 2026-05-09 | Диагноз: presentRestoreFlowIfNeeded мёртвый код, "close and reopen" UX, нет e2e теста |
