@@ -9,6 +9,7 @@ import Foundation
 
 struct AutoBackupPolicy {
     static let everyTwentyFourHours = AutoBackupPolicy(minimumInterval: 24 * 60 * 60)
+    static let everySixHours = AutoBackupPolicy(minimumInterval: 6 * 60 * 60)
 
     let minimumInterval: TimeInterval
 

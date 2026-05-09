@@ -642,8 +642,12 @@ struct millioApp: App {
               appState.isAutoBackupEnabled,
               let diContainer = diContainer else { return }
 
+        // Не бекапим пустой стор — иначе перезапишем актуальный бекап нулевыми данными
+        // (например, сразу после миграции схемы до того, как сработал auto-restore).
+        if let container = activeModelContainer, Self.exportedModelCount(in: container) == 0 { return }
+
         Task {
-            let policy = AutoBackupPolicy.everyTwentyFourHours
+            let policy = AutoBackupPolicy.everySixHours
             let versions = await diContainer.backupManager.listBackupVersions()
             let latestAutoBackupDate = versions.first(where: { !$0.isPinned })?.date
             guard policy.shouldRun(lastBackupDate: latestAutoBackupDate, now: Date()) else {
@@ -677,7 +681,28 @@ struct millioApp: App {
         guard recoveryDecision.shouldPresentRestore else { return }
         appState.isICloudAvailable = await diContainer.backupManager.isAvailable()
         appState.lastBackupDate = latestBackupInfo?.date
-        appState.lifecycle = .restoring
+
+        // Если стор существовал, но данные исчезли (потеря при обновлении / миграции схемы) —
+        // восстанавливаем последний бекап автоматически, без участия пользователя.
+        if activeScopeStoreExistedBeforeBinding, let latest = latestBackupInfo {
+            appState.lifecycle = .autoRestoring
+            Task {
+                do {
+                    try await diContainer.backupManager.restoreVersion(
+                        recordName: latest.recordName,
+                        passphrase: nil
+                    )
+                    AppLogger.log(.info, category: "App", "Auto-restore completed successfully")
+                    await MainActor.run { appState.lifecycle = .ready }
+                } catch {
+                    AppLogger.log(.error, category: "App", "Auto-restore failed, falling back to manual: \(error.localizedDescription)")
+                    await MainActor.run { appState.lifecycle = .restoring }
+                }
+            }
+        } else {
+            // Свежая установка с доступным бекапом — показываем экран выбора версии.
+            appState.lifecycle = .restoring
+        }
     }
 
     @MainActor

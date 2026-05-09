@@ -62,6 +62,16 @@ private enum BackupInlineCatalog {
     // fallback copy centralized here so missing catalog entries cannot silently fall
     // back to English on Russian or Chinese devices.
     private static let entries: [String: Entry] = [
+        "backup.auto-restore.title": .init(
+            en: "Restoring Data",
+            ru: "Восстанавливаем данные",
+            zhHans: "正在恢复数据"
+        ),
+        "backup.auto-restore.subtitle": .init(
+            en: "Restoring from backup of %@",
+            ru: "Восстанавливаем резервную копию от %@",
+            zhHans: "正在恢复 %@ 的备份"
+        ),
         "backup.actions.create.subtitle.busy": .init(
             en: "Another backup task is running",
             ru: "Уже идёт другая операция с копией",

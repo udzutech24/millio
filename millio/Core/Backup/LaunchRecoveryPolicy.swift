@@ -43,10 +43,10 @@ struct LaunchRecoveryPolicy {
         guard input.lifecycle == .ready else {
             return .skip(.lifecycleNotReady)
         }
-        // Recovery should only be offered when the scoped store did not exist before
-        // launch. If the file was already present, this is a normal relaunch and we
-        // should not nudge the user into replacing existing local state.
-        guard !input.didLocalStoreExistBeforeLaunch else {
+        // Normal relaunch: store existed and still contains user data — nothing to recover.
+        // But if the store existed yet is now empty (e.g. SwiftData schema migration wiped it),
+        // fall through so we can offer restore from the available backup.
+        if input.didLocalStoreExistBeforeLaunch && input.localDataCount > 0 {
             return .skip(.existingLocalStore)
         }
         guard input.localDataCount == 0 else {

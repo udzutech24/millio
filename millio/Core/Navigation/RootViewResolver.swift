@@ -12,6 +12,7 @@ enum RootViewRoute: Equatable {
     case auth
     case onboarding
     case restoring
+    case autoRestoring
     case ready
     case error
 }
@@ -42,6 +43,8 @@ struct RootViewResolver: View {
             return .onboarding
         case .restoring:
             return .restoring
+        case .autoRestoring:
+            return .autoRestoring
         case .ready:
             return .ready
         case .error:
@@ -71,6 +74,8 @@ struct RootViewResolver: View {
                 OnboardingView(appState: appState, router: router)
             case .restoring:
                 RestoreView(appState: appState, router: router)
+            case .autoRestoring:
+                AutoRestoringView(backupDate: appState.lastBackupDate)
             case .ready:
                 RootTabView(router: router)
             case .error:

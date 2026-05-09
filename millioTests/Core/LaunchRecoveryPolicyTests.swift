@@ -57,8 +57,26 @@ struct LaunchRecoveryPolicyTests {
         #expect(!decision.shouldPresentRestore)
     }
 
-    @Test("Evaluator skips restore on normal relaunch when scoped store already exists")
-    func testEvaluateSkipsRestoreForExistingLocalStore() {
+    @Test("Evaluator skips restore on normal relaunch when scoped store exists and has data")
+    func testEvaluateSkipsRestoreForExistingLocalStoreWithData() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 17_000, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: true,
+                localDataCount: 42,
+                latestBackupInfo: backupInfo
+            )
+        )
+
+        #expect(decision == .skip(.existingLocalStore))
+        #expect(!decision.shouldPresentRestore)
+    }
+
+    @Test("Evaluator offers restore when store existed but data was wiped (schema migration / update)")
+    func testEvaluatePresentRestoreWhenStoreExistedButDataWiped() {
         let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 17_000, version: "2.0.0")
 
         let decision = LaunchRecoveryPolicy.evaluate(
@@ -71,8 +89,8 @@ struct LaunchRecoveryPolicyTests {
             )
         )
 
-        #expect(decision == .skip(.existingLocalStore))
-        #expect(!decision.shouldPresentRestore)
+        #expect(decision == .presentRestore)
+        #expect(decision.shouldPresentRestore)
     }
 
     @Test("Evaluator skips restore when local SwiftData models are already present")
@@ -163,8 +181,20 @@ struct LaunchRecoveryPolicyTests {
             )
         )
 
+        // Store existed with data → normal relaunch → no restore
         #expect(
             !LaunchRecoveryPolicy.shouldPresentRestore(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: true,
+                localDataCount: 5,
+                latestBackupInfo: backupInfo
+            )
+        )
+
+        // Store existed but data wiped (schema migration) → offer restore
+        #expect(
+            LaunchRecoveryPolicy.shouldPresentRestore(
                 lifecycle: .ready,
                 hasCompletedOnboarding: true,
                 didLocalStoreExistBeforeLaunch: true,
@@ -174,8 +204,8 @@ struct LaunchRecoveryPolicyTests {
         )
     }
 
-    @Test("Policy does not enter restore after language change and normal relaunch when local store already exists")
-    func testShouldNotPresentRestoreAfterLanguageChangeAndRelaunch() {
+    @Test("Policy skips restore on normal relaunch when store exists with data (user just relaunched)")
+    func testShouldNotPresentRestoreOnNormalRelaunchWithData() {
         let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 17_000, version: "2.0.0")
 
         let decision = LaunchRecoveryPolicy.evaluate(
@@ -183,21 +213,12 @@ struct LaunchRecoveryPolicyTests {
                 lifecycle: .ready,
                 hasCompletedOnboarding: true,
                 didLocalStoreExistBeforeLaunch: true,
-                localDataCount: 0,
+                localDataCount: 42,
                 latestBackupInfo: backupInfo
             )
         )
 
         #expect(decision == .skip(.existingLocalStore))
         #expect(!decision.shouldPresentRestore)
-        #expect(
-            !LaunchRecoveryPolicy.shouldPresentRestore(
-                lifecycle: .ready,
-                hasCompletedOnboarding: true,
-                didLocalStoreExistBeforeLaunch: true,
-                localDataCount: 0,
-                latestBackupInfo: backupInfo
-            )
-        )
     }
 }

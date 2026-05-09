@@ -147,7 +147,7 @@ private protocol BackupRecordNameProviding {
 extension BackupVersionInfo: BackupRecordNameProviding {}
 
 final class CloudBackupStore: CloudBackupStoreProtocol {
-    private static let defaultAutoSnapshotRetention = 1
+    private static let defaultAutoSnapshotRetention = 3
     private static let defaultPinnedSnapshotRetention = 4
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "CloudBackupStore")
     private let container: CloudBackupContainerProtocol

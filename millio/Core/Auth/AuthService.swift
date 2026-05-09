@@ -1459,7 +1459,7 @@ final class AuthManager {
         guard route != lastResolvedRoute else { return }
         lastResolvedRoute = route
 
-        let isAuthorizedRoute = route == .onboarding || route == .ready || route == .restoring
+        let isAuthorizedRoute = route == .onboarding || route == .ready || route == .restoring || route == .autoRestoring
         guard isAuthenticated, isAuthorizedRoute else { return }
 
         diagnostics.log(
