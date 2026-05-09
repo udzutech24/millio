@@ -7,10 +7,10 @@
 
 ## Статус
 
-`В РАБОТЕ`
+`РЕАЛИЗОВАН`
 
-**Реализовано:** —
-**Осталось:** Phase 1 → Phase 2 → Phase 3
+**Реализовано:** Phase 1 (integration tests), Phase 2 (убран "Close and reopen", навигация на Finances), Phase 3 (auto-recovery при запуске)
+**Осталось:** —
 
 ## Цель
 
@@ -18,10 +18,10 @@
 
 ## Acceptance Criteria
 
-- [ ] AC1: Integration test round-trip проходит — Card/Group/Account создан, экспортирован, store очищен, импортирован, FinanceViewModel видит данные через fetch.
-- [ ] AC2: После ручного restore через BackupManagementView данные видны в UI **без перезапуска** приложения.
-- [ ] AC3: При запуске с пустым store + существующим iCloud-бэкапом приложение автоматически переходит в `.restoring` flow.
-- [ ] AC4: "Close and reopen the app" сообщение удалено / заменено на адекватное.
+- [x] AC1: Integration test round-trip проходит — Card/Group/Account создан, экспортирован, store очищен, импортирован, FinanceViewModel видит данные через fetch.
+- [x] AC2: После ручного restore через BackupManagementView данные видны в UI **без перезапуска** приложения.
+- [x] AC3: При запуске с пустым store + существующим iCloud-бэкапом приложение автоматически переходит в `.restoring` flow.
+- [x] AC4: "Close and reopen the app" сообщение удалено / заменено на адекватное.
 
 ## Challenge Log
 
