@@ -32,6 +32,7 @@ struct BackupManagementView: View {
     @State private var isVersionsExpanded = false
     @State private var selectedRestoreRecordName: String?
     @State private var showRestoreConfirmation = false
+    @State private var showRestoreSuccessPrompt = false
     @State private var isImportingVersion = false
     @State private var isExportingVersion = false
     @State private var exportDocument: BackupTransferFileDocument?
@@ -274,6 +275,17 @@ struct BackupManagementView: View {
         } message: {
             Text(BackupL10n.tr("backup.restore.confirm.message", fallback: "Current local data will be fully replaced by the selected backup"))
         }
+        .alert(
+            BackupL10n.tr("backup.restore.success.title", fallback: "Data restored"),
+            isPresented: $showRestoreSuccessPrompt
+        ) {
+            Button(BackupL10n.tr("common.done", fallback: "OK"), role: .cancel) {
+                router.selectedTab = .finances
+                router.popToRoot()
+            }
+        } message: {
+            Text(BackupL10n.tr("backup.restore.success.message", fallback: "Your data has been restored and will appear in the app shortly"))
+        }
         .fileExporter(
             isPresented: $isExportingVersion,
             document: exportDocument,
@@ -309,6 +321,11 @@ struct BackupManagementView: View {
             }
 
             Task { await refreshStatusIfNeeded() }
+
+            if let url = appState.pendingIncomingBackupURL {
+                appState.pendingIncomingBackupURL = nil
+                Task { await importBackupFile(from: url) }
+            }
         }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -329,6 +346,11 @@ struct BackupManagementView: View {
             guard !shouldIgnorePassphraseStateChange() else { return }
             isPassphraseConfirmed = false
             isPassphraseEditorExpanded = true
+        }
+        .onChange(of: appState.pendingIncomingBackupURL) { _, url in
+            guard let url else { return }
+            appState.pendingIncomingBackupURL = nil
+            Task { await importBackupFile(from: url) }
         }
     }
 
@@ -666,15 +688,6 @@ struct BackupManagementView: View {
                         Task { await createBackupNow() }
                     }
 
-                    primaryActionButton(
-                        title: restoreButtonTitle,
-                        subtitle: restoreSliderSubtitle,
-                        icon: "arrow.down.circle.fill",
-                        isEnabled: canRestoreSelectedVersion
-                    ) {
-                        showRestoreConfirmation = true
-                    }
-
                     if appState.isAutoBackupEnabled {
                         Text(BackupL10n.tr("backup.actions.auto_schedule.note", fallback: "One automatic backup is refreshed every 24 hours"))
                             .font(.system(size: 12, weight: .regular))
@@ -769,59 +782,77 @@ struct BackupManagementView: View {
                                     FinancesRowDivider()
                                 }
 
-                                HStack(spacing: 10) {
-                                    Image(systemName: selectedRestoreRecordName == version.recordName ? "largecircle.fill.circle" : "circle")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(AppColors.brandPrimary)
+                                let isSelected = selectedRestoreRecordName == version.recordName
 
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(version.date.formatted(date: .abbreviated, time: .shortened))
+                                VStack(spacing: 0) {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
                                             .font(.system(size: 13, weight: .semibold))
-                                            .foregroundStyle(AppColors.textPrimary)
+                                            .foregroundStyle(AppColors.brandPrimary)
+
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(version.date.formatted(date: .abbreviated, time: .shortened))
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundStyle(AppColors.textPrimary)
+
+                                            Text(
+                                                String(
+                                                    format: String(localized: "restore.version_size_format"),
+                                                    ByteCountFormatter.string(fromByteCount: version.size, countStyle: .file),
+                                                    String(version.version)
+                                                )
+                                            )
+                                            .font(.system(size: 11, weight: .regular))
+                                            .foregroundStyle(AppColors.textTertiary)
+                                        }
+
+                                        Spacer()
 
                                         Text(
-                                            String(
-                                                format: String(localized: "restore.version_size_format"),
-                                                ByteCountFormatter.string(fromByteCount: version.size, countStyle: .file),
-                                                String(version.version)
-                                            )
+                                            version.isPinned
+                                                ? BackupL10n.tr("backup.versions.pinned", fallback: "Saved")
+                                                : BackupL10n.tr("backup.versions.auto", fallback: "Auto")
                                         )
-                                        .font(.system(size: 11, weight: .regular))
-                                        .foregroundStyle(AppColors.textTertiary)
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(AppColors.textPrimary)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background((version.isPinned ? AppColors.toggleOnGreen : AppColors.brandPrimary).opacity(0.25))
+                                        .clipShape(Capsule())
+
+                                        Button(role: .destructive) {
+                                            Task { await deleteVersion(recordName: version.recordName) }
+                                        } label: {
+                                            if deletingRecordName == version.recordName {
+                                                ProgressView()
+                                                    .scaleEffect(0.75)
+                                            } else {
+                                                Image(systemName: "trash")
+                                                    .font(.system(size: 13, weight: .semibold))
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(isBusy || deletingRecordName != nil)
                                     }
-
-                                    Spacer()
-
-                                    Text(
-                                        version.isPinned
-                                            ? BackupL10n.tr("backup.versions.pinned", fallback: "Saved")
-                                            : BackupL10n.tr("backup.versions.auto", fallback: "Auto")
-                                    )
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background((version.isPinned ? AppColors.toggleOnGreen : AppColors.brandPrimary).opacity(0.25))
-                                    .clipShape(Capsule())
-
-                                    Button(role: .destructive) {
-                                        Task { await deleteVersion(recordName: version.recordName) }
-                                    } label: {
-                                        if deletingRecordName == version.recordName {
-                                            ProgressView()
-                                                .scaleEffect(0.75)
-                                        } else {
-                                            Image(systemName: "trash")
-                                                .font(.system(size: 13, weight: .semibold))
+                                    .padding(.vertical, 10)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        withAnimation(.easeInOut(duration: 0.18)) {
+                                            selectedRestoreRecordName = version.recordName
                                         }
                                     }
-                                    .buttonStyle(.plain)
-                                    .disabled(isBusy || deletingRecordName != nil)
-                                }
-                                .padding(.vertical, 10)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    selectedRestoreRecordName = version.recordName
+
+                                    if isSelected {
+                                        compactActionButton(
+                                            title: BackupL10n.tr("backup.restore.action.short", fallback: "Restore this version"),
+                                            icon: "arrow.down.circle.fill",
+                                            isEnabled: canRestoreSelectedVersion
+                                        ) {
+                                            showRestoreConfirmation = true
+                                        }
+                                        .padding(.bottom, 8)
+                                        .transition(.opacity.combined(with: .move(edge: .top)))
+                                    }
                                 }
                             }
                         }
@@ -855,6 +886,12 @@ struct BackupManagementView: View {
 
         if selectedRestoreRecordName == nil || backupVersions.contains(where: { $0.recordName == selectedRestoreRecordName }) == false {
             selectedRestoreRecordName = backupVersions.first?.recordName
+        }
+
+        if !backupVersions.isEmpty && !isVersionsExpanded {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isVersionsExpanded = true
+            }
         }
     }
 
@@ -913,6 +950,7 @@ struct BackupManagementView: View {
             let passphraseToUse = trimmedPassphrase.isEmpty ? nil : trimmedPassphrase
             try await backupManager.restoreVersion(recordName: selectedRestoreRecordName, passphrase: passphraseToUse)
             await refreshStatusIfNeeded(force: true)
+            showRestoreSuccessPrompt = true
         } catch let appError as AppError {
             backupError = appError
         } catch {

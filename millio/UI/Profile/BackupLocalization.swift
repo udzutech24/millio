@@ -397,6 +397,21 @@ private enum BackupInlineCatalog {
             ru: "Повторить поиск",
             zhHans: "重试搜索"
         ),
+        "backup.restore.action.short": .init(
+            en: "Restore this version",
+            ru: "Восстановить эту версию",
+            zhHans: "恢复此版本"
+        ),
+        "backup.restore.success.title": .init(
+            en: "Data Restored",
+            ru: "Данные восстановлены",
+            zhHans: "数据已恢复"
+        ),
+        "backup.restore.success.message": .init(
+            en: "Your data has been restored and will appear in the app shortly",
+            ru: "Ваши данные восстановлены и скоро отобразятся в приложении",
+            zhHans: "您的数据已恢复，稍后将显示在应用中"
+        ),
         "common.done": .init(
             en: "Done",
             ru: "Готово",
