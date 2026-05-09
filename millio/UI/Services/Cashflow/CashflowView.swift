@@ -244,13 +244,6 @@ private struct CashflowContentView: View {
         .navigationBarBackButtonHidden(true)
         .interactiveBackSwipe()
         .toolbar { topToolbar }
-        .safeAreaInset(edge: .bottom) {
-            actionButtonsSection
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
-                .padding(.bottom, 8)
-                .background(Color.black.opacity(0.92))
-        }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showTransactionEditor },
             set: { if !$0 { viewModel.handle(.hideTransactionEditor) } }
@@ -263,9 +256,9 @@ private struct CashflowContentView: View {
             } else if let creatingType = viewModel.state.creatingTransactionType {
                 switch creatingType {
                 case .income:
-                    CashflowIncomeTransactionSheet(viewModel: viewModel)
+                    CashflowCategorySheetContainer(viewModel: viewModel, initialTab: .incomes)
                 case .expense:
-                    CashflowExpenseTransactionSheet(viewModel: viewModel)
+                    CashflowCategorySheetContainer(viewModel: viewModel, initialTab: .expenses)
                 case .transfer:
                     CashflowTransferTransactionSheet(viewModel: viewModel)
                 case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:

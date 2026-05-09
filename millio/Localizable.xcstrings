@@ -2514,6 +2514,7 @@
       }
     },
     "Cancel" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10022,6 +10023,29 @@
         }
       }
     },
+    "cashflow.category.empty_month" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No transactions this month"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет транзакций за этот месяц"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本月没有交易"
+          }
+        }
+      }
+    },
     "cashflow.category.pinned" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10340,13 +10364,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open Finances"
+            "value" : "Add account"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Перейти в Финансы"
+            "value" : "Добавить счёт"
           }
         }
       }
@@ -13105,13 +13129,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You are in Cashflow: this screen shows where money comes from, where it goes, and period totals, go to Finances to manage products and balances in detail"
+            "value" : "Here you can see where money comes from and where it goes. Add your first transaction to get started."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Вы в разделе «Кэшфлоу»: здесь видно, откуда приходят деньги, куда уходят и какой итог за период, перейдите в «Финансы», чтобы управлять продуктами и балансами детально"
+            "value" : "Здесь видно, откуда приходят деньги и куда уходят. Добавьте первую операцию, чтобы начать."
           }
         }
       }
@@ -13752,6 +13776,72 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "本月收入"
+          }
+        }
+      }
+    },
+    "cashflow.quick.add" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加"
+          }
+        }
+      }
+    },
+    "cashflow.quick.amount.placeholder" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amount"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сумма"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "金额"
+          }
+        }
+      }
+    },
+    "cashflow.quick.note.placeholder" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note (optional)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Заметка (необязательно)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "备注（可选）"
           }
         }
       }
@@ -15315,6 +15405,72 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "结果"
+          }
+        }
+      }
+    },
+    "cashflow.tab.all" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Все"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部"
+          }
+        }
+      }
+    },
+    "cashflow.tab.expenses" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expenses"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Расходы"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支出"
+          }
+        }
+      }
+    },
+    "cashflow.tab.incomes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Income"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доходы"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收入"
           }
         }
       }
@@ -40088,6 +40244,9 @@
         }
       }
     },
+    "Виджеты" : {
+
+    },
     "Восстановление данных" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -40120,6 +40279,9 @@
           }
         }
       }
+    },
+    "Все виджеты добавлены" : {
+
     },
     "Все связанные кешбэки этой категории будут безопасно перенесены в категорию \"Другое\"." : {
       "extractionState" : "stale",
@@ -40303,7 +40465,6 @@
     },
     "Готово" : {
       "comment" : "A button that closes a settings sheet.",
-      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "en" : {
@@ -40387,6 +40548,9 @@
           }
         }
       }
+    },
+    "Добавить виджет" : {
+
     },
     "Добавить кешбэк" : {
       "comment" : "A button label that allows the user to add a cashback category.",
@@ -40493,6 +40657,9 @@
           }
         }
       }
+    },
+    "Закрыть" : {
+
     },
     "Избранная" : {
       "comment" : "A toggle switch label that indicates whether a card is marked as favorite.",
@@ -40953,6 +41120,9 @@
           }
         }
       }
+    },
+    "Общий баланс" : {
+
     },
     "Обычные валюты доступны бесплатно, криптовалюты доступны по подписке PRO." : {
       "extractionState" : "stale",
