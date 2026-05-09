@@ -337,6 +337,7 @@ struct millioApp: App {
             }
             return switched
         }
+        await presentRestoreFlowIfNeeded()
     }
 
     @MainActor
@@ -539,7 +540,7 @@ struct millioApp: App {
         try? FileManager.default.removeItem(at: backupURL)
         try? FileManager.default.moveItem(at: storeURL, to: backupURL)
 
-        AppLogger.log(.critical, category: "Schema", """
+        AppLogger.log(.error, category: "Schema", """
         ⚠️⚠️⚠️ DATA LOSS: Store rebuilt from scratch!
         Scope: \(scope.storeConfigurationName)
         Old store backed up to: \(backupURL.path)
