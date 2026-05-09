@@ -120,6 +120,7 @@ struct ProfileAccountDetailsView: View {
             }
 
             Button(logoutTitle) {
+                ScopeCache.clearUserID()
                 Task { await authManager.logout() }
             }
             .font(.system(size: 17, weight: .semibold))

@@ -49,9 +49,17 @@ enum AppSchemaV2: VersionedSchema {
     ]
 }
 
+// MARK: - Текущая схема (единственный источник правды)
+
+// При добавлении нового @Model:
+//   1. Создать AppSchemaV{N+1} с новым типом в models
+//   2. Добавить lightweight stage V{N}→V{N+1} в AppMigrationPlan.stages
+//   3. Обновить этот typealias на AppSchemaV{N+1}
+//   4. Запустить SchemaConsistencyTests — должны быть зелёными
+typealias AppSchemaCurrent = AppSchemaV2
+
 // MARK: - План миграции
 
-// Правило: при добавлении нового @Model → новая SchemaVN + lightweight stage V(N-1)→VN.
 // Существующие сторы без версионирования трактуются как V1 и безопасно мигрируют.
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] = [

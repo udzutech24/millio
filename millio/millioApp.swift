@@ -148,7 +148,11 @@ struct millioApp: App {
                     }
                 }
                 .onOpenURL { url in
-                    AppWidgetDeepLinkHandler.handle(url: url, appState: appState)
+                    if url.pathExtension == "millio-backup" {
+                        appState.pendingIncomingBackupURL = url
+                    } else {
+                        AppWidgetDeepLinkHandler.handle(url: url, appState: appState)
+                    }
                 }
             } else {
                 ErrorView(
@@ -188,11 +192,16 @@ struct millioApp: App {
         let initStart = DispatchTime.now()
         await useCase.initialize()
         await authManager.restoreSession()
+        AppLogger.log(.info, category: "App", "Auth restored — isAuthenticated=\(authManager.isAuthenticated) userID=\(authManager.currentUser?.id ?? "nil")")
         await synchronizeDataScope(with: authManager.currentUser)
-        await presentRestoreFlowIfNeeded()
+        AppLogger.log(.info, category: "App", "Active scope after sync: \(activeDataScope.storeConfigurationName), storeExisted=\(activeScopeStoreExistedBeforeBinding)")
         logger.info("AppLifecycleUseCase.initialize finished in \(Double(DispatchTime.now().uptimeNanoseconds - initStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         logger.info("initializeColdStart finished in \(Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
-        
+
+        #if DEBUG
+        await debugImportBackupIfNeeded()
+        #endif
+
         await runPostStartupRefreshes()
         await scheduleDailyReminderIfNeeded()
     }
@@ -301,8 +310,32 @@ struct millioApp: App {
             user: user
         )
 
-        await startupCoordinator.switchScopeIfNeeded(to: targetScope) { targetScope in
-            await rebindDataScope(to: targetScope)
+        // Auth/Scope resilience: если auth restore вернул .guest (сбой сети или токена),
+        // но в кэше есть user ID и соответствующий стор существует на диске —
+        // открываем пользовательский стор вместо пустого гостевого.
+        // Кэш сбрасывается при явном logout (ScopeCache.clearUserID()), поэтому
+        // намеренный выход не перехватывается этой логикой.
+        let resolvedScope: DataScope
+        if case .guest = targetScope,
+           let cachedUserID = ScopeCache.lastKnownUserID() {
+            let cachedScope = DataScope.user(id: cachedUserID)
+            if Self.storeExists(for: cachedScope) {
+                AppLogger.log(.warning, category: "App",
+                    "Auth restore returned guest but cached user store exists — using cached scope '\(cachedScope.storeConfigurationName)'")
+                resolvedScope = cachedScope
+            } else {
+                resolvedScope = targetScope
+            }
+        } else {
+            resolvedScope = targetScope
+        }
+
+        await startupCoordinator.switchScopeIfNeeded(to: resolvedScope) { resolvedScope in
+            let switched = await rebindDataScope(to: resolvedScope)
+            if switched, case .user = resolvedScope {
+                ScopeCache.save(resolvedScope)
+            }
+            return switched
         }
     }
 
@@ -373,6 +406,24 @@ struct millioApp: App {
         await NotificationManager.shared.scheduleDailyReminder(using: SettingsManager.shared.dailyReminderSettings)
     }
 
+    #if DEBUG
+    @MainActor
+    private func debugImportBackupIfNeeded() async {
+        let triggerURL = URL(fileURLWithPath: "/tmp/millio-debug-import.json")
+        guard FileManager.default.fileExists(atPath: triggerURL.path),
+              let data = try? Data(contentsOf: triggerURL),
+              let repo = diContainer?.dataRepository else { return }
+        do {
+            try await repo.clearAllDataAsync()
+            try await repo.importAllDataAsync(data)
+            try? FileManager.default.removeItem(at: triggerURL)
+            logger.info("DEBUG: backup import from /tmp/millio-debug-import.json succeeded")
+        } catch {
+            logger.error("DEBUG: backup import failed: \(error)")
+        }
+    }
+    #endif
+
     private static func registerFeatures() {
         CurrencyFeatureRegistration.register()
         CardFeatureRegistration.register()
@@ -408,12 +459,14 @@ struct millioApp: App {
         )
 
         let storeAlreadyExists = FileManager.default.fileExists(atPath: storeURL.path)
+        AppLogger.log(.info, category: "App", "Opening store '\(storeURL.lastPathComponent)' (existed=\(storeAlreadyExists)) scope=\(scope.storeConfigurationName)")
 
         do {
-            return try AppMigrationPlan.makeContainer(configuration: modelConfiguration)
+            let container = try AppMigrationPlan.makeContainer(configuration: modelConfiguration)
+            AppLogger.log(.info, category: "App", "Store opened OK — path: \(storeURL.path)")
+            return container
         } catch {
-            // Сюда попадаем только при реальной коррупции стора, не при schema mismatch:
-            // schema mismatch теперь обрабатывается AppMigrationPlan автоматически.
+            // schema mismatch обрабатывается AppMigrationPlan; сюда попадаем при реальной коррупции.
             AppLogger.log(.error, category: "App", "Failed to open ModelContainer at \(storeURL.lastPathComponent): \(error)")
 
             if storeAlreadyExists {
@@ -421,16 +474,26 @@ struct millioApp: App {
                 let schema = AppSchema.create()
                 return Self.rebuildStorePreservingData(at: storeURL, schema: schema, scope: scope)
                 #else
-                AppLogger.log(.error, category: "App", "Existing store unreadable — returning nil to show error screen")
+                AppLogger.log(.error, category: "App", "Existing store unreadable — showing error screen")
                 return nil
                 #endif
             }
 
-            // Стор не существовал → новый пользователь, in-memory безопасен
+            // Стор не существовал — новый пользователь или первый запуск.
+            // Никогда не используем in-memory: данные должны жить на диске.
+            // Пробуем создать чистый стор без плана миграции (нечего мигрировать).
+            let freshConfig = ModelConfiguration(
+                scope.storeConfigurationName,
+                schema: AppSchema.create(),
+                url: storeURL,
+                cloudKitDatabase: .none
+            )
             do {
-                return try AppMigrationPlan.makeInMemoryContainer()
+                let fresh = try ModelContainer(for: AppSchema.create(), configurations: [freshConfig])
+                AppLogger.log(.info, category: "App", "Created fresh on-disk store at \(storeURL.lastPathComponent)")
+                return fresh
             } catch {
-                AppLogger.log(.error, category: "App", "Failed to create fallback ModelContainer: \(error)")
+                AppLogger.log(.error, category: "App", "Failed to create fresh store: \(error) — showing error screen")
                 return nil
             }
         }
@@ -475,7 +538,15 @@ struct millioApp: App {
         let backupURL = storeURL.deletingPathExtension().appendingPathExtension("bak.store")
         try? FileManager.default.removeItem(at: backupURL)
         try? FileManager.default.moveItem(at: storeURL, to: backupURL)
-        AppLogger.log(.warning, category: "App", "Schema migration failed — renamed old store to .bak, starting fresh. Restore from iCloud backup if needed.")
+
+        AppLogger.log(.critical, category: "Schema", """
+        ⚠️⚠️⚠️ DATA LOSS: Store rebuilt from scratch!
+        Scope: \(scope.storeConfigurationName)
+        Old store backed up to: \(backupURL.path)
+        To recover: copy .bak.store → rename to .store → relaunch.
+        Root cause: likely a @Model missing from AppSchemaCurrent.models or AppMigrationPlan.
+        Run SchemaConsistencyTests to detect divergence.
+        """)
 
         let newConfig = ModelConfiguration(scope.storeConfigurationName, schema: schema, url: storeURL, cloudKitDatabase: .none)
         return try? ModelContainer(for: schema, configurations: [newConfig])
@@ -592,15 +663,15 @@ struct millioApp: App {
 
         let localDataCount = Self.exportedModelCount(in: activeModelContainer)
         let latestBackupInfo = await diContainer.backupManager.lastBackupInfo()
-        let recoveryDecision = LaunchRecoveryPolicy.evaluate(
-            .init(
-                lifecycle: appState.lifecycle,
-                hasCompletedOnboarding: lifecycleUseCase?.checkOnboardingStatus() ?? false,
-                didLocalStoreExistBeforeLaunch: activeScopeStoreExistedBeforeBinding,
-                localDataCount: localDataCount,
-                latestBackupInfo: latestBackupInfo
-            )
+        let input = LaunchRecoveryPolicy.Input(
+            lifecycle: appState.lifecycle,
+            hasCompletedOnboarding: lifecycleUseCase?.checkOnboardingStatus() ?? false,
+            didLocalStoreExistBeforeLaunch: activeScopeStoreExistedBeforeBinding,
+            localDataCount: localDataCount,
+            latestBackupInfo: latestBackupInfo
         )
+        let recoveryDecision = LaunchRecoveryPolicy.evaluate(input)
+        AppLogger.log(.info, category: "App", "LaunchRecovery: localCount=\(localDataCount) storeExisted=\(activeScopeStoreExistedBeforeBinding) backup=\(latestBackupInfo != nil) lifecycle=\(appState.lifecycle) → \(recoveryDecision)")
 
         guard recoveryDecision.shouldPresentRestore else { return }
         appState.isICloudAvailable = await diContainer.backupManager.isAvailable()
