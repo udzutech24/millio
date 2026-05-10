@@ -74,6 +74,7 @@ final class AppState {
     }
     var launchSplashDisplayMode: LaunchSplashDisplayMode = .always
     var isAppLocked: Bool = false
+    var isRestoreInProgress: Bool = false
     var isGuestModeEnabled: Bool = false {
         didSet {
             SettingsManager.shared.isGuestModeEnabled = isGuestModeEnabled
@@ -116,6 +117,8 @@ final class AppState {
     var pendingOpenCashflowHistory: Bool = false
     /// One-shot deep-link trigger from widget to open converter service.
     var pendingOpenConverterService: Bool = false
+    /// One-shot trigger: incoming backup file URL (from Files, AirDrop, drag-and-drop).
+    var pendingIncomingBackupURL: URL?
     var backendRegionCode: String = ""
     var backendBaseURLString: String = ""
     var isBackendFallbackActive: Bool = false

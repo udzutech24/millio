@@ -624,6 +624,10 @@ struct millioApp: App {
         return sources
     }
 
+    private static let autoRestoreTimeoutSeconds: TimeInterval = 30
+    private static let autoRestoreMaxAttempts = 2
+    private static let autoRestoreAttemptsKey = "autoRestoreAttemptCount"
+
     private static func exportedModelCount(in container: ModelContainer) -> Int? {
         let repository = DataRepository(
             modelContext: container.mainContext,
@@ -644,6 +648,7 @@ struct millioApp: App {
         guard appState.isBackupEnabled,
               appState.isAutoBackupEnabled,
               let diContainer = diContainer else { return }
+        guard !appState.isRestoreInProgress else { return }
 
         // Не бекапим достоверно пустой стор — иначе перезапишем актуальный бекап нулевыми данными.
         // nil (ошибка fetch) → состояние неизвестно → бекапим (лучше лишний бекап, чем пропустить).
@@ -691,8 +696,17 @@ struct millioApp: App {
         // Если стор существовал, но данные исчезли (потеря при обновлении / миграции схемы) —
         // восстанавливаем последний бекап автоматически, без участия пользователя.
         if activeScopeStoreExistedBeforeBinding, latestBackupInfo != nil {
+            let attempts = UserDefaults.standard.integer(forKey: Self.autoRestoreAttemptsKey)
+            guard attempts < Self.autoRestoreMaxAttempts else {
+                AppLogger.log(.warning, category: "App", "Auto-restore: лимит попыток исчерпан (\(attempts)), переходим к ручному restore")
+                appState.lifecycle = .restoring
+                return
+            }
+            UserDefaults.standard.set(attempts + 1, forKey: Self.autoRestoreAttemptsKey)
+            appState.isRestoreInProgress = true
             appState.lifecycle = .autoRestoring
             Task {
+                defer { Task { @MainActor in appState.isRestoreInProgress = false } }
                 do {
                     let versions = await diContainer.backupManager.listBackupVersions()
                     guard let latestVersion = versions.first else {
@@ -700,13 +714,17 @@ struct millioApp: App {
                         await MainActor.run { appState.lifecycle = .restoring }
                         return
                     }
-                    try await diContainer.backupManager.restoreVersion(
-                        recordName: latestVersion.recordName,
-                        passphrase: nil
-                    )
+                    try await withTaskTimeout(seconds: Self.autoRestoreTimeoutSeconds) {
+                        try await diContainer.backupManager.restoreVersion(
+                            recordName: latestVersion.recordName,
+                            passphrase: nil
+                        )
+                    }
+                    UserDefaults.standard.set(0, forKey: Self.autoRestoreAttemptsKey)
                     AppLogger.log(.info, category: "App", "Auto-restore completed successfully")
                     await MainActor.run { appState.lifecycle = .ready }
                 } catch {
+                    CrashReporting.record(error: error)
                     AppLogger.log(.error, category: "App", "Auto-restore failed, falling back to manual: \(error.localizedDescription)")
                     await MainActor.run { appState.lifecycle = .restoring }
                 }
