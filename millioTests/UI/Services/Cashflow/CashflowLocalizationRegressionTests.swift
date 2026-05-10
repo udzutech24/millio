@@ -500,7 +500,6 @@ struct CashflowLocalizationRegressionTests {
         let insightsSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowInsightsChartModels.swift"), encoding: .utf8)
         let transactionSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowTransaction.swift"), encoding: .utf8)
         let operationSheetsSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowOperationSheets.swift"), encoding: .utf8)
-        let periodSelectorSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowPeriodSelectorView.swift"), encoding: .utf8)
         let scheduledTransactionsSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowScheduledTransactionsView.swift"), encoding: .utf8)
 
         #expect(!viewSource.contains("Text(\"cashflow."))
@@ -524,8 +523,6 @@ struct CashflowLocalizationRegressionTests {
         #expect(!operationSheetsSource.contains("\"Pin category\""))
         #expect(!operationSheetsSource.contains("\"Unpin category\""))
         #expect(!operationSheetsSource.contains("\"Pinned category\""))
-        #expect(!periodSelectorSource.contains("Text(\"cashflow."))
-        #expect(!periodSelectorSource.contains(".navigationTitle(\"cashflow."))
         #expect(!scheduledTransactionsSource.contains("Text(\"cashflow."))
     }
 

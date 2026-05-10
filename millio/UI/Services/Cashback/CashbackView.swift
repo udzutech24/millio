@@ -91,7 +91,6 @@ private struct CashbackContentViewInternal: View {
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     @State private var showCategorySettingsSheet: Bool = false
-    @State private var showQuickNavigationPopover: Bool = false
     @State private var isSearchExpanded: Bool = false
     @State private var searchText: String = ""
     @FocusState private var isSearchFieldFocused: Bool
@@ -385,25 +384,6 @@ private struct CashbackContentViewInternal: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text(CashbackL10n.backAccessibility))
 
-                Button {
-                    showQuickNavigationPopover.toggle()
-                } label: {
-                    Image(systemName: "square.grid.2x2")
-                        .font(.system(size: iconSize - 2, weight: .regular))
-                        .foregroundStyle(Color.white.opacity(0.90))
-                        .frame(width: itemSize, height: itemSize)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(CashbackL10n.quickNavigationAccessibility))
-                .popover(isPresented: $showQuickNavigationPopover, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
-                    MiniAppQuickNavigationPopover(
-                        destinations: MiniAppNavigation.destinations(excluding: currentRoute)
-                    ) { destination in
-                        showQuickNavigationPopover = false
-                        MiniAppNavigation.navigate(to: destination.route, from: currentRoute, router: router)
-                    }
-                    .presentationCompactAdaptation(.popover)
-                }
             }
         }
 

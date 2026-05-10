@@ -49,13 +49,6 @@ enum ConverterL10n {
     static var addCurrencyAccessibility: String { tr("converter.accessibility.add_currency") }
     static var shareAccessibility: String { tr("converter.accessibility.share") }
     static var settingsAccessibility: String { tr("converter.accessibility.settings") }
-    static var quickNavigationAccessibility: String {
-        tr(
-            "finances.common.quick_navigation",
-            fallback: "Quick mini-app navigation"
-        )
-    }
-
     static var addCurrencyTitle: String { tr("converter.currency.add", fallback: "Add currency") }
     static var replaceCurrencyTitle: String { tr("converter.currency.replace", fallback: "Replace currency") }
     static var addCurrencyPlaceholder: String { tr("converter.currency.add", fallback: "Add currency") }

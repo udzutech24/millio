@@ -21,7 +21,6 @@ struct ConverterView: View {
     @Environment(AppRouter.self) private var router
     @Environment(AppState.self) private var appState
     @State private var showCryptoProAlert = false
-    @State private var showQuickNavigationPopover = false
 
     private let rowStrokeColor = Color.white.opacity(0.16)
     private let rowInactiveStrokeColor = Color.white.opacity(0.07)
@@ -480,26 +479,6 @@ struct ConverterView: View {
                 }
                 .buttonStyle(.plain)
 
-                Button {
-                    showQuickNavigationPopover.toggle()
-                } label: {
-                    Image(systemName: "square.grid.2x2")
-                        .font(.system(size: iconSize, weight: .regular))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(Color.white.opacity(0.90))
-                        .frame(width: itemSize, height: itemSize)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(ConverterL10n.quickNavigationAccessibility)
-                .popover(isPresented: $showQuickNavigationPopover, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
-                    MiniAppQuickNavigationPopover(
-                        destinations: MiniAppNavigation.destinations(excluding: currentRoute)
-                    ) { destination in
-                        showQuickNavigationPopover = false
-                        switchToMiniApp(destination.route)
-                    }
-                    .presentationCompactAdaptation(.popover)
-                }
             }
             .padding(.horizontal, 10)
             .frame(height: 40)

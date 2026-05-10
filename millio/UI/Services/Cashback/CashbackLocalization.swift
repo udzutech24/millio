@@ -35,7 +35,6 @@ enum CashbackL10n {
     static var searchEmptyTitle: String { text("cashback.search.empty.title", fallback: "Nothing found") }
     static var searchEmptySubtitle: String { text("cashback.search.empty.subtitle", fallback: "Try a different category or card name") }
     static var backAccessibility: String { text("cashback.accessibility.back", fallback: "Back") }
-    static var quickNavigationAccessibility: String { text("cashback.accessibility.quick_navigation", fallback: "Quick navigation between mini apps") }
     static var previousMonthAccessibility: String { text("cashback.accessibility.previous_month", fallback: "Previous month") }
     static var nextMonthAccessibility: String { text("cashback.accessibility.next_month", fallback: "Next month") }
     static var closeSearchAccessibility: String { text("cashback.accessibility.close_search", fallback: "Close search") }
