@@ -84,7 +84,7 @@ struct CashflowInsightsChartStyleTests {
         let expectedRawWidth: CGFloat = (420 - 2 - 10 * 3) / 4
 
         #expect(abs(metrics.groupWidth - expectedRawWidth) < 0.0001)
-        #expect(metrics.barWidth <= 18)
+        #expect(metrics.barWidth <= 28)
         #expect(metrics.labelFontSize <= 13)
     }
 

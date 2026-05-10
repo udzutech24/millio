@@ -46,7 +46,7 @@ enum CashflowInsightsChartStyle {
         return CashflowInsightsChartMetrics(
             spacing: spacing,
             groupWidth: groupWidth,
-            barWidth: min(max(compactMode ? 7 : 9, groupWidth * (compactMode ? 0.18 : 0.20)), compactMode ? 16 : 18),
+            barWidth: min(max(compactMode ? 12 : 16, groupWidth * (compactMode ? 0.30 : 0.34)), compactMode ? 24 : 28),
             labelFontSize: max(10, min(compactMode ? 12 : 13, groupWidth * (compactMode ? 0.18 : 0.20))),
             maxBarHeight: compactMode ? 180 : 168,
             columnPadding: compactMode ? 8 : 12,

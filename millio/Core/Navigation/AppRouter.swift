@@ -32,14 +32,20 @@ final class AppRouter {
     var navigationPath = NavigationPath()
     var selectedTab: RootTab = .dashboard
     var pendingFABAction: FABAction? = nil
+    var showingSubscription = false
 
     func navigate(to route: AppRoute) {
         currentRoute = route
         popToRoot()
     }
-    
+
     func push(_ route: AppRoute) {
-        navigationPath.append(route)
+        switch route {
+        case .subscription:
+            showingSubscription = true
+        default:
+            navigationPath.append(route)
+        }
     }
 
     /// Clears pushed screens and returns to the current root container.

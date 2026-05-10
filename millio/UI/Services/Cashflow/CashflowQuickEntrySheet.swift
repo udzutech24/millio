@@ -17,6 +17,7 @@ struct CashflowQuickEntrySheet: View {
     let kind: CashflowCategoryTransactionSheetKind
     let selectedMonth: Date
     var onSave: (() -> Void)? = nil
+    var onOpenFullEditor: ((CashflowCategoryOption) -> Void)? = nil
 
     // MARK: - State
 
@@ -24,6 +25,7 @@ struct CashflowQuickEntrySheet: View {
 
     @State private var amountText: String = ""
     @State private var note: String = ""
+    @State private var selectedCardID: String? = nil
     @State private var isSaving: Bool = false
     @State private var showError: Bool = false
 
@@ -54,10 +56,25 @@ struct CashflowQuickEntrySheet: View {
 
                     // Поле заметки
                     noteField
-                        .padding(.bottom, 32)
+                        .padding(.bottom, 16)
+
+                    // Выбор карты (всегда показываем; если карт нет — только "Без карты")
+                    cardPicker
+                        .padding(.bottom, 24)
 
                     // Кнопка добавить
                     saveButton
+
+                    // Ссылка на полный редактор
+                    if onOpenFullEditor != nil {
+                        Button(String(localized: "cashflow.quick.open_full_editor")) {
+                            dismiss()
+                            onOpenFullEditor?(option)
+                        }
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .padding(.top, 12)
+                    }
 
                     Spacer(minLength: 0)
                 }
@@ -77,6 +94,7 @@ struct CashflowQuickEntrySheet: View {
         .presentationDragIndicator(.visible)
         .onAppear {
             amountFocused = true
+            selectedCardID = viewModel.state.availableCards.first?.cardUniqueID
         }
         .alert(String(localized: "cashflow.editor.save_failed.title"), isPresented: $showError) {
             Button(String(localized: "cashflow.common.ok"), role: .cancel) {}
@@ -170,6 +188,56 @@ struct CashflowQuickEntrySheet: View {
         }
     }
 
+    private var cardPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(String(localized: "cashflow.quick.card.label"))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+
+            let cards = viewModel.state.availableCards
+            let selectedCard = cards.first(where: { $0.cardUniqueID == selectedCardID })
+
+            Menu {
+                Button {
+                    selectedCardID = nil
+                } label: {
+                    Label(String(localized: "cashflow.quick.card.none"), systemImage: "xmark.circle")
+                }
+                Divider()
+                ForEach(cards, id: \.cardUniqueID) { card in
+                    Button {
+                        selectedCardID = card.cardUniqueID
+                    } label: {
+                        Label(card.name, systemImage: "creditcard")
+                    }
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "creditcard")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(selectedCard != nil ? kind.accentColor : AppColors.textSecondary)
+                    Text(selectedCard?.name ?? String(localized: "cashflow.quick.card.none"))
+                        .font(.system(size: 15))
+                        .foregroundStyle(selectedCard != nil ? AppColors.textPrimary : AppColors.textSecondary)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.06))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                        )
+                )
+            }
+        }
+    }
+
     private var saveButton: some View {
         Button {
             saveTransaction()
@@ -229,7 +297,7 @@ struct CashflowQuickEntrySheet: View {
             transactionDate: CashflowCategorySheetBootstrap.initialTransactionDate(
                 forSelectedMonth: selectedMonth
             ),
-            cardID: nil,
+            cardID: selectedCardID,
             toCardID: nil,
             investmentID: nil,
             incomeCategoryRaw: incomeCategoryRaw,

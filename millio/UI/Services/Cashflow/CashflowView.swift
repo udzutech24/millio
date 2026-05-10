@@ -193,10 +193,10 @@ private struct CashflowContentView: View {
     @State private var historyInitialEndDate: Date? = nil
     private let currentRoute: AppRoute = .cashflow
     
-    private let neonCyan = Color(hex: "47D7FF")
-    private let neonViolet = Color(hex: "8A6BFF")
-    private let neonPositive = Color(hex: "6DFFC7")
-    private let neonNegative = Color(hex: "FF6666")
+    private let neonCyan = Color(hex: "35B8DC")
+    private let neonViolet = Color(hex: "7460E0")
+    private let neonPositive = Color(hex: "4ECFA0")
+    private let neonNegative = Color(hex: "D45050")
     private let primarySecondaryText = Color.white.opacity(0.78)
     private let panelFill = Color.white.opacity(0.035)
     private let innerGlassFill = Color.white.opacity(0.018)
@@ -207,7 +207,6 @@ private struct CashflowContentView: View {
 
     private enum TopToolbarAction: CaseIterable {
         case currency
-        case history
     }
     
     var body: some View {
@@ -222,20 +221,9 @@ private struct CashflowContentView: View {
                     // Сводка активов за период
                     assetBreakdownSection
 
-                    if let warning = viewModel.state.currencyConversionWarning {
-                        currencyWarningView(
-                            text: warning,
-                            isRefreshing: viewModel.state.isRefreshingExchangeRates,
-                            onDismissTapped: {
-                                viewModel.handle(.dismissCurrencyConversionWarning)
-                            }
-                        ) {
-                            viewModel.handle(.refreshExchangeRates)
-                        }
-                    }
                 }
                 .padding(.horizontal, 12)
-                .padding(.top, 8)
+                .padding(.top, 2)
                 .padding(.bottom, 20)
             }
         }
@@ -243,6 +231,7 @@ private struct CashflowContentView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .interactiveBackSwipe()
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar { topToolbar }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showTransactionEditor },
@@ -606,111 +595,31 @@ private struct CashflowContentView: View {
         .padding(.vertical, 2)
     }
 
-    private func currencyWarningView(
-        text: String,
-        isRefreshing: Bool,
-        onDismissTapped: @escaping () -> Void,
-        onRefreshTapped: @escaping () -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppColors.warning)
-
-                Text(text)
-                    .font(.system(size: 12))
-                    .foregroundStyle(primarySecondaryText)
-                    .lineLimit(3)
-
-                Spacer(minLength: 8)
-
-                Button(action: onDismissTapped) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(primarySecondaryText.opacity(0.85))
-                        .padding(6)
-                        .background(
-                            Circle()
-                                .fill(Color.white.opacity(0.06))
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(String(localized: "cashflow.common.close")))
-            }
-
-            Button(action: onRefreshTapped) {
-                HStack(spacing: 6) {
-                    if isRefreshing {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(AppColors.warning)
-                    }
-                    Text(isRefreshing ? "converter.settings.refreshing_rates" : "converter.settings.refresh_rates")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppColors.warning)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(AppColors.warning.opacity(0.12))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(AppColors.warning.opacity(0.35), lineWidth: 1)
-                        )
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(isRefreshing)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
-                .fill(AppColors.warning.opacity(0.10))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
-                .stroke(AppColors.warning.opacity(0.45), lineWidth: 1)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(text))
-    }
-
     // MARK: - Period Selection Section
 
     private var periodSelectionHeader: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Spacer(minLength: 0)
-
-                Button {
-                    draftStartDate = viewModel.state.customStartDate
-                    draftEndDate = viewModel.state.customEndDate
-                    viewModel.handle(.showPeriodSelector)
-                    fireLightImpact()
-                } label: {
-                    Image("calendar")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 16, height: 16)
-                        .padding(8)
-                        .background(periodControlBackground)
-                }
-                .buttonStyle(.plain)
-
-                Spacer(minLength: 0)
-            }
-
-            let range = viewModel.currentDateRange()
+        let range = viewModel.currentDateRange()
+        return HStack(spacing: 8) {
             Text(String(format: String(localized: "cashflow.period.range_format"), formatPeriod(range.0), formatPeriod(range.1)))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(primarySecondaryText)
                 .contentTransition(.opacity)
                 .frame(maxWidth: .infinity, alignment: .center)
+
+            Button {
+                draftStartDate = viewModel.state.customStartDate
+                draftEndDate = viewModel.state.customEndDate
+                viewModel.handle(.showPeriodSelector)
+                fireLightImpact()
+            } label: {
+                Image("calendar")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
+                    .padding(8)
+                    .background(periodControlBackground)
+            }
+            .buttonStyle(.plain)
         }
         .animation(.easeInOut(duration: 0.2), value: viewModel.state.customStartDate)
     }
@@ -757,23 +666,6 @@ private struct CashflowContentView: View {
                 .padding(.horizontal, 10)
                 .frame(height: 40)
             }
-        }
-
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                selectedTopAction = .history
-                openHistory(
-                    filter: .all,
-                    dateRange: currentCalendarMonthHistoryRange
-                )
-            } label: {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(selectedTopAction == .history ? Color.white.opacity(0.96) : primarySecondaryText)
-                    .frame(width: 42, height: 38)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text(String(localized: "cashflow.accessibility.transaction_history")))
         }
 
         ToolbarItem(placement: .topBarTrailing) {
@@ -910,7 +802,8 @@ private struct CashflowContentView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 14)
         .background(financeCardBackground(cornerRadius: panelCornerRadius))
     }
 
@@ -947,10 +840,10 @@ private struct CashflowContentView: View {
                 presentation: presentation,
                 granularity: granularity,
                 chartHeight: CashflowInsightsControlsStyle.compactBarsHeight,
-                maxBarHeight: 110,
-                minimumGroupWidth: 56,
-                barWidth: 26,
-                labelFontSize: 14,
+                maxBarHeight: 120,
+                minimumGroupWidth: 50,
+                barWidth: 32,
+                labelFontSize: 13,
                 visibleWindowPeriods: compactChartVisiblePeriods,
                 onBarTap: handleChartBarTap
             )
@@ -1066,7 +959,8 @@ private struct CashflowContentView: View {
         let presentation = cashflowFullScreenPresentation
         let net = presentation.incomeCard.amount - presentation.expenseCard.amount
 
-        return VStack(spacing: 6) {
+        let netColor = positiveColor(for: net)
+        return VStack(spacing: 4) {
             Text(
                 String(
                     format: String(localized: "cashflow.period.range_format"),
@@ -1074,30 +968,32 @@ private struct CashflowContentView: View {
                     formatPeriod(range.1)
                 )
             )
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(primarySecondaryText)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(primarySecondaryText.opacity(0.70))
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .contentTransition(.opacity)
 
-            Text(String(localized: "cashflow.stats.result"))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(primarySecondaryText.opacity(0.85))
-
             Text(chartSignedAmountText(net))
-                .font(.system(size: 30, weight: .heavy))
-                .foregroundStyle(positiveColor(for: net))
+                .font(.system(size: 36, weight: .heavy))
+                .foregroundStyle(netColor)
                 .lineLimit(1)
-                .minimumScaleFactor(0.65)
+                .minimumScaleFactor(0.60)
                 .contentTransition(.numericText())
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
+                .padding(.top, 2)
+
+            Text(String(localized: "cashflow.stats.result"))
+                .font(.system(size: 11, weight: .medium))
+                .tracking(0.5)
+                .foregroundStyle(netColor.opacity(0.65))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(positiveColor(for: net).opacity(0.12))
+                        .fill(netColor.opacity(0.10))
                         .overlay(
                             Capsule(style: .continuous)
-                                .stroke(positiveColor(for: net).opacity(0.45), lineWidth: 1)
+                                .stroke(netColor.opacity(0.30), lineWidth: 0.7)
                         )
                 )
         }
@@ -1293,48 +1189,67 @@ private struct CashflowContentView: View {
         onTap: (() -> Void)? = nil
     ) -> some View {
         let content = VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Circle()
                     .fill(accent)
-                    .frame(width: 12, height: 12)
+                    .frame(width: 8, height: 8)
+                    .shadow(color: accent.opacity(0.3), radius: 3, x: 0, y: 0)
 
                 Text(model.title)
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(primarySecondaryText)
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(primarySecondaryText.opacity(0.65))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(primarySecondaryText.opacity(0.50))
             }
 
             Text(chartAmountText(model.amount))
-                .font(.system(size: 31, weight: .bold))
+                .font(.system(size: 34, weight: .bold))
                 .foregroundStyle(AppColors.textPrimary)
-                .padding(.top, 18)
+                .padding(.top, 14)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.70)
                 .contentTransition(.numericText())
 
             if showsComparisonAndDelta {
-                Spacer(minLength: 18)
+                Spacer(minLength: 14)
 
                 Text(model.comparisonText)
-                    .font(.system(size: 20, weight: .regular))
-                    .foregroundStyle(primarySecondaryText)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(primarySecondaryText.opacity(0.75))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(chartSignedAmountText(model.delta))
-                    .font(.system(size: 25, weight: .bold))
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(chartDeltaColor(for: model.deltaTone))
-                    .padding(.top, 10)
+                    .padding(.top, 6)
                     .contentTransition(.numericText())
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 16)
-        .frame(maxWidth: .infinity, minHeight: showsComparisonAndDelta ? 220 : 150, alignment: .topLeading)
-        .background(financeInnerBackground(cornerRadius: 28))
+        .padding(.top, 14)
+        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, minHeight: showsComparisonAndDelta ? 200 : 130, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .overlay(alignment: .top) {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [accent.opacity(0.18), .clear],
+                                startPoint: .top, endPoint: .center
+                            )
+                        )
+                        .frame(height: 60)
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .stroke(accent.opacity(0.15), lineWidth: 1)
+                )
+        )
         if let onTap {
             Button {
                 onTap()
@@ -1372,7 +1287,7 @@ private struct CashflowContentView: View {
 
             ScrollViewReader { reader in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .bottom, spacing: 8) {
+                    HStack(alignment: .center, spacing: 8) {
                         ForEach(presentation.bars) { bar in
                             cashflowInsightsBarGroup(
                                 bar: bar,
@@ -1388,6 +1303,7 @@ private struct CashflowContentView: View {
                         }
                     }
                 }
+                .scrollClipDisabled()
                 .onAppear {
                     scrollChartToLatestPeriod(reader: reader, bars: presentation.bars)
                 }
@@ -1397,6 +1313,7 @@ private struct CashflowContentView: View {
             }
             .frame(maxHeight: .infinity, alignment: .bottomLeading)
             .padding(.horizontal, 2)
+            .padding(.top, 6)
         }
         .frame(height: chartHeight)
     }
@@ -1418,7 +1335,7 @@ private struct CashflowContentView: View {
 
             ScrollViewReader { reader in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .bottom, spacing: metrics.spacing) {
+                    HStack(alignment: .center, spacing: metrics.spacing) {
                         ForEach(presentation.bars) { bar in
                             cashflowInsightsBarGroup(
                                 bar: bar,
@@ -1434,6 +1351,7 @@ private struct CashflowContentView: View {
                         }
                     }
                 }
+                .scrollClipDisabled()
                 .onAppear {
                     scrollChartToLatestPeriod(reader: reader, bars: presentation.bars)
                 }
@@ -1463,12 +1381,9 @@ private struct CashflowContentView: View {
     ) -> some View {
         let comparisonGranularity: Calendar.Component = {
             switch granularity {
-            case .year:
-                return .year
-            case .month:
-                return .month
-            case .week:
-                return .weekOfYear
+            case .year: return .year
+            case .month: return .month
+            case .week: return .weekOfYear
             }
         }()
         let isSelected = Calendar.current.isDate(
@@ -1476,118 +1391,141 @@ private struct CashflowContentView: View {
             equalTo: selectedPeriodStart,
             toGranularity: comparisonGranularity
         )
+        let halfHeight = maxBarHeight / 2
+        let incomeHeight = CashflowInsightsChartStyle.visibleBarHeight(
+            value: bar.income, maxValue: maxValue, maxBarHeight: halfHeight, isSelected: isSelected
+        )
+        let expenseHeight = CashflowInsightsChartStyle.visibleBarHeight(
+            value: bar.expense, maxValue: maxValue, maxBarHeight: halfHeight, isSelected: isSelected
+        )
+        let netGlow = bar.income >= bar.expense ? neonPositive : neonNegative
 
-        let content = VStack(spacing: 12) {
-            Spacer(minLength: 0)
+        let content = VStack(spacing: 0) {
+            // ── Доходы — растут вверх от нулевой линии ──────────────
+            ZStack(alignment: .bottom) {
+                Color.clear.frame(height: halfHeight)
+                if incomeHeight > 0 {
+                    biChartBar(
+                        height: incomeHeight,
+                        width: barWidth,
+                        fill: LinearGradient(
+                            colors: [Color(hex: "4ECFA0"), Color(hex: "1E8A62"), Color(hex: "091A12")],
+                            startPoint: .top, endPoint: .bottom
+                        ),
+                        glowColor: neonPositive,
+                        isSelected: isSelected,
+                        shineAtTop: true
+                    )
+                }
+            }
 
-            HStack(alignment: .bottom, spacing: 8) {
-                chartColumn(
-                    value: bar.expense,
-                    maxValue: maxValue,
-                    maxBarHeight: maxBarHeight,
-                    barWidth: barWidth,
-                    isSelected: isSelected,
-                    trackTint: neonNegative,
-                    glowColor: neonNegative,
-                    fill: LinearGradient(
-                        colors: [
-                            Color(hex: "FF7A7A"),
-                            Color(hex: "FF6666"),
-                            Color(hex: "4A1414")
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
+            // ── Нулевая линия ─────────────────────────────────────────
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [.clear, Color.white.opacity(isSelected ? 0.22 : 0.10), .clear],
+                        startPoint: .leading, endPoint: .trailing
                     )
                 )
+                .frame(height: 1.5)
 
-                chartColumn(
-                    value: bar.income,
-                    maxValue: maxValue,
-                    maxBarHeight: maxBarHeight,
-                    barWidth: barWidth,
-                    isSelected: isSelected,
-                    trackTint: neonPositive,
-                    glowColor: neonPositive,
-                    fill: LinearGradient(
+            // ── Расходы — растут вниз от нулевой линии ───────────────
+            ZStack(alignment: .top) {
+                Color.clear.frame(height: halfHeight)
+                if expenseHeight > 0 {
+                    biChartBar(
+                        height: expenseHeight,
+                        width: barWidth,
+                        fill: LinearGradient(
+                            colors: [Color(hex: "3B1212"), Color(hex: "C44444"), Color(hex: "C45858")],
+                            startPoint: .top, endPoint: .bottom
+                        ),
+                        glowColor: neonNegative,
+                        isSelected: isSelected,
+                        shineAtTop: false
+                    )
+                }
+            }
+
+            // ── Лейбл периода ─────────────────────────────────────────
+            Text(bar.label)
+                .font(.system(size: labelFontSize, weight: .medium))
+                .foregroundStyle(AppColors.textPrimary.opacity(bar.isPlaceholder ? 0.50 : 0.92))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(Color.white.opacity(isSelected ? 0.15 : 0.0))
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
+                .padding(.bottom, 10)
+        }
+        .frame(width: groupWidth)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(
+                    LinearGradient(
                         colors: [
-                            Color(hex: "7BFFD0"),
-                            Color(hex: "30D6A8"),
-                            Color(hex: "0B3A2A")
+                            Color.white.opacity(isSelected ? 0.11 : (bar.isPlaceholder ? 0.06 : 0.025)),
+                            Color.white.opacity(isSelected ? 0.04 : 0.0)
                         ],
-                        startPoint: .top,
-                        endPoint: .bottom
+                        startPoint: .top, endPoint: .bottom
                     )
                 )
-            }
-                .padding(.horizontal, 10)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(isSelected ? 0.15 : 0.05), lineWidth: 1)
+                )
+        )
+        .shadow(color: netGlow.opacity(isSelected ? 0.15 : 0.0), radius: isSelected ? 24 : 0, x: 0, y: 0)
+        .offset(y: isSelected ? -3 : 0)
+        .animation(.spring(response: 0.26, dampingFraction: 0.82), value: isSelected)
 
-                Text(bar.label)
-                    .font(.system(size: labelFontSize, weight: .medium))
-                    .foregroundStyle(AppColors.textPrimary.opacity(bar.isPlaceholder ? 0.78 : 0.94))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(Color.white.opacity(isSelected ? 0.14 : 0.0))
-                    )
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, 12)
-            }
-            .frame(width: groupWidth)
-            .frame(maxHeight: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(isSelected ? 0.13 : (bar.isPlaceholder ? 0.07 : 0.03)),
-                                Color.white.opacity(isSelected ? 0.06 : (bar.isPlaceholder ? 0.03 : 0.0))
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .overlay(alignment: .top) {
-                        RoundedRectangle(cornerRadius: 30, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(isSelected ? 0.08 : 0.03),
-                                        .clear
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .frame(height: max(68, maxBarHeight * 0.3))
-                    }
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 30, style: .continuous)
-                            .stroke(Color.white.opacity(isSelected ? 0.12 : 0.04), lineWidth: 1)
-                    )
-            )
-            .shadow(
-                color: Color.white.opacity(isSelected ? 0.06 : 0.0),
-                radius: isSelected ? 18 : 0,
-                x: 0,
-                y: 10
-            )
-            .offset(y: isSelected ? -2 : 0)
         if let onTap {
-            Button {
-                onTap()
-                fireLightImpact()
-            } label: {
-                content
-            }
-            .buttonStyle(.plain)
+            Button { onTap(); fireLightImpact() } label: { content }
+                .buttonStyle(.plain)
         } else {
             content
         }
+    }
+
+    private func biChartBar(
+        height: CGFloat,
+        width: CGFloat,
+        fill: LinearGradient,
+        glowColor: Color,
+        isSelected: Bool,
+        shineAtTop: Bool
+    ) -> some View {
+        let cornerRadius = min(14, width / 2)
+        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(fill)
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.20), .clear, Color.black.opacity(0.06)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .overlay(alignment: shineAtTop ? .top : .bottom) {
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(isSelected ? 0.26 : 0.0))
+                    .frame(width: width * 0.62, height: 5)
+                    .blur(radius: 2.5)
+                    .padding(shineAtTop ? .top : .bottom, 5)
+            }
+            .frame(width: width, height: height)
+            .shadow(
+                color: glowColor.opacity(isSelected ? 0.32 : 0.0),
+                radius: isSelected ? 12 : 0,
+                x: 0,
+                y: shineAtTop ? -3 : 3
+            )
     }
 
     private func handleChartBarTap(_ bar: CashflowInsightsBar) {
@@ -1607,95 +1545,6 @@ private struct CashflowContentView: View {
         }
     }
 
-    private func chartColumn(
-        value: Double,
-        maxValue: Double,
-        maxBarHeight: CGFloat,
-        barWidth: CGFloat,
-        isSelected: Bool,
-        trackTint: Color,
-        glowColor: Color,
-        fill: LinearGradient
-    ) -> some View {
-        ZStack(alignment: .bottom) {
-            Capsule(style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            trackTint.opacity(isSelected ? 0.18 : 0.10),
-                            Color.white.opacity(isSelected ? 0.04 : 0.02)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay(
-                    Capsule(style: .continuous)
-                        .stroke(Color.white.opacity(isSelected ? 0.10 : 0.04), lineWidth: 0.8)
-                )
-
-            chartBar(
-                value: value,
-                maxValue: maxValue,
-                maxBarHeight: maxBarHeight,
-                barWidth: barWidth,
-                fill: fill,
-                glowColor: glowColor,
-                isSelected: isSelected
-            )
-        }
-        .frame(width: barWidth, height: maxBarHeight)
-    }
-
-    private func chartBar(
-        value: Double,
-        maxValue: Double,
-        maxBarHeight: CGFloat,
-        barWidth: CGFloat,
-        fill: LinearGradient,
-        glowColor: Color,
-        isSelected: Bool
-    ) -> some View {
-        let visibleHeight = CashflowInsightsChartStyle.visibleBarHeight(
-            value: value,
-            maxValue: maxValue,
-            maxBarHeight: maxBarHeight,
-            isSelected: isSelected
-        )
-        let cornerRadius = min(16, barWidth / 2)
-
-        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(fill)
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.28),
-                                .clear,
-                                Color.black.opacity(0.08)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            .overlay(alignment: .top) {
-                Capsule(style: .continuous)
-                    .fill(Color.white.opacity(isSelected ? 0.28 : 0.20))
-                    .frame(width: barWidth * 0.72, height: 6)
-                    .blur(radius: 3)
-                    .padding(.top, 6)
-            }
-            .frame(width: barWidth, height: visibleHeight)
-            .shadow(
-                color: glowColor.opacity(isSelected ? 0.30 : 0.18),
-                radius: isSelected ? 16 : 9,
-                x: 0,
-                y: 6
-            )
-            .opacity(visibleHeight > 0 ? 1 : 0)
-    }
 
     private func visibleRangeChip(_ value: Int) -> some View {
         let isSelected = fullScreenChartVisiblePeriods == value

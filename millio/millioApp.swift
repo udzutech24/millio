@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import SQLite3
 import FirebaseCore
 import OSLog
 
@@ -629,8 +630,18 @@ struct millioApp: App {
     private static let autoRestoreAttemptsKey = "autoRestoreAttemptCount"
 
     private static func exportedModelCount(in container: ModelContainer) -> Int? {
+        // Первичный путь: прямое чтение SQLite — обходит timing issue SwiftData, где
+        // ModelContext возвращает 0 из только что открытого контейнера до того как SwiftUI
+        // его инициализирует через .modelContainer(). SQLite WAL-режим безопасен для
+        // параллельного чтения, пока ModelContainer держит тот же файл открытым.
+        if let url = container.configurations.first?.url,
+           let count = sqliteUserDataCount(at: url) {
+            return count
+        }
+        // Fallback: путь через ModelContext (корректен после инициализации SwiftUI-окружения)
+        let freshContext = ModelContext(container)
         let repository = DataRepository(
-            modelContext: container.mainContext,
+            modelContext: freshContext,
             modelContainer: container
         )
         guard
@@ -643,6 +654,40 @@ struct millioApp: App {
         }
         return models.count
     }
+
+    /// Прямой подсчёт строк в SQLite-сторе, минуя SwiftData.
+    /// Считает все строки в пользовательских таблицах (Z-префикс, не системные Z_METADATA и т.п.).
+    private static func sqliteUserDataCount(at url: URL) -> Int? {
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nil) == SQLITE_OK else {
+            return nil
+        }
+        defer { sqlite3_close(db) }
+
+        var tableNames: [String] = []
+        var listStmt: OpaquePointer?
+        // Пользовательские таблицы: Z-префикс, исключая системные Z_PRIMARYKEY / Z_METADATA / Z_MODELCACHE
+        let listSQL = "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Z%' AND name NOT LIKE 'Z\\_%' ESCAPE '\\'"
+        if sqlite3_prepare_v2(db, listSQL, -1, &listStmt, nil) == SQLITE_OK {
+            while sqlite3_step(listStmt) == SQLITE_ROW, let ptr = sqlite3_column_text(listStmt, 0) {
+                tableNames.append(String(cString: ptr))
+            }
+        }
+        sqlite3_finalize(listStmt)
+
+        var total = 0
+        for tableName in tableNames {
+            var countStmt: OpaquePointer?
+            let countSQL = "SELECT COUNT(*) FROM \"\(tableName)\""
+            if sqlite3_prepare_v2(db, countSQL, -1, &countStmt, nil) == SQLITE_OK,
+               sqlite3_step(countStmt) == SQLITE_ROW {
+                total += Int(sqlite3_column_int(countStmt, 0))
+            }
+            sqlite3_finalize(countStmt)
+        }
+
+        return total
+    }
     
     private func triggerBackgroundBackup() {
         guard appState.isBackupEnabled,
@@ -650,9 +695,10 @@ struct millioApp: App {
               let diContainer = diContainer else { return }
         guard !appState.isRestoreInProgress else { return }
 
-        // Не бекапим достоверно пустой стор — иначе перезапишем актуальный бекап нулевыми данными.
-        // nil (ошибка fetch) → состояние неизвестно → бекапим (лучше лишний бекап, чем пропустить).
-        if let container = activeModelContainer, Self.exportedModelCount(in: container) == 0 { return }
+        // Не бекапим пустой или неизвестный стор — неизвестное состояние (nil) опаснее пропущенного бэкапа.
+        guard let container = activeModelContainer,
+              let count = Self.exportedModelCount(in: container),
+              count > 0 else { return }
 
         Task {
             let policy = AutoBackupPolicy.everySixHours
@@ -677,6 +723,11 @@ struct millioApp: App {
         guard let localDataCount = Self.exportedModelCount(in: activeModelContainer) else {
             AppLogger.log(.warning, category: "App", "LaunchRecovery: count uncertain, skipping restore")
             return
+        }
+        // Если данные есть — счётчик авто-восстановления сбрасываем, чтобы не застревать
+        // в ручном restore после двух неудачных попыток (например, при passphrase-бэкапе).
+        if localDataCount > 0 {
+            UserDefaults.standard.set(0, forKey: Self.autoRestoreAttemptsKey)
         }
         let latestBackupInfo = await diContainer.backupManager.lastBackupInfo()
         let input = LaunchRecoveryPolicy.Input(
@@ -708,17 +759,15 @@ struct millioApp: App {
             Task {
                 defer { Task { @MainActor in appState.isRestoreInProgress = false } }
                 do {
+                    // TODO(temp): заменить size-guard на preflight.modelCount > 0 когда появится preflightLatestBackup()
                     let versions = await diContainer.backupManager.listBackupVersions()
-                    guard let latestVersion = versions.first else {
-                        AppLogger.log(.warning, category: "App", "Auto-restore: версии не найдены, переходим к ручному restore")
+                    guard let latestVersion = versions.first, latestVersion.size >= 1024 else {
+                        AppLogger.log(.warning, category: "App", "Auto-restore: нет валидных версий (пусто или < 1KB), переходим к ручному restore")
                         await MainActor.run { appState.lifecycle = .restoring }
                         return
                     }
                     try await withTaskTimeout(seconds: Self.autoRestoreTimeoutSeconds) {
-                        try await diContainer.backupManager.restoreVersion(
-                            recordName: latestVersion.recordName,
-                            passphrase: nil
-                        )
+                        try await diContainer.backupManager.restoreLatest(passphrase: nil)
                     }
                     UserDefaults.standard.set(0, forKey: Self.autoRestoreAttemptsKey)
                     AppLogger.log(.info, category: "App", "Auto-restore completed successfully")

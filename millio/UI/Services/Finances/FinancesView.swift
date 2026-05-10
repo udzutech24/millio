@@ -797,22 +797,6 @@ struct FinancesMainTabView: View {
             }
             .buttonStyle(.plain)
 
-            if !isEmptyIntroHidden {
-                Button {
-                    if let onNavigateToDynamics {
-                        onNavigateToDynamics()
-                    } else {
-                        selectedTab = .dynamics
-                    }
-                } label: {
-                    Text(financesLocalized("finances.main.empty_intro.open_dynamics"))
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 32)
-                }
-                .buttonStyle(.plain)
-            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 22)

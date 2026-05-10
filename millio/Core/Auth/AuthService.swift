@@ -862,6 +862,7 @@ actor AuthService: AuthServiceProtocol {
     private let diagnosticsContext: AuthDiagnosticsContext
     private var signInBackoffState = AuthRateLimitBackoffState()
     private var refreshBackoffState = AuthRateLimitBackoffState()
+    private var activeRefreshTask: Task<String, Error>?
 
     init(
         apiClient: any AuthAPIClientProtocol,
@@ -997,6 +998,26 @@ actor AuthService: AuthServiceProtocol {
     }
 
     private func refreshAccessToken() async throws -> String {
+        // Coalesce concurrent refresh calls — only one in-flight at a time.
+        // Assigning activeRefreshTask before any `await` keeps this atomic within the actor.
+        if let task = activeRefreshTask {
+            return try await task.value
+        }
+        let task = Task<String, Error> { [self] in
+            try await self.performRefresh()
+        }
+        activeRefreshTask = task
+        do {
+            let token = try await task.value
+            activeRefreshTask = nil
+            return token
+        } catch {
+            activeRefreshTask = nil
+            throw error
+        }
+    }
+
+    private func performRefresh() async throws -> String {
         guard let refreshToken = try await tokenStore.refreshToken() else {
             throw AuthServiceError.notAuthenticated
         }

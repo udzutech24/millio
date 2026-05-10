@@ -12,23 +12,7 @@ import SwiftUI
 import SwiftData
 import Charts
 
-struct FinanceDynamicsEstimatedRateWarningPrefs {
-    static let hiddenKey = "finance_dynamics_estimated_rate_warning_hidden"
 
-    private let defaults: UserDefaults
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-    }
-
-    func isHidden() -> Bool {
-        defaults.bool(forKey: Self.hiddenKey)
-    }
-
-    func setHidden(_ hidden: Bool) {
-        defaults.set(hidden, forKey: Self.hiddenKey)
-    }
-}
 
 enum FinanceDynamicsTopBarStyle {
     static let passiveIconColor = Color.white.opacity(0.9)
@@ -216,7 +200,6 @@ private struct FinanceDynamicsContentView: View {
     @State private var inlineAmountText: String = ""
     @State private var inlineCreditLimitText: String = ""
     @State private var inlineCreditDebtText: String = ""
-    @State private var isEstimatedRateWarningHidden: Bool = FinanceDynamicsEstimatedRateWarningPrefs().isHidden()
     @State private var showOverviewExpandedChart: Bool = false
     @State private var selectedOverviewGranularity: FinanceOverviewGranularity = .month
     @State private var selectedOverviewPeriods: [FinanceOverviewGranularity: Date] = [:]
@@ -491,12 +474,6 @@ private struct FinanceDynamicsContentView: View {
 
                 chartCard
 
-                if let warning = viewModel.state.currencyConversionWarning, !isEstimatedRateWarningHidden {
-                    currencyWarningView(text: warning) {
-                        isEstimatedRateWarningHidden = true
-                        FinanceDynamicsEstimatedRateWarningPrefs().setHidden(true)
-                    }
-                }
 
                 // Полоса параметров вклада (Phase 5)
                 if let deposit = depositInvestment {
@@ -1855,6 +1832,16 @@ private struct FinanceDynamicsContentView: View {
                 } else if viewModel.state.chartData.isEmpty {
                     emptyChartView
                         .frame(height: max(0, currentHeight - 64))
+                } else if viewModel.state.selectedChartType == .distribution && !viewModel.state.isSingleAccountMode {
+                    DistributionChartView(
+                        items: viewModel.state.dynamicsBreakdown,
+                        currency: viewModel.state.displayCurrency,
+                        isAmountHidden: isAmountHidden
+                    )
+                    .frame(height: max(0, currentHeight - 64))
+                    .padding(.top, 8)
+                    .animation(.easeInOut(duration: 0.25), value: viewModel.state.period)
+                    .animation(.easeInOut(duration: 0.25), value: viewModel.state.displayCurrency)
                 } else {
                     chartContent
                         .frame(height: max(0, currentHeight - 64))
@@ -2734,6 +2721,11 @@ private struct FinanceDynamicsContentView: View {
                 .frame(width: 48, height: 32)
             }
 
+            // Переключатель типа графика (только в агрегированном режиме)
+            if !viewModel.state.isSingleAccountMode {
+                chartTypeToggle
+            }
+
             Spacer(minLength: 4)
 
             // Кнопка календаря
@@ -2768,6 +2760,48 @@ private struct FinanceDynamicsContentView: View {
         .frame(maxWidth: .infinity)
 //        .padding(.horizontal, 12)
         .padding(.vertical, 6)
+    }
+
+    // MARK: - Chart Type Toggle
+
+    private var chartTypeToggle: some View {
+        let selectedFill = Color.white.opacity(0.10)
+        let quietFill = Color.white.opacity(0.05)
+        let isLine = viewModel.state.selectedChartType == .line
+        return HStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    viewModel.handle(.setChartViewType(.line))
+                }
+            } label: {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 32, height: 32)
+                    .foregroundStyle(isLine ? AppColors.textPrimary : AppColors.textSecondary)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    viewModel.handle(.setChartViewType(.distribution))
+                }
+            } label: {
+                Image(systemName: "chart.pie")
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 32, height: 32)
+                    .foregroundStyle(!isLine ? AppColors.textPrimary : AppColors.textSecondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .background(
+            Capsule()
+                .fill(quietFill)
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                )
+        )
+        .frame(height: 32)
     }
 
     // MARK: - Custom Period Sheet
@@ -3243,35 +3277,6 @@ private struct FinanceDynamicsContentView: View {
         }
     }
 
-    private func currencyWarningView(text: String, onClose: @escaping () -> Void) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 14))
-                .foregroundStyle(AppColors.textSecondary)
-            Text(text)
-                .font(.system(size: 13))
-                .foregroundStyle(AppColors.textSecondary)
-                .multilineTextAlignment(.leading)
-            Spacer(minLength: 0)
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .frame(width: 18, height: 18)
-                    .background(Color.white.opacity(0.08))
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "finances.dynamics.currency.hint.dismiss_accessibility"))
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.05))
-        )
-        .padding(.horizontal, 16)
-    }
 }
 
 private struct SwipeConfirmButton: View {

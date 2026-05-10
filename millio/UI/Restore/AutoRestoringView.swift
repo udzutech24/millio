@@ -12,7 +12,7 @@ struct AutoRestoringView: View {
 
     var body: some View {
         ZStack {
-            AppColors.background.ignoresSafeArea()
+            AppColors.backgroundTop.ignoresSafeArea()
 
             VStack(spacing: 24) {
                 ProgressView()

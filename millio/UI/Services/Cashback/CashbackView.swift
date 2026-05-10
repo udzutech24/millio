@@ -75,6 +75,7 @@ struct CashbackView: View {
             }
         }
         .onAppear {
+            InputDismissalSupport.dismissActiveResponder()
             if viewModel == nil {
                 viewModel = CashbackViewModel(modelContext: modelContext)
             }

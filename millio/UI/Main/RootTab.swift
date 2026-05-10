@@ -15,4 +15,5 @@ enum RootTab: String, CaseIterable {
 enum FABAction {
     case income
     case expense
+    case transfer
 }

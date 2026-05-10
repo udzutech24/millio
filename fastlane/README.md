@@ -23,6 +23,14 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 Build and upload the app to TestFlight
 
+### ios distribute
+
+```sh
+[bundle exec] fastlane ios distribute
+```
+
+Distribute already-uploaded build to internal testers (millio group)
+
 ----
 
 This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.

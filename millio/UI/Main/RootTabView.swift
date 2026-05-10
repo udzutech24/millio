@@ -30,9 +30,13 @@ struct RootTabView: View {
     @State private var financeViewModel: FinanceViewModel?
     @State private var cashflowViewModel: CashflowViewModel?
 
-    // FAB sheets
+    // FAB menu
+    @State private var showFABMenu = false
+
+    // FAB / quick-action sheets
     @State private var showIncomeSheet = false
     @State private var showExpenseSheet = false
+    @State private var showTransferSheet = false
 
     // Profile
     @State private var showProfileSheet = false
@@ -40,16 +44,41 @@ struct RootTabView: View {
     // Internal finances tab state (для обратной совместимости с FinancesContentViewInternal)
     @State private var financesInternalTab: FinancesInternalTab = .main
 
+    private var isNavigatedDeep: Bool {
+        switch router.selectedTab {
+        case .dashboard: !dashboardPath.isEmpty
+        case .finances:  !financesPath.isEmpty
+        case .dynamics:  !dynamicsPath.isEmpty
+        case .cashflow:  !cashflowPath.isEmpty
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             // Контент таба
             tabContent
 
-            // Кастомный таб бар
-            RootTabBar(selectedTab: $router.selectedTab) { fabAction in
-                handleFABAction(fabAction)
+            // Tap-to-dismiss FAB menu при нажатии вне
+            if showFABMenu {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.80)) {
+                            showFABMenu = false
+                        }
+                    }
+            }
+
+            // Кастомный таб бар — скрываем при push-навигации вглубь
+            if !isNavigatedDeep {
+                RootTabBar(selectedTab: $router.selectedTab, showFABMenu: $showFABMenu) { fabAction in
+                    handleFABAction(fabAction)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: isNavigatedDeep)
         .ignoresSafeArea(edges: .bottom)
         .onAppear {
             ensureViewModels()
@@ -77,11 +106,22 @@ struct RootTabView: View {
                 CashflowExpenseTransactionSheet(viewModel: vm)
             }
         }
+        .sheet(isPresented: $showTransferSheet) {
+            if let vm = cashflowViewModel {
+                CashflowTransferTransactionSheet(viewModel: vm)
+            }
+        }
         .sheet(isPresented: $showProfileSheet) {
             NavigationStack {
                 ProfileView(router: router)
                     .environment(appState)
             }
+        }
+        .sheet(isPresented: $router.showingSubscription) {
+            NavigationStack {
+                SubscriptionView()
+            }
+            .environment(appState)
         }
     }
 
@@ -115,11 +155,53 @@ struct RootTabView: View {
         NavigationStack(path: $dashboardPath) {
             DashboardView(
                 onOpenConverter: { dashboardPath.append(FinancesStackRoute.courses) },
-                onOpenCashback: { dashboardPath.append(FinancesStackRoute.cashback) }
+                onOpenCashback: { dashboardPath.append(FinancesStackRoute.cashback) },
+                onAddIncome: {
+                    ensureCashflowViewModel()
+                    showIncomeSheet = true
+                },
+                onAddExpense: {
+                    ensureCashflowViewModel()
+                    showExpenseSheet = true
+                },
+                onAddTransfer: {
+                    ensureCashflowViewModel()
+                    showTransferSheet = true
+                },
+                onOpenFinances: { router.selectedTab = .finances },
+                onOpenDynamics: { router.selectedTab = .dynamics },
+                onOpenCashflow: { router.selectedTab = .cashflow },
+                totalBalance: financeViewModel?.state.totalAmount ?? 0,
+                displayCurrency: financeViewModel?.state.displayCurrency ?? appState.primaryCurrencyCode,
+                sparklinePoints: financeViewModel?.state.dashboardSparkline ?? [],
+                weekDelta: financeViewModel?.state.dashboardWeekDelta ?? (0.0, 0.0),
+                sparklineDaysCount: financeViewModel?.state.dashboardSparklineDaysCount ?? 7,
+                cashflowTotal: {
+                    let s = cashflowViewModel?.state
+                    return (s?.totalIncome ?? 0) + (s?.assetValueChange ?? 0) - (s?.contributedExpense ?? 0)
+                }(),
+                cashflowIncome: cashflowViewModel?.state.totalIncome ?? 0,
+                cashflowExpense: cashflowViewModel?.state.contributedExpense ?? 0,
+                cashflowAssetChange: cashflowViewModel?.state.assetValueChange ?? 0,
+                cashflowCurrency: cashflowViewModel?.state.displayCurrency ?? appState.primaryCurrencyCode,
+                cashflowPeriodLabel: cashflowViewModel?.state.chartPeriod.displayName ?? "Месяц"
             )
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        ensureCashflowViewModel()
+                        appState.pendingOpenCashflowHistory = true
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(Color.white.opacity(0.75))
+                            .frame(width: 38, height: 38)
+                    }
+                    .buttonStyle(.plain)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
                     profileButton
                 }
             }
@@ -161,9 +243,6 @@ struct RootTabView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    profileButton
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     financeSettingsButton
                 }
@@ -310,12 +389,17 @@ struct RootTabView: View {
     // MARK: - FAB Handler
 
     private func handleFABAction(_ action: FABAction) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.80)) {
+            showFABMenu = false
+        }
         ensureCashflowViewModel()
         switch action {
         case .income:
             showIncomeSheet = true
         case .expense:
             showExpenseSheet = true
+        case .transfer:
+            showTransferSheet = true
         }
     }
 

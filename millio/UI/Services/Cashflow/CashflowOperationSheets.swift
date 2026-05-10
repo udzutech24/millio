@@ -354,6 +354,13 @@ struct CashflowCategoryTransactionSheet: View {
                     selectedMonth: selectedMonth,
                     onSave: {
                         reloadMonthlyTotal(focusingOn: option.rawValue)
+                    },
+                    onOpenFullEditor: { category in
+                        // Небольшая задержка чтобы quick sheet успел закрыться
+                        // перед тем как navigationDestination сработает
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            selectedCategory = category
+                        }
                     }
                 )
             }

@@ -149,6 +149,11 @@ extension BackupVersionInfo: BackupRecordNameProviding {}
 final class CloudBackupStore: CloudBackupStoreProtocol {
     private static let defaultAutoSnapshotRetention = 3
     private static let defaultPinnedSnapshotRetention = 4
+    #if DEBUG
+    static let cloudKitEnvironment = "Development"
+    #else
+    static let cloudKitEnvironment = "Production"
+    #endif
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "CloudBackupStore")
     private let container: CloudBackupContainerProtocol
     private let snapshotRecordType = "AppBackup"
@@ -470,7 +475,11 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
             versions.append(autoVersion)
         }
 
-        return versions.sorted { $0.date > $1.date }
+        let sorted = versions.sorted { $0.date > $1.date }
+        for v in sorted {
+            logger.info("BackupVersion recordName=\(v.recordName, privacy: .public) date=\(v.date, privacy: .public) size=\(v.size) version=\(v.version, privacy: .public) isPinned=\(v.isPinned) source=\(v.source.rawValue, privacy: .public) env=\(Self.cloudKitEnvironment, privacy: .public)")
+        }
+        return sorted
     }
 
     func deleteBackup(recordName: String) async throws {
@@ -529,36 +538,56 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     }
 
     private func listSnapshotVersions(using database: CloudBackupDatabaseProtocol) async throws -> [BackupVersionInfo] {
-        let indexEntries = try await loadIndexEntries(from: database)
-        if !indexEntries.isEmpty {
-            return indexEntries
-                .map {
-                    BackupVersionInfo(
-                        recordName: $0.recordName,
-                        date: $0.date,
-                        size: $0.size,
-                        version: $0.version,
-                        isPinned: $0.isPinned
-                    )
+        do {
+            // AppBackup records — источник истины. backup_index — только best-effort cache / fallback.
+            let records = try await database.records(recordType: snapshotRecordType)
+            let versions = records
+                .filter { $0.recordID != legacyLatestRecordID }
+                .compactMap { r -> BackupVersionInfo? in
+                    guard var v = snapshotVersionInfo(from: r) else { return nil }
+                    v.source = .snapshotQuery
+                    return v
                 }
                 .sorted { $0.date > $1.date }
-        }
+            logger.info("BackupList source=snapshotQuery count=\(versions.count) env=\(Self.cloudKitEnvironment, privacy: .public)")
 
-        do {
-            // Snapshot records are the source of truth. backup_index is only a best-effort cache.
-            let records = try await database.records(recordType: snapshotRecordType)
-            return records
-                .filter { $0.recordID != legacyLatestRecordID }
-                .compactMap(snapshotVersionInfo(from:))
-                .sorted { $0.date > $1.date }
+            // Диагностика расхождения с индексом — только логируем, не перезаписываем в read-path.
+            if let indexEntries = try? await loadIndexEntries(from: database), !indexEntries.isEmpty {
+                let indexNames = Set(indexEntries.map(\.recordName))
+                let queryNames = Set(versions.map(\.recordName))
+                if indexNames != queryNames {
+                    logger.warning("BackupList: index diverged from snapshotQuery — index:\(indexNames.count) query:\(queryNames.count), serving snapshotQuery")
+                }
+            }
+
+            return versions
         } catch let error as CKError where error.code == .unknownItem {
-            return []
+            // Тип AppBackup ещё не создан в этом CloudKit environment — используем индекс как fallback.
+            // Типичная причина: schema Development не задеплоена в Production через CloudKit Dashboard.
+            logger.warning("BackupList: AppBackup record type не найден в CloudKit \(Self.cloudKitEnvironment, privacy: .public) (unknownItem) — schema не задеплоена в этот env? Falling back to index. \(error.localizedDescription, privacy: .public)")
         } catch where isSnapshotQueryUnsupported(error) {
-            logger.warning("Snapshot query not supported, fallback to legacy backup path")
-            return []
+            let reason = (error as NSError).userInfo[NSLocalizedFailureReasonErrorKey] as? String
+                ?? error.localizedDescription
+            logger.warning("BackupList: snapshotQuery unsupported в \(Self.cloudKitEnvironment, privacy: .public) — поле не помечено queryable в CloudKit Dashboard. Reason: \(reason, privacy: .public)")
         } catch {
             throw mapCloudKitError(error)
         }
+
+        // Fallback: индекс (только когда snapshotQuery недоступен в этом environment).
+        let indexEntries = try await loadIndexEntries(from: database)
+        logger.info("BackupList source=index (fallback) count=\(indexEntries.count) env=\(Self.cloudKitEnvironment, privacy: .public)")
+        return indexEntries
+            .map {
+                BackupVersionInfo(
+                    recordName: $0.recordName,
+                    date: $0.date,
+                    size: $0.size,
+                    version: $0.version,
+                    isPinned: $0.isPinned,
+                    source: .index
+                )
+            }
+            .sorted { $0.date > $1.date }
     }
 
     private func mergeIndexEntries(
@@ -593,6 +622,14 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
 
     private func pruneExcessSnapshotsIfNeeded(using database: CloudBackupDatabaseProtocol) async throws {
         let versions = try await listSnapshotVersions(using: database)
+
+        // Удаляем только когда snapshotQuery вернул авторитетные данные из CloudKit.
+        // Index fallback — read-cache: удалять записи по stale index опасно (ложные positives).
+        guard versions.isEmpty || versions.allSatisfy({ $0.source == .snapshotQuery }) else {
+            logger.info("Prune skipped: versions sourced from index fallback, snapshotQuery unavailable")
+            return
+        }
+
         let staleEntries = staleSnapshotEntries(from: versions)
 
         guard !staleEntries.isEmpty else { return }
@@ -750,12 +787,14 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
             return nil
         }
 
+        logger.info("BackupList source=legacyLatest date=\(info.date, privacy: .public) size=\(info.size) env=\(Self.cloudKitEnvironment, privacy: .public)")
         return BackupVersionInfo(
             recordName: legacyLatestRecordID.recordName,
             date: info.date,
             size: info.size,
             version: info.version,
-            isPinned: false
+            isPinned: false,
+            source: .legacyLatest
         )
     }
 

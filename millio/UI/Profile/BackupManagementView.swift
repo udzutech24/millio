@@ -243,6 +243,9 @@ struct BackupManagementView: View {
                         overviewCard(availableWidth: availableWidth)
                         protectionCard
                         actionsCard(availableWidth: availableWidth)
+                        #if DEBUG
+                        debugEnvironmentBanner
+                        #endif
                         versionsCard
 
                         if let backupError {
@@ -262,29 +265,15 @@ struct BackupManagementView: View {
                 .refreshable {
                     await refreshStatusIfNeeded(force: true)
                 }
+
+                if showRestoreConfirmation {
+                    restoreConfirmationOverlay
+                }
+
+                if showRestoreSuccessPrompt {
+                    restoreSuccessOverlay
+                }
             }
-        }
-        .alert(
-            BackupL10n.tr("backup.restore.confirm.title", fallback: "Restore this version?"),
-            isPresented: $showRestoreConfirmation
-        ) {
-            Button(BackupL10n.tr("backup.restore.confirm.action", fallback: "Yes, restore"), role: .destructive) {
-                Task { await restoreSelectedVersion() }
-            }
-            Button(BackupL10n.tr("common.cancel", fallback: "Cancel"), role: .cancel) {}
-        } message: {
-            Text(BackupL10n.tr("backup.restore.confirm.message", fallback: "Current local data will be fully replaced by the selected backup"))
-        }
-        .alert(
-            BackupL10n.tr("backup.restore.success.title", fallback: "Data restored"),
-            isPresented: $showRestoreSuccessPrompt
-        ) {
-            Button(BackupL10n.tr("common.done", fallback: "OK"), role: .cancel) {
-                router.selectedTab = .finances
-                router.popToRoot()
-            }
-        } message: {
-            Text(BackupL10n.tr("backup.restore.success.message", fallback: "Your data has been restored and will appear in the app shortly"))
         }
         .fileExporter(
             isPresented: $isExportingVersion,
@@ -804,6 +793,17 @@ struct BackupManagementView: View {
                                             )
                                             .font(.system(size: 11, weight: .regular))
                                             .foregroundStyle(AppColors.textTertiary)
+                                            #if DEBUG
+                                            Text("src:\(version.source.rawValue) env:\(CloudBackupStore.cloudKitEnvironment)")
+                                                .font(.system(size: 9, weight: .medium))
+                                                .foregroundStyle(.orange.opacity(0.9))
+                                            #else
+                                            if version.source == .index {
+                                                Text("cached")
+                                                    .font(.system(size: 9, weight: .medium))
+                                                    .foregroundStyle(.orange.opacity(0.7))
+                                            }
+                                            #endif
                                         }
 
                                         Spacer()
@@ -1373,6 +1373,136 @@ struct BackupManagementView: View {
         }
         .padding(10)
         .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    #if DEBUG
+    private var debugEnvironmentBanner: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "ladybug.fill")
+                .font(.system(size: 11))
+            Text("CloudKit \(CloudBackupStore.cloudKitEnvironment)")
+                .font(.system(size: 11, weight: .semibold))
+            Spacer()
+            Text("DEBUG")
+                .font(.system(size: 9, weight: .bold))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(Color.orange.opacity(0.3))
+                .clipShape(Capsule())
+        }
+        .foregroundStyle(.orange)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+        )
+    }
+    #endif
+
+    private var restoreConfirmationOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.65)
+                .ignoresSafeArea()
+
+            FinancesGlassCard(accentColor: AppColors.error, cornerRadius: 24) {
+                VStack(spacing: 18) {
+                    Image(systemName: "arrow.down.doc.fill")
+                        .font(.system(size: 34, weight: .semibold))
+                        .foregroundStyle(AppColors.brandPrimary)
+
+                    VStack(spacing: 8) {
+                        Text(BackupL10n.tr("backup.restore.confirm.title", fallback: "Restore This Version?"))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .multilineTextAlignment(.center)
+
+                        Text(BackupL10n.tr("backup.restore.confirm.message", fallback: "Current local data will be fully replaced by the selected backup"))
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VStack(spacing: 10) {
+                        Button {
+                            Task { await restoreSelectedVersion() }
+                            showRestoreConfirmation = false
+                        } label: {
+                            Text(BackupL10n.tr("backup.restore.confirm.action", fallback: "Yes, Restore"))
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppColors.error)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(AppColors.error.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            showRestoreConfirmation = false
+                        } label: {
+                            Text(BackupL10n.tr("common.cancel", fallback: "Cancel"))
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(22)
+            }
+            .padding(.horizontal, 28)
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showRestoreConfirmation)
+    }
+
+    private var restoreSuccessOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.65)
+                .ignoresSafeArea()
+
+            FinancesGlassCard(accentColor: AppColors.toggleOnGreen, cornerRadius: 24) {
+                VStack(spacing: 18) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 40, weight: .semibold))
+                        .foregroundStyle(AppColors.toggleOnGreen)
+
+                    VStack(spacing: 8) {
+                        Text(BackupL10n.tr("backup.restore.success.title", fallback: "Data Restored"))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .multilineTextAlignment(.center)
+
+                        Text(BackupL10n.tr("backup.restore.success.message", fallback: "Your data has been restored and will appear in the app shortly"))
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Button {
+                        showRestoreSuccessPrompt = false
+                        router.selectedTab = .finances
+                        router.popToRoot()
+                    } label: {
+                        Text(BackupL10n.tr("common.done", fallback: "Done"))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(22)
+            }
+            .padding(.horizontal, 28)
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showRestoreSuccessPrompt)
     }
 }
 

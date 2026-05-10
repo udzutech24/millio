@@ -38,4 +38,4 @@ if [[ "${READONLY_SIGNING:-1}" == "0" ]]; then
   args+=("readonly_signing:false")
 fi
 
-bundle exec fastlane ios release_testflight "${args[@]}"
+bundle exec fastlane ios release_testflight ${args[@]+"${args[@]}"}

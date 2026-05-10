@@ -153,6 +153,15 @@ struct FinanceState {
 
     /// Последняя успешно завершенная сделка по рыночному активу.
     var tradeCelebration: FinanceTradeCelebration? = nil
+
+    /// Точки спарклайна для дашборда (нормализованы [0..1])
+    var dashboardSparkline: [Double] = []
+
+    /// Дельта за период спарклайна (абсолютная, процентная)
+    var dashboardWeekDelta: (absolute: Double, percent: Double) = (0.0, 0.0)
+
+    /// Кол-во дней, за которые есть реальные данные в sparkline (2..7)
+    var dashboardSparklineDaysCount: Int = 7
 }
 
 // StockRefreshIssues перемещён в FinanceMarketDataService.swift
@@ -840,6 +849,67 @@ final class FinanceViewModel: ViewModelProtocol {
         if let warning = snapshot.currencyConversionWarning {
             state.currencyConversionWarning = warning
         }
+        await computeDashboardSparkline()
+    }
+
+    /// Вычисляет 7-дневный спарклайн и дельту для виджета дашборда.
+    /// Сохраняет сегодняшний баланс в DashboardBalanceHistoryStore и строит
+    /// sparkline из накопленной истории (не из cashflow-транзакций).
+    func computeDashboardSparkline() async {
+        let displayCurrency = state.displayCurrency
+        let currentTotal = state.totalAmount
+        let daysCount = 7
+
+        DashboardBalanceHistoryStore.save(currentTotal, currency: displayCurrency)
+
+        let rawPoints = DashboardBalanceHistoryStore.dailyAmounts(
+            currency: displayCurrency,
+            daysCount: daysCount
+        )
+
+        let validPoints = rawPoints.compactMap { $0 }
+        let validCount = validPoints.count
+        guard validCount >= 2 else {
+            state.dashboardSparkline = []
+            state.dashboardWeekDelta = (0.0, 0.0)
+            state.dashboardSparklineDaysCount = 0
+            return
+        }
+
+        // Заполняем пропуски: вперёд от первого известного значения
+        var filled = [Double](repeating: currentTotal, count: daysCount)
+        var lastKnown: Double = validPoints.first ?? currentTotal
+        for i in filled.indices {
+            if let v = rawPoints[i] {
+                lastKnown = v
+                filled[i] = v
+            } else {
+                filled[i] = lastKnown
+            }
+        }
+
+        let minVal = filled.min() ?? 0.0
+        let maxVal = filled.max() ?? 1.0
+        let range = maxVal - minVal
+        let normalized: [Double]
+        if range < 0.01 {
+            normalized = filled.map { _ in 0.5 }
+        } else {
+            // Visual floor: минимальный диапазон = 2% от максимума.
+            // Предотвращает визуальный "обрыв" при малых колебаниях.
+            let visualRange = max(range, maxVal * 0.02)
+            let mid = (minVal + maxVal) / 2.0
+            let lo = mid - visualRange / 2.0
+            normalized = filled.map { min(1.0, max(0.0, ($0 - lo) / visualRange)) }
+        }
+
+        let weekStart = filled.first ?? currentTotal
+        let delta = currentTotal - weekStart
+        let pct = abs(weekStart) < 0.01 ? 0.0 : (delta / abs(weekStart)) * 100.0
+
+        state.dashboardSparkline = normalized
+        state.dashboardWeekDelta = (absolute: delta, percent: pct)
+        state.dashboardSparklineDaysCount = validCount
     }
 
     /// Подсчитать сумму группы в указанной валюте

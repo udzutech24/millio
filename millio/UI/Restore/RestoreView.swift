@@ -66,19 +66,10 @@ struct RestoreView: View {
             .refreshable {
                 await refreshBackupStatusIfNeeded()
             }
-        }
-        .confirmationDialog(
-            BackupL10n.tr("backup.restore.confirm.title", fallback: "Continue Without Restoring?"),
-            isPresented: $showSkipConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(BackupL10n.tr("backup.restore.confirm.action", fallback: "Continue Without Restoring"), role: .destructive) {
-                appState.lifecycle = .ready
-                dismiss()
+
+            if showSkipConfirmation {
+                skipConfirmationOverlay
             }
-            Button(BackupL10n.tr("backup.restore.confirm.cancel", fallback: "Cancel"), role: .cancel) {}
-        } message: {
-            Text(BackupL10n.tr("backup.restore.confirm.message", fallback: "Local data will remain as is."))
         }
         .task {
             await refreshBackupStatusIfNeeded()
@@ -125,6 +116,68 @@ struct RestoreView: View {
             .padding(22)
             .frame(maxWidth: .infinity)
         }
+    }
+
+    private var skipConfirmationOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.65)
+                .ignoresSafeArea()
+
+            FinancesGlassCard(accentColor: AppColors.error, cornerRadius: 24) {
+                VStack(spacing: 18) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 34, weight: .semibold))
+                        .foregroundStyle(AppColors.error)
+
+                    VStack(spacing: 8) {
+                        Text(BackupL10n.tr("backup.restore.skip.title", fallback: "Data Not Restored"))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .multilineTextAlignment(.center)
+
+                        Text(BackupL10n.tr(
+                            "backup.restore.skip.message",
+                            fallback: "Local data is not available. The app will open empty. You can restore later in Profile → Backup as long as your backup exists in iCloud."
+                        ))
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VStack(spacing: 10) {
+                        Button {
+                            showSkipConfirmation = false
+                        } label: {
+                            Text(BackupL10n.tr("backup.restore.skip.cancel", fallback: "Go Back and Restore"))
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            showSkipConfirmation = false
+                            appState.lifecycle = .ready
+                            dismiss()
+                        } label: {
+                            Text(BackupL10n.tr("backup.restore.skip.confirm", fallback: "Continue Without Data"))
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppColors.error)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(22)
+            }
+            .padding(.horizontal, 28)
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showSkipConfirmation)
     }
 
     private func backupFoundView(version: BackupVersionInfo) -> some View {

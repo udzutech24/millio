@@ -95,6 +95,9 @@ struct FinanceDynamicsState {
 
     /// Предупреждение о конвертации валют в истории
     var currencyConversionWarning: String? = nil
+
+    /// Тип отображаемого графика
+    var selectedChartType: ChartViewType = .line
 }
 
 // MARK: - Dynamics Period
@@ -147,6 +150,13 @@ enum DynamicsViewMode {
     case accounts
 }
 
+// MARK: - Chart View Type
+
+enum ChartViewType {
+    case line
+    case distribution
+}
+
 // MARK: - Dynamics Breakdown Item
 
 struct DynamicsBreakdownItem: Identifiable {
@@ -185,6 +195,7 @@ enum FinanceDynamicsAction {
     case showPeriodSelector
     case hidePeriodSelector
     case setShowArchivedAccounts(Bool)
+    case setChartViewType(ChartViewType)
 }
 
 // MARK: - Finance Dynamics ViewModel
@@ -417,6 +428,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         case .setShowArchivedAccounts(let isOn):
             state.showArchivedAccounts = isOn
             updateChartData()
+
+        case .setChartViewType(let type):
+            state.selectedChartType = type
             
         case .selectAllGroups:
             state.selectedGroupIDs = Set(state.groups.map { $0.groupUniqueID })

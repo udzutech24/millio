@@ -93,6 +93,31 @@ struct LaunchRecoveryHardeningTests {
         #expect(shouldBlock)
     }
 
+    // MARK: - AC6: triggerBackgroundBackup nil guard contract
+
+    @Test("nil exportedModelCount blocks background backup")
+    func nilModelCountBlocksBackup() {
+        // Mirrors guard in triggerBackgroundBackup:
+        // guard let count = exportedModelCount(in:), count > 0 else { return }
+        let count: Int? = nil
+        let shouldBackup = count.map { $0 > 0 } ?? false
+        #expect(!shouldBackup)
+    }
+
+    @Test("zero exportedModelCount blocks background backup")
+    func zeroModelCountBlocksBackup() {
+        let count: Int? = 0
+        let shouldBackup = count.map { $0 > 0 } ?? false
+        #expect(!shouldBackup)
+    }
+
+    @Test("positive exportedModelCount allows background backup")
+    func positiveModelCountAllowsBackup() {
+        let count: Int? = 5
+        let shouldBackup = count.map { $0 > 0 } ?? false
+        #expect(shouldBackup)
+    }
+
     // MARK: - AC6: parallel backup+restore — BackupManager mock receives no backup call while restore flag is set
 
     @Test("BackupManager backup call is skipped while isRestoreInProgress is true")

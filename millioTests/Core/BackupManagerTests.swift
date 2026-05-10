@@ -979,7 +979,7 @@ struct CloudBackupStoreTests {
         #expect(latest == Data("payload-4".utf8))
     }
 
-    @Test("uploadBackup keeps only one auto backup version by default")
+    @Test("uploadBackup keeps three auto backup versions by default")
     func testUploadBackupKeepsSingleAutoBackupVersionByDefault() async throws {
         let db = FakeCloudBackupDatabase()
         let store = CloudBackupStore(
@@ -991,9 +991,9 @@ struct CloudBackupStoreTests {
         }
 
         let versions = try await store.listBackupVersions()
-        #expect(versions.count == 1)
+        #expect(versions.count == 3)
         #expect(versions.allSatisfy { $0.recordName != "latest_backup" })
-        #expect(db.deletedRecordNames.count == 3)
+        #expect(db.deletedRecordNames.count == 1)
     }
 
     @Test("importBackup stores pinned snapshot with provided original metadata")
@@ -1087,7 +1087,7 @@ struct CloudBackupStoreTests {
         #expect(db.deletedRecordNames.count == 2)
     }
 
-    @Test("listBackupVersions prunes existing excess backups down to four manual and one auto")
+    @Test("listBackupVersions prunes existing excess backups down to four manual and three auto")
     func testListBackupVersionsPrunesExistingExcessBackups() async throws {
         let db = FakeCloudBackupDatabase()
         let store = CloudBackupStore(
@@ -1114,10 +1114,10 @@ struct CloudBackupStoreTests {
 
         let versions = try await store.listBackupVersions()
 
-        #expect(versions.count == 5)
+        #expect(versions.count == 7)
         #expect(versions.filter(\.isPinned).count == 4)
-        #expect(versions.filter { !$0.isPinned }.count == 1)
-        #expect(db.deletedRecordNames.count == 4)
+        #expect(versions.filter { !$0.isPinned }.count == 3)
+        #expect(db.deletedRecordNames.count == 2)
     }
 
     @Test("downloadLatestBackup fallback к legacy latest, если index указывает на отсутствующие snapshots")

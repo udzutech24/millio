@@ -35,7 +35,7 @@ struct CashbackOverviewMetricsTests {
 
         let metrics = CashbackOverviewMetrics.make(from: [first, second])
 
-        #expect(metrics.featuredCategoryName == CashbackCategory.gasStation.displayName)
+        #expect(metrics.featuredCategoryName == "Заправки")
         #expect(metrics.featuredCashbackKey == CashbackOverviewMetrics.stableKey(for: second))
     }
 

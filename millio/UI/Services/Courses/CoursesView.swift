@@ -12,6 +12,9 @@ struct CoursesView: View {
         ConverterView()
             .navigationTitle(MainLocalization.text(MainLocalization.serviceCourses))
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                InputDismissalSupport.dismissActiveResponder()
+            }
     }
 }
 

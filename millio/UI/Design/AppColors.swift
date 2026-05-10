@@ -121,6 +121,13 @@ enum AppColors {
     static let quickSetupAccentMint = Color(hex: "34D399")
     static let quickSetupAccentDeep = Color(hex: "0B1F17")
 
+    static let positiveColor  = Color(hex: "18C57A")
+    static let negativeColor  = Color(hex: "FF5E5E")
+
+    static let incomeActionGradient   = [Color(hex: "1EE688"), Color(hex: "18C57A")]
+    static let expenseActionGradient  = [Color(hex: "FF7070"), Color(hex: "FF4444")]
+    static let transferActionGradient = [Color(hex: "80B8FF"), Color(hex: "68A5FF")]
+
     static let profileValueAccent = Color(hex: "6AA8FF")
     static let toggleOnGreen = Color(hex: "34C759")
     static let profileIconBlue = Color(hex: "5DA8FF")
