@@ -573,7 +573,8 @@ struct millioApp: App {
         targetScope: DataScope,
         currentScope: DataScope
     ) {
-        guard Self.exportedModelCount(in: targetContainer) == 0 else { return }
+        // nil (fetch failed) → неизвестно → не мигрируем, чтобы не затереть существующие данные
+        guard let targetCount = Self.exportedModelCount(in: targetContainer), targetCount == 0 else { return }
         let targetRepository = DataRepository(
             modelContext: targetContainer.mainContext,
             modelContainer: targetContainer
@@ -585,7 +586,8 @@ struct millioApp: App {
         )
 
         for source in sourceContainers {
-            guard Self.exportedModelCount(in: source.container) > 0 else { continue }
+            // nil → источник неизвестен → пропускаем (не копируем из неопределённого состояния)
+            guard let sourceCount = Self.exportedModelCount(in: source.container), sourceCount > 0 else { continue }
 
             let sourceRepository = DataRepository(
                 modelContext: source.container.mainContext,
@@ -622,7 +624,7 @@ struct millioApp: App {
         return sources
     }
 
-    private static func exportedModelCount(in container: ModelContainer) -> Int {
+    private static func exportedModelCount(in container: ModelContainer) -> Int? {
         let repository = DataRepository(
             modelContext: container.mainContext,
             modelContainer: container
@@ -632,7 +634,8 @@ struct millioApp: App {
             let json = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
             let models = json["models"] as? [[String: Any]]
         else {
-            return 0
+            AppLogger.log(.warning, category: "App", "exportedModelCount: fetch failed, count uncertain")
+            return nil
         }
         return models.count
     }
@@ -642,8 +645,8 @@ struct millioApp: App {
               appState.isAutoBackupEnabled,
               let diContainer = diContainer else { return }
 
-        // Не бекапим пустой стор — иначе перезапишем актуальный бекап нулевыми данными
-        // (например, сразу после миграции схемы до того, как сработал auto-restore).
+        // Не бекапим достоверно пустой стор — иначе перезапишем актуальный бекап нулевыми данными.
+        // nil (ошибка fetch) → состояние неизвестно → бекапим (лучше лишний бекап, чем пропустить).
         if let container = activeModelContainer, Self.exportedModelCount(in: container) == 0 { return }
 
         Task {
@@ -666,7 +669,10 @@ struct millioApp: App {
     private func presentRestoreFlowIfNeeded() async {
         guard let diContainer, let activeModelContainer else { return }
 
-        let localDataCount = Self.exportedModelCount(in: activeModelContainer)
+        guard let localDataCount = Self.exportedModelCount(in: activeModelContainer) else {
+            AppLogger.log(.warning, category: "App", "LaunchRecovery: count uncertain, skipping restore")
+            return
+        }
         let latestBackupInfo = await diContainer.backupManager.lastBackupInfo()
         let input = LaunchRecoveryPolicy.Input(
             lifecycle: appState.lifecycle,
@@ -684,12 +690,18 @@ struct millioApp: App {
 
         // Если стор существовал, но данные исчезли (потеря при обновлении / миграции схемы) —
         // восстанавливаем последний бекап автоматически, без участия пользователя.
-        if activeScopeStoreExistedBeforeBinding, let latest = latestBackupInfo {
+        if activeScopeStoreExistedBeforeBinding, latestBackupInfo != nil {
             appState.lifecycle = .autoRestoring
             Task {
                 do {
+                    let versions = await diContainer.backupManager.listBackupVersions()
+                    guard let latestVersion = versions.first else {
+                        AppLogger.log(.warning, category: "App", "Auto-restore: версии не найдены, переходим к ручному restore")
+                        await MainActor.run { appState.lifecycle = .restoring }
+                        return
+                    }
                     try await diContainer.backupManager.restoreVersion(
-                        recordName: latest.recordName,
+                        recordName: latestVersion.recordName,
                         passphrase: nil
                     )
                     AppLogger.log(.info, category: "App", "Auto-restore completed successfully")
