@@ -14,9 +14,9 @@ enum DashboardWidgetID: String, CaseIterable, Codable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .totalBalance: return "Общий баланс"
-        case .quickActions: return "Быстрые действия"
-        case .cashflowSummary: return "Кэшфлоу за период"
+        case .totalBalance: return L("Общий баланс")
+        case .quickActions: return L("Быстрые действия")
+        case .cashflowSummary: return L("Кэшфлоу за период")
         }
     }
 

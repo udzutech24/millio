@@ -786,7 +786,7 @@ struct BackupManagementView: View {
 
                                             Text(
                                                 String(
-                                                    format: String(localized: "restore.version_size_format"),
+                                                    format: L("restore.version_size_format"),
                                                     ByteCountFormatter.string(fromByteCount: version.size, countStyle: .file),
                                                     String(version.version)
                                                 )

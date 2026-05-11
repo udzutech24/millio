@@ -250,7 +250,7 @@ struct FinanceGroupRow: View {
             }
 
             if displayAccounts.isEmpty {
-                Text(String(localized: "finances.main.empty_products.title"))
+                Text(L("finances.main.empty_products.title"))
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)

@@ -1030,10 +1030,10 @@ private extension CashflowTransaction {
         switch transactionType {
         case .expense:
             return expenseCategoryRaw == ExpenseCategory.other.rawValue
-                && note == String(localized: "finances.transaction.note.investment_buy")
+                && note == L("finances.transaction.note.investment_buy")
         case .income:
             return incomeCategoryRaw == IncomeCategory.investment.rawValue
-                && note == String(localized: "finances.transaction.note.investment_sell")
+                && note == L("finances.transaction.note.investment_sell")
         case .transfer, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
             return false
         }

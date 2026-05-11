@@ -12,6 +12,7 @@ struct TotalBalanceWidget: View {
     var sparklineDaysCount: Int = 7
     var onTap: (() -> Void)? = nil
     var onSparklineTap: (() -> Void)? = nil
+    var onDaysChipTap: (() -> Void)? = nil
 
     private var formattedBalance: String {
         let formatter = NumberFormatter()
@@ -44,36 +45,46 @@ struct TotalBalanceWidget: View {
     var body: some View {
         HStack(spacing: 0) {
             // Левая зона: баланс + дельта → Счета
-            Button(action: { onTap?() }) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Общий баланс")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.55))
+            VStack(alignment: .leading, spacing: 4) {
+                Button(action: { onTap?() }) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L("Общий баланс"))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.55))
 
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(formattedBalance)
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundStyle(Color.white)
-                            .minimumScaleFactor(0.6)
-                            .lineLimit(1)
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(formattedBalance)
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundStyle(Color.white)
+                                .minimumScaleFactor(0.6)
+                                .lineLimit(1)
 
-                        Text(currencySymbol)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.75))
+                            Text(currencySymbol)
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(Color.white.opacity(0.75))
+                        }
                     }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(onTap == nil)
 
-                    if hasDelta {
-                        let isNeutral = abs(weekDelta.percent) < 0.1
-                        let deltaColor: Color = isNeutral
-                            ? Color.white.opacity(0.45)
-                            : deltaIsPositive ? AppColors.positiveColor : AppColors.negativeColor
+                // Чип дельты — вне кнопки баланса, иначе жесты конфликтуют
+                if hasDelta {
+                    let isNeutral = abs(weekDelta.percent) < 0.1
+                    let deltaColor: Color = isNeutral
+                        ? Color.white.opacity(0.45)
+                        : deltaIsPositive ? AppColors.positiveColor : AppColors.negativeColor
+                    if let onDaysChipTap {
+                        Button(action: onDaysChipTap) {
+                            deltaChip(text: formattedDelta, daysCount: sparklineDaysCount, color: deltaColor)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
                         deltaChip(text: formattedDelta, daysCount: sparklineDaysCount, color: deltaColor)
                     }
                 }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .disabled(onTap == nil)
 
             Spacer(minLength: 12)
 
@@ -99,7 +110,7 @@ struct TotalBalanceWidget: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(color)
             if daysCount > 0 {
-                Text("  ·  \(daysCount)д")
+                Text("  ·  \(daysCount)\(L("dashboard.balance.days_suffix"))")
                     .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(color.opacity(0.65))
             }

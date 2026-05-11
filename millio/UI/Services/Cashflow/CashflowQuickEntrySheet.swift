@@ -67,7 +67,7 @@ struct CashflowQuickEntrySheet: View {
 
                     // Ссылка на полный редактор
                     if onOpenFullEditor != nil {
-                        Button(String(localized: "cashflow.quick.open_full_editor")) {
+                        Button(L("cashflow.quick.open_full_editor")) {
                             dismiss()
                             onOpenFullEditor?(option)
                         }
@@ -83,7 +83,7 @@ struct CashflowQuickEntrySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "cashflow.common.cancel")) {
+                    Button(L("cashflow.common.cancel")) {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textSecondary)
@@ -96,8 +96,8 @@ struct CashflowQuickEntrySheet: View {
             amountFocused = true
             selectedCardID = viewModel.state.availableCards.first?.cardUniqueID
         }
-        .alert(String(localized: "cashflow.editor.save_failed.title"), isPresented: $showError) {
-            Button(String(localized: "cashflow.common.ok"), role: .cancel) {}
+        .alert(L("cashflow.editor.save_failed.title"), isPresented: $showError) {
+            Button(L("cashflow.common.ok"), role: .cancel) {}
         }
     }
 
@@ -132,7 +132,7 @@ struct CashflowQuickEntrySheet: View {
 
     private var amountField: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(String(localized: "cashflow.quick.amount.placeholder"))
+            Text(L("cashflow.quick.amount.placeholder"))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
 
@@ -165,12 +165,12 @@ struct CashflowQuickEntrySheet: View {
 
     private var noteField: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(String(localized: "cashflow.quick.note.placeholder"))
+            Text(L("cashflow.quick.note.placeholder"))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
 
             TextField(
-                String(localized: "cashflow.quick.note.placeholder"),
+                L("cashflow.quick.note.placeholder"),
                 text: $note
             )
             .font(.system(size: 15))
@@ -190,7 +190,7 @@ struct CashflowQuickEntrySheet: View {
 
     private var cardPicker: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(String(localized: "cashflow.quick.card.label"))
+            Text(L("cashflow.quick.card.label"))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
 
@@ -201,7 +201,7 @@ struct CashflowQuickEntrySheet: View {
                 Button {
                     selectedCardID = nil
                 } label: {
-                    Label(String(localized: "cashflow.quick.card.none"), systemImage: "xmark.circle")
+                    Label(L("cashflow.quick.card.none"), systemImage: "xmark.circle")
                 }
                 Divider()
                 ForEach(cards, id: \.cardUniqueID) { card in
@@ -216,7 +216,7 @@ struct CashflowQuickEntrySheet: View {
                     Image(systemName: "creditcard")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(selectedCard != nil ? kind.accentColor : AppColors.textSecondary)
-                    Text(selectedCard?.name ?? String(localized: "cashflow.quick.card.none"))
+                    Text(selectedCard?.name ?? L("cashflow.quick.card.none"))
                         .font(.system(size: 15))
                         .foregroundStyle(selectedCard != nil ? AppColors.textPrimary : AppColors.textSecondary)
                     Spacer()
@@ -248,7 +248,7 @@ struct CashflowQuickEntrySheet: View {
                         .progressViewStyle(.circular)
                         .tint(.white)
                 } else {
-                    Text(String(localized: "cashflow.quick.add"))
+                    Text(L("cashflow.quick.add"))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(.white)
                 }

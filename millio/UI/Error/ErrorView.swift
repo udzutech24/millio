@@ -18,7 +18,7 @@ struct ErrorView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.orange)
             
-            Text(String(localized: "error"))
+            Text(L("error"))
                 .font(.title2)
                 .bold()
             
@@ -27,7 +27,7 @@ struct ErrorView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
             
-            Button(String(localized: "try_again")) {
+            Button(L("try_again")) {
                 appState.lifecycle = .ready
             }
             .buttonStyle(.borderedProminent)

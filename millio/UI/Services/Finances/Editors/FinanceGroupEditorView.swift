@@ -72,8 +72,8 @@ struct FinanceGroupEditorView: View {
                     isPresented: showDeleteGroupConfirmation,
                     title: deleteGroupConfirmationTitle,
                     message: deleteGroupConfirmationMessage,
-                    confirmTitle: String(localized: "finances.common.delete"),
-                    cancelTitle: String(localized: "finances.common.cancel"),
+                    confirmTitle: L("finances.common.delete"),
+                    cancelTitle: L("finances.common.cancel"),
                     onConfirm: confirmDeleteGroup,
                     onCancel: { showDeleteGroupConfirmation = false }
                 )
@@ -82,16 +82,16 @@ struct FinanceGroupEditorView: View {
                     isPresented: pendingAccountDeletion != nil,
                     title: deleteAccountConfirmationTitle,
                     message: deleteAccountConfirmationMessage,
-                    confirmTitle: String(localized: "finances.common.delete"),
-                    cancelTitle: String(localized: "finances.common.cancel"),
+                    confirmTitle: L("finances.common.delete"),
+                    cancelTitle: L("finances.common.cancel"),
                     onConfirm: confirmDeleteAccount,
                     onCancel: { pendingAccountDeletion = nil }
                 )
             }
             .navigationTitle(
                 currentEditingGroup == nil
-                    ? String(localized: "finances.group_editor.nav.new")
-                    : String(localized: "finances.group_editor.nav.edit")
+                    ? L("finances.group_editor.nav.new")
+                    : L("finances.group_editor.nav.edit")
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -110,7 +110,7 @@ struct FinanceGroupEditorView: View {
                                 )
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "finances.common.cancel"))
+                        .accessibilityLabel(L("finances.common.cancel"))
                     }
                 }
                 
@@ -129,7 +129,7 @@ struct FinanceGroupEditorView: View {
                         )
                     )
                     .disabled(!isValid)
-                    .accessibilityLabel(String(localized: "finances.common.save"))
+                    .accessibilityLabel(L("finances.common.save"))
                 }
             }
             .onAppear {
@@ -179,11 +179,11 @@ struct FinanceGroupEditorView: View {
                             showCurrencyPicker = false
                         }
                     )
-                    .navigationTitle(String(localized: "finances.add_account.currency_picker.title"))
+                    .navigationTitle(L("finances.add_account.currency_picker.title"))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button(String(localized: "finances.common.cancel")) { showCurrencyPicker = false }
+                            Button(L("finances.common.cancel")) { showCurrencyPicker = false }
                         }
                     }
                 }
@@ -212,10 +212,10 @@ struct FinanceGroupEditorView: View {
     
     private var nameSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.group_editor.section.name"))
+            FinancesSectionHeader(title: L("finances.group_editor.section.name"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
-                    TextField(String(localized: "finances.add_account.section.name"), text: $name)
+                    TextField(L("finances.add_account.section.name"), text: $name)
                         .focused($isNameFocused)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 14)
@@ -246,7 +246,7 @@ struct FinanceGroupEditorView: View {
     
     private var colorSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.group_editor.section.color"))
+            FinancesSectionHeader(title: L("finances.group_editor.section.color"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     Button {
@@ -319,11 +319,11 @@ struct FinanceGroupEditorView: View {
     
     private var currencySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.display_currency.title.primary"))
+            FinancesSectionHeader(title: L("finances.display_currency.title.primary"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
-                        Text(String(localized: "finances.add_account.field.currency"))
+                        Text(L("finances.add_account.field.currency"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         
@@ -369,7 +369,7 @@ struct FinanceGroupEditorView: View {
     
     private func accountsSection(_ accounts: [FinanceAccount]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.group_editor.section.accounts"))
+            FinancesSectionHeader(title: L("finances.group_editor.section.accounts"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     NavigationLink {
@@ -392,7 +392,7 @@ struct FinanceGroupEditorView: View {
                                     )
                                 )
 
-                            Text(String(localized: "finances.group.action.add_account"))
+                            Text(L("finances.group.action.add_account"))
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
 
@@ -409,7 +409,7 @@ struct FinanceGroupEditorView: View {
                     }
 
                     if accounts.isEmpty {
-                        Text(String(localized: "finances.main.empty_products.title"))
+                        Text(L("finances.main.empty_products.title"))
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -478,7 +478,7 @@ struct FinanceGroupEditorView: View {
         Group {
             if let editingGroup = currentEditingGroup {
                 VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: String(localized: "finances.group_editor.section.manage"))
+                    FinancesSectionHeader(title: L("finances.group_editor.section.manage"))
                     FinancesGlassCard {
                         VStack(spacing: 0) {
                             if presentationStyle.showsOpenCurrentGroupAction {
@@ -491,7 +491,7 @@ struct FinanceGroupEditorView: View {
                                     )
                                 } label: {
                                     managementRow(
-                                        title: String(localized: "finances.group.menu.open"),
+                                        title: L("finances.group.menu.open"),
                                         systemImage: "chart.line.uptrend.xyaxis",
                                         tint: AppColors.textPrimary
                                     )
@@ -506,7 +506,7 @@ struct FinanceGroupEditorView: View {
                                 showDeleteGroupConfirmation = true
                             } label: {
                                 managementRow(
-                                    title: String(localized: "finances.common.delete"),
+                                    title: L("finances.common.delete"),
                                     systemImage: "trash",
                                     tint: AppColors.error
                                 )
@@ -561,22 +561,22 @@ struct FinanceGroupEditorView: View {
 
     private var deleteAccountConfirmationTitle: String {
         guard let account = pendingAccountDeletion else {
-            return String(localized: "finances.dynamics.delete_account")
+            return L("finances.dynamics.delete_account")
         }
         let name = viewModel.getAccountInfo(account: account)?.name
-            ?? String(localized: "finances.dynamics.chart.account_fallback")
+            ?? L("finances.dynamics.chart.account_fallback")
         return FinanceDeleteProductCopy.confirmationTitle(for: account.accountType, name: name)
     }
 
     private var deleteAccountConfirmationMessage: String {
         guard let account = pendingAccountDeletion else {
-            return String(localized: "finances.dynamics.delete_account.confirm.message")
+            return L("finances.dynamics.delete_account.confirm.message")
         }
         return String(localized: FinanceDeleteProductCopy.confirmationMessage(for: account.accountType))
     }
 
     private var deleteGroupConfirmationTitle: String {
-        let groupName = currentEditingGroup?.name ?? String(localized: "finances.group.ungrouped")
+        let groupName = currentEditingGroup?.name ?? L("finances.group.ungrouped")
         return FinancesL10n.format("finances.dynamics.delete_group.confirm.title_format", groupName)
     }
 

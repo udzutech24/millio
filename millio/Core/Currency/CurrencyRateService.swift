@@ -40,6 +40,10 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     private let frankfurterHistoricalProvider: HistoricalRateProvider
     private let rubHistoricalFallbackProvider: HistoricalRateProvider?
     
+    /// Провайдер цены крипто-валюты в USD (инжектируется извне, Core не зависит от MarketAPIClient).
+    /// Принимает код валюты ("BTC"), возвращает цену в USD (например, 100000.0).
+    var cryptoPriceProviderUSD: (@Sendable (String) async -> Double?)? = nil
+
     private var cachedRates: [String: Double] = ["USD": 1.0]
     private var lastUpdateTS: Double = 0
     private let cacheTimeout: TimeInterval = 12 * 3600 // 12 часов
@@ -73,10 +77,24 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
             await refreshRates()
         }
         
+        // Для валют, отсутствующих в фиат-кэше (напр., BTC), запрашиваем цену в USD у внешнего провайдера
+        if let provider = cryptoPriceProviderUSD {
+            if f != "USD", cachedRates[f] == nil {
+                if let priceUSD = await provider(f), priceUSD > 0 {
+                    cachedRates[f] = 1.0 / priceUSD
+                }
+            }
+            if t != "USD", cachedRates[t] == nil {
+                if let priceUSD = await provider(t), priceUSD > 0 {
+                    cachedRates[t] = 1.0 / priceUSD
+                }
+            }
+        }
+
         // Получаем курсы через USD
         let rateFromUSD = f == "USD" ? 1.0 : cachedRates[f]
         let rateToUSD = t == "USD" ? 1.0 : cachedRates[t]
-        
+
         guard let rFrom = rateFromUSD, let rTo = rateToUSD, rFrom > 0, rTo > 0 else {
             return nil
         }

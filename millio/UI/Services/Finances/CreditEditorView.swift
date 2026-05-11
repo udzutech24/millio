@@ -63,13 +63,13 @@ struct CreditEditorView: View {
             }
             .navigationTitle(
                 viewModel.state.editingCredit == nil
-                    ? String(localized: "finances.editor.credit.new_title")
-                    : String(localized: "finances.editor.credit.edit_title")
+                    ? L("finances.editor.credit.new_title")
+                    : L("finances.editor.credit.edit_title")
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(String(localized: "finances.common.cancel")) {
+                    Button(L("finances.common.cancel")) {
                         if let onClose {
                             onClose()
                         } else {
@@ -80,7 +80,7 @@ struct CreditEditorView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(String(localized: "finances.common.save")) {
+                    Button(L("finances.common.save")) {
                         saveCredit()
                     }
                     .foregroundStyle(
@@ -95,7 +95,7 @@ struct CreditEditorView: View {
 
                 if onDelete != nil, viewModel.state.editingCredit != nil {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(String(localized: "finances.common.delete"), role: .destructive) {
+                        Button(L("finances.common.delete"), role: .destructive) {
                             onDelete?()
                         }
                     }
@@ -149,11 +149,11 @@ struct CreditEditorView: View {
                             showCurrencyPicker = false
                         }
                     )
-                    .navigationTitle(String(localized: "finances.add_account.currency_picker.title"))
+                    .navigationTitle(L("finances.add_account.currency_picker.title"))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button(String(localized: "finances.common.cancel")) {
+                            Button(L("finances.common.cancel")) {
                                 showCurrencyPicker = false
                             }
                             .foregroundStyle(AppColors.textPrimary)
@@ -174,10 +174,10 @@ struct CreditEditorView: View {
     
     private var mainInfoSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.editor.section.main_info"))
+            FinancesSectionHeader(title: L("finances.editor.section.main_info"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
-                    TextField(String(localized: "finances.editor.credit.name_placeholder"), text: $name)
+                    TextField(L("finances.editor.credit.name_placeholder"), text: $name)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
@@ -188,11 +188,11 @@ struct CreditEditorView: View {
     
     private var creditParamsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.editor.credit.params_section"))
+            FinancesSectionHeader(title: L("finances.editor.credit.params_section"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text(String(localized: "finances.add_account.credit.amount"))
+                        Text(L("finances.add_account.credit.amount"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         TextField("0", text: Binding(
@@ -212,7 +212,7 @@ struct CreditEditorView: View {
                     FinancesRowDivider()
                     
                     HStack {
-                        Text(String(localized: "finances.add_account.credit.remaining_debt"))
+                        Text(L("finances.add_account.credit.remaining_debt"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         TextField("0", text: Binding(
@@ -232,7 +232,7 @@ struct CreditEditorView: View {
                     FinancesRowDivider()
 
                     HStack {
-                        Text(String(localized: "finances.add_account.credit.monthly_payment"))
+                        Text(L("finances.add_account.credit.monthly_payment"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         TextField("0", text: Binding(
@@ -252,10 +252,10 @@ struct CreditEditorView: View {
                     FinancesRowDivider()
 
                     HStack {
-                        Text(String(localized: "finances.add_account.credit.payment_mode"))
+                        Text(L("finances.add_account.credit.payment_mode"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Picker(String(localized: "finances.add_account.credit.payment_mode"), selection: $paymentMode) {
+                        Picker(L("finances.add_account.credit.payment_mode"), selection: $paymentMode) {
                             ForEach(CreditPaymentMode.allCases, id: \.self) { mode in
                                 Text(mode.displayName).tag(mode)
                             }
@@ -269,7 +269,7 @@ struct CreditEditorView: View {
 
                     if paymentMode == .dayOfMonth {
                         HStack {
-                            Text(String(localized: "finances.add_account.credit.payment_day"))
+                            Text(L("finances.add_account.credit.payment_day"))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
                             Menu {
@@ -290,7 +290,7 @@ struct CreditEditorView: View {
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
                     } else {
-                        DatePicker(String(localized: "finances.add_account.credit.next_payment_date"), selection: $nextPaymentDate, displayedComponents: .date)
+                        DatePicker(L("finances.add_account.credit.next_payment_date"), selection: $nextPaymentDate, displayedComponents: .date)
                             .foregroundStyle(AppColors.textPrimary)
                             .padding(.vertical, 12)
                             .padding(.horizontal, 16)
@@ -302,10 +302,10 @@ struct CreditEditorView: View {
 
     private var reminderSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.credit.reminder.section"))
+            FinancesSectionHeader(title: L("finances.add_account.credit.reminder.section"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
-                    Toggle(String(localized: "finances.add_account.credit.reminder.toggle"), isOn: $reminderEnabled)
+                    Toggle(L("finances.add_account.credit.reminder.toggle"), isOn: $reminderEnabled)
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
@@ -315,7 +315,7 @@ struct CreditEditorView: View {
                         FinancesRowDivider()
 
                         HStack {
-                            Text(String(localized: "finances.add_account.credit.reminder.days_before"))
+                            Text(L("finances.add_account.credit.reminder.days_before"))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
                             TextField("0", text: Binding(
@@ -334,7 +334,7 @@ struct CreditEditorView: View {
 
                         FinancesRowDivider()
 
-                        DatePicker(String(localized: "finances.add_account.credit.reminder.time"), selection: $reminderTime, displayedComponents: .hourAndMinute)
+                        DatePicker(L("finances.add_account.credit.reminder.time"), selection: $reminderTime, displayedComponents: .hourAndMinute)
                             .foregroundStyle(AppColors.textPrimary)
                             .padding(.vertical, 12)
                             .padding(.horizontal, 16)
@@ -346,11 +346,11 @@ struct CreditEditorView: View {
     
     private var additionalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.editor.section.additional"))
+            FinancesSectionHeader(title: L("finances.editor.section.additional"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text(String(localized: "finances.add_account.field.currency"))
+                        Text(L("finances.add_account.field.currency"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         if isLoadingCurrencies {
@@ -378,10 +378,10 @@ struct CreditEditorView: View {
                     FinancesRowDivider()
                     
                     HStack {
-                        Text(String(localized: "finances.editor.credit.type_label"))
+                        Text(L("finances.editor.credit.type_label"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Picker(String(localized: "finances.editor.credit.type_label"), selection: $selectedCreditType) {
+                        Picker(L("finances.editor.credit.type_label"), selection: $selectedCreditType) {
                             ForEach(CreditType.allCases, id: \.self) { type in
                                 Text(type.displayName).tag(type)
                             }
@@ -393,7 +393,7 @@ struct CreditEditorView: View {
                     
                     FinancesRowDivider()
                     
-                    Toggle(String(localized: "finances.add_account.favorite"), isOn: $isFavorite)
+                    Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
@@ -402,10 +402,10 @@ struct CreditEditorView: View {
                     FinancesRowDivider()
 
                     HStack {
-                        Text(String(localized: "finances.add_account.total_impact.title"))
+                        Text(L("finances.add_account.total_impact.title"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Text(String(localized: "finances.add_account.total_impact.decreases"))
+                        Text(L("finances.add_account.total_impact.decreases"))
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppColors.error.opacity(0.9))
                     }

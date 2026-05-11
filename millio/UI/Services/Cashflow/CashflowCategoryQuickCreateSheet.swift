@@ -172,7 +172,7 @@ struct CashflowCategoryQuickCreateSheet: View {
                 .scrollDismissesKeyboard(.immediately)
                 .dismissKeyboardOnTap()
             }
-            .navigationTitle(String(localized: "cashflow.editor.new_category"))
+            .navigationTitle(L("cashflow.editor.new_category"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -183,7 +183,7 @@ struct CashflowCategoryQuickCreateSheet: View {
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary.opacity(0.92))
                     }
-                    .accessibilityLabel(String(localized: "cashflow.common.cancel"))
+                    .accessibilityLabel(L("cashflow.common.cancel"))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -193,7 +193,7 @@ struct CashflowCategoryQuickCreateSheet: View {
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(canSave ? Color(hex: "6DFFC7") : AppColors.textSecondary.opacity(0.55))
                     }
-                    .accessibilityLabel(String(localized: "cashflow.common.save"))
+                    .accessibilityLabel(L("cashflow.common.save"))
                     .disabled(!canSave)
                 }
             }

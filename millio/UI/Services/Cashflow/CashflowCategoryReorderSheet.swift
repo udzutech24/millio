@@ -39,20 +39,20 @@ struct CashflowCategoryReorderSheet: View {
             .environment(\.editMode, .constant(.active))
             .navigationTitle(
                 kind == .expense
-                ? String(localized: "cashflow.category.reorder.title.expense", defaultValue: "Expense order")
-                : String(localized: "cashflow.category.reorder.title.income", defaultValue: "Income order")
+                ? L("cashflow.category.reorder.title.expense", defaultValue: "Expense order")
+                : L("cashflow.category.reorder.title.income", defaultValue: "Income order")
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(String(localized: "cashflow.category.reorder.reset", defaultValue: "Reset")) {
+                    Button(L("cashflow.category.reorder.reset", defaultValue: "Reset")) {
                         viewModel.clearCategoryOrder(for: kind)
                         items = viewModel.orderedCategoryOptions(for: kind)
                     }
                     .foregroundStyle(AppColors.textSecondary)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "cashflow.common.done", defaultValue: "Done")) {
+                    Button(L("cashflow.common.done", defaultValue: "Done")) {
                         dismiss()
                     }
                 }

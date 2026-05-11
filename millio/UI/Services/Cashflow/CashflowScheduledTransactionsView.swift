@@ -120,10 +120,10 @@ struct CashflowScheduledTransactionsView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 if mode == .planner {
                     Menu {
-                        Button(String(localized: "cashflow.scheduled.create_picker.monthly")) {
+                        Button(L("cashflow.scheduled.create_picker.monthly")) {
                             createMonthlyTransaction()
                         }
-                        Button(String(localized: "cashflow.scheduled.create_picker.one_time")) {
+                        Button(L("cashflow.scheduled.create_picker.one_time")) {
                             createPlannedForSelectedDate()
                         }
                     } label: {
@@ -164,18 +164,18 @@ struct CashflowScheduledTransactionsView: View {
                 onSave: { editingTransaction = nil }
             )
         }
-        .alert(String(localized: "cashflow.scheduled.delete_transaction.title"), isPresented: $showDeleteAlert) {
-            Button(String(localized: "cashflow.common.cancel"), role: .cancel) {
+        .alert(L("cashflow.scheduled.delete_transaction.title"), isPresented: $showDeleteAlert) {
+            Button(L("cashflow.common.cancel"), role: .cancel) {
                 pendingDeleteTransaction = nil
             }
-            Button(String(localized: "cashflow.history.detail.delete"), role: .destructive) {
+            Button(L("cashflow.history.detail.delete"), role: .destructive) {
                 guard let transactionToDelete = pendingDeleteTransaction else { return }
                 viewModel.handle(.deleteTransaction(transactionToDelete, recalculate: true))
                 pendingDeleteTransaction = nil
                 updatePlannerSelectionIfNeeded()
             }
         } message: {
-            Text(String(localized: "cashflow.scheduled.delete_transaction.message"))
+            Text(L("cashflow.scheduled.delete_transaction.message"))
         }
         .onAppear {
             configurePlannerFocusIfNeeded()
@@ -294,7 +294,7 @@ struct CashflowScheduledTransactionsView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
 
-            TextField(String(localized: "cashflow.scheduled.search_transaction"), text: $searchText)
+            TextField(L("cashflow.scheduled.search_transaction"), text: $searchText)
                 .textInputAutocapitalization(.words)
                 .foregroundStyle(AppColors.textPrimary)
         }
@@ -413,7 +413,7 @@ struct CashflowScheduledTransactionsView: View {
                             .fill((AppColors.subscriptionsGradient.first ?? .orange).opacity(0.14))
                     )
 
-                Text(String(localized: "subscriptions.title", defaultValue: "Subscriptions"))
+                Text(L("subscriptions.title", defaultValue: "Subscriptions"))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
 
@@ -644,7 +644,7 @@ struct CashflowScheduledTransactionsView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "plus")
                                 .font(.system(size: 11, weight: .bold))
-                            Text(String(localized: "cashflow.scheduled.day_agenda.empty.add_here"))
+                            Text(L("cashflow.scheduled.day_agenda.empty.add_here"))
                                 .font(.system(size: 12, weight: .semibold))
                                 .lineLimit(1)
                         }
@@ -748,10 +748,10 @@ struct CashflowScheduledTransactionsView: View {
             editingTransaction = transaction
         }
         .contextMenu {
-            Button(String(localized: "cashflow.common.edit")) {
+            Button(L("cashflow.common.edit")) {
                 editingTransaction = transaction
             }
-            Button(String(localized: "cashflow.history.detail.delete"), role: .destructive) {
+            Button(L("cashflow.history.detail.delete"), role: .destructive) {
                 requestDelete(transaction)
             }
         }
@@ -759,7 +759,7 @@ struct CashflowScheduledTransactionsView: View {
             Button(role: .destructive) {
                 requestDelete(transaction)
             } label: {
-                Label(String(localized: "cashflow.history.detail.delete"), systemImage: "trash")
+                Label(L("cashflow.history.detail.delete"), systemImage: "trash")
             }
         }
     }
@@ -847,14 +847,14 @@ struct CashflowScheduledTransactionsView: View {
             if let nextDate = scheduledDate ?? viewModel.nextOccurrenceDate(for: transaction) {
                 parts.append(
                     String(
-                        format: String(localized: "cashflow.scheduled.subtitle.next_format"),
+                        format: L("cashflow.scheduled.subtitle.next_format"),
                         formatDate(nextDate)
                     )
                 )
             } else {
                 parts.append(
                     String(
-                        format: String(localized: "cashflow.scheduled.subtitle.start_date_format"),
+                        format: L("cashflow.scheduled.subtitle.start_date_format"),
                         formatDate(plannedDate)
                     )
                 )
@@ -862,7 +862,7 @@ struct CashflowScheduledTransactionsView: View {
         case .oneTimePlanned:
             parts.append(
                 String(
-                    format: String(localized: "cashflow.scheduled.subtitle.planned_date_format"),
+                    format: L("cashflow.scheduled.subtitle.planned_date_format"),
                     formatDate(plannedDate)
                 )
             )
@@ -871,7 +871,7 @@ struct CashflowScheduledTransactionsView: View {
         if let cardName = cardName(for: transaction.cardID) {
             parts.append(
                 String(
-                    format: String(localized: "cashflow.scheduled.subtitle.account_format"),
+                    format: L("cashflow.scheduled.subtitle.account_format"),
                     cardName
                 )
             )
@@ -890,7 +890,7 @@ struct CashflowScheduledTransactionsView: View {
         case .recurringMonthly:
             return transaction.recurrenceRule.displayName
         case .oneTimePlanned:
-            return String(localized: "cashflow.scheduled.one_time_badge")
+            return L("cashflow.scheduled.one_time_badge")
         }
     }
 
@@ -943,33 +943,33 @@ struct CashflowScheduledTransactionsView: View {
         let date = shortDate(entry.scheduledDate)
         let prefix: String = entry.kind == .recurringMonthly
             ? entry.transaction.recurrenceRule.displayName
-            : String(localized: "cashflow.scheduled.overview.one_time_prefix")
+            : L("cashflow.scheduled.overview.one_time_prefix")
         return "\(prefix): \(category) • \(date)"
     }
 
     private var plannerOverviewTitle: String {
         switch kind {
         case .income:
-            return String(localized: "cashflow.scheduled.overview.title.income")
+            return L("cashflow.scheduled.overview.title.income")
         case .expense:
-            return String(localized: "cashflow.scheduled.overview.title.expense")
+            return L("cashflow.scheduled.overview.title.expense")
         }
     }
 
     private var plannerMonthlySectionTitle: String {
-        String(localized: "cashflow.scheduled.section.recurring")
+        L("cashflow.scheduled.section.recurring")
     }
 
     private var plannerOneTimeSectionTitle: String {
-        String(localized: "cashflow.scheduled.section.one_time")
+        L("cashflow.scheduled.section.one_time")
     }
 
     private func itemTitle(_ item: PlannerDisplayMode) -> String {
         switch item {
         case .calendar:
-            return String(localized: "cashflow.scheduled.display.calendar")
+            return L("cashflow.scheduled.display.calendar")
         case .list:
-            return String(localized: "cashflow.scheduled.display.list")
+            return L("cashflow.scheduled.display.list")
         }
     }
 
@@ -1096,13 +1096,13 @@ enum CashflowScheduledTransactionsMode: Hashable {
     func navigationTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return String(localized: "cashflow.scheduled.recurring_income")
+            return L("cashflow.scheduled.recurring_income")
         case (.recurring, .expense):
-            return String(localized: "cashflow.scheduled.recurring_expenses")
+            return L("cashflow.scheduled.recurring_expenses")
         case (.planner, .income):
-            return String(localized: "cashflow.scheduled.planner_income")
+            return L("cashflow.scheduled.planner_income")
         case (.planner, .expense):
-            return String(localized: "cashflow.scheduled.planner_expenses")
+            return L("cashflow.scheduled.planner_expenses")
         }
     }
 
@@ -1110,17 +1110,17 @@ enum CashflowScheduledTransactionsMode: Hashable {
         if self == .recurring || recurrenceRule != .none {
             switch kind {
             case .income:
-                return String(localized: "cashflow.scheduled.new_recurring_income")
+                return L("cashflow.scheduled.new_recurring_income")
             case .expense:
-                return String(localized: "cashflow.scheduled.new_recurring_expense")
+                return L("cashflow.scheduled.new_recurring_expense")
             }
         }
 
         switch kind {
         case .income:
-            return String(localized: "cashflow.scheduled.new_planned_income")
+            return L("cashflow.scheduled.new_planned_income")
         case .expense:
-            return String(localized: "cashflow.scheduled.new_planned_expense")
+            return L("cashflow.scheduled.new_planned_expense")
         }
     }
 
@@ -1132,26 +1132,26 @@ enum CashflowScheduledTransactionsMode: Hashable {
     func emptyTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return String(localized: "cashflow.scheduled.empty.recurring_income")
+            return L("cashflow.scheduled.empty.recurring_income")
         case (.recurring, .expense):
-            return String(localized: "cashflow.scheduled.empty.recurring_expenses")
+            return L("cashflow.scheduled.empty.recurring_expenses")
         case (.planner, .income):
-            return String(localized: "cashflow.scheduled.empty.planner_income")
+            return L("cashflow.scheduled.empty.planner_income")
         case (.planner, .expense):
-            return String(localized: "cashflow.scheduled.empty.planner_expenses")
+            return L("cashflow.scheduled.empty.planner_expenses")
         }
     }
 
     func createButtonTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return String(localized: "cashflow.scheduled.add_recurring_income")
+            return L("cashflow.scheduled.add_recurring_income")
         case (.recurring, .expense):
-            return String(localized: "cashflow.scheduled.add_recurring_expense")
+            return L("cashflow.scheduled.add_recurring_expense")
         case (.planner, .income):
-            return String(localized: "cashflow.scheduled.add_income_item")
+            return L("cashflow.scheduled.add_income_item")
         case (.planner, .expense):
-            return String(localized: "cashflow.scheduled.add_payment")
+            return L("cashflow.scheduled.add_payment")
         }
     }
 }

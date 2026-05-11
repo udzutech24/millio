@@ -20,6 +20,7 @@ final class CashflowCategoryService {
     private let categoryPinPrefs: CashflowCategoryPinPrefs
     let categoryOrderPrefs: CashflowCategoryOrderPrefs
     private let bulkExpenseMerchantPrefs: CashflowBulkExpenseMerchantCategoryPrefs
+    private let customCategoryVisibilityPrefs: CashflowCustomCategoryVisibilityPrefs
     private let now: () -> Date
 
     /// Провайдер пользовательских категорий из CashflowState
@@ -38,6 +39,7 @@ final class CashflowCategoryService {
         categoryPinPrefs: CashflowCategoryPinPrefs,
         categoryOrderPrefs: CashflowCategoryOrderPrefs = CashflowCategoryOrderPrefs(),
         bulkExpenseMerchantPrefs: CashflowBulkExpenseMerchantCategoryPrefs,
+        customCategoryVisibilityPrefs: CashflowCustomCategoryVisibilityPrefs = CashflowCustomCategoryVisibilityPrefs(),
         now: @escaping () -> Date,
         customCategoriesProvider: @escaping () -> [CashflowCustomCategory],
         systemCategoryOverridesProvider: @escaping () -> [CashflowSystemCategoryOverride],
@@ -47,6 +49,7 @@ final class CashflowCategoryService {
         self.categoryPinPrefs = categoryPinPrefs
         self.categoryOrderPrefs = categoryOrderPrefs
         self.bulkExpenseMerchantPrefs = bulkExpenseMerchantPrefs
+        self.customCategoryVisibilityPrefs = customCategoryVisibilityPrefs
         self.now = now
         self.customCategoriesProvider = customCategoriesProvider
         self.systemCategoryOverridesProvider = systemCategoryOverridesProvider
@@ -73,7 +76,7 @@ final class CashflowCategoryService {
         includeHiddenSystem: Bool = false
     ) -> [CashflowCategoryOption] {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let options = systemCategoryOptions(for: kind, includeHidden: includeHiddenSystem) + customCategoryOptions(for: kind)
+        let options = systemCategoryOptions(for: kind, includeHidden: includeHiddenSystem) + customCategoryOptions(for: kind, includeHidden: includeHiddenSystem)
 
         guard !trimmedQuery.isEmpty else { return options }
         return options.filter { option in
@@ -405,6 +408,7 @@ final class CashflowCategoryService {
         migrateTransactions(fromRaw: rawValue, toRaw: target.rawValue, kind: kind, nowDate: nowDate)
         migrateBudgetCategoryLimits(fromRaw: rawValue, toRaw: target.rawValue, kind: kind, nowDate: nowDate)
         categoryPinPrefs.remap(categoryRaw: rawValue, to: target.rawValue, kind: kind)
+        customCategoryVisibilityPrefs.removeAll(categoryRaw: rawValue, kind: kind)
         if kind == .expense {
             bulkExpenseMerchantPrefs.remapCategory(from: rawValue, to: target.rawValue)
         }
@@ -622,17 +626,33 @@ final class CashflowCategoryService {
         }
     }
 
-    private func customCategoryOptions(for kind: CashflowCategoryKind) -> [CashflowCategoryOption] {
-        customCategoriesProvider()
+    private func customCategoryOptions(for kind: CashflowCategoryKind, includeHidden: Bool = false) -> [CashflowCategoryOption] {
+        let hiddenRaws = includeHidden ? Set<String>() : customCategoryVisibilityPrefs.hiddenRawValues(for: kind)
+        return customCategoriesProvider()
             .filter { $0.kind == kind }
-            .map {
-                CashflowCategoryOption(
-                    rawValue: Self.customRawValue(from: $0.categoryID),
+            .compactMap {
+                let raw = Self.customRawValue(from: $0.categoryID)
+                guard includeHidden || !hiddenRaws.contains(raw) else { return nil }
+                return CashflowCategoryOption(
+                    rawValue: raw,
                     displayName: $0.name,
                     icon: $0.icon,
                     isCustom: true
                 )
             }
+    }
+
+    // MARK: - Custom Category Visibility
+
+    @discardableResult
+    func setCustomCategoryHidden(
+        kind: CashflowCategoryKind,
+        categoryRaw: String,
+        isHidden: Bool
+    ) -> Bool {
+        customCategoryVisibilityPrefs.setHidden(isHidden, categoryRaw: categoryRaw, kind: kind)
+        onCategoriesChanged()
+        return true
     }
 
     private func fallbackCategoryRaw(for kind: CashflowCategoryKind) -> String {

@@ -15,9 +15,9 @@ enum GroupPriority: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .low: return String(localized: "finances.priority.low")
-        case .normal: return String(localized: "finances.priority.normal")
-        case .high: return String(localized: "finances.priority.high")
+        case .low: return L("finances.priority.low")
+        case .normal: return L("finances.priority.normal")
+        case .high: return L("finances.priority.high")
         }
     }
     

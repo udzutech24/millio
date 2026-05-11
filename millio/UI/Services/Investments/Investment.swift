@@ -463,8 +463,8 @@ enum DepositCapitalization: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .none: return String(localized: "finances.deposit.capitalization.none", defaultValue: "Без капитализации")
-        case .monthly: return String(localized: "finances.deposit.capitalization.monthly", defaultValue: "Ежемесячная")
+        case .none: return L("finances.deposit.capitalization.none", defaultValue: "Без капитализации")
+        case .monthly: return L("finances.deposit.capitalization.monthly", defaultValue: "Ежемесячная")
         }
     }
 }
@@ -479,10 +479,10 @@ enum DepositNotifyDays: Int, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .off: return String(localized: "finances.deposit.notify.off", defaultValue: "Выключено")
-        case .sevenDays: return String(localized: "finances.deposit.notify.7days", defaultValue: "За 7 дней")
-        case .fourteenDays: return String(localized: "finances.deposit.notify.14days", defaultValue: "За 14 дней")
-        case .thirtyDays: return String(localized: "finances.deposit.notify.30days", defaultValue: "За 30 дней")
+        case .off: return L("finances.deposit.notify.off", defaultValue: "Выключено")
+        case .sevenDays: return L("finances.deposit.notify.7days", defaultValue: "За 7 дней")
+        case .fourteenDays: return L("finances.deposit.notify.14days", defaultValue: "За 14 дней")
+        case .thirtyDays: return L("finances.deposit.notify.30days", defaultValue: "За 30 дней")
         }
     }
 }

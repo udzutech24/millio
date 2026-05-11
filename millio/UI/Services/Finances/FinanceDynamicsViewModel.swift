@@ -80,6 +80,9 @@ struct FinanceDynamicsState {
     
     /// Данные для списка динамики
     var dynamicsBreakdown: [DynamicsBreakdownItem] = []
+
+    /// Данные для графика распределения по валютам
+    var currencyBreakdown: [CurrencyBreakdownItem] = []
     
     /// Режим просмотра списка (группы/счета)
     var viewMode: DynamicsViewMode = .groups
@@ -155,6 +158,7 @@ enum DynamicsViewMode {
 enum ChartViewType {
     case line
     case distribution
+    case currencyDistribution
 }
 
 // MARK: - Dynamics Breakdown Item
@@ -170,6 +174,15 @@ struct DynamicsBreakdownItem: Identifiable {
     let accountType: FinanceAccountType?
     let isCreditCard: Bool
     let isArchived: Bool
+}
+
+// MARK: - Currency Breakdown Item
+
+struct CurrencyBreakdownItem: Identifiable {
+    let id: String          // код валюты
+    let currency: String    // код валюты
+    let convertedValue: Double  // сумма в валюте отображения
+    let percentage: Double      // % от общего (0–100)
 }
 
 // MARK: - Finance Dynamics Actions
@@ -688,6 +701,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             await viewModel.updateCurrentBalanceAndDelta()
             guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
             await viewModel.updateDynamicsBreakdown()
+            guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
+            await viewModel.updateCurrencyBreakdown()
         }
     }
     
@@ -895,6 +910,59 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return fallbackAccountsForCalculation()
     }
     
+    /// Обновить распределение по валютам
+    func updateCurrencyBreakdown() async {
+        let accounts = getAccountsForCalculation()
+        let displayCurrency = state.displayCurrency
+
+        // Собираем суммы по валютам в нативной валюте
+        var nativeTotals: [String: Double] = [:]
+        for account in accounts {
+            switch account.accountType {
+            case .card:
+                if let card = cardsCache[account.accountID] {
+                    nativeTotals[card.currency, default: 0] += card.balance
+                }
+            case .credit:
+                if let credit = creditsCache[account.accountID] {
+                    // кредиты как отрицательный вклад
+                    nativeTotals[credit.currency, default: 0] -= credit.remainingAmount
+                }
+            case .investment:
+                if let inv = investmentsCache[account.accountID] {
+                    nativeTotals[inv.currency, default: 0] += inv.amount
+                }
+            }
+        }
+
+        // Конвертируем каждую валюту в валюту отображения
+        var converted: [(currency: String, value: Double)] = []
+        for (currency, nativeValue) in nativeTotals {
+            let value = await convertAmount(value: nativeValue, from: currency, to: displayCurrency)
+            converted.append((currency: currency, value: value))
+        }
+
+        // Считаем total по положительным значениям
+        let totalPositive = converted.filter { $0.value > 0 }.reduce(0) { $0 + $1.value }
+        guard totalPositive > 0 else {
+            state.currencyBreakdown = []
+            return
+        }
+
+        let items = converted
+            .filter { $0.value > 0 }
+            .sorted { $0.value > $1.value }
+            .map { entry in
+                CurrencyBreakdownItem(
+                    id: entry.currency,
+                    currency: entry.currency,
+                    convertedValue: entry.value,
+                    percentage: entry.value / totalPositive * 100
+                )
+            }
+        state.currencyBreakdown = items
+    }
+
     /// Обновить список динамики
     func updateDynamicsBreakdown() async {
         let accounts = getAccountsForCalculation()
@@ -1136,7 +1204,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 accounts: accounts,
                 startDate: period.start,
                 endDate: period.end,
-                label: String(localized: "finances.dynamics.chart.total_label"),
+                label: L("finances.dynamics.chart.total_label"),
                 debtAsNegative: useNetTotals
             )
             guard isCurrentChartUpdateRevision(revision) else { return }
@@ -1150,7 +1218,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     accounts: [account],
                     startDate: period.start,
                     endDate: period.end,
-                    label: getAccountInfoForDynamics(account: account)?.name ?? String(localized: "finances.dynamics.chart.account_fallback"),
+                    label: getAccountInfoForDynamics(account: account)?.name ?? L("finances.dynamics.chart.account_fallback"),
                     debtAsNegative: false
                 )
                 allDataPoints.append(contentsOf: accountData)
@@ -1165,7 +1233,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     accounts: [account],
                     startDate: period.start,
                     endDate: period.end,
-                    label: getAccountInfoForDynamics(account: account)?.name ?? String(localized: "finances.dynamics.chart.account_fallback"),
+                    label: getAccountInfoForDynamics(account: account)?.name ?? L("finances.dynamics.chart.account_fallback"),
                     debtAsNegative: false
                 )
                 guard isCurrentChartUpdateRevision(revision) else { return }
@@ -2227,7 +2295,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             let result = await historicalRateStore.getRate(on: date, from: normalizedFrom, to: normalizedTo)
             if result.resolution != .exact {
                 if state.currencyConversionWarning == nil {
-                    state.currencyConversionWarning = String(localized: "finances.dynamics.warning.estimated_rate")
+                    state.currencyConversionWarning = L("finances.dynamics.warning.estimated_rate")
                 }
             }
             if let rate = result.rate {
@@ -2241,7 +2309,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             to: normalizedTo
         ) {
             if state.currencyConversionWarning == nil {
-                state.currencyConversionWarning = String(localized: "finances.dynamics.warning.estimated_rate")
+                state.currencyConversionWarning = L("finances.dynamics.warning.estimated_rate")
             }
             return converted
         }

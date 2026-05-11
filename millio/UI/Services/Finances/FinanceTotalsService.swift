@@ -57,7 +57,7 @@ final class FinanceTotalsService {
         let displayCurrency = displayCurrencyProvider()
         let groups = groupsProvider()
         var total: Double = 0.0
-        var warnings: [String] = []
+        var warnings: Set<String> = []
 
         // Собираем все валюты из всех групп
         var allCurrenciesNeeded = Set<String>()
@@ -85,7 +85,7 @@ final class FinanceTotalsService {
                 if let rate = await currencyService.getRate(from: normalizedGroupCurrency, to: normalizedDisplayCurrency), rate > 0 {
                     total += groupTotalInGroupCurrency * rate
                 } else {
-                    warnings.append(FinancesL10n.format("finances.warning.rate_unavailable", groupCurrency, displayCurrency))
+                    warnings.insert(FinancesL10n.format("finances.warning.rate_unavailable", groupCurrency, displayCurrency))
                     AppLogger.log(
                         .warning,
                         category: "Finance",
@@ -110,7 +110,7 @@ final class FinanceTotalsService {
                     if let rate = await currencyService.getRate(from: normalizedGroupCurrency, to: normalizedSecondaryCurrency), rate > 0 {
                         secondaryTotal += groupTotalInGroupCurrency * rate
                     } else {
-                        warnings.append(FinancesL10n.format("finances.warning.rate_unavailable", groupCurrency, secondaryCurrency))
+                        warnings.insert(FinancesL10n.format("finances.warning.rate_unavailable", groupCurrency, secondaryCurrency))
                         AppLogger.log(
                             .warning,
                             category: "Finance",
@@ -124,7 +124,7 @@ final class FinanceTotalsService {
         return FinanceTotalsSnapshot(
             totalAmount: total,
             secondaryTotalAmount: secondaryTotal,
-            currencyConversionWarning: warnings.isEmpty ? nil : warnings.joined(separator: "\n")
+            currencyConversionWarning: warnings.isEmpty ? nil : warnings.sorted().joined(separator: "\n")
         )
     }
 

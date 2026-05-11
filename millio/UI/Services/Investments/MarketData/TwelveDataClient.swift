@@ -367,7 +367,7 @@ enum MarketAPIClientError: LocalizedError, Equatable, Sendable {
         case .transport(let message):
             return message
         case .decodingFailed:
-            return String(localized: "finances.market.error_generic")
+            return L("finances.market.error_generic")
         }
     }
 
@@ -568,7 +568,7 @@ final class MarketAPIClient: MarketDataClientProtocol, @unchecked Sendable {
             case .array(let values):
                 return values.joined(separator: ", ")
             case nil:
-                return error ?? String(localized: "finances.market.error_generic")
+                return error ?? L("finances.market.error_generic")
             }
         }
     }

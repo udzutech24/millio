@@ -243,17 +243,17 @@ final class MarketSymbolSearchViewModel: ObservableObject {
     var emptyStateHintText: String {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if query.isEmpty {
-            return String(localized: "finances.market.search.start_hint")
+            return L("finances.market.search.start_hint")
         }
 
         if query.count < Self.minimumRemoteQueryLength {
             return String(
-                format: String(localized: "finances.market.search.min_chars_format"),
+                format: L("finances.market.search.min_chars_format"),
                 Self.minimumRemoteQueryLength
             )
         }
 
-        return String(localized: "finances.market.search_hint")
+        return L("finances.market.search_hint")
     }
 
     private func userFacingSearchErrorMessage(for error: Error, query: String, hasFallbackResults: Bool) -> String? {
@@ -262,7 +262,7 @@ final class MarketSymbolSearchViewModel: ObservableObject {
         }
 
         if isRateLimitError(error) {
-            return String(localized: "finances.market.search.rate_limit")
+            return L("finances.market.search.rate_limit")
         }
 
         return error.localizedDescription
@@ -389,7 +389,7 @@ struct MarketSymbolSearchSheet: View {
                 .padding(.top, 40)
             } else if viewModel.results.isEmpty {
                 VStack(spacing: 8) {
-                    Text(String(localized: "finances.market.search_empty"))
+                    Text(L("finances.market.search_empty"))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     Text(viewModel.emptyStateHintText)
@@ -505,14 +505,14 @@ struct MarketSymbolSearchSheet: View {
                     .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("finances.market.search.support_hint")
+                    Text(L("finances.market.search.support_hint"))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                         .lineSpacing(1)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Button(String(localized: "finances.market.search.contact_action")) {
+                    Button(L("finances.market.search.contact_action")) {
                         showSupportContactSheet = true
                     }
                     .font(.system(size: 13, weight: .semibold))

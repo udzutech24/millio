@@ -7,7 +7,11 @@ final class FirebaseCrashReporter: CrashReporter {
     func setEnabled(_ enabled: Bool) {
         crashlytics.setCrashlyticsCollectionEnabled(enabled)
     }
-    
+
+    func setUserID(_ id: String?) {
+        crashlytics.setUserID(id ?? "")
+    }
+
     func log(_ message: String) {
         crashlytics.log(message)
     }

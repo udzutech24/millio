@@ -39,10 +39,10 @@ enum SubscriptionBillingCycle: String, CaseIterable, Codable {
 
     var localizedTitle: String {
         switch self {
-        case .weekly:    return String(localized: "subscriptions.cycle.weekly",    defaultValue: "Weekly")
-        case .monthly:   return String(localized: "subscriptions.cycle.monthly",   defaultValue: "Monthly")
-        case .quarterly: return String(localized: "subscriptions.cycle.quarterly", defaultValue: "Quarterly")
-        case .yearly:    return String(localized: "subscriptions.cycle.yearly",    defaultValue: "Yearly")
+        case .weekly:    return L("subscriptions.cycle.weekly", defaultValue: "Weekly")
+        case .monthly:   return L("subscriptions.cycle.monthly", defaultValue: "Monthly")
+        case .quarterly: return L("subscriptions.cycle.quarterly", defaultValue: "Quarterly")
+        case .yearly:    return L("subscriptions.cycle.yearly", defaultValue: "Yearly")
         }
     }
 

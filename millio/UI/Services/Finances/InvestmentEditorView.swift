@@ -131,8 +131,8 @@ struct InvestmentEditorView: View {
 
     private var marketSymbolHintText: String {
         selectedCategory == .crypto
-            ? String(localized: "finances.add_account.hint.select_coin_or_pair")
-            : String(localized: "finances.add_account.hint.select_ticker")
+            ? L("finances.add_account.hint.select_coin_or_pair")
+            : L("finances.add_account.hint.select_ticker")
     }
 
     private var positionTotal: Double? {
@@ -176,21 +176,21 @@ struct InvestmentEditorView: View {
                     isPresented: showDeleteConfirmation,
                     title: deleteConfirmationTitle,
                     message: String(localized: deleteConfirmationMessageKey),
-                    confirmTitle: String(localized: "finances.common.delete"),
-                    cancelTitle: String(localized: "finances.common.cancel"),
+                    confirmTitle: L("finances.common.delete"),
+                    cancelTitle: L("finances.common.cancel"),
                     onConfirm: confirmDeleteInvestment,
                     onCancel: { showDeleteConfirmation = false }
                 )
             }
             .navigationTitle(
                 viewModel.state.editingInvestment == nil
-                    ? String(localized: "finances.editor.investment.new_title")
-                    : String(localized: "finances.editor.investment.edit_title")
+                    ? L("finances.editor.investment.new_title")
+                    : L("finances.editor.investment.edit_title")
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(String(localized: "finances.common.cancel")) {
+                    Button(L("finances.common.cancel")) {
                         if let onClose {
                             onClose()
                         } else {
@@ -201,7 +201,7 @@ struct InvestmentEditorView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(String(localized: "finances.common.save")) {
+                    Button(L("finances.common.save")) {
                         saveInvestment()
                     }
                     .foregroundStyle(
@@ -316,11 +316,11 @@ struct InvestmentEditorView: View {
                             showCurrencyPicker = false
                         }
                     )
-                    .navigationTitle(String(localized: "finances.add_account.currency_picker.title"))
+                    .navigationTitle(L("finances.add_account.currency_picker.title"))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button(String(localized: "finances.common.cancel")) {
+                            Button(L("finances.common.cancel")) {
                                 showCurrencyPicker = false
                             }
                             .foregroundStyle(AppColors.textPrimary)
@@ -369,10 +369,10 @@ struct InvestmentEditorView: View {
     
     private var mainInfoSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.editor.section.main_info"))
+            FinancesSectionHeader(title: L("finances.editor.section.main_info"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
-                    TextField(String(localized: "finances.editor.investment.name_placeholder"), text: $name)
+                    TextField(L("finances.editor.investment.name_placeholder"), text: $name)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
@@ -383,14 +383,14 @@ struct InvestmentEditorView: View {
     
     private var investmentParamsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.editor.investment.params_section"))
+            FinancesSectionHeader(title: L("finances.editor.investment.params_section"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text(String(localized: "finances.editor.investment.type_label"))
+                        Text(L("finances.editor.investment.type_label"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Picker(String(localized: "finances.editor.investment.type_label"), selection: $selectedInvestmentType) {
+                        Picker(L("finances.editor.investment.type_label"), selection: $selectedInvestmentType) {
                             ForEach(InvestmentType.allCases, id: \.self) { type in
                                 Text(type.displayName).tag(type)
                             }
@@ -403,14 +403,14 @@ struct InvestmentEditorView: View {
                     FinancesRowDivider()
 
                     HStack {
-                        Text(String(localized: "finances.editor.investment.category_label"))
+                        Text(L("finances.editor.investment.category_label"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         if isEditingMarketAssetWithLockedIdentity {
                             Text(selectedCategory.displayName)
                                 .foregroundStyle(AppColors.textTertiary)
                         } else {
-                            Picker(String(localized: "finances.editor.investment.category_label"), selection: $selectedCategory) {
+                            Picker(L("finances.editor.investment.category_label"), selection: $selectedCategory) {
                                 ForEach(InvestmentCategory.allCases, id: \.self) { category in
                                     Text(category.displayName).tag(category)
                                 }
@@ -543,7 +543,7 @@ struct InvestmentEditorView: View {
             FinancesRowDivider()
 
             HStack(spacing: 8) {
-                Text(String(localized: "finances.market.field_unit_price"))
+                Text(L("finances.market.field_unit_price"))
                     .foregroundStyle(AppColors.textPrimary)
                 Spacer()
                 if isRefreshingPrice {
@@ -568,7 +568,7 @@ struct InvestmentEditorView: View {
             FinancesRowDivider()
 
             HStack {
-                Text(String(localized: "finances.add_account.investment.purchase_price"))
+                Text(L("finances.add_account.investment.purchase_price"))
                     .foregroundStyle(AppColors.textPrimary)
                 Spacer()
                 TextField("0", text: Binding(
@@ -588,7 +588,7 @@ struct InvestmentEditorView: View {
             FinancesRowDivider()
 
             HStack {
-                Text(String(localized: "finances.market.field_position_total"))
+                Text(L("finances.market.field_position_total"))
                     .foregroundStyle(AppColors.textPrimary)
                 Spacer()
                 Text(formatOptionalPrice(positionTotal))
@@ -600,7 +600,7 @@ struct InvestmentEditorView: View {
             FinancesRowDivider()
 
             HStack {
-                Text(String(localized: "finances.market.field_quote_currency"))
+                Text(L("finances.market.field_quote_currency"))
                     .foregroundStyle(AppColors.textPrimary)
                 Spacer()
                 Text(marketCurrency ?? selectedCurrency)
@@ -614,7 +614,7 @@ struct InvestmentEditorView: View {
     private var regularAmountRows: some View {
         Group {
             HStack {
-                Text(String(localized: "finances.add_account.field.amount"))
+                Text(L("finances.add_account.field.amount"))
                     .foregroundStyle(AppColors.textPrimary)
                 Spacer()
                 TextField("0", text: Binding(
@@ -635,7 +635,7 @@ struct InvestmentEditorView: View {
             FinancesRowDivider()
 
             HStack {
-                Text(String(localized: "finances.add_account.field.currency"))
+                Text(L("finances.add_account.field.currency"))
                     .foregroundStyle(AppColors.textPrimary)
                 Spacer()
                 if isLoadingCurrencies {
@@ -670,7 +670,7 @@ struct InvestmentEditorView: View {
                     .foregroundStyle(AppColors.error)
                     .padding(.horizontal, 4)
             } else if let lastKnownPriceUpdatedAt {
-                Text("\(String(localized: "finances.market.price_updated_prefix")) \(formatDate(lastKnownPriceUpdatedAt))")
+                Text("\(L("finances.market.price_updated_prefix")) \(formatDate(lastKnownPriceUpdatedAt))")
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textPrimary.opacity(0.35))
                     .padding(.horizontal, 4)
@@ -683,12 +683,12 @@ struct InvestmentEditorView: View {
     @ViewBuilder
     private var depositIncomeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.deposit.section.income_title"))
+            FinancesSectionHeader(title: L("finances.deposit.section.income_title"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     // Ставка
                     HStack {
-                        Text(String(localized: "finances.deposit.field.rate"))
+                        Text(L("finances.deposit.field.rate"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         TextField("0", text: $depositInterestRateText)
@@ -707,7 +707,7 @@ struct InvestmentEditorView: View {
 
                     // Дата открытия
                     DatePicker(
-                        String(localized: "finances.deposit.field.start_date"),
+                        L("finances.deposit.field.start_date"),
                         selection: $depositStartDate,
                         displayedComponents: .date
                     )
@@ -719,7 +719,7 @@ struct InvestmentEditorView: View {
                     FinancesRowDivider()
 
                     // Срок вклада
-                    Toggle(String(localized: "finances.deposit.field.has_end_date"), isOn: $depositHasEndDate)
+                    Toggle(L("finances.deposit.field.has_end_date"), isOn: $depositHasEndDate)
                         .foregroundStyle(AppColors.textPrimary)
                         .tint(AppColors.toggleOnGreen)
                         .padding(.vertical, 8)
@@ -729,10 +729,10 @@ struct InvestmentEditorView: View {
 
                     // Капитализация
                     HStack {
-                        Text(String(localized: "finances.deposit.field.capitalization"))
+                        Text(L("finances.deposit.field.capitalization"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Picker(String(localized: "finances.deposit.field.capitalization"), selection: $depositCapitalization) {
+                        Picker(L("finances.deposit.field.capitalization"), selection: $depositCapitalization) {
                             ForEach(DepositCapitalization.allCases, id: \.self) { cap in
                                 Text(cap.displayName).tag(cap)
                             }
@@ -746,7 +746,7 @@ struct InvestmentEditorView: View {
                     if depositHasEndDate {
                         FinancesRowDivider()
                         DatePicker(
-                            String(localized: "finances.deposit.field.end_date"),
+                            L("finances.deposit.field.end_date"),
                             selection: $depositEndDate,
                             in: depositStartDate...,
                             displayedComponents: .date
@@ -760,10 +760,10 @@ struct InvestmentEditorView: View {
 
                         // Уведомление о конце срока
                         HStack {
-                            Text(String(localized: "finances.deposit.field.notify"))
+                            Text(L("finances.deposit.field.notify"))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
-                            Picker(String(localized: "finances.deposit.field.notify"), selection: Binding(
+                            Picker(L("finances.deposit.field.notify"), selection: Binding(
                                 get: { DepositNotifyDays(rawValue: depositNotifyDaysBefore ?? 0) ?? .off },
                                 set: { depositNotifyDaysBefore = $0 == .off ? nil : $0.rawValue }
                             )) {
@@ -782,11 +782,11 @@ struct InvestmentEditorView: View {
                         FinancesRowDivider()
                         // Плановый доход
                         HStack {
-                            Text(String(localized: "finances.deposit.monthly_income_label"))
+                            Text(L("finances.deposit.monthly_income_label"))
                                 .foregroundStyle(AppColors.textSecondary)
                                 .font(.system(size: 14))
                             Spacer()
-                            Text("~\(String(format: "%.2f", depositMonthlyIncome)) \(selectedCurrency)/мес")
+                            Text("~\(String(format: "%.2f", depositMonthlyIncome)) \(selectedCurrency)\(L("finances.deposit.per_month_suffix"))")
                                 .foregroundStyle(AppColors.textPrimary)
                                 .font(.system(size: 14, weight: .medium))
                         }
@@ -796,7 +796,7 @@ struct InvestmentEditorView: View {
                         FinancesRowDivider()
 
                         // Тоггл Cashflow
-                        Toggle(String(localized: "finances.deposit.cashflow_toggle"), isOn: $depositIncomeInCashflow)
+                        Toggle(L("finances.deposit.cashflow_toggle"), isOn: $depositIncomeInCashflow)
                             .foregroundStyle(AppColors.textPrimary)
                             .tint(AppColors.toggleOnGreen)
                             .padding(.vertical, 8)
@@ -808,7 +808,7 @@ struct InvestmentEditorView: View {
                                 Image(systemName: "calendar.badge.checkmark")
                                     .foregroundStyle(AppColors.toggleOnGreen)
                                     .font(.system(size: 13))
-                                Text(String(format: String(localized: "finances.deposit.cashflow_preview"),
+                                Text(String(format: L("finances.deposit.cashflow_preview"),
                                             String(format: "%.2f", depositMonthlyIncome),
                                             selectedCurrency))
                                     .foregroundStyle(AppColors.textSecondary)
@@ -825,14 +825,14 @@ struct InvestmentEditorView: View {
 
     private var additionalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.editor.section.additional"))
+            FinancesSectionHeader(title: L("finances.editor.section.additional"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text(String(localized: "finances.add_account.section.priority"))
+                        Text(L("finances.add_account.section.priority"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Picker(String(localized: "finances.add_account.section.priority"), selection: $selectedPriority) {
+                        Picker(L("finances.add_account.section.priority"), selection: $selectedPriority) {
                             ForEach(InvestmentPriority.allCases, id: \.self) { priority in
                                 Text(priority.displayName).tag(priority)
                             }
@@ -844,7 +844,7 @@ struct InvestmentEditorView: View {
                     
                     FinancesRowDivider()
                     
-                    Toggle(String(localized: "finances.add_account.favorite"), isOn: $isFavorite)
+                    Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
@@ -852,7 +852,7 @@ struct InvestmentEditorView: View {
                     
                     FinancesRowDivider()
                     
-                    Toggle(String(localized: "finances.add_account.total_impact.include"), isOn: $includeInTotal)
+                    Toggle(L("finances.add_account.total_impact.include"), isOn: $includeInTotal)
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
@@ -1233,7 +1233,7 @@ struct InvestmentEditorView: View {
 
     private var deleteConfirmationTitle: String {
         let name = viewModel.state.editingInvestment?.name
-            ?? String(localized: "finances.dynamics.chart.account_fallback")
+            ?? L("finances.dynamics.chart.account_fallback")
         return FinanceDeleteProductCopy.confirmationTitle(for: .investment, name: name)
     }
 

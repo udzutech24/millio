@@ -353,7 +353,7 @@ struct FinanceOverviewCardView: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
-                        Text(String(localized: "finances.overview.chart.saldo"))
+                        Text(L("finances.overview.chart.saldo"))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppColors.textSecondary)
                             .textCase(.uppercase)
@@ -905,7 +905,7 @@ struct FinanceOverviewCardView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "cashflow.common.dismiss"))
+                    .accessibilityLabel(L("cashflow.common.dismiss"))
                 }
             }
         }
@@ -925,7 +925,7 @@ struct FinanceOverviewCardView: View {
             Image(systemName: "chart.bar.xaxis")
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
-            Text(String(localized: "finances.overview.chart.empty"))
+            Text(L("finances.overview.chart.empty"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
         }

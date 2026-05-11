@@ -25,15 +25,15 @@ enum CashflowCategoryTransactionSheetKind {
 
     var navigationTitle: String {
         switch self {
-        case .income: return String(localized: "cashflow.operation.new_income")
-        case .expense: return String(localized: "cashflow.operation.new_expense")
+        case .income: return L("cashflow.operation.new_income")
+        case .expense: return L("cashflow.operation.new_expense")
         }
     }
 
     var monthlyTotalTitle: String {
         switch self {
-        case .income: return String(localized: "cashflow.operation.total_income_for_month")
-        case .expense: return String(localized: "cashflow.operation.total_expense_for_month")
+        case .income: return L("cashflow.operation.total_income_for_month")
+        case .expense: return L("cashflow.operation.total_expense_for_month")
         }
     }
 

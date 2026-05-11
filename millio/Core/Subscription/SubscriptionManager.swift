@@ -514,6 +514,6 @@ enum SubscriptionError: LocalizedError {
     }
     
     var errorDescription: String? {
-        String(localized: String.LocalizationValue(localizationKey))
+        String(localized: String.LocalizationValue(localizationKey), bundle: LanguageManager.shared.currentBundle)
     }
 }

@@ -12,7 +12,7 @@ struct ToastView: View {
     @Binding var isPresented: Bool
 
     private var closeLabel: String {
-        String(localized: "cashflow.common.close")
+        L("cashflow.common.close")
     }
     
     var body: some View {

@@ -205,7 +205,7 @@ enum CashflowHistorySummaryBuilder {
     }
 }
 
-private struct CashflowHistoryRingChart: View {
+struct CashflowHistoryRingChart: View {
     let entries: [CashflowHistorySummaryEntry]
     let selectedRawValue: String?
     let progress: CGFloat

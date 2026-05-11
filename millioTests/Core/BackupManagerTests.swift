@@ -1087,14 +1087,16 @@ struct CloudBackupStoreTests {
         #expect(db.deletedRecordNames.count == 2)
     }
 
-    @Test("listBackupVersions prunes existing excess backups down to four manual and three auto")
-    func testListBackupVersionsPrunesExistingExcessBackups() async throws {
+    @Test("listBackupVersions не удаляет записи CloudKit — pure read path")
+    func testListBackupVersionsDoesNotDeleteRecords() async throws {
         let db = FakeCloudBackupDatabase()
         let store = CloudBackupStore(
-            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
+            maxSnapshots: 3,
+            maxPinnedSnapshots: 4
         )
 
-        for index in 0..<6 {
+        for index in 0..<60 {
             let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_pinned_\(index)"))
             record["backupDate"] = Date(timeIntervalSince1970: TimeInterval(1_000 + index))
             record["backupSize"] = Int64(100 + index)
@@ -1103,7 +1105,7 @@ struct CloudBackupStoreTests {
             db.recordsByName[record.recordID.recordName] = record
         }
 
-        for index in 0..<3 {
+        for index in 0..<40 {
             let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_auto_\(index)"))
             record["backupDate"] = Date(timeIntervalSince1970: TimeInterval(2_000 + index))
             record["backupSize"] = Int64(200 + index)
@@ -1112,12 +1114,73 @@ struct CloudBackupStoreTests {
             db.recordsByName[record.recordID.recordName] = record
         }
 
-        let versions = try await store.listBackupVersions()
+        _ = try await store.listBackupVersions()
 
-        #expect(versions.count == 7)
-        #expect(versions.filter(\.isPinned).count == 4)
-        #expect(versions.filter { !$0.isPinned }.count == 3)
-        #expect(db.deletedRecordNames.count == 2)
+        #expect(db.deletedRecordNames.isEmpty)
+    }
+
+    @Test("uploadBackup запускает prune после успешного сохранения snapshot")
+    func testUploadTriggersPruneAfterSuccess() async throws {
+        let db = FakeCloudBackupDatabase()
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
+            maxSnapshots: 3,
+            maxPinnedSnapshots: 4
+        )
+
+        for index in 0..<5 {
+            let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_auto_\(index)"))
+            record["backupDate"] = Date(timeIntervalSince1970: TimeInterval(1_000 + index))
+            record["backupSize"] = Int64(100 + index)
+            record["backupVersion"] = "2.0.0"
+            record["isPinned"] = 0
+            db.recordsByName[record.recordID.recordName] = record
+        }
+
+        try await store.uploadBackup(Data("payload".utf8), isPinned: false)
+
+        // После upload: 5 старых + 1 новый = 6 авто; maxSnapshots=3 → удалено 3 stale.
+        // Layer 1 в storeAutoBackup удалил stale по индексу, Layer 2 (prune) — orphan scan.
+        // Итого deletedRecordNames.count >= 2 (stale сверх retention окна).
+        #expect(!db.deletedRecordNames.isEmpty)
+    }
+
+    @Test("prune сохраняет pinned-записи в пределах maxPinnedSnapshots")
+    func testPruneRetainsPinnedRecords() async throws {
+        let db = FakeCloudBackupDatabase()
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
+            maxSnapshots: 3,
+            maxPinnedSnapshots: 4
+        )
+
+        for index in 0..<5 {
+            let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_pinned_\(index)"))
+            record["backupDate"] = Date(timeIntervalSince1970: TimeInterval(1_000 + index))
+            record["backupSize"] = Int64(100 + index)
+            record["backupVersion"] = "2.0.0"
+            record["isPinned"] = 1
+            db.recordsByName[record.recordID.recordName] = record
+        }
+
+        for index in 0..<5 {
+            let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_auto_\(index)"))
+            record["backupDate"] = Date(timeIntervalSince1970: TimeInterval(2_000 + index))
+            record["backupSize"] = Int64(200 + index)
+            record["backupVersion"] = "2.0.0"
+            record["isPinned"] = 0
+            db.recordsByName[record.recordID.recordName] = record
+        }
+
+        try await store.uploadBackup(Data("payload".utf8), isPinned: false)
+
+        let versions = try await store.listBackupVersions()
+        let retainedPinned = versions.filter(\.isPinned).count
+        let retainedAuto = versions.filter { !$0.isPinned }.count
+
+        // maxPinnedSnapshots=4: удалён 1 pinned из 5; maxSnapshots=3: удалены 3 авто из 6 (5 старых + 1 новый).
+        #expect(retainedPinned == 4)
+        #expect(retainedAuto == 3)
     }
 
     @Test("downloadLatestBackup fallback к legacy latest, если index указывает на отсутствующие snapshots")
@@ -1186,6 +1249,7 @@ struct CloudBackupStoreTests {
         #expect(versions.count == 1)
         #expect(versions.first?.recordName == "snapshot_live")
         #expect(downloaded == payload)
+        #expect(db.deletedRecordNames.isEmpty)
     }
 
     @Test("uploadBackup succeeds when backup_index cache update fails")
@@ -1361,6 +1425,103 @@ struct CloudBackupStoreTests {
         #expect(info?.size == Int64(99))
         #expect(info?.version == "2.0.0")
     }
+
+    // MARK: - Snapshot cache tests
+
+    @Test("listSnapshotVersions использует кэш при повторном вызове в пределах TTL")
+    func testSnapshotCacheReturnsCachedResultWithinTTL() async throws {
+        let db = FakeCloudBackupDatabase()
+        let fixedNow = Date(timeIntervalSince1970: 1_000_000)
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
+            now: { fixedNow }
+        )
+        let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_a"))
+        record["backupDate"] = fixedNow
+        record["backupSize"] = Int64(2048)
+        record["backupVersion"] = "2.0.0"
+        record["isPinned"] = 0
+        db.recordsByName[record.recordID.recordName] = record
+
+        _ = try await store.listBackupVersions()
+        _ = try await store.listBackupVersions()
+
+        #expect(db.fetchRecordsCallCount == 1)
+    }
+
+    @Test("кэш инвалидируется после uploadBackup — следующий listBackupVersions делает CKQuery")
+    func testSnapshotCacheInvalidatedAfterUpload() async throws {
+        let db = FakeCloudBackupDatabase()
+        let fixedNow = Date(timeIntervalSince1970: 1_000_000)
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
+            maxSnapshots: 10,
+            now: { fixedNow }
+        )
+        let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_a"))
+        record["backupDate"] = fixedNow
+        record["backupSize"] = Int64(2048)
+        record["backupVersion"] = "2.0.0"
+        record["isPinned"] = 0
+        db.recordsByName[record.recordID.recordName] = record
+
+        _ = try await store.listBackupVersions()
+        let countAfterFirst = db.fetchRecordsCallCount
+
+        try await store.uploadBackup(Data("payload".utf8), isPinned: false)
+        _ = try await store.listBackupVersions()
+
+        #expect(db.fetchRecordsCallCount > countAfterFirst)
+    }
+
+    @Test("кэш инвалидируется после deleteBackup — следующий listBackupVersions делает CKQuery")
+    func testSnapshotCacheInvalidatedAfterDelete() async throws {
+        let db = FakeCloudBackupDatabase()
+        let fixedNow = Date(timeIntervalSince1970: 1_000_000)
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
+            now: { fixedNow }
+        )
+        let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_a"))
+        record["backupDate"] = fixedNow
+        record["backupSize"] = Int64(2048)
+        record["backupVersion"] = "2.0.0"
+        record["isPinned"] = 0
+        db.recordsByName[record.recordID.recordName] = record
+
+        _ = try await store.listBackupVersions()
+        let countAfterFirst = db.fetchRecordsCallCount
+
+        try await store.deleteBackup(recordName: "snapshot_a")
+        _ = try await store.listBackupVersions()
+
+        #expect(db.fetchRecordsCallCount > countAfterFirst)
+    }
+
+    @Test("кэш истекает после TTL — следующий вызов делает CKQuery")
+    func testSnapshotCacheExpiresAfterTTL() async throws {
+        let db = FakeCloudBackupDatabase()
+        var currentTime = Date(timeIntervalSince1970: 1_000_000)
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
+            now: { currentTime }
+        )
+        let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_a"))
+        record["backupDate"] = currentTime
+        record["backupSize"] = Int64(2048)
+        record["backupVersion"] = "2.0.0"
+        record["isPinned"] = 0
+        db.recordsByName[record.recordID.recordName] = record
+
+        _ = try await store.listBackupVersions()
+        let countAfterFirst = db.fetchRecordsCallCount
+
+        // Продвигаем время за пределы TTL (30 с)
+        currentTime = currentTime.addingTimeInterval(31)
+        _ = try await store.listBackupVersions()
+
+        #expect(db.fetchRecordsCallCount > countAfterFirst)
+    }
 }
 
 final class FakeCloudBackupContainer: CloudBackupContainerProtocol {
@@ -1395,6 +1556,7 @@ final class FakeCloudBackupDatabase: CloudBackupDatabaseProtocol {
     var savedRecords: [CKRecord] = []
     var deletedRecordNames: [String] = []
     var saveErrorByRecordName: [String: Error] = [:]
+    var fetchRecordsCallCount: Int = 0
     private var persistedAssetURLs: [URL] = []
     
     func record(for recordID: CKRecord.ID) async throws -> CKRecord {
@@ -1407,6 +1569,7 @@ final class FakeCloudBackupDatabase: CloudBackupDatabaseProtocol {
     func records(recordType: String) async throws -> [CKRecord] {
         if let recordsError { throw recordsError }
         if let errorOnFetch { throw errorOnFetch }
+        fetchRecordsCallCount += 1
         return recordsByName.values.filter { $0.recordType == recordType }
     }
     

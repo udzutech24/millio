@@ -79,7 +79,14 @@ struct millioApp: App {
         _activeScopeStoreExistedBeforeBinding = State(initialValue: Self.storeExists(for: initialScope))
         _activeDataScope = State(initialValue: initialScope)
         _activeModelContainer = State(initialValue: Self.makeModelContainer(for: initialScope))
-        if runtimeEnvironment.isUITesting {
+        if runtimeEnvironment.isScreenshotMode {
+            let appState = AppState()
+            appState.isGuestModeEnabled = true
+            appState.isAppLocked = false
+            appState.lifecycle = .ready
+            appState.subscriptionAccessSource = .subscription
+            _appState = State(initialValue: appState)
+        } else if runtimeEnvironment.isUITesting {
             let appState = AppState()
             appState.isGuestModeEnabled = true
             appState.isAppLocked = false
@@ -124,6 +131,10 @@ struct millioApp: App {
                 )
                 .task {
                     guard !runtimeEnvironment.isUITesting else { return }
+                    if runtimeEnvironment.isScreenshotMode {
+                        await ScreenshotDataSeeder.seed(into: container.mainContext)
+                        return
+                    }
                     await startupCoordinator.runColdStartIfNeeded {
                         await initializeColdStart(using: container)
                     }
@@ -133,7 +144,7 @@ struct millioApp: App {
                     appLockCoordinator.handleWillResignActive(appState: appState)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                    guard !runtimeEnvironment.isUITesting else { return }
+                    guard !runtimeEnvironment.isUITesting, !runtimeEnvironment.isScreenshotMode else { return }
                     Task { @MainActor in
                         await appRefreshCoordinator.refreshSubscriptionIfNeeded(
                             reason: .appDidBecomeActive,
@@ -258,6 +269,7 @@ struct millioApp: App {
         authManager.configure(toastCenter: toastCenter)
         authManager.configure(authConfiguration: backendRuntime.authConfiguration)
         authManager.configure(onSessionChanged: { user in
+            CrashReporting.setUserID(user?.id)
             await synchronizeDataScope(with: user)
             portfolioSymbolsSyncService?.handleAuthenticationStateChanged(
                 isAuthenticated: authManager.isAuthenticated

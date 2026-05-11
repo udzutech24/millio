@@ -33,13 +33,13 @@ struct CashflowCategoryGridLayout {
         case overlayButton
     }
 
-    static let compactColumns = 3
-    static let regularColumns = 3
-    static let compactWidthThreshold: CGFloat = 330
-    static let budgetCompactWidthThreshold: CGFloat = 430
-    static let columnSpacing: CGFloat = 8
-    static let unifiedCardMinHeight: CGFloat = 94
-    static let unifiedTopRowMinHeight: CGFloat = 18
+    static let compactColumns = 2
+    static let regularColumns = 2
+    static let compactWidthThreshold: CGFloat = 280
+    static let budgetCompactWidthThreshold: CGFloat = 280
+    static let columnSpacing: CGFloat = 10
+    static let unifiedCardMinHeight: CGFloat = 100
+    static let unifiedTopRowMinHeight: CGFloat = 24
     static let unifiedFooterMinHeight: CGFloat = 18
 
     static func columnCount(
@@ -75,10 +75,10 @@ struct CashflowCategoryGridLayout {
         if showsBudgetDetails {
             return CardMetrics(
                 topRowMinHeight: unifiedTopRowMinHeight,
-                contentSpacing: 4,
-                titleMinHeight: 22,
+                contentSpacing: 5,
+                titleMinHeight: 20,
                 cardMinHeight: unifiedCardMinHeight,
-                verticalPadding: 7,
+                verticalPadding: 10,
                 amountTopPadding: 0,
                 usesFlexibleSpacer: true,
                 footerMinHeight: unifiedFooterMinHeight
@@ -87,12 +87,12 @@ struct CashflowCategoryGridLayout {
 
         return CardMetrics(
             topRowMinHeight: unifiedTopRowMinHeight,
-            contentSpacing: 4,
+            contentSpacing: 5,
             titleMinHeight: 20,
             cardMinHeight: unifiedCardMinHeight,
-            verticalPadding: 6,
-            amountTopPadding: 4,
-            usesFlexibleSpacer: true,
+            verticalPadding: 10,
+            amountTopPadding: 2,
+            usesFlexibleSpacer: false,
             footerMinHeight: unifiedFooterMinHeight
         )
     }

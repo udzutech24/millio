@@ -169,6 +169,13 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     private let maxPinnedSnapshots: Int
     private let now: () -> Date
 
+    private struct SnapshotCache {
+        let versions: [BackupVersionInfo]
+        let expiresAt: Date
+    }
+    private var snapshotCache: SnapshotCache?
+    private let snapshotCacheTTL: TimeInterval = 30
+
     private struct BackupIndexEntry: Codable, BackupRecordNameProviding {
         let recordName: String
         let date: Date
@@ -260,19 +267,32 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         backupDate: Date,
         backupVersion: String
     ) async throws -> BackupVersionInfo {
+        let result: BackupVersionInfo
         if isPinned {
-            return try await storePinnedBackup(
+            result = try await storePinnedBackup(
+                data,
+                backupDate: backupDate,
+                backupVersion: backupVersion
+            )
+        } else {
+            result = try await storeAutoBackup(
                 data,
                 backupDate: backupDate,
                 backupVersion: backupVersion
             )
         }
-
-        return try await storeAutoBackup(
-            data,
-            backupDate: backupDate,
-            backupVersion: backupVersion
-        )
+        snapshotCache = nil
+        // Layer 2: orphan cleanup — полный scan CloudKit после успешного snapshot.
+        // Layer 1 (index-based в storePinnedBackup/storeAutoBackup) удаляет stale-записи по индексу.
+        // Layer 2 — safety net для orphan-записей вне индекса (schema-миграции, другие устройства).
+        // Ошибка prune не откатывает upload — best-effort.
+        do {
+            try await pruneExcessSnapshotsIfNeeded(using: container.privateCloudDatabase)
+        } catch {
+            logger.warning("Orphan prune after backup failed (non-fatal): \(self.descriptiveCloudKitError(error), privacy: .public)")
+        }
+        snapshotCache = nil  // prune мог населить кэш данными до удаления stale-записей
+        return result
     }
 
     private func storePinnedBackup(
@@ -467,7 +487,6 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
 
     func listBackupVersions() async throws -> [BackupVersionInfo] {
         let privateDB = container.privateCloudDatabase
-        try await pruneExcessSnapshotsIfNeeded(using: privateDB)
         var versions = try await listSnapshotVersions(using: privateDB)
 
         if let autoVersion = try await autoBackupVersion(using: privateDB),
@@ -491,6 +510,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         } catch {
             throw mapCloudKitError(error)
         }
+        snapshotCache = nil
 
         guard recordName != legacyLatestRecordID.recordName else {
             return
@@ -538,6 +558,12 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     }
 
     private func listSnapshotVersions(using database: CloudBackupDatabaseProtocol) async throws -> [BackupVersionInfo] {
+        let currentTime = now()
+        if let cache = snapshotCache, cache.expiresAt > currentTime {
+            logger.info("BackupList source=cache count=\(cache.versions.count) env=\(Self.cloudKitEnvironment, privacy: .public)")
+            return cache.versions
+        }
+
         do {
             // AppBackup records — источник истины. backup_index — только best-effort cache / fallback.
             let records = try await database.records(recordType: snapshotRecordType)
@@ -550,6 +576,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
                 }
                 .sorted { $0.date > $1.date }
             logger.info("BackupList source=snapshotQuery count=\(versions.count) env=\(Self.cloudKitEnvironment, privacy: .public)")
+            snapshotCache = SnapshotCache(versions: versions, expiresAt: now().addingTimeInterval(snapshotCacheTTL))
 
             // Диагностика расхождения с индексом — только логируем, не перезаписываем в read-path.
             if let indexEntries = try? await loadIndexEntries(from: database), !indexEntries.isEmpty {

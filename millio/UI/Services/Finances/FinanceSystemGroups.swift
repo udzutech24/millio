@@ -13,7 +13,7 @@ import SwiftData
 /// Важно: бизнес-логика должна опираться на устойчивую сущность (группу), а не на `nil`-связи.
 /// `FinanceAccount.group == nil` считается невалидным состоянием и подлежит нормализации.
 enum FinanceSystemGroups {
-    static var ungroupedName: String { String(localized: "finances.group.ungrouped") }
+    static var ungroupedName: String { L("finances.group.ungrouped") }
     static let ungroupedColorHex: String = "#3C4B5E"
 
     @MainActor

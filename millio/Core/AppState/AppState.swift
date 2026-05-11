@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import OSLog
 
 // Импортируем SubscriptionStatus из SubscriptionManager
 // (определен в SubscriptionManager.swift)
@@ -29,6 +30,7 @@ final class AppState {
                 }
             }
             languageRefreshToken = UUID()
+            Logger(subsystem: "millio", category: "AppState").debug("[AppState] languageRefreshToken updated: \(self.languageRefreshToken) (language: \(self.selectedLanguage.rawValue))")
             if SettingsManager.isDefaultProfileDisplayName(profileDisplayName) {
                 let localizedDefault = SettingsManager.defaultProfileDisplayName(for: selectedLanguage)
                 if profileDisplayName != localizedDefault {

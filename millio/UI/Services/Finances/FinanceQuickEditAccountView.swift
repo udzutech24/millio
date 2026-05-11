@@ -118,7 +118,7 @@ struct FinanceQuickEditAccountView: View {
                         Button {
                             save()
                         } label: {
-                            Text(String(localized: "finances.common.save"))
+                            Text(L("finances.common.save"))
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                                 .frame(maxWidth: .infinity)
@@ -151,7 +151,7 @@ struct FinanceQuickEditAccountView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(String(localized: "finances.common.cancel")) {
+                    Button(L("finances.common.cancel")) {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
@@ -167,7 +167,7 @@ struct FinanceQuickEditAccountView: View {
     private func creditCardQuickForm(currency: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             quickRow(
-                title: String(localized: "finances.add_account.card.credit_limit"),
+                title: L("finances.add_account.card.credit_limit"),
                 text: Binding(
                     get: { creditLimitText },
                     set: { creditLimitText = $0 }
@@ -176,7 +176,7 @@ struct FinanceQuickEditAccountView: View {
             )
 
             quickRow(
-                title: String(localized: "finances.add_account.card.total_debt"),
+                title: L("finances.add_account.card.total_debt"),
                 text: Binding(
                     get: { creditDebtText },
                     set: { creditDebtText = $0 }
@@ -185,7 +185,7 @@ struct FinanceQuickEditAccountView: View {
             )
 
             HStack {
-                Text(String(localized: "finances.add_account.card.remaining_limit"))
+                Text(L("finances.add_account.card.remaining_limit"))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
                 Spacer()
@@ -251,11 +251,11 @@ struct FinanceQuickEditAccountView: View {
 
     private var navigationTitle: String {
         if isCreditCard {
-            return String(localized: "finances.quick_edit.title.card")
+            return L("finances.quick_edit.title.card")
         }
         return isMarketInvestment
-            ? String(localized: "finances.quick_edit.title.quantity")
-            : String(localized: "finances.quick_edit.title.amount")
+            ? L("finances.quick_edit.title.quantity")
+            : L("finances.quick_edit.title.amount")
     }
 
     private var creditRemainingLimit: Double {
@@ -345,19 +345,19 @@ struct FinanceQuickEditAccountView: View {
     private var fieldTitle: String {
         if isMarketInvestment {
             return marketInvestment?.category == .crypto
-                ? String(localized: "finances.market.field_quantity_coins")
-                : String(localized: "finances.market.field_quantity")
+                ? L("finances.market.field_quantity_coins")
+                : L("finances.market.field_quantity")
         }
         return isCreditCard
-            ? String(localized: "finances.quick_edit.field.debt")
-            : String(localized: "finances.add_account.field.amount")
+            ? L("finances.quick_edit.field.debt")
+            : L("finances.add_account.field.amount")
     }
 
     private func valueSuffix(for info: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)) -> String {
         if isMarketInvestment {
             return marketInvestment?.category == .crypto
-                ? String(localized: "finances.quick_edit.unit.coins_short")
-                : String(localized: "finances.investment.unit.shares_short")
+                ? L("finances.quick_edit.unit.coins_short")
+                : L("finances.investment.unit.shares_short")
         }
         return info.currency
     }

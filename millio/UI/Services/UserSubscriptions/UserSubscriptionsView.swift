@@ -32,7 +32,7 @@ struct UserSubscriptionsView: View {
                 subscriptionsList
             }
         }
-        .navigationTitle(String(localized: "subscriptions.title", defaultValue: "Subscriptions"))
+        .navigationTitle(L("subscriptions.title", defaultValue: "Subscriptions"))
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -60,12 +60,12 @@ struct UserSubscriptionsView: View {
             Text("📋")
                 .font(.system(size: 56))
 
-            Text(String(localized: "subscriptions.empty.title", defaultValue: "No subscriptions yet"))
+            Text(L("subscriptions.empty.title", defaultValue: "No subscriptions yet"))
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(Color.white)
 
-            Text(String(localized: "subscriptions.empty.subtitle",
-                        defaultValue: "Track your recurring services — Netflix, Spotify, and others."))
+            Text(L("subscriptions.empty.subtitle",
+                    defaultValue: "Track your recurring services — Netflix, Spotify, and others."))
                 .font(.system(size: 15))
                 .foregroundStyle(Color.white.opacity(0.55))
                 .multilineTextAlignment(.center)
@@ -74,7 +74,7 @@ struct UserSubscriptionsView: View {
             Button {
                 showAddSheet = true
             } label: {
-                Text(String(localized: "subscriptions.add.first", defaultValue: "Add subscription"))
+                Text(L("subscriptions.add.first", defaultValue: "Add subscription"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.white)
                     .padding(.horizontal, 28)
@@ -116,7 +116,7 @@ struct UserSubscriptionsView: View {
 
     private var totalSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(String(localized: "subscriptions.total.monthly", defaultValue: "Per month"))
+            Text(L("subscriptions.total.monthly", defaultValue: "Per month"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.55))
             Text(formattedTotal)
@@ -176,7 +176,7 @@ struct UserSubscriptionsView: View {
                         .foregroundStyle(sub.isActive ? Color.white : Color.white.opacity(0.4))
 
                     if !sub.isActive {
-                        Text(String(localized: "subscriptions.status.paused", defaultValue: "Paused"))
+                        Text(L("subscriptions.status.paused", defaultValue: "Paused"))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Color.white.opacity(0.4))
                     }
@@ -225,7 +225,7 @@ private struct UserSubscriptionEditorSheet: View {
                     Section {
                         HStack {
                             TextField(
-                                String(localized: "subscriptions.editor.emoji", defaultValue: "Emoji"),
+                                L("subscriptions.editor.emoji", defaultValue: "Emoji"),
                                 text: $iconEmoji
                             )
                             .frame(width: 60)
@@ -233,7 +233,7 @@ private struct UserSubscriptionEditorSheet: View {
                             .font(.system(size: 24))
 
                             TextField(
-                                String(localized: "subscriptions.editor.name", defaultValue: "Service name"),
+                                L("subscriptions.editor.name", defaultValue: "Service name"),
                                 text: $serviceName
                             )
                         }
@@ -243,13 +243,13 @@ private struct UserSubscriptionEditorSheet: View {
                     Section {
                         HStack {
                             TextField(
-                                String(localized: "subscriptions.editor.amount", defaultValue: "Amount"),
+                                L("subscriptions.editor.amount", defaultValue: "Amount"),
                                 text: $amount
                             )
                             .keyboardType(.decimalPad)
 
                             TextField(
-                                String(localized: "subscriptions.editor.currency", defaultValue: "Currency"),
+                                L("subscriptions.editor.currency", defaultValue: "Currency"),
                                 text: $currencyCode
                             )
                             .frame(width: 70)
@@ -257,7 +257,7 @@ private struct UserSubscriptionEditorSheet: View {
                         }
 
                         Picker(
-                            String(localized: "subscriptions.editor.cycle", defaultValue: "Billing"),
+                            L("subscriptions.editor.cycle", defaultValue: "Billing"),
                             selection: $billingCycle
                         ) {
                             ForEach(SubscriptionBillingCycle.allCases, id: \.self) { cycle in
@@ -269,7 +269,7 @@ private struct UserSubscriptionEditorSheet: View {
 
                     Section {
                         Toggle(
-                            String(localized: "subscriptions.editor.next_charge", defaultValue: "Next charge date"),
+                            L("subscriptions.editor.next_charge", defaultValue: "Next charge date"),
                             isOn: $hasNextChargeDate
                         )
                         if hasNextChargeDate {
@@ -285,7 +285,7 @@ private struct UserSubscriptionEditorSheet: View {
 
                     Section {
                         Toggle(
-                            String(localized: "subscriptions.editor.active", defaultValue: "Active"),
+                            L("subscriptions.editor.active", defaultValue: "Active"),
                             isOn: $isActive
                         )
                     }
@@ -300,7 +300,7 @@ private struct UserSubscriptionEditorSheet: View {
                                 }
                                 dismiss()
                             } label: {
-                                Text(String(localized: "subscriptions.editor.delete", defaultValue: "Delete subscription"))
+                                Text(L("subscriptions.editor.delete", defaultValue: "Delete subscription"))
                                     .frame(maxWidth: .infinity, alignment: .center)
                             }
                         }
@@ -311,17 +311,17 @@ private struct UserSubscriptionEditorSheet: View {
             }
             .navigationTitle(
                 isEditing
-                ? String(localized: "subscriptions.editor.title.edit", defaultValue: "Edit")
-                : String(localized: "subscriptions.editor.title.add", defaultValue: "New subscription")
+                ? L("subscriptions.editor.title.edit", defaultValue: "Edit")
+                : L("subscriptions.editor.title.add", defaultValue: "New subscription")
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(String(localized: "cashflow.common.cancel", defaultValue: "Cancel")) { dismiss() }
+                    Button(L("cashflow.common.cancel", defaultValue: "Cancel")) { dismiss() }
                         .foregroundStyle(AppColors.textSecondary)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "cashflow.common.save", defaultValue: "Save")) {
+                    Button(L("cashflow.common.save", defaultValue: "Save")) {
                         save()
                     }
                     .disabled(!canSave)

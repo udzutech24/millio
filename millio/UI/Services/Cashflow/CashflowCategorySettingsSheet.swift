@@ -29,6 +29,14 @@ struct CashflowCategorySettingsSheet: View {
         ).filter { !$0.isCustom }
     }
 
+    private var customOptions: [CashflowCategoryOption] {
+        viewModel.categoryOptions(
+            for: kind.categoryKind,
+            matching: searchText,
+            includeHiddenSystem: true
+        ).filter { $0.isCustom }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -99,7 +107,7 @@ struct CashflowCategorySettingsSheet: View {
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary.opacity(0.92))
                     }
-                    .accessibilityLabel(String(localized: "cashflow.common.close"))
+                    .accessibilityLabel(L("cashflow.common.close"))
                 }
             }
         }
@@ -123,7 +131,7 @@ struct CashflowCategorySettingsSheet: View {
                         openEditSheet(for: option)
                     },
                     deleteActionTitle: option.isCustom
-                        ? String(localized: "cashflow.category.actions.delete")
+                        ? L("cashflow.category.actions.delete")
                         : String(
                             localized: "cashflow.category.actions.archive",
                             defaultValue: "Archive",
@@ -215,7 +223,7 @@ struct CashflowCategorySettingsSheet: View {
                     )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "cashflow.common.edit"))
+            .accessibilityLabel(L("cashflow.common.edit"))
 
             Toggle(
                 "",
@@ -292,12 +300,12 @@ struct CashflowCategorySettingsSheet: View {
 
     private func visibilityText(isVisible: Bool, canHide: Bool) -> String {
         if !canHide {
-            return String(localized: "cashflow.category.visibility.always")
+            return L("cashflow.category.visibility.always")
         }
         if isVisible {
-            return String(localized: "cashflow.category.visibility.visible")
+            return L("cashflow.category.visibility.visible")
         }
-        return String(localized: "cashflow.category.visibility.hidden")
+        return L("cashflow.category.visibility.hidden")
     }
 
     private func handleSave(name: String, icon: String) {

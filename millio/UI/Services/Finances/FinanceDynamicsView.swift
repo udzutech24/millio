@@ -25,7 +25,7 @@ enum FinanceDynamicsTopBarStyle {
     static let containerStrokeWidth: CGFloat = 0.7
     static let containerHorizontalPadding: CGFloat = 6
     static let containerVerticalPadding: CGFloat = 4
-    static let baseScrollContentTopPadding: CGFloat = 8
+    static let baseScrollContentTopPadding: CGFloat = 18
     static let singleAccountCreditCardScrollContentClearanceTopPadding: CGFloat = 24
     static let periodSelectorTopPadding: CGFloat = 10
 
@@ -187,6 +187,7 @@ private struct FinanceDynamicsContentView: View {
     @State private var tradeQuantityText: String = "1"
     @State private var tradePriceText: String = ""
     @State private var tradeSettlementSelectionID: String? = nil
+    @State private var isBreakdownExpanded: Bool = false
     @State private var tradeShouldAffectCardBalance: Bool = true
     @State private var tradeErrorText: String?
     @State private var isInlineMarketEdit: Bool = false
@@ -270,37 +271,43 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private var configuredContent: some View {
-        baseContent
-            .navigationTitle(navigationTitleText)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { navigationToolbarContent }
-            .sheet(isPresented: filterSheetBinding) {
-                FinanceDynamicsFilterSheet(viewModel: viewModel)
+        Group {
+            if case .none = navigationToolbarMode {
+                baseContent
+            } else {
+                baseContent
+                    .navigationTitle("")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { navigationToolbarContent }
             }
-            .sheet(isPresented: $showCustomPeriodSheet) {
-                customPeriodSheet
+        }
+        .sheet(isPresented: filterSheetBinding) {
+            FinanceDynamicsFilterSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showCustomPeriodSheet) {
+            customPeriodSheet
+        }
+        .sheet(isPresented: $showSubscriptionSheet) {
+            NavigationStack {
+                SubscriptionView()
             }
-            .sheet(isPresented: $showSubscriptionSheet) {
-                NavigationStack {
-                    SubscriptionView()
-                }
-            }
-            .sheet(isPresented: $showDisplayCurrencySheet) {
-                displayCurrencySheet
-            }
-            .sheet(isPresented: $showTradeSheet) {
-                tradeSheetContent
-            }
-            .sheet(isPresented: $showFullProductEditSheet) {
-                fullProductEditSheetContent
-            }
-            .sheet(isPresented: $showCashflowHistory) {
-                cashflowHistorySheetContent
-            }
-            .onAppear(perform: handleOnAppear)
-            .onChange(of: marketInvestment?.updatedAt) { _, _ in
-                handleMarketInvestmentChange()
-            }
+        }
+        .sheet(isPresented: $showDisplayCurrencySheet) {
+            displayCurrencySheet
+        }
+        .sheet(isPresented: $showTradeSheet) {
+            tradeSheetContent
+        }
+        .sheet(isPresented: $showFullProductEditSheet) {
+            fullProductEditSheetContent
+        }
+        .sheet(isPresented: $showCashflowHistory) {
+            cashflowHistorySheetContent
+        }
+        .onAppear(perform: handleOnAppear)
+        .onChange(of: marketInvestment?.updatedAt) { _, _ in
+            handleMarketInvestmentChange()
+        }
     }
 
     private var baseContent: some View {
@@ -314,8 +321,8 @@ private struct FinanceDynamicsContentView: View {
                     isPresented: showDeleteAccountConfirmation,
                     title: deleteAccountConfirmationTitle,
                     message: String(localized: deleteAccountConfirmationMessageKey),
-                    confirmTitle: String(localized: "finances.common.delete"),
-                    cancelTitle: String(localized: "finances.common.cancel"),
+                    confirmTitle: L("finances.common.delete"),
+                    cancelTitle: L("finances.common.cancel"),
                     onConfirm: confirmDeleteAccount,
                     onCancel: { showDeleteAccountConfirmation = false }
                 )
@@ -324,8 +331,8 @@ private struct FinanceDynamicsContentView: View {
                     isPresented: showDeleteGroupConfirmation,
                     title: deleteGroupConfirmationTitle,
                     message: deleteGroupConfirmationMessage,
-                    confirmTitle: String(localized: "finances.common.delete"),
-                    cancelTitle: String(localized: "finances.common.cancel"),
+                    confirmTitle: L("finances.common.delete"),
+                    cancelTitle: L("finances.common.cancel"),
                     onConfirm: confirmDeleteCurrentGroup,
                     onCancel: { showDeleteGroupConfirmation = false }
                 )
@@ -348,7 +355,7 @@ private struct FinanceDynamicsContentView: View {
         if let group = currentDynamicsGroup {
             return group.name
         }
-        return String(localized: "finances.dynamics.title")
+        return L("finances.dynamics.title")
     }
 
     private var filterSheetBinding: Binding<Bool> {
@@ -458,51 +465,62 @@ private struct FinanceDynamicsContentView: View {
         let needsTopClearance = viewModel.state.isSingleAccountMode && isCreditCardAccount && shouldShowSingleAccountActionBar
         let scrollTopPadding = FinanceDynamicsTopBarStyle.scrollContentTopPadding(needsClearance: needsTopClearance)
 
-        return ScrollView {
-            VStack(spacing: 16) {
-                Color.clear
-                    .frame(height: 0)
-                    .background(
-                        GeometryReader { proxy in
-                            Color.clear
-                                .preference(
-                                    key: ScrollOffsetKey.self,
-                                    value: proxy.frame(in: .named("dynScroll")).minY
-                                )
-                        }
-                    )
+        return GeometryReader { safeProxy in
+            let topInset = safeProxy.safeAreaInsets.top
+            ScrollView {
+                VStack(spacing: 16) {
+                    Color.clear
+                        .frame(height: 0)
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear
+                                    .preference(
+                                        key: ScrollOffsetKey.self,
+                                        value: proxy.frame(in: .named("dynScroll")).minY
+                                    )
+                            }
+                        )
 
-                chartCard
+                    chartCard
 
+                    // Полоса параметров вклада (Phase 5)
+                    if let deposit = depositInvestment {
+                        depositParamsStrip(for: deposit)
+                    }
 
-                // Полоса параметров вклада (Phase 5)
-                if let deposit = depositInvestment {
-                    depositParamsStrip(for: deposit)
+                    dynamicsListCard
+
+                    if !viewModel.state.isSingleAccountMode && !viewModel.state.dynamicsBreakdown.isEmpty {
+                        groupsDonutCard
+                    }
+
+                    if !viewModel.state.isSingleAccountMode && !viewModel.state.currencyBreakdown.isEmpty {
+                        currencyBreakdownCard
+                    }
+
+                    // Блок прогноза дохода по вкладу (Phase 5 + 8)
+                    if let deposit = depositInvestment {
+                        depositForecastSection(for: deposit)
+                    }
+
+                    if shouldShowDeleteAccountFooter, let account = initialAccount {
+                        deleteAccountFooterButton(account: account)
+                    }
                 }
-
-                dynamicsListCard
-
-                // Блок прогноза дохода по вкладу (Phase 5 + 8)
-                if let deposit = depositInvestment {
-                    depositForecastSection(for: deposit)
-                }
-
-                if shouldShowDeleteAccountFooter, let account = initialAccount {
-                    deleteAccountFooterButton(account: account)
-                }
+                .padding(.horizontal, 16)
+                .padding(.top, topInset + scrollTopPadding)
+                .padding(.bottom, shouldShowDeleteAccountFooter ? 44 : 32)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, scrollTopPadding)
-            .padding(.bottom, shouldShowDeleteAccountFooter ? 44 : 32)
-        }
-        .coordinateSpace(name: "dynScroll")
-        .onPreferenceChange(ScrollOffsetKey.self) { y in
-            let threshold: CGFloat = 140
-            let p = min(max(-y / threshold, 0), 1)
-            let quant: CGFloat = 0.02
-            if abs(p - lastCollapseProgress) > quant {
-                lastCollapseProgress = p
-                collapseProgress = p
+            .ignoresSafeArea(edges: .top)
+            .coordinateSpace(name: "dynScroll")
+            .onPreferenceChange(ScrollOffsetKey.self) { y in
+                let threshold: CGFloat = 140
+                let p = min(max(-y / threshold, 0), 1)
+                let quant: CGFloat = 0.02
+                if abs(p - lastCollapseProgress) > quant {
+                    lastCollapseProgress = p
+                    collapseProgress = p
+                }
             }
         }
     }
@@ -526,9 +544,9 @@ private struct FinanceDynamicsContentView: View {
                 investmentCurrency
             )
             let currentPriceValue = money(investment.lastKnownUnitPrice ?? 0, currency: investmentCurrency)
-            let purchasePriceTitle = String(localized: "finances.add_account.investment.purchase_price")
+            let purchasePriceTitle = L("finances.add_account.investment.purchase_price")
             let purchasePriceValue = money(investment.averagePurchaseUnitPrice ?? 0, currency: investmentCurrency)
-            let purchaseTotalTitle = String(localized: "finances.dynamics.market.purchase_total")
+            let purchaseTotalTitle = L("finances.dynamics.market.purchase_total")
             let purchaseTotalValue = money(investment.totalPurchaseCost ?? 0, currency: investmentCurrency)
 
             ScrollView {
@@ -541,7 +559,7 @@ private struct FinanceDynamicsContentView: View {
                         contentPadding: EdgeInsets(top: compactLayout ? 10 : 14, leading: 12, bottom: compactLayout ? 10 : 14, trailing: 12)
                     ) {
                         VStack(alignment: .leading, spacing: compactLayout ? 8 : 12) {
-                            Text(String(localized: "finances.dynamics.market.instrument_info"))
+                            Text(L("finances.dynamics.market.instrument_info"))
                                 .font(.system(size: compactLayout ? 18 : 20, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                                 .lineLimit(1)
@@ -585,7 +603,7 @@ private struct FinanceDynamicsContentView: View {
                     }
 
                     VStack(alignment: .leading, spacing: compactLayout ? 6 : 8) {
-                        Text(String(localized: "finances.dynamics.market.actions"))
+                        Text(L("finances.dynamics.market.actions"))
                             .font(.system(size: compactLayout ? 18 : 20, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -595,12 +613,12 @@ private struct FinanceDynamicsContentView: View {
                             contentPadding: EdgeInsets(top: compactLayout ? 10 : 12, leading: 12, bottom: compactLayout ? 10 : 12, trailing: 12)
                         ) {
                             HStack(spacing: compactLayout ? 8 : 10) {
-                                actionButton(title: String(localized: "finances.dynamics.market.action.buy"), icon: "cart.badge.plus", color: Color.green.opacity(0.88), compactLayout: compactLayout) {
+                                actionButton(title: L("finances.dynamics.market.action.buy"), icon: "cart.badge.plus", color: Color.green.opacity(0.88), compactLayout: compactLayout) {
                                     tradeMode = .buy
                                     prepareTradeDraft(for: investment)
                                     showTradeSheet = true
                                 }
-                                actionButton(title: String(localized: "finances.dynamics.market.action.sell"), icon: "cart.badge.minus", color: Color.red.opacity(0.9), compactLayout: compactLayout) {
+                                actionButton(title: L("finances.dynamics.market.action.sell"), icon: "cart.badge.minus", color: Color.red.opacity(0.9), compactLayout: compactLayout) {
                                     tradeMode = .sell
                                     prepareTradeDraft(for: investment)
                                     showTradeSheet = true
@@ -709,7 +727,7 @@ private struct FinanceDynamicsContentView: View {
             : (growth < 0 ? Color.red.opacity(0.16) : Color.white.opacity(0.08))
 
         return VStack(alignment: .trailing, spacing: 2) {
-            Text(String(localized: "finances.dynamics.growth"))
+            Text(L("finances.dynamics.growth"))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
                 .lineLimit(1)
@@ -857,7 +875,7 @@ private struct FinanceDynamicsContentView: View {
             )
             .overlay {
                 VStack(spacing: compactLayout ? 3 : 5) {
-                    Text(String(localized: "finances.dynamics.growth"))
+                    Text(L("finances.dynamics.growth"))
                         .font(.system(size: compactLayout ? 13 : 14, weight: .medium))
                         .foregroundStyle(AppColors.textSecondary)
                         .lineLimit(1)
@@ -914,17 +932,17 @@ private struct FinanceDynamicsContentView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        Picker(String(localized: "finances.dynamics.trade.mode"), selection: $tradeMode) {
-                            Text(String(localized: "finances.dynamics.market.action.buy")).tag(InvestmentOrderSide.buy)
-                            Text(String(localized: "finances.dynamics.market.action.sell")).tag(InvestmentOrderSide.sell)
+                        Picker(L("finances.dynamics.trade.mode"), selection: $tradeMode) {
+                            Text(L("finances.dynamics.market.action.buy")).tag(InvestmentOrderSide.buy)
+                            Text(L("finances.dynamics.market.action.sell")).tag(InvestmentOrderSide.sell)
                         }
                         .pickerStyle(.segmented)
 
                         FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
                             VStack(spacing: 12) {
-                                Picker(String(localized: "finances.dynamics.trade.price_mode"), selection: $tradePriceMode) {
-                                    Text(String(localized: "finances.dynamics.trade.price_mode.market")).tag(TradePriceMode.market)
-                                    Text(String(localized: "finances.dynamics.trade.price_mode.custom")).tag(TradePriceMode.custom)
+                                Picker(L("finances.dynamics.trade.price_mode"), selection: $tradePriceMode) {
+                                    Text(L("finances.dynamics.trade.price_mode.market")).tag(TradePriceMode.market)
+                                    Text(L("finances.dynamics.trade.price_mode.custom")).tag(TradePriceMode.custom)
                                 }
                                 .pickerStyle(.segmented)
 
@@ -968,13 +986,13 @@ private struct FinanceDynamicsContentView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 HStack(spacing: 12) {
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text(String(localized: "finances.dynamics.trade.funding.title"))
+                                        Text(L("finances.dynamics.trade.funding.title"))
                                             .font(.system(size: 16, weight: .semibold))
                                             .foregroundStyle(AppColors.textPrimary)
                                         Text(
                                             tradeMode == .buy
-                                                ? String(localized: "finances.dynamics.trade.funding.buy_subtitle")
-                                                : String(localized: "finances.dynamics.trade.funding.sell_subtitle")
+                                                ? L("finances.dynamics.trade.funding.buy_subtitle")
+                                                : L("finances.dynamics.trade.funding.sell_subtitle")
                                         )
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundStyle(AppColors.textSecondary)
@@ -1002,7 +1020,7 @@ private struct FinanceDynamicsContentView: View {
                                         )
                                     }
                                 } else {
-                                    Text(String(localized: "finances.dynamics.trade.funding.ignored_hint"))
+                                    Text(L("finances.dynamics.trade.funding.ignored_hint"))
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundStyle(AppColors.textSecondary)
                                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1042,8 +1060,8 @@ private struct FinanceDynamicsContentView: View {
 
                         SwipeConfirmButton(
                             title: tradeMode == .buy
-                                ? String(localized: "finances.dynamics.trade.swipe.buy")
-                                : String(localized: "finances.dynamics.trade.swipe.sell"),
+                                ? L("finances.dynamics.trade.swipe.buy")
+                                : L("finances.dynamics.trade.swipe.sell"),
                             accentColor: tradeMode == .buy ? Color.green : Color.red,
                             isEnabled: canSubmitTrade(for: investment),
                             onConfirmed: {
@@ -1056,7 +1074,7 @@ private struct FinanceDynamicsContentView: View {
                     .padding(.bottom, 32)
                 }
             }
-            .navigationTitle(String(localized: "finances.dynamics.trade.title"))
+            .navigationTitle(L("finances.dynamics.trade.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -1086,11 +1104,11 @@ private struct FinanceDynamicsContentView: View {
         } label: {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(String(localized: "finances.dynamics.trade.funding.title"))
+                    Text(L("finances.dynamics.trade.funding.title"))
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(AppColors.textTertiary)
                         .textCase(.uppercase)
-                    Text(selectedAccount?.pickerTitle ?? String(localized: "finances.dynamics.trade.error.account_required"))
+                    Text(selectedAccount?.pickerTitle ?? L("finances.dynamics.trade.error.account_required"))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(selectedAccount == nil ? AppColors.textSecondary : AppColors.textPrimary)
                         .lineLimit(1)
@@ -1200,14 +1218,14 @@ private struct FinanceDynamicsContentView: View {
         ) ?? 0
         let unitPrice = currentTradeUnitPrice(for: investment)
         guard quantity > 0, unitPrice > 0 else {
-            tradeErrorText = String(localized: "finances.dynamics.trade.error.invalid_inputs")
+            tradeErrorText = L("finances.dynamics.trade.error.invalid_inputs")
             return
         }
 
         let funding = currentTradeFunding(for: investment)
         if tradeShouldAffectCardBalance {
             guard funding.settlementAccountKind != nil else {
-                tradeErrorText = String(localized: "finances.dynamics.trade.error.account_required")
+                tradeErrorText = L("finances.dynamics.trade.error.account_required")
                 return
             }
             guard let settlementAccount = resolvedTradeSettlementAccount(for: investment) else {
@@ -1218,13 +1236,13 @@ private struct FinanceDynamicsContentView: View {
                 return
             }
             if tradeMode == .buy, quantity * unitPrice > tradeSettlementAccountBalance(for: settlementAccount) + 0.0000001 {
-                tradeErrorText = String(localized: "finances.dynamics.trade.error.insufficient_account_balance")
+                tradeErrorText = L("finances.dynamics.trade.error.insufficient_account_balance")
                 return
             }
         }
 
         if tradeMode == .sell, quantity > (investment.marketQuantity ?? 0) {
-            tradeErrorText = String(localized: "finances.dynamics.trade.error.insufficient_quantity")
+            tradeErrorText = L("finances.dynamics.trade.error.insufficient_quantity")
             return
         }
 
@@ -1313,14 +1331,14 @@ private struct FinanceDynamicsContentView: View {
 
     private func marketQuantityTitle(for investment: Investment) -> String {
         investment.category == .crypto
-            ? String(localized: "finances.market.field_quantity_coins")
-            : String(localized: "finances.market.field_quantity")
+            ? L("finances.market.field_quantity_coins")
+            : L("finances.market.field_quantity")
     }
 
     private func marketQuantityUnit(for investment: Investment) -> String {
         investment.category == .crypto
-            ? String(localized: "finances.quick_edit.unit.coins_short")
-            : String(localized: "finances.investment.unit.shares_short")
+            ? L("finances.quick_edit.unit.coins_short")
+            : L("finances.investment.unit.shares_short")
     }
 
     private func marketNumber(_ value: Double, digits: Int) -> String {
@@ -1427,7 +1445,7 @@ private struct FinanceDynamicsContentView: View {
     private var financeOverviewChartSection: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Text(String(localized: "finances.overview.chart.title"))
+                Text(L("finances.overview.chart.title"))
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
 
@@ -1439,7 +1457,7 @@ private struct FinanceDynamicsContentView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
                             .font(.system(size: 12, weight: .semibold))
-                        Text(String(localized: "finances.overview.chart.full"))
+                        Text(L("finances.overview.chart.full"))
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundStyle(AppColors.textPrimary)
@@ -1507,11 +1525,11 @@ private struct FinanceDynamicsContentView: View {
                     .padding(16)
                 }
             }
-            .navigationTitle(String(localized: "finances.overview.chart.title"))
+            .navigationTitle(L("finances.overview.chart.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "cashflow.common.dismiss")) {
+                    Button(L("cashflow.common.dismiss")) {
                         showOverviewExpandedChart = false
                     }
                     .foregroundStyle(AppColors.textPrimary)
@@ -1526,19 +1544,19 @@ private struct FinanceDynamicsContentView: View {
     ) -> some View {
         HStack(spacing: compact ? 8 : 12) {
             financeOverviewSummaryCard(
-                title: String(localized: "finances.overview.chart.credit"),
+                title: L("finances.overview.chart.credit"),
                 value: presentation.selectedBar.credit,
                 accent: AppColors.error,
                 compact: compact
             )
             financeOverviewSummaryCard(
-                title: String(localized: "finances.overview.chart.debit"),
+                title: L("finances.overview.chart.debit"),
                 value: presentation.selectedBar.debit,
                 accent: Color(red: 0.38, green: 0.96, blue: 0.71),
                 compact: compact
             )
             financeOverviewSummaryCard(
-                title: String(localized: "finances.overview.chart.saldo"),
+                title: L("finances.overview.chart.saldo"),
                 value: presentation.selectedBar.saldo,
                 accent: overviewSaldoColor(for: presentation.selectedBar.saldo),
                 compact: compact,
@@ -1679,9 +1697,9 @@ private struct FinanceDynamicsContentView: View {
                         .frame(height: maxBarHeight, alignment: .bottom)
 
                         HStack(spacing: 10) {
-                            Text(String(localized: "finances.overview.chart.credit"))
+                            Text(L("finances.overview.chart.credit"))
                                 .foregroundStyle(AppColors.textSecondary)
-                            Text(String(localized: "finances.overview.chart.debit"))
+                            Text(L("finances.overview.chart.debit"))
                                 .foregroundStyle(AppColors.textSecondary)
                         }
                         .font(.system(size: 10, weight: .medium))
@@ -1767,7 +1785,7 @@ private struct FinanceDynamicsContentView: View {
             Image(systemName: "chart.bar.xaxis")
                 .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
-            Text(String(localized: "finances.overview.chart.empty"))
+            Text(L("finances.overview.chart.empty"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
         }
@@ -1832,16 +1850,6 @@ private struct FinanceDynamicsContentView: View {
                 } else if viewModel.state.chartData.isEmpty {
                     emptyChartView
                         .frame(height: max(0, currentHeight - 64))
-                } else if viewModel.state.selectedChartType == .distribution && !viewModel.state.isSingleAccountMode {
-                    DistributionChartView(
-                        items: viewModel.state.dynamicsBreakdown,
-                        currency: viewModel.state.displayCurrency,
-                        isAmountHidden: isAmountHidden
-                    )
-                    .frame(height: max(0, currentHeight - 64))
-                    .padding(.top, 8)
-                    .animation(.easeInOut(duration: 0.25), value: viewModel.state.period)
-                    .animation(.easeInOut(duration: 0.25), value: viewModel.state.displayCurrency)
                 } else {
                     chartContent
                         .frame(height: max(0, currentHeight - 64))
@@ -2015,7 +2023,7 @@ private struct FinanceDynamicsContentView: View {
             guard case .singleAccount(let accountID) = viewModel.state.dynamicsMode,
                   let account = viewModel.getAccountsForSelectedGroups().first(where: { $0.accountUniqueID == accountID }),
                   let accountInfo = viewModel.getAccountInfoForDynamics(account: account) else {
-                return String(localized: "finances.dynamics.chart.account_fallback")
+                return L("finances.dynamics.chart.account_fallback")
             }
             return accountInfo.name
         }()
@@ -2125,10 +2133,10 @@ private struct FinanceDynamicsContentView: View {
 
     private var deleteAccountConfirmationTitle: String {
         guard let account = initialAccount else {
-            return String(localized: "finances.dynamics.delete_account")
+            return L("finances.dynamics.delete_account")
         }
         let name = financeViewModel.getAccountInfo(account: account)?.name
-            ?? String(localized: "finances.dynamics.chart.account_fallback")
+            ?? L("finances.dynamics.chart.account_fallback")
         return FinanceDeleteProductCopy.confirmationTitle(for: account.accountType, name: name)
     }
 
@@ -2155,7 +2163,7 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private var deleteGroupConfirmationTitle: String {
-        let groupName = currentGroup?.name ?? String(localized: "finances.group.ungrouped")
+        let groupName = currentGroup?.name ?? L("finances.group.ungrouped")
         return FinancesL10n.format("finances.dynamics.delete_group.confirm.title_format", groupName)
     }
 
@@ -2210,7 +2218,7 @@ private struct FinanceDynamicsContentView: View {
                 Image(systemName: "percent")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AppColors.toggleOnGreen)
-                Text("\(rate, specifier: "%.2g")% \(String(localized: "finances.deposit.params.per_year", defaultValue: "годовых"))")
+                Text("\(rate, specifier: "%.2g")% \(L("finances.deposit.params.per_year", defaultValue: "годовых"))")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AppColors.textPrimary)
 
@@ -2228,11 +2236,11 @@ private struct FinanceDynamicsContentView: View {
                 Spacer()
 
                 if isMatured {
-                    Text(String(localized: "finances.deposit.params.matured"))
+                    Text(L("finances.deposit.params.matured"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppColors.warning)
                 } else if let days = daysRemaining {
-                    Text(String(format: String(localized: "finances.deposit.params.days_remaining"), days))
+                    Text(String(format: L("finances.deposit.params.days_remaining"), days))
                         .font(.system(size: 12))
                         .foregroundStyle(AppColors.textTertiary)
                 }
@@ -2407,7 +2415,7 @@ private struct FinanceDynamicsContentView: View {
 
             VStack(spacing: 8) {
                 creditFieldRow(
-                    title: String(localized: "finances.add_account.card.credit_limit"),
+                    title: L("finances.add_account.card.credit_limit"),
                     value: limit,
                     currency: info.currency,
                     isEditing: isInlineAccountEdit,
@@ -2417,7 +2425,7 @@ private struct FinanceDynamicsContentView: View {
                     )
                 )
                 creditFieldRow(
-                    title: String(localized: "finances.add_account.card.total_debt"),
+                    title: L("finances.add_account.card.total_debt"),
                     value: debt,
                     currency: info.currency,
                     isEditing: isInlineAccountEdit,
@@ -2427,7 +2435,7 @@ private struct FinanceDynamicsContentView: View {
                     )
                 )
                 creditFieldRow(
-                    title: String(localized: "finances.add_account.card.remaining_limit"),
+                    title: L("finances.add_account.card.remaining_limit"),
                     value: remaining,
                     currency: info.currency,
                     isEditing: false,
@@ -2598,7 +2606,7 @@ private struct FinanceDynamicsContentView: View {
                         .padding(.top, 6)
                 }
             }
-            .navigationTitle(String(localized: "finances.dynamics.currency.title"))
+            .navigationTitle(L("finances.dynamics.currency.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -2609,7 +2617,7 @@ private struct FinanceDynamicsContentView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "finances.common.cancel")) {
+                    Button(L("finances.common.cancel")) {
                         displayCurrencySearchText = ""
                         showDisplayCurrencySheet = false
                     }
@@ -2621,7 +2629,7 @@ private struct FinanceDynamicsContentView: View {
                     hasSeenDisplayCurrencyHint = true
                 }
             }
-            .alert(String(localized: "finances.dynamics.currency.hint.title"), isPresented: $showDisplayCurrencyInfoAlert) {
+            .alert(L("finances.dynamics.currency.hint.title"), isPresented: $showDisplayCurrencyInfoAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(displayCurrencyInfoMessage)
@@ -2640,7 +2648,7 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private var displayCurrencyInfoMessage: String {
-        String(localized: "finances.display_currency.hint.message")
+        L("finances.display_currency.hint.message")
     }
 
     private func displayCurrencyInfoBanner(message: String) -> some View {
@@ -2667,7 +2675,7 @@ private struct FinanceDynamicsContentView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "finances.dynamics.currency.hint.dismiss_accessibility"))
+            .accessibilityLabel(L("finances.dynamics.currency.hint.dismiss_accessibility"))
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
@@ -2721,41 +2729,33 @@ private struct FinanceDynamicsContentView: View {
                 .frame(width: 48, height: 32)
             }
 
-            // Переключатель типа графика (только в агрегированном режиме)
-            if !viewModel.state.isSingleAccountMode {
-                chartTypeToggle
-            }
-
-            Spacer(minLength: 4)
-
             // Кнопка календаря
             Button {
                 draftStartDate = customStartDate
                 draftEndDate = customEndDate
                 showCustomPeriodSheet = true
             } label: {
-                    Image("calendar")
-                        .frame(width: 24, height: 24)
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(useCustomPeriod ? selectedFill : quietFill)
-                                .overlay(
-                                    Capsule()
-                                        .stroke(
-                                            useCustomPeriod
-                                                ? CalendarRangeTheme.finances.ringColor.opacity(0.9)
-                                                : Color.white.opacity(0.14),
-                                            lineWidth: useCustomPeriod ? 1.2 : 1
-                                        )
-                                )
-                        )
+                Image("calendar")
+                    .frame(width: 18, height: 18)
+                    .font(.subheadline.weight(.semibold))
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Capsule()
+                            .fill(useCustomPeriod ? selectedFill : quietFill)
+                            .overlay(
+                                Capsule()
+                                    .stroke(
+                                        useCustomPeriod
+                                            ? CalendarRangeTheme.finances.ringColor.opacity(0.9)
+                                            : Color.white.opacity(0.14),
+                                        lineWidth: useCustomPeriod ? 1.2 : 1
+                                    )
+                            )
+                    )
                     .foregroundStyle(useCustomPeriod ? AppColors.textPrimary : AppColors.textSecondary)
             }
             .buttonStyle(.plain)
-            .frame(width: 60, height: 32)
+
         }
         .frame(maxWidth: .infinity)
 //        .padding(.horizontal, 12)
@@ -2765,42 +2765,51 @@ private struct FinanceDynamicsContentView: View {
     // MARK: - Chart Type Toggle
 
     private var chartTypeToggle: some View {
-        let selectedFill = Color.white.opacity(0.10)
-        let quietFill = Color.white.opacity(0.05)
-        let isLine = viewModel.state.selectedChartType == .line
-        return HStack(spacing: 0) {
+        let currentType = viewModel.state.selectedChartType
+        let icon: String = {
+            switch currentType {
+            case .line: return "chart.line.uptrend.xyaxis"
+            case .distribution: return "chart.pie"
+            case .currencyDistribution: return "dollarsign.circle"
+            }
+        }()
+        return Menu {
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     viewModel.handle(.setChartViewType(.line))
                 }
             } label: {
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(width: 32, height: 32)
-                    .foregroundStyle(isLine ? AppColors.textPrimary : AppColors.textSecondary)
+                Label(L("finances.dynamics.chart_type.line"), systemImage: "chart.line.uptrend.xyaxis")
             }
-            .buttonStyle(.plain)
-
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     viewModel.handle(.setChartViewType(.distribution))
                 }
             } label: {
-                Image(systemName: "chart.pie")
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(width: 32, height: 32)
-                    .foregroundStyle(!isLine ? AppColors.textPrimary : AppColors.textSecondary)
+                Label(L("finances.dynamics.chart_type.distribution"), systemImage: "chart.pie")
             }
-            .buttonStyle(.plain)
-        }
-        .background(
-            Capsule()
-                .fill(quietFill)
-                .overlay(
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    viewModel.handle(.setChartViewType(.currencyDistribution))
+                }
+            } label: {
+                Label(L("finances.dynamics.chart_type.currency"), systemImage: "dollarsign.circle")
+            }
+        } label: {
+            Image(systemName: icon)
+                .font(.subheadline.weight(.semibold))
+                .frame(width: 18, height: 18)
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(width: 32, height: 32)
+                .background(
                     Capsule()
-                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                        .fill(Color.white.opacity(0.05))
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                        )
                 )
-        )
+        }
         .frame(height: 32)
     }
 
@@ -2813,7 +2822,7 @@ private struct FinanceDynamicsContentView: View {
 
                 CalendarRangePickerPanel(
                     title: CalendarRangePickerCopy.sheetTitle(locale: locale),
-                    subtitle: String(localized: "finances.dynamics.custom_period.subtitle"),
+                    subtitle: L("finances.dynamics.custom_period.subtitle"),
                     startDate: $draftStartDate,
                     endDate: $draftEndDate,
                     theme: .finances
@@ -2825,7 +2834,7 @@ private struct FinanceDynamicsContentView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     ToolbarGlassIconButton(
                         systemName: "xmark",
-                        accessibilityLabel: String(localized: "cashflow.common.dismiss")
+                        accessibilityLabel: L("cashflow.common.dismiss")
                     ) {
                         showCustomPeriodSheet = false
                     }
@@ -2833,8 +2842,8 @@ private struct FinanceDynamicsContentView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 CalendarRangeSheetActionBar(
-                    secondaryTitle: String(localized: "finances.common.reset"),
-                    primaryTitle: String(localized: "finances.dynamics.custom_period.show"),
+                    secondaryTitle: L("finances.common.reset"),
+                    primaryTitle: L("finances.dynamics.custom_period.show"),
                     theme: .finances
                 ) {
                         draftStartDate = Date()
@@ -2875,7 +2884,7 @@ private struct FinanceDynamicsContentView: View {
                         Image(systemName: "line.3.horizontal.decrease.circle")
                             .symbolRenderingMode(.monochrome)
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(Color.cyan)
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.92))
                             .frame(width: 44, height: 44)
                             .background(
                                 Circle()
@@ -2900,24 +2909,45 @@ private struct FinanceDynamicsContentView: View {
                     .background(dynamicsCardBackground)
             } else {
                 LazyVStack(spacing: 0) {
-                    // Заголовок таблицы
-                    tableHeader
+                    // Заголовок таблицы — только при раскрытом состоянии
+                    if isBreakdownExpanded {
+                        tableHeader
+                    }
 
-                    // Итого
+                    // Итого — всегда видна, тап раскрывает/скрывает список
                     if let total = totalRow {
-                        totalRowView(total)
+                        Button {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                isBreakdownExpanded.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 0) {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(AppColors.textSecondary.opacity(0.7))
+                                    .rotationEffect(.degrees(isBreakdownExpanded ? 90 : 0))
+                                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isBreakdownExpanded)
+                                    .frame(width: 20)
+                                totalRowView(total)
+                                    .frame(maxWidth: .infinity)
+                            }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.plain)
+
                         Divider()
                             .overlay(Color.white.opacity(0.06))
                             .padding(.horizontal, 16)
                     }
 
-                    // Строки данных
-                    ForEach(viewModel.state.dynamicsBreakdown) { item in
-                        rowView(item)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                    // Строки данных — только при раскрытом состоянии
+                    if isBreakdownExpanded {
+                        ForEach(viewModel.state.dynamicsBreakdown) { item in
+                            rowView(item)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                        }
                     }
                 }
                 .padding(.vertical, 12)
@@ -2937,14 +2967,14 @@ private struct FinanceDynamicsContentView: View {
             VStack(spacing: 6) {
                 Text(
                     viewModel.state.viewMode == .groups
-                        ? String(localized: "finances.dynamics.empty.groups.title")
-                        : String(localized: "finances.dynamics.empty.products.title")
+                        ? L("finances.dynamics.empty.groups.title")
+                        : L("finances.dynamics.empty.products.title")
                 )
                     .font(.title3.weight(.bold))
                     .foregroundStyle(AppColors.textPrimary)
 
                 if viewModel.state.viewMode != .groups {
-                    Text(String(localized: "finances.dynamics.empty.products.subtitle"))
+                    Text(L("finances.dynamics.empty.products.subtitle"))
                         .font(.subheadline)
                         .foregroundStyle(AppColors.textSecondary)
                 }
@@ -2960,10 +2990,10 @@ private struct FinanceDynamicsContentView: View {
                 Text("")
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer(minLength: 12)
-                Text(String(localized: "finances.dynamics.table.start"))
+                Text(L("finances.dynamics.table.start"))
                     .font(.caption2).foregroundStyle(AppColors.textSecondary)
                     .frame(width: 92, alignment: .trailing)
-                Text(String(localized: "finances.dynamics.table.end"))
+                Text(L("finances.dynamics.table.end"))
                     .font(.caption2).foregroundStyle(AppColors.textSecondary)
                     .frame(width: 92, alignment: .trailing)
             }
@@ -2977,9 +3007,9 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private var dynamicsSegmentedControl: some View {
-        return Picker(String(localized: "finances.dynamics.view_mode.title"), selection: dynamicsViewModeSelection) {
-            Text(String(localized: "finances.dynamics.view_mode.groups")).tag(0)
-            Text(String(localized: "finances.dynamics.view_mode.accounts")).tag(1)
+        return Picker(L("finances.dynamics.view_mode.title"), selection: dynamicsViewModeSelection) {
+            Text(L("finances.dynamics.view_mode.groups")).tag(0)
+            Text(L("finances.dynamics.view_mode.accounts")).tag(1)
         }
         .pickerStyle(.segmented)
         .padding(4)
@@ -3001,12 +3031,100 @@ private struct FinanceDynamicsContentView: View {
         }
     }
 
+    // MARK: - Groups Donut Card
+
+    private var groupsDonutCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L("finances.dynamics.chart_type.distribution"))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color(red: 0.75, green: 0.60, blue: 1.00))
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+
+            DistributionChartView(
+                items: viewModel.state.dynamicsBreakdown,
+                currency: viewModel.state.displayCurrency,
+                isAmountHidden: isAmountHidden
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+        }
+        .background(distributionCardBackground)
+    }
+
+    // MARK: - Currency Breakdown Card
+
+    private var currencyBreakdownCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L("finances.dynamics.chart_type.currency"))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color(red: 1.00, green: 0.72, blue: 0.30))
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+
+            CurrencyDistributionChartView(
+                items: viewModel.state.currencyBreakdown,
+                displayCurrency: viewModel.state.displayCurrency,
+                isAmountHidden: isAmountHidden
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+        }
+        .background(currencyCardBackground)
+    }
+
+    private var distributionCardBackground: some View {
+        let accentColor = Color(red: 0.75, green: 0.47, blue: 1.00)
+        let fillGradient = LinearGradient(
+            colors: [Color(white: 0.08), Color(white: 0.04), Color.black],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        return RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(fillGradient)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [accentColor.opacity(0.10), Color.clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(accentColor.opacity(0.28), lineWidth: 0.9)
+            )
+    }
+
+    private var currencyCardBackground: some View {
+        let accentColor = Color(red: 1.00, green: 0.72, blue: 0.30)
+        let fillGradient = LinearGradient(
+            colors: [Color(white: 0.08), Color(white: 0.04), Color.black],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        return RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(fillGradient)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [accentColor.opacity(0.10), Color.clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(accentColor.opacity(0.28), lineWidth: 0.9)
+            )
+    }
+
     private var dynamicsCardBackground: some View {
         let accentColor = AppColors.financesGradient.first ?? .cyan
         let fillGradient = LinearGradient(
             colors: [
-                Color(red: 0.04, green: 0.06, blue: 0.10),
-                Color(red: 0.02, green: 0.03, blue: 0.06),
+                Color(white: 0.08),
+                Color(white: 0.04),
                 Color.black
             ],
             startPoint: .topLeading,
@@ -3074,7 +3192,7 @@ private struct FinanceDynamicsContentView: View {
                     .foregroundStyle(AppColors.textPrimary)
                 
                 if item.isArchived {
-                    Text(String(localized: "finances.dynamics.archived_badge"))
+                    Text(L("finances.dynamics.archived_badge"))
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -3192,7 +3310,7 @@ private struct FinanceDynamicsContentView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(AppColors.textTertiary)
 
-            Text(String(localized: "finances.dynamics.empty.chart"))
+            Text(L("finances.dynamics.empty.chart"))
                 .font(.system(size: 16))
                 .foregroundStyle(AppColors.textSecondary)
         }
@@ -3382,7 +3500,7 @@ private struct FinanceDynamicsFilterSheet: View {
             .safeAreaInset(edge: .bottom) {
                 filterApplyButton
             }
-            .navigationTitle(String(localized: "finances.dynamics.filter.title"))
+            .navigationTitle(L("finances.dynamics.filter.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { }
         }
@@ -3393,12 +3511,12 @@ private struct FinanceDynamicsFilterSheet: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
-            TextField(String(localized: "finances.dynamics.filter.search_placeholder"), text: $filterSearchText)
+            TextField(L("finances.dynamics.filter.search_placeholder"), text: $filterSearchText)
                 .foregroundStyle(AppColors.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
             Spacer()
-            Button(String(localized: "finances.common.cancel")) {
+            Button(L("finances.common.cancel")) {
                 filterSearchText = ""
             }
             .foregroundStyle(Color(red: 0.46, green: 0.67, blue: 1.0))
@@ -3424,7 +3542,7 @@ private struct FinanceDynamicsFilterSheet: View {
         return Button {
             dismiss()
         } label: {
-            Text(String(localized: "finances.dynamics.filter.apply"))
+            Text(L("finances.dynamics.filter.apply"))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity)
@@ -3453,12 +3571,12 @@ private struct FinanceDynamicsFilterSheet: View {
     private var groupsFilterSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
-                filterPrimaryButton(title: String(localized: "finances.dynamics.filter.show_all")) {
+                filterPrimaryButton(title: L("finances.dynamics.filter.show_all")) {
                     viewModel.handle(.selectAllGroups)
                 }
                 .frame(maxWidth: .infinity)
 
-                filterSecondaryButton(title: String(localized: "finances.dynamics.filter.clear_selection")) {
+                filterSecondaryButton(title: L("finances.dynamics.filter.clear_selection")) {
                     viewModel.handle(.deselectAllGroups)
                 }
                 .frame(maxWidth: .infinity)
@@ -3471,7 +3589,7 @@ private struct FinanceDynamicsFilterSheet: View {
             }
 
             if filteredGroups.isEmpty {
-                Text(String(localized: "finances.dynamics.empty.groups.title"))
+                Text(L("finances.dynamics.empty.groups.title"))
                     .font(.system(size: 14))
                     .foregroundStyle(AppColors.textTertiary)
             } else {
@@ -3550,11 +3668,11 @@ private struct FinanceDynamicsFilterSheet: View {
 
     private var archivedToggleSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(String(localized: "finances.dynamics.filter.archive_section"))
+            Text(L("finances.dynamics.filter.archive_section"))
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
             
-            Toggle(String(localized: "finances.dynamics.filter.show_archived_accounts"), isOn: Binding(
+            Toggle(L("finances.dynamics.filter.show_archived_accounts"), isOn: Binding(
                 get: { viewModel.state.showArchivedAccounts },
                 set: { viewModel.handle(.setShowArchivedAccounts($0)) }
             ))
@@ -3742,28 +3860,28 @@ private struct DepositForecastView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.deposit.forecast.section_title"))
+            FinancesSectionHeader(title: L("finances.deposit.forecast.section_title"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
-                    row(label: String(localized: "finances.deposit.forecast.rate"),
+                    row(label: L("finances.deposit.forecast.rate"),
                         value: "\(String(format: "%.2g", rate))%")
                     FinancesRowDivider()
-                    row(label: String(localized: "finances.deposit.forecast.monthly"),
+                    row(label: L("finances.deposit.forecast.monthly"),
                         value: "\(String(format: "%.2f", monthlyIncome)) \(currency)")
 
                     if let total = totalIncome {
                         FinancesRowDivider()
-                        row(label: String(localized: "finances.deposit.forecast.total"),
+                        row(label: L("finances.deposit.forecast.total"),
                             value: "\(String(format: "%.2f", total)) \(currency)")
                     }
 
                     FinancesRowDivider()
-                    row(label: String(localized: "finances.deposit.forecast.earned"),
+                    row(label: L("finances.deposit.forecast.earned"),
                         value: "\(String(format: "%.2f", earnedSoFar)) \(currency)")
 
                     if let rem = remaining {
                         FinancesRowDivider()
-                        row(label: String(localized: "finances.deposit.forecast.remaining"),
+                        row(label: L("finances.deposit.forecast.remaining"),
                             value: "\(String(format: "%.2f", rem)) \(currency)")
                     }
 
@@ -3773,7 +3891,7 @@ private struct DepositForecastView: View {
                             Image(systemName: "calendar.badge.checkmark")
                                 .foregroundStyle(AppColors.toggleOnGreen)
                                 .font(.system(size: 13))
-                            Text(String(localized: "finances.deposit.forecast.next_payment"))
+                            Text(L("finances.deposit.forecast.next_payment"))
                                 .font(.system(size: 14))
                                 .foregroundStyle(AppColors.textSecondary)
                             Spacer()

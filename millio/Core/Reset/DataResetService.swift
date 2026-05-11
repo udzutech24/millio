@@ -18,6 +18,7 @@ enum DataResetPeriodPreset: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
+        // TODO: localize — используй SmartDataResetLocalization.periodTitle(_:locale:) в UI вместо этого свойства
         switch self {
         case .allTime: return "All time"
         case .last30Days: return "Last 30 days"
@@ -88,6 +89,7 @@ enum DataResetTarget: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
+        // TODO: localize — используй SmartDataResetLocalization.targetTitle(_:locale:) в UI вместо этого свойства
         switch self {
         case .operations: return "Operations"
         case .accountOperations: return "Account operations"

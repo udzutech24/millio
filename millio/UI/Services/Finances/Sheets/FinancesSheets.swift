@@ -181,13 +181,13 @@ struct DisplayCurrencySheet: View {
             }
             .navigationTitle(
                 isSecondary
-                    ? String(localized: "finances.display_currency.title.secondary")
-                    : String(localized: "finances.display_currency.title.primary")
+                    ? L("finances.display_currency.title.secondary")
+                    : L("finances.display_currency.title.primary")
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "finances.common.cancel")) { dismiss() }
+                    Button(L("finances.common.cancel")) { dismiss() }
                         .foregroundStyle(AppColors.textPrimary)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -197,7 +197,7 @@ struct DisplayCurrencySheet: View {
                         Image(systemName: "questionmark.circle")
                             .foregroundStyle(AppColors.textPrimary)
                     }
-                    .accessibilityLabel(String(localized: "finances.display_currency.hint.accessibility"))
+                    .accessibilityLabel(L("finances.display_currency.hint.accessibility"))
                 }
             }
             .onAppear {
@@ -206,7 +206,7 @@ struct DisplayCurrencySheet: View {
                     hasSeenDisplayCurrencyHint = true
                 }
             }
-            .alert(String(localized: "finances.display_currency.hint.title"), isPresented: $showInfoAlert) {
+            .alert(L("finances.display_currency.hint.title"), isPresented: $showInfoAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(infoMessage)
@@ -223,7 +223,7 @@ struct DisplayCurrencySheet: View {
     }
 
     private var infoMessage: String {
-        String(localized: "finances.display_currency.hint.message")
+        L("finances.display_currency.hint.message")
     }
 
     private func infoBanner(message: String) -> some View {
@@ -250,7 +250,7 @@ struct DisplayCurrencySheet: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "finances.display_currency.hint.dismiss_accessibility"))
+            .accessibilityLabel(L("finances.display_currency.hint.dismiss_accessibility"))
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 10)

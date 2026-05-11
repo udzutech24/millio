@@ -13,19 +13,19 @@ struct QuickActionsWidget: View {
     var body: some View {
         HStack(spacing: 10) {
             actionButton(
-                title: String(localized: "main.quick_action.income"),
+                title: L("main.quick_action.income"),
                 icon: QuickActionIcons.income,
                 gradientColors: AppColors.incomeActionGradient,
                 action: onAddIncome
             )
             actionButton(
-                title: String(localized: "main.quick_action.expense"),
+                title: L("main.quick_action.expense"),
                 icon: QuickActionIcons.expense,
                 gradientColors: AppColors.expenseActionGradient,
                 action: onAddExpense
             )
             actionButton(
-                title: String(localized: "cashflow.quick_action.transfer"),
+                title: L("cashflow.quick_action.transfer"),
                 icon: QuickActionIcons.transfer,
                 gradientColors: AppColors.transferActionGradient,
                 action: onAddTransfer

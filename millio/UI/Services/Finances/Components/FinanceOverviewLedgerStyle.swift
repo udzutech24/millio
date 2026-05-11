@@ -6,6 +6,7 @@
 //  Держим здесь мелкую UI-логику, чтобы View оставался компактнее и её можно было покрыть тестами.
 //
 
+import Foundation
 import CoreGraphics
 
 enum FinanceOverviewLedgerStyle {
@@ -23,15 +24,15 @@ enum FinanceOverviewLedgerStyle {
     }
 
     static func countsText(groups: Int, accounts: Int) -> String {
-        "\(groups) групп · \(accounts) счетов"
+        "\(groups) \(L("finances.overview.groups_suffix")) · \(accounts) \(L("finances.overview.accounts_suffix"))"
     }
 
     static func compactCountsText(groups: Int, accounts: Int) -> String {
-        "\(groups) гр. · \(accounts) сч."
+        "\(groups) \(L("finances.overview.groups_short")) · \(accounts) \(L("finances.overview.accounts_short"))"
     }
 
     static func hiddenGroupsText(_ count: Int) -> String {
-        "Еще групп: \(count)"
+        "\(L("finances.overview.more_groups")): \(count)"
     }
 
     static func normalizeAmount(

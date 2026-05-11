@@ -1,0 +1,42 @@
+# Snapfile — fastlane snapshot конфигурация
+# Документация: https://docs.fastlane.tools/actions/snapshot/
+
+# Схема и таргет
+scheme("millio")
+app_identifier("com.millio.app")
+
+# UI Tests таргет
+app_identifier("com.millio.app")
+
+# Устройства App Store:
+# - 6.7" для iPhone 16 Pro Max / 15 Plus
+# - 6.5" для iPhone 14 Plus / 13 Pro Max (устаревший, но всё ещё требуется ASC)
+devices([
+  "iPhone 17 Pro Max",
+  "iPhone Air"
+])
+
+# Локали
+languages([
+  "en-US",
+  "ru"
+])
+
+# Путь к тестам (класс)
+only_testing("millioUITests/ScreenshotTests")
+
+# Выходная директория (сырые скрины без оформления)
+output_directory("./screenshots/raw")
+
+# Очищать предыдущие скрины перед новым запуском
+clear_previous_screenshots(true)
+
+# Количество попыток при падении теста
+number_of_retries(1)
+
+# Не останавливаться на первой ошибке
+stop_after_first_error(false)
+
+# Использовать конфигурацию Debug (Release долго билдится, + Xcode Preview данные)
+configuration("Debug")
+

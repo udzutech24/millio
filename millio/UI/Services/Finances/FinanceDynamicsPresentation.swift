@@ -26,7 +26,7 @@ enum FinanceDynamicsPresentation {
 
         return DynamicsBreakdownItem(
             id: "total",
-            name: String(localized: "finances.dynamics.chart.total_label"),
+            name: L("finances.dynamics.chart.total_label"),
             startValue: startSum,
             endValue: endSum,
             delta: delta,

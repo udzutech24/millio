@@ -23,11 +23,11 @@ enum CashbackScreenshotImportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidImage:
-            return String(localized: "cashback.import.error.invalid_image")
+            return L("cashback.import.error.invalid_image")
         case .noTextFound:
-            return String(localized: "cashback.import.error.no_text")
+            return L("cashback.import.error.no_text")
         case .noCashbackLinesFound:
-            return String(localized: "cashback.import.error.no_cashback_lines")
+            return L("cashback.import.error.no_cashback_lines")
         }
     }
 }

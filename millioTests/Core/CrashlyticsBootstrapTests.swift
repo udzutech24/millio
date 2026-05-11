@@ -38,7 +38,9 @@ private final class MockCrashReporter: CrashReporter {
             _enabledValues.append(enabled)
         }
     }
-    
+
+    func setUserID(_ id: String?) {}
+
     func log(_ message: String) {
         withLock {
             _logs.append(message)

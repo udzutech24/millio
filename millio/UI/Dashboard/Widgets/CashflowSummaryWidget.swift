@@ -38,7 +38,7 @@ struct CashflowSummaryWidget: View {
     private var headerRow: some View {
         HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Кэшфлоу за период")
+                Text(L("Кэшфлоу за период"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.55))
 
@@ -83,13 +83,13 @@ struct CashflowSummaryWidget: View {
     private var metricRow: some View {
         HStack(spacing: 8) {
             metricChip(
-                label: "Доходы",
+                label: L("cashflow.income"),
                 value: totalIncome,
                 showSign: true,
                 valueColor: AppColors.positiveColor
             )
             metricChip(
-                label: "Расходы",
+                label: L("cashflow.expense"),
                 value: -totalExpense,
                 showSign: true,
                 valueColor: totalExpense > 0.01
@@ -97,7 +97,7 @@ struct CashflowSummaryWidget: View {
                     : Color.white.opacity(0.5)
             )
             metricChip(
-                label: "Изм. активов",
+                label: L("cashflow.asset_change"),
                 value: assetValueChange,
                 showSign: true,
                 valueColor: assetValueChange >= 0

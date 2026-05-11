@@ -696,7 +696,7 @@ struct SubscriptionView: View {
                 )
                 return String(format: format, locale: localizationLocale, savings)
             }
-            return String(localized: "subscription.plan.yearly.savings", locale: localizationLocale)
+            return String(localized: "subscription.plan.yearly.savings", bundle: LanguageManager.shared.currentBundle, locale: localizationLocale)
         }
     }
 

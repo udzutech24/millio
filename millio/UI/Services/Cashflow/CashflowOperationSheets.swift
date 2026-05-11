@@ -313,8 +313,8 @@ struct CashflowCategoryTransactionSheet: View {
                         categoryIcon: option.icon,
                         accentColor: kind.accentColor,
                         primaryActionTitle: viewModel.isCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind)
-                            ? String(localized: "cashflow.category.actions.unpin")
-                            : String(localized: "cashflow.category.actions.pin"),
+                            ? L("cashflow.category.actions.unpin")
+                            : L("cashflow.category.actions.pin"),
                         primaryActionIcon: viewModel.isCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind)
                             ? "pin.slash"
                             : "pin",
@@ -322,7 +322,7 @@ struct CashflowCategoryTransactionSheet: View {
                             togglePinned(for: option)
                             closeCategoryActions()
                         },
-                        secondaryActionTitle: String(localized: "cashflow.category.actions.operations"),
+                        secondaryActionTitle: L("cashflow.category.actions.operations"),
                         secondaryActionIcon: "list.bullet.rectangle",
                         onSecondaryAction: {
                             openOperations(for: option)
@@ -391,7 +391,7 @@ struct CashflowCategoryTransactionSheet: View {
 
     private var headerSection: some View {
         HStack(spacing: 12) {
-            circleToolbarButton(systemName: "xmark", accessibilityLabel: String(localized: "cashflow.common.close")) {
+            circleToolbarButton(systemName: "xmark", accessibilityLabel: L("cashflow.common.close")) {
                 dismiss()
             }
 
@@ -434,14 +434,14 @@ struct CashflowCategoryTransactionSheet: View {
             HStack(spacing: 8) {
                 circleToolbarButton(
                     systemName: "clock.arrow.circlepath",
-                    accessibilityLabel: String(localized: "cashflow.operation.history_accessibility")
+                    accessibilityLabel: L("cashflow.operation.history_accessibility")
                 ) {
                     showTransactionsHistory = true
                 }
 
                 circleToolbarButton(
                     systemName: "gearshape",
-                    accessibilityLabel: String(localized: "cashflow.common.settings")
+                    accessibilityLabel: L("cashflow.common.settings")
                 ) {
                     showSettingsSheet = true
                 }
@@ -479,60 +479,105 @@ struct CashflowCategoryTransactionSheet: View {
 
     @ViewBuilder
     private var monthlySummaryHeroSection: some View {
-        let usesBudgetLayout = budgetSnapshot != nil
+        let chartEntries = heroChartEntries
+        let showChart = !chartEntries.isEmpty
 
-        VStack(alignment: usesBudgetLayout ? .leading : .center, spacing: 14) {
-            if isLoadingMonthlyTotal {
-                HStack {
-                    Spacer()
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
+                if isLoadingMonthlyTotal {
                     ProgressView()
                         .tint(AppColors.textPrimary)
                         .scaleEffect(0.9)
-                    Spacer()
+                        .padding(.vertical, 10)
+                } else {
+                    Text(formattedMonthlyTotal(monthlyTotal))
+                        .font(.system(size: 38, weight: .bold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .contentTransition(.numericText())
+                        .shadow(color: kind.accentColor.opacity(0.45), radius: 12, x: 0, y: 0)
                 }
-                .padding(.vertical, 18)
-            } else {
-                Text(formattedMonthlyTotal(monthlyTotal))
-                    .font(.system(size: 34, weight: .bold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .contentTransition(.numericText())
-                    .frame(maxWidth: .infinity, alignment: usesBudgetLayout ? .leading : .center)
-            }
 
-            monthlyBudgetInlineSection
+                monthlyBudgetInlineSection
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if showChart {
+                Button {
+                    showTransactionsHistory = true
+                } label: {
+                    CashflowHistoryRingChart(
+                        entries: chartEntries,
+                        selectedRawValue: nil,
+                        progress: 0,
+                        onSelect: { _ in }
+                    )
+                    .frame(width: 80, height: 80)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: usesBudgetLayout ? .leading : .center)
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
-        .background(innerPanelBackground)
+        .background(heroCardBackground)
+    }
+
+    private var heroChartEntries: [CashflowHistorySummaryEntry] {
+        let palette: [String] = kind == .expense
+            ? ["47D7FF", "FF9F5A", "F68BA7", "6FD2A8", "AFC8FF", "C5B6FF", "E7C66C", "9EA7BC"]
+            : ["63E6BE", "47D7FF", "7AB6FF", "FFD166", "FF9B9B", "D0BFFF", "95E0A3", "A1A7B8"]
+        let filtered = categoryTotals.filter { $0.value > 0.0000001 }
+        let total = filtered.values.reduce(0, +)
+        guard total > 0 else { return [] }
+        let optionMap = Dictionary(uniqueKeysWithValues: viewModel.categoryOptions(for: kind.categoryKind).map { ($0.rawValue, $0) })
+        return filtered
+            .sorted { $0.value > $1.value }
+            .enumerated()
+            .map { index, item in
+                let option = optionMap[item.key]
+                return CashflowHistorySummaryEntry(
+                    rawValue: item.key,
+                    title: option?.displayName ?? item.key,
+                    icon: option?.icon ?? "questionmark",
+                    amount: item.value,
+                    share: item.value / total,
+                    tintHex: palette[index % palette.count]
+                )
+            }
+    }
+
+    private var heroCardBackground: some View {
+        RoundedRectangle(cornerRadius: innerCornerRadius, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [kind.accentColor.opacity(0.38), Color.black.opacity(0.36)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: innerCornerRadius, style: .continuous)
+                    .stroke(kind.strokeGradient.opacity(0.60), lineWidth: 1)
+            )
     }
 
     @ViewBuilder
     private var monthlyBudgetInlineSection: some View {
         if let snapshot = budgetSnapshot {
             let style = budgetMonthlySummaryStyle(kind: kind, snapshot: snapshot)
-            VStack(alignment: .leading, spacing: 10) {
-                Text(monthlyBudgetUsageText(snapshot))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(style.usageText.color)
-
+            VStack(alignment: .leading, spacing: 6) {
                 GeometryReader { proxy in
                     let progress = min(max(snapshot.progress, 0), 1)
                     ZStack(alignment: .leading) {
                         Capsule(style: .continuous)
                             .fill(Color.white.opacity(0.08))
                         Capsule(style: .continuous)
-                            .fill(style.progressFill.color)
+                            .fill(kind.strokeGradient)
                             .frame(width: max(12, proxy.size.width * progress))
                     }
                 }
-                .frame(height: 8)
-
-                Text(monthlyBudgetStatusText(snapshot))
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(style.statusText.color)
+                .frame(height: 10)
 
                 if snapshot.categoriesLimitOverflow > 0.0000001 {
                     Text(CashflowBudgetLocalization.monthlyOverflow(
@@ -540,7 +585,7 @@ struct CashflowCategoryTransactionSheet: View {
                         amount: formattedAmount(snapshot.categoriesLimitOverflow)
                     ))
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.orange.opacity(0.92))
+                    .foregroundStyle(style.usageText.color)
                 }
             }
         }
@@ -592,8 +637,8 @@ struct CashflowCategoryTransactionSheet: View {
         .buttonStyle(.plain)
         .accessibilityLabel(
             shouldShowSearchField
-            ? String(localized: "cashflow.common.close", defaultValue: "Close")
-            : String(localized: "cashflow.operation.search_category", defaultValue: "Search category")
+            ? L("cashflow.common.close", defaultValue: "Close")
+            : L("cashflow.operation.search_category", defaultValue: "Search category")
         )
     }
 
@@ -602,7 +647,7 @@ struct CashflowCategoryTransactionSheet: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
-            TextField(String(localized: "cashflow.operation.search_category"), text: $searchText)
+            TextField(L("cashflow.operation.search_category"), text: $searchText)
                 .textInputAutocapitalization(.words)
                 .foregroundStyle(AppColors.textPrimary)
                 .focused($isSearchFieldFocused)
@@ -667,7 +712,7 @@ struct CashflowCategoryTransactionSheet: View {
                             .frame(width: 36, height: 36)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "cashflow.common.close"))
+                    .accessibilityLabel(L("cashflow.common.close"))
                 }
             }
         }
@@ -690,8 +735,8 @@ struct CashflowCategoryTransactionSheet: View {
                         .font(.system(size: 13, weight: .medium))
                     Text(
                         hasCustomCategoryOrder
-                        ? String(localized: "cashflow.category.reorder.edit", defaultValue: "Edit order")
-                        : String(localized: "cashflow.category.reorder.sort", defaultValue: "Sort")
+                        ? L("cashflow.category.reorder.edit", defaultValue: "Edit order")
+                        : L("cashflow.category.reorder.sort", defaultValue: "Sort")
                     )
                     .font(.system(size: 13, weight: .medium))
                 }
@@ -740,7 +785,7 @@ struct CashflowCategoryTransactionSheet: View {
             Image(systemName: "tray")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
-            Text(String(localized: "cashflow.category.empty_month"))
+            Text(L("cashflow.category.empty_month"))
                 .font(.system(size: 15))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -776,12 +821,21 @@ struct CashflowCategoryTransactionSheet: View {
             } label: {
                 VStack(alignment: .leading, spacing: metrics.contentSpacing) {
                     HStack(alignment: .top) {
-                        CashflowCategoryIconView(
-                            icon: option.icon,
-                            fontSize: 18,
-                            fontWeight: .semibold,
-                            tint: AnyShapeStyle(AppColors.textPrimary)
-                        )
+                        ZStack {
+                            Circle()
+                                .fill(kind.accentColor.opacity(0.18))
+                                .overlay(
+                                    Circle()
+                                        .stroke(kind.accentColor.opacity(0.35), lineWidth: 1)
+                                )
+                            CashflowCategoryIconView(
+                                icon: option.icon,
+                                fontSize: 20,
+                                fontWeight: .semibold,
+                                tint: AnyShapeStyle(AppColors.textPrimary)
+                            )
+                        }
+                        .frame(width: 38, height: 38)
                         Spacer(minLength: 6)
 
                         HStack(spacing: 6) {
@@ -807,7 +861,7 @@ struct CashflowCategoryTransactionSheet: View {
                     .frame(maxWidth: .infinity, minHeight: metrics.topRowMinHeight, alignment: .topLeading)
 
                     Text(option.displayName)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(2)
                         .minimumScaleFactor(0.72)
@@ -818,7 +872,7 @@ struct CashflowCategoryTransactionSheet: View {
                     }
 
                     Text(formattedCategoryTotal(for: option))
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: 22, weight: .bold))
                         .foregroundStyle((summary == nil ? AppColors.textSecondary : AppColors.textPrimary).opacity(0.98))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -855,7 +909,7 @@ struct CashflowCategoryTransactionSheet: View {
                             VStack(alignment: .leading, spacing: metrics.contentSpacing) {
                                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                                     Text(categoryBudgetLimitLabel(summary.limit))
-                                        .font(.system(size: 10, weight: .medium))
+                                        .font(.system(size: 12, weight: .medium))
                                         .foregroundStyle(Color.white.opacity(0.66))
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.72)
@@ -871,7 +925,7 @@ struct CashflowCategoryTransactionSheet: View {
                                             .frame(width: max(8, proxy.size.width * progress))
                                     }
                                 }
-                                .frame(height: 5)
+                                .frame(height: 6)
                             }
                         } else {
                             Color.clear
@@ -933,8 +987,8 @@ struct CashflowCategoryTransactionSheet: View {
                 .padding(8)
                 .accessibilityLabel(
                     isPinned
-                        ? String(localized: "cashflow.category.actions.unpin")
-                        : String(localized: "cashflow.category.actions.pin")
+                        ? L("cashflow.category.actions.unpin")
+                        : L("cashflow.category.actions.pin")
                 )
             }
         }
@@ -954,7 +1008,7 @@ struct CashflowCategoryTransactionSheet: View {
                             .stroke(Color.white.opacity(0.10), lineWidth: 1)
                     )
             )
-            .accessibilityLabel(String(localized: "cashflow.category.pinned"))
+            .accessibilityLabel(L("cashflow.category.pinned"))
     }
 
     private var floatingAddCategoryButton: some View {
@@ -1235,7 +1289,7 @@ struct CashflowCategoryTransactionSheet: View {
 
     private func destructiveActionTitle(for option: CashflowCategoryOption) -> String {
         option.isCustom
-            ? String(localized: "cashflow.category.actions.delete")
+            ? L("cashflow.category.actions.delete")
             : String(
                 localized: "cashflow.category.actions.archive",
                 defaultValue: "Archive",
@@ -1460,7 +1514,7 @@ struct CashflowTransferTransactionSheet: View {
             viewModel: viewModel,
             transactionType: .transfer,
             showsTransactionTypeSection: false,
-            customNavigationTitle: String(localized: "cashflow.operation.new_transfer")
+            customNavigationTitle: L("cashflow.operation.new_transfer")
         )
     }
 }

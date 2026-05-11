@@ -28,7 +28,11 @@ struct DashboardView: View {
     var cashflowExpense: Double = 0
     var cashflowAssetChange: Double = 0
     var cashflowCurrency: String = "RUB"
-    var cashflowPeriodLabel: String = "Месяц"
+    var cashflowPeriodLabel: String = L("dashboard.cashflow.default_period")
+
+    var onOpenHistory: () -> Void = {}
+    var onShowProfile: () -> Void = {}
+    var onDaysChipTap: (() -> Void)? = nil
 
     @State private var activeWidgets: [DashboardWidgetID] = DashboardWidgetStorage.load()
     @State private var isEditing = false
@@ -39,16 +43,19 @@ struct DashboardView: View {
     }
 
     var body: some View {
-        ZStack {
-            GradientBackground()
+        GeometryReader { proxy in
+            let topInset = proxy.safeAreaInsets.top
+            ZStack {
+                GradientBackground()
 
-            if isEditing {
-                editModeContent
-                    .transition(.opacity)
-                doneButtonOverlay
-            } else {
-                normalModeContent
-                    .transition(.opacity)
+                if isEditing {
+                    editModeContent
+                        .transition(.opacity)
+                    doneButtonOverlay
+                } else {
+                    normalModeContent(topInset: topInset)
+                        .transition(.opacity)
+                }
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -75,11 +82,15 @@ struct DashboardView: View {
 
     // MARK: - Normal Mode
 
-    private var normalModeContent: some View {
+    private func normalModeContent(topInset: CGFloat) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                topActionButtons
+                    .padding(.top, topInset + 18)
+                    .padding(.horizontal, 14)
+
                 miniAppsSection
-                    .padding(.top, 12)
+                    .padding(.top, 8)
 
                 if activeWidgets.isEmpty {
                     emptyPlaceholder
@@ -89,6 +100,37 @@ struct DashboardView: View {
 
                 Spacer(minLength: 88)
             }
+        }
+        .ignoresSafeArea(edges: .top)
+    }
+
+    // MARK: - Top Action Buttons
+
+    private var topActionButtons: some View {
+        HStack {
+            Button {
+                onOpenHistory()
+            } label: {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(Color.white.opacity(0.75))
+                    .frame(width: 38, height: 38)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Button {
+                onShowProfile()
+            } label: {
+                Image("profile")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 34, height: 34)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("root.profileButton")
         }
     }
 
@@ -115,7 +157,8 @@ struct DashboardView: View {
                 weekDelta: weekDelta,
                 sparklineDaysCount: sparklineDaysCount,
                 onTap: onOpenFinances,
-                onSparklineTap: onOpenDynamics
+                onSparklineTap: onOpenDynamics,
+                onDaysChipTap: onDaysChipTap
             )
         case .quickActions:
             QuickActionsWidget(
@@ -141,7 +184,7 @@ struct DashboardView: View {
     private var editModeContent: some View {
         VStack(spacing: 0) {
             miniAppsSection
-                .padding(.top, 12)
+                .padding(.top, 18)
 
             List {
                 ForEach(activeWidgets) { widget in
@@ -163,7 +206,7 @@ struct DashboardView: View {
                         HStack(spacing: 10) {
                             Image(systemName: "plus.circle.fill")
                                 .font(.system(size: 16, weight: .semibold))
-                            Text("Добавить виджет")
+                            Text(L("Добавить виджет"))
                                 .font(.system(size: 15, weight: .semibold))
                         }
                         .foregroundStyle(AppColors.brandPrimary)
@@ -216,13 +259,13 @@ struct DashboardView: View {
         VStack {
             HStack {
                 Spacer()
-                Button("Готово") {
+                Button(L("common.done")) {
                     exitEditMode()
                 }
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppColors.brandPrimary)
                 .padding(.horizontal, 18)
-                .padding(.top, 8)
+                .padding(.top, 18)
             }
             Spacer()
         }
@@ -248,7 +291,7 @@ struct DashboardView: View {
             Button {
                 showAddWidget = true
             } label: {
-                Text("Добавить виджет")
+                Text(L("Добавить виджет"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppColors.brandPrimary)
                     .padding(.horizontal, 20)
@@ -274,12 +317,14 @@ struct DashboardView: View {
                     icon: "chart.line.uptrend.xyaxis",
                     titleKey: MainLocalization.serviceCourses,
                     accentColors: [AppColors.brandPrimary, AppColors.brandPrimary],
+                    accessibilityID: "dashboard.chip.courses",
                     action: onOpenConverter
                 )
                 miniAppChip(
                     icon: "percent",
                     titleKey: MainLocalization.serviceCashback,
                     accentColors: AppColors.cashbackGradient,
+                    accessibilityID: "dashboard.chip.cashback",
                     action: onOpenCashback
                 )
             }
@@ -292,6 +337,7 @@ struct DashboardView: View {
         icon: String,
         titleKey: String,
         accentColors: [Color],
+        accessibilityID: String = "",
         action: @escaping () -> Void
     ) -> some View {
         let accent = LinearGradient(
@@ -320,6 +366,7 @@ struct DashboardView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(accessibilityID)
     }
 
     // MARK: - Edit Mode Helpers
@@ -356,7 +403,7 @@ private struct AddWidgetSheet: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 40))
                                 .foregroundStyle(AppColors.incomeGradient.first ?? AppColors.brandPrimary)
-                            Text("Все виджеты добавлены")
+                            Text(L("Все виджеты добавлены"))
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary.opacity(0.7))
                         }
@@ -409,11 +456,11 @@ private struct AddWidgetSheet: View {
                     }
                 }
             }
-            .navigationTitle("Виджеты")
+            .navigationTitle(L("dashboard.widgets.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Закрыть") { dismiss() }
+                    Button(L("common.close")) { dismiss() }
                         .foregroundStyle(AppColors.brandPrimary)
                 }
             }

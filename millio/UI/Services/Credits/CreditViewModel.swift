@@ -483,7 +483,7 @@ final class CreditViewModel: ViewModelProtocol {
                     currency: existing.currency,
                     transactionDate: Date(),
                     creditID: existing.creditUniqueID,
-                    note: String(localized: "finances.transaction.note.credit_remaining_edit")
+                    note: L("finances.transaction.note.credit_remaining_edit")
                 )
                 transaction.hasAppliedBalanceEffect = true
                 modelContext.insert(transaction)

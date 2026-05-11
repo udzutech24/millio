@@ -2,6 +2,7 @@ import Foundation
 
 protocol CrashReporter {
     func setEnabled(_ enabled: Bool)
+    func setUserID(_ id: String?)
     func log(_ message: String)
     func setCustomValue(_ value: Any, forKey key: String)
     func record(error: Error)
@@ -56,6 +57,14 @@ enum CrashReporting {
         reporter.log(sanitizeForCrashlytics(message))
     }
     
+    static func setUserID(_ id: String?) {
+        let reporter: CrashReporter
+        lock.lock()
+        reporter = _reporter
+        lock.unlock()
+        reporter.setUserID(id)
+    }
+
     static func setCustomValue(_ value: Any, forKey key: String) {
         let reporter: CrashReporter
         lock.lock()
@@ -114,6 +123,7 @@ struct DefaultCrashReportingSink: CrashReportingSink {
 
 struct NoopCrashReporter: CrashReporter {
     func setEnabled(_ enabled: Bool) {}
+    func setUserID(_ id: String?) {}
     func log(_ message: String) {}
     func setCustomValue(_ value: Any, forKey key: String) {}
     func record(error: Error) {}

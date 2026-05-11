@@ -18,9 +18,9 @@ enum CashflowSheetTab: Int, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .expenses: return String(localized: "cashflow.tab.expenses")
-        case .incomes:  return String(localized: "cashflow.tab.incomes")
-        case .all:      return String(localized: "cashflow.tab.all")
+        case .expenses: return L("cashflow.tab.expenses")
+        case .incomes:  return L("cashflow.tab.incomes")
+        case .all:      return L("cashflow.tab.all")
         }
     }
 }

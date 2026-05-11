@@ -350,7 +350,7 @@ enum QuickSetupApplyError: LocalizedError {
         switch self {
         case .trackedTickerLimitReached(let limit):
             return String(
-                format: String(localized: "monetization.ticker.limit.max_format"),
+                format: L("monetization.ticker.limit.max_format"),
                 limit
             )
         case .quickSetupTrackedTickerLimitReached(let limit, let locale):

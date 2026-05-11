@@ -249,7 +249,7 @@ struct RestoreView: View {
                                                     .font(.system(size: 13, weight: .semibold))
                                                 Text(
                                                     String(
-                                                        format: String(localized: "restore.version_size_format"),
+                                                        format: L("restore.version_size_format"),
                                                         ByteCountFormatter.string(fromByteCount: item.size, countStyle: .file),
                                                         String(item.version)
                                                     )

@@ -26,11 +26,11 @@ enum FinanceOverviewGranularity: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .year:
-            return String(localized: "Year")
+            return L("Year")
         case .month:
-            return String(localized: "Month")
+            return L("Month")
         case .week:
-            return String(localized: "Week")
+            return L("Week")
         }
     }
 }
@@ -285,9 +285,9 @@ enum FinanceOverviewLedgerSide: String, Equatable {
     var title: String {
         switch self {
         case .debit:
-            return String(localized: "finances.overview.chart.debit")
+            return L("finances.overview.chart.debit")
         case .credit:
-            return String(localized: "finances.overview.chart.credit")
+            return L("finances.overview.chart.credit")
         }
     }
 }

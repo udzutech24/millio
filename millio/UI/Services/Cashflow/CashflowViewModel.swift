@@ -700,6 +700,17 @@ final class CashflowViewModel: ViewModelProtocol {
         categoryService.setSystemCategoryHidden(kind: kind, categoryRaw: categoryRaw, isHidden: isHidden)
     }
 
+    // MARK: - Category: Custom Visibility (thin wrapper)
+
+    @discardableResult
+    func setCustomCategoryHidden(
+        kind: CashflowCategoryKind,
+        categoryRaw: String,
+        isHidden: Bool
+    ) -> Bool {
+        categoryService.setCustomCategoryHidden(kind: kind, categoryRaw: categoryRaw, isHidden: isHidden)
+    }
+
     // MARK: - Category: Static Utils (backward compat)
 
     private static func customRawValue(from categoryID: String) -> String {

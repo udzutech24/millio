@@ -58,7 +58,10 @@ struct FinanceState {
     
     /// Флаг загрузки курсов
     var isLoadingRates: Bool = false
-    
+
+    /// Время последнего успешного принудительного обновления
+    var lastRefreshedAt: Date? = nil
+
     /// Доступные карты
     var availableCards: [Card] = []
     
@@ -451,6 +454,15 @@ final class FinanceViewModel: ViewModelProtocol {
         self.modelContext = modelContext
         self.currencyService = currencyService ?? CurrencyRateService.shared
         self.marketDataClient = marketDataClient
+
+        // Подключаем крипто-курсы через Twelve Data (MarketAPIClient → наш бэк → Twelve Data).
+        // Символ: "BTC/USD" → price в USD, инвертируется в getRate для cross-rate.
+        if let rateService = self.currencyService as? CurrencyRateService {
+            let client = marketDataClient
+            rateService.cryptoPriceProviderUSD = { code in
+                try? await client.latestPrice(symbol: "\(code)/USD", forceRefresh: false)
+            }
+        }
         self.nowProvider = now
         state.displayCurrency = SettingsManager.shared.primaryCurrencyCode
         state.secondaryDisplayCurrency = defaultSecondaryDisplayCurrency(primary: state.displayCurrency)
@@ -853,12 +865,13 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     /// Вычисляет 7-дневный спарклайн и дельту для виджета дашборда.
-    /// Сохраняет сегодняшний баланс в DashboardBalanceHistoryStore и строит
-    /// sparkline из накопленной истории (не из cashflow-транзакций).
+    /// Форма кривой — из DashboardBalanceHistoryStore (снапшоты).
+    /// Дельта — через FinanceDynamicsViewModel (replay транзакций, текущие курсы),
+    /// аналогично экрану Аналитики, чтобы знаки всегда совпадали.
     func computeDashboardSparkline() async {
         let displayCurrency = state.displayCurrency
         let currentTotal = state.totalAmount
-        let daysCount = 7
+        let daysCount = max(1, SettingsManager.shared.dashboardDeltaPeriodDays)
 
         DashboardBalanceHistoryStore.save(currentTotal, currency: displayCurrency)
 
@@ -869,10 +882,13 @@ final class FinanceViewModel: ViewModelProtocol {
 
         let validPoints = rawPoints.compactMap { $0 }
         let validCount = validPoints.count
+
+        // Если истории меньше 2 точек — кривую не рисуем, но дельту всё равно считаем
         guard validCount >= 2 else {
             state.dashboardSparkline = []
-            state.dashboardWeekDelta = (0.0, 0.0)
-            state.dashboardSparklineDaysCount = 0
+            state.dashboardSparklineDaysCount = daysCount
+            let (delta, pct) = await computeDashboardDeltaViaAnalytics(startDaysAgo: daysCount, currentTotal: currentTotal)
+            state.dashboardWeekDelta = (absolute: delta, percent: pct)
             return
         }
 
@@ -903,13 +919,45 @@ final class FinanceViewModel: ViewModelProtocol {
             normalized = filled.map { min(1.0, max(0.0, ($0 - lo) / visualRange)) }
         }
 
-        let weekStart = filled.first ?? currentTotal
-        let delta = currentTotal - weekStart
-        let pct = abs(weekStart) < 0.01 ? 0.0 : (delta / abs(weekStart)) * 100.0
-
         state.dashboardSparkline = normalized
+
+        // Лейбл и дельта — всегда по выбранному периоду, а не по наличию данных в store.
+        // Store используется только для формы кривой (sparkline shape).
+        state.dashboardSparklineDaysCount = daysCount
+
+        // Дельта через replay транзакций — согласованно с Аналитикой
+        let (delta, pct) = await computeDashboardDeltaViaAnalytics(startDaysAgo: daysCount, currentTotal: currentTotal)
         state.dashboardWeekDelta = (absolute: delta, percent: pct)
-        state.dashboardSparklineDaysCount = validCount
+    }
+
+    /// Вычисляет дельту баланса за период startDaysAgo→сегодня через FinanceDynamicsViewModel.
+    /// Использует те же текущие курсы и replay транзакций, что и экран Аналитики.
+    private func computeDashboardDeltaViaAnalytics(startDaysAgo: Int, currentTotal: Double) async -> (Double, Double) {
+        guard startDaysAgo > 0 else { return (0.0, 0.0) }
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let startDayBegin = calendar.date(byAdding: .day, value: -startDaysAgo, to: today),
+              let startDayEnd = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: startDayBegin)
+        else { return (0.0, 0.0) }
+
+        let dynamicsVM = FinanceDynamicsViewModel(modelContext: modelContext, financeViewModel: self)
+        dynamicsVM.loadData()
+
+        let accounts = dynamicsVM.getAccountsForCalculation()
+        let cardIDs = Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil })
+
+        let startBalance = await dynamicsVM.calculateBalanceAtDate(
+            accounts: accounts,
+            date: startDayEnd,
+            accountCardIDs: cardIDs,
+            debtAsNegative: true,
+            includeInitialBeforeCreation: false
+        )
+
+        let delta = currentTotal - startBalance
+        let pct = abs(startBalance) < 0.01 ? 0.0 : (delta / abs(startBalance)) * 100.0
+        return (delta, pct)
     }
 
     /// Подсчитать сумму группы в указанной валюте
@@ -1004,8 +1052,8 @@ final class FinanceViewModel: ViewModelProtocol {
         let currencyCode = resolvedInvestmentCurrency(investment)
         let currencyLabel = MonetaCurrency(rawValue: currencyCode)?.symbol ?? currencyCode
         let quantityUnit = investment.category == .crypto
-            ? String(localized: "finances.investment.unit.coins")
-            : String(localized: "finances.investment.unit.shares_short")
+            ? L("finances.investment.unit.coins")
+            : L("finances.investment.unit.shares_short")
 
         return FinancesL10n.format("finances.investment.position_subtitle", quantityText, quantityUnit, unitPriceText, currencyLabel)
     }
@@ -1118,7 +1166,7 @@ final class FinanceViewModel: ViewModelProtocol {
             return trimmedName
         }
 
-        return String(localized: "finances.dynamics.chart.account_fallback")
+        return L("finances.dynamics.chart.account_fallback")
     }
 
     private func normalizedInvestmentDisplaySymbol(for investment: Investment) -> String? {
@@ -1150,6 +1198,7 @@ final class FinanceViewModel: ViewModelProtocol {
     func warmupRemoteDataForStartup() async {
         await refreshCurrencyQuotes(forceRefresh: false)
         await marketDataService.refreshStockPrices(forceRefresh: false)
+        state.lastRefreshedAt = Date()
     }
 
     private func stampFrozenRate(on transaction: CashflowTransaction, targetCurrency: String) {
@@ -1214,6 +1263,16 @@ final class FinanceViewModel: ViewModelProtocol {
         defer { state.isLoadingRates = false }
         let message = await marketDataService.refreshStockPricesManual()
         presentRefreshIssueIfNeeded(message: message)
+    }
+
+    /// Обновляет все котировки и акции — используется в pull-to-refresh и фоновом обновлении.
+    func refreshAll() async {
+        state.isLoadingRates = true
+        defer { state.isLoadingRates = false }
+        await refreshCurrencyQuotes(forceRefresh: true)
+        let stockMessage = await marketDataService.refreshStockPricesManual()
+        state.lastRefreshedAt = Date()
+        presentRefreshIssueIfNeeded(message: stockMessage ?? state.currencyConversionWarning)
     }
 
     func refreshRates() async {
@@ -1361,11 +1420,11 @@ final class FinanceViewModel: ViewModelProtocol {
 
                         if card.cardType == .credit {
                             transactionAmount = -difference
-                            transactionNote = String(localized: "finances.transaction.note.quick_debt_change")
+                            transactionNote = L("finances.transaction.note.quick_debt_change")
                             transactionType = .creditDebtAdjustment
                         } else {
                             transactionAmount = difference
-                            transactionNote = String(localized: "finances.transaction.note.quick_balance_change")
+                            transactionNote = L("finances.transaction.note.quick_balance_change")
                             transactionType = .cardBalanceAdjustment
                         }
 
@@ -1432,7 +1491,7 @@ final class FinanceViewModel: ViewModelProtocol {
                             currency: credit.currency,
                             transactionDate: Date(),
                             creditID: credit.creditUniqueID,
-                            note: String(localized: "finances.transaction.note.quick_remaining_debt_change")
+                            note: L("finances.transaction.note.quick_remaining_debt_change")
                         )
                         stampFrozenRate(on: transaction, targetCurrency: credit.currency)
                         transaction.hasAppliedBalanceEffect = true
@@ -1492,7 +1551,7 @@ final class FinanceViewModel: ViewModelProtocol {
                                 currency: investment.currency,
                                 transactionDate: Date(),
                                 investmentID: investment.investmentUniqueID,
-                                note: String(localized: "finances.transaction.note.manual_investment_quantity_change")
+                                note: L("finances.transaction.note.manual_investment_quantity_change")
                             )
                             transaction.applyAssetChangeSnapshot(
                                 before: marketAssetSnapshot(
@@ -1540,7 +1599,7 @@ final class FinanceViewModel: ViewModelProtocol {
                                 currency: investment.currency,
                                 transactionDate: Date(),
                                 investmentID: investment.investmentUniqueID,
-                                note: String(localized: "finances.transaction.note.manual_investment_amount_change")
+                                note: L("finances.transaction.note.manual_investment_amount_change")
                             )
                             transaction.applyAssetChangeSnapshot(
                                 before: marketAssetSnapshot(
@@ -1614,7 +1673,7 @@ final class FinanceViewModel: ViewModelProtocol {
                     currency: card.currency,
                     transactionDate: Date(),
                     cardID: card.cardUniqueID,
-                    note: String(localized: "finances.transaction.note.quick_credit_card_fields_change")
+                    note: L("finances.transaction.note.quick_credit_card_fields_change")
                 )
                 stampFrozenRate(on: transaction, targetCurrency: card.currency)
                 transaction.hasAppliedBalanceEffect = true

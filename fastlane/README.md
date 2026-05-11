@@ -23,6 +23,16 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 Build and upload the app to TestFlight
 
+### ios screenshots
+
+```sh
+[bundle exec] fastlane ios screenshots
+```
+
+Генерирует сырые App Store скриншоты через Screenshot Mode + fastlane snapshot.
+  После захвата: cd Маркетинг/screenshots-remotion && npm run render — финальные карточки.
+  Запуск: bundle exec fastlane screenshots
+
 ### ios distribute
 
 ```sh

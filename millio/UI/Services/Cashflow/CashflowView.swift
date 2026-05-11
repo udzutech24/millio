@@ -180,7 +180,6 @@ private struct CashflowContentView: View {
     @State private var showAssetChangeInfoSheet: Bool = false
     @State private var showIncomeBreakdown: Bool = false
     @State private var showExpenseBreakdown: Bool = false
-    @State private var selectedTopAction: TopToolbarAction = .currency
     @State private var showExpandedChart: Bool = false
     @State private var showExpandedPeriodSelector: Bool = false
     @State private var fullScreenChartVisiblePeriods: Int = 4
@@ -205,10 +204,6 @@ private struct CashflowContentView: View {
     private let rowCornerRadius: CGFloat = 16
     private let compactChartHistoricalPeriods = 6
 
-    private enum TopToolbarAction: CaseIterable {
-        case currency
-    }
-    
     var body: some View {
         ZStack {
             Color.black
@@ -223,11 +218,10 @@ private struct CashflowContentView: View {
 
                 }
                 .padding(.horizontal, 12)
-                .padding(.top, 2)
+                .padding(.top, 18)
                 .padding(.bottom, 20)
             }
         }
-        .navigationTitle(String(localized: "main.service.cashflow"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .interactiveBackSwipe()
@@ -317,9 +311,9 @@ private struct CashflowContentView: View {
             let useCompactMetrics = CashflowActionButtonsLayout.shouldUseCompactMetrics(
                 containerWidth: proxy.size.width
             )
-            let incomeTitle = String(localized: "main.quick_action.income")
-            let expenseTitle = String(localized: "main.quick_action.expense")
-            let transferTitle = String(localized: "cashflow.quick_action.transfer")
+            let incomeTitle = L("main.quick_action.income")
+            let expenseTitle = L("main.quick_action.expense")
+            let transferTitle = L("cashflow.quick_action.transfer")
 
             HStack(spacing: CashflowActionButtonsLayout.buttonSpacing) {
                 CashflowActionButton(
@@ -367,7 +361,7 @@ private struct CashflowContentView: View {
     private var assetBreakdownSection: some View {
         VStack(spacing: 14) {
             statRow(
-                title: String(localized: "cashflow.stats.assets_start"),
+                title: L("cashflow.stats.assets_start"),
                 value: formatMoney(viewModel.state.assetsAtPeriodStart),
                 valueColor: AppColors.textPrimary
             )
@@ -400,7 +394,7 @@ private struct CashflowContentView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .center) {
                     HStack(spacing: 8) {
-                        Text(String(localized: "cashflow.stats.asset_value_change"))
+                        Text(L("cashflow.stats.asset_value_change"))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(primarySecondaryText)
                         Button {
@@ -424,7 +418,7 @@ private struct CashflowContentView: View {
             rowDivider
 
             expandableStatRow(
-                title: String(localized: "cashflow.stats.expenses"),
+                title: L("cashflow.stats.expenses"),
                 value: formatSignedMoney(-viewModel.state.contributedExpense),
                 valueColor: negativeColor(for: -viewModel.state.contributedExpense),
                 isExpanded: $showExpenseBreakdown
@@ -445,7 +439,7 @@ private struct CashflowContentView: View {
 
             VStack(spacing: 8) {
                 statRow(
-                    title: String(localized: "cashflow.stats.assets_end"),
+                    title: L("cashflow.stats.assets_end"),
                     value: formatMoney(viewModel.state.assetsAtPeriodEnd),
                     valueColor: AppColors.textPrimary
                 )
@@ -454,7 +448,7 @@ private struct CashflowContentView: View {
                     .overlay(innerSeparator)
 
                 HStack {
-                    Text(String(localized: "cashflow.stats.result"))
+                    Text(L("cashflow.stats.result"))
                         .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     Spacer()
@@ -540,11 +534,11 @@ private struct CashflowContentView: View {
             if entries.isEmpty {
                 if showNoCardsHint {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(String(localized: "cashflow.breakdown.empty.no_cards.title"))
+                        Text(L("cashflow.breakdown.empty.no_cards.title"))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(primarySecondaryText)
 
-                        Text(String(localized: "cashflow.breakdown.empty.no_cards.subtitle"))
+                        Text(L("cashflow.breakdown.empty.no_cards.subtitle"))
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(primarySecondaryText)
 
@@ -553,7 +547,7 @@ private struct CashflowContentView: View {
                             MiniAppNavigation.navigate(to: .finances, from: currentRoute, router: router)
                             fireLightImpact()
                         } label: {
-                            Text(String(localized: "cashflow.breakdown.empty.no_cards.cta"))
+                            Text(L("cashflow.breakdown.empty.no_cards.cta"))
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                                 .padding(.horizontal, 10)
@@ -570,7 +564,7 @@ private struct CashflowContentView: View {
                         .buttonStyle(.plain)
                     }
                 } else {
-                    Text(String(localized: "cashflow.main.empty.no_transactions"))
+                    Text(L("cashflow.main.empty.no_transactions"))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(primarySecondaryText)
                 }
@@ -599,27 +593,64 @@ private struct CashflowContentView: View {
 
     private var periodSelectionHeader: some View {
         let range = viewModel.currentDateRange()
-        return HStack(spacing: 8) {
-            Text(String(format: String(localized: "cashflow.period.range_format"), formatPeriod(range.0), formatPeriod(range.1)))
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(primarySecondaryText)
-                .contentTransition(.opacity)
-                .frame(maxWidth: .infinity, alignment: .center)
-
+        let canExpand = hasChartData && EntitlementPolicy.canUseCashflowChart(isPro: appState.isPro)
+        return HStack(spacing: 6) {
             Button {
                 draftStartDate = viewModel.state.customStartDate
                 draftEndDate = viewModel.state.customEndDate
                 viewModel.handle(.showPeriodSelector)
                 fireLightImpact()
             } label: {
-                Image("calendar")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 16, height: 16)
-                    .padding(8)
+                HStack(spacing: 6) {
+                    Image("calendar")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 14, height: 14)
+                    Text(String(format: L("cashflow.period.range_format"), formatPeriod(range.0), formatPeriod(range.1)))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(primarySecondaryText)
+                        .contentTransition(.opacity)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(periodControlBackground)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Button {
+                viewModel.handle(.showCurrencySelector)
+                fireLightImpact()
+            } label: {
+                Text(toolbarCurrencyLabel())
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(0.4)
+                    .foregroundStyle(primarySecondaryText)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
                     .background(periodControlBackground)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(L("cashflow.accessibility.display_currency_selector")))
+
+            if canExpand {
+                Button {
+                    showExpandedChart = true
+                    fireLightImpact()
+                } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(periodControlBackground)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(L("cashflow.chart.expand")))
+            }
         }
         .animation(.easeInOut(duration: 0.2), value: viewModel.state.customStartDate)
     }
@@ -641,7 +672,7 @@ private struct CashflowContentView: View {
                             .frame(width: itemSize, height: itemSize)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text(String(localized: "cashflow.accessibility.back")))
+                    .accessibilityLabel(Text(L("cashflow.accessibility.back")))
 
                     Button {
                         showQuickNavigationPopover.toggle()
@@ -652,7 +683,7 @@ private struct CashflowContentView: View {
                             .frame(width: itemSize, height: itemSize)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text(String(localized: "cashflow.accessibility.quick_navigation")))
+                    .accessibilityLabel(Text(L("cashflow.accessibility.quick_navigation")))
                     .popover(isPresented: $showQuickNavigationPopover, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
                         MiniAppQuickNavigationPopover(
                             destinations: MiniAppNavigation.destinations(excluding: currentRoute)
@@ -668,21 +699,6 @@ private struct CashflowContentView: View {
             }
         }
 
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                selectedTopAction = .currency
-                viewModel.handle(.showCurrencySelector)
-                fireLightImpact()
-            } label: {
-                Text(toolbarCurrencyLabel())
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(0.4)
-                .foregroundStyle(selectedTopAction == .currency ? Color.white.opacity(0.96) : primarySecondaryText)
-                .frame(height: 38)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text(String(localized: "cashflow.accessibility.display_currency_selector")))
-        }
     }
     
     private func formatPeriod(_ date: Date) -> String {
@@ -812,30 +828,6 @@ private struct CashflowContentView: View {
         let granularity = cashflowInsightsGranularity
 
         return VStack(spacing: 18) {
-            HStack {
-                Text(String(localized: "cashflow.chart.title"))
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(primarySecondaryText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-
-                Spacer()
-
-                Button {
-                    showExpandedChart = true
-                    fireLightImpact()
-                } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(periodControlBackground)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(String(localized: "cashflow.chart.expand")))
-            }
-
             cashflowInsightsBars(
                 presentation: presentation,
                 granularity: granularity,
@@ -913,7 +905,7 @@ private struct CashflowContentView: View {
                     .padding(.bottom, CashflowExpandedChartLayoutPolicy.controlsOverlayBottomPadding)
                 }
             }
-            .navigationTitle(String(localized: "cashflow.chart.title"))
+            .navigationTitle(L("cashflow.chart.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -931,13 +923,13 @@ private struct CashflowContentView: View {
                             .frame(width: 40, height: 40, alignment: .center)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text(String(localized: "cashflow.accessibility.select_period")))
+                    .accessibilityLabel(Text(L("cashflow.accessibility.select_period")))
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
                     ToolbarGlassIconButton(
                         systemName: "checkmark",
-                        accessibilityLabel: String(localized: "cashflow.common.done"),
+                        accessibilityLabel: L("cashflow.common.done"),
                         isHighlighted: true
                     ) {
                         showExpandedChart = false
@@ -963,7 +955,7 @@ private struct CashflowContentView: View {
         return VStack(spacing: 4) {
             Text(
                 String(
-                    format: String(localized: "cashflow.period.range_format"),
+                    format: L("cashflow.period.range_format"),
                     formatPeriod(range.0),
                     formatPeriod(range.1)
                 )
@@ -982,7 +974,7 @@ private struct CashflowContentView: View {
                 .contentTransition(.numericText())
                 .padding(.top, 2)
 
-            Text(String(localized: "cashflow.stats.result"))
+            Text(L("cashflow.stats.result"))
                 .font(.system(size: 11, weight: .medium))
                 .tracking(0.5)
                 .foregroundStyle(netColor.opacity(0.65))
@@ -1009,12 +1001,12 @@ private struct CashflowContentView: View {
                 .frame(width: 86, height: 86)
                 .padding(.top, 2)
 
-            Text(String(localized: "cashflow.chart.empty.banner.title"))
+            Text(L("cashflow.chart.empty.banner.title"))
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(AppColors.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text(String(localized: "cashflow.main.empty_intro.description"))
+            Text(L("cashflow.main.empty_intro.description"))
                 .font(.system(size: 17, weight: .regular))
                 .foregroundStyle(AppColors.textTertiary)
                 .multilineTextAlignment(.center)
@@ -1024,7 +1016,7 @@ private struct CashflowContentView: View {
                 viewModel.handle(.addTransaction(.expense))
                 fireLightImpact()
             } label: {
-                Text(String(localized: "cashflow.chart.empty.banner.add_action"))
+                Text(L("cashflow.chart.empty.banner.add_action"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                     .frame(maxWidth: .infinity)
@@ -1045,7 +1037,7 @@ private struct CashflowContentView: View {
                 MiniAppNavigation.navigate(to: .finances, from: currentRoute, router: router)
                 fireLightImpact()
             } label: {
-                Text(String(localized: "cashflow.chart.empty.banner.open_finances"))
+                Text(L("cashflow.chart.empty.banner.open_finances"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                     .frame(maxWidth: .infinity)
@@ -1142,7 +1134,7 @@ private struct CashflowContentView: View {
 
     private var fullScreenVisiblePeriodsControl: some View {
         HStack(spacing: 10) {
-            Text(String(localized: "cashflow.chart.visible_range"))
+            Text(L("cashflow.chart.visible_range"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(primarySecondaryText)
 
@@ -1599,7 +1591,7 @@ private struct CashflowContentView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "cashflow.accessibility.hide_hints"))
+            .accessibilityLabel(L("cashflow.accessibility.hide_hints"))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -1654,7 +1646,7 @@ private struct CashflowContentView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
-                        Text(String(localized: "cashflow.asset_change.info_title"))
+                        Text(L("cashflow.asset_change.info_title"))
                             .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
 
@@ -1675,7 +1667,7 @@ private struct CashflowContentView: View {
                                 comment: "Cashflow asset change formula section title"
                             )
                         ) {
-                            Text(String(localized: "cashflow.asset_change.formula"))
+                            Text(L("cashflow.asset_change.formula"))
                                 .font(.system(size: 18, weight: .semibold, design: .rounded))
                                 .foregroundStyle(AppColors.textPrimary)
                                 .multilineTextAlignment(.leading)
@@ -1691,7 +1683,7 @@ private struct CashflowContentView: View {
                                 )
                         }
 
-                        assetChangeInfoCard(title: String(localized: "cashflow.asset_change.substitution")) {
+                        assetChangeInfoCard(title: L("cashflow.asset_change.substitution")) {
                             VStack(spacing: 14) {
                                 assetChangeValueRow(
                                     title: assetChangeLabel("cashflow.asset_change.start_total_format"),
@@ -1722,7 +1714,7 @@ private struct CashflowContentView: View {
                             }
                         }
 
-                        assetChangeInfoCard(title: String(localized: "cashflow.asset_change.balance_check")) {
+                        assetChangeInfoCard(title: L("cashflow.asset_change.balance_check")) {
                             HStack(alignment: .top, spacing: 12) {
                                 Image(systemName: isBalanced ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
                                     .font(.system(size: 22, weight: .semibold))
@@ -1732,8 +1724,8 @@ private struct CashflowContentView: View {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text(
                                         isBalanced
-                                        ? String(localized: "cashflow.asset_change.matches")
-                                        : String(localized: "cashflow.asset_change.mismatch")
+                                        ? L("cashflow.asset_change.matches")
+                                        : L("cashflow.asset_change.mismatch")
                                     )
                                         .font(.system(size: 19, weight: .semibold))
                                         .foregroundStyle(AppColors.textPrimary)
@@ -1764,7 +1756,7 @@ private struct CashflowContentView: View {
                             }
                         }
 
-                        Text(String(localized: "cashflow.asset_change.explanation"))
+                        Text(L("cashflow.asset_change.explanation"))
                             .font(.system(size: 16, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)

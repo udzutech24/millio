@@ -176,8 +176,8 @@ final class FinanceInvestmentOrderService {
             let operationGroupID = UUID().uuidString
             if abs(difference) > 0.01 {
                 let note = side == .buy
-                    ? String(localized: "finances.transaction.note.investment_buy")
-                    : String(localized: "finances.transaction.note.investment_sell")
+                    ? L("finances.transaction.note.investment_buy")
+                    : L("finances.transaction.note.investment_sell")
                 let transaction = CashflowTransaction(
                     transactionType: .balanceAdjustment,
                     amount: difference,
@@ -199,8 +199,8 @@ final class FinanceInvestmentOrderService {
 
             if let settlementAccountForOrder {
                 let note = side == .buy
-                    ? String(localized: "finances.transaction.note.investment_buy")
-                    : String(localized: "finances.transaction.note.investment_sell")
+                    ? L("finances.transaction.note.investment_buy")
+                    : L("finances.transaction.note.investment_sell")
                 let settlementCardID: String?
                 switch settlementAccountForOrder {
                 case .card(let card):
@@ -325,7 +325,7 @@ final class FinanceInvestmentOrderService {
                     currency: investment.currency,
                     transactionDate: Date(),
                     investmentID: investment.investmentUniqueID,
-                    note: String(localized: "finances.transaction.note.market_position_edit")
+                    note: L("finances.transaction.note.market_position_edit")
                 )
                 transaction.applyAssetChangeSnapshot(
                     before: snapshotBefore,

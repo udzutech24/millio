@@ -12,10 +12,10 @@ struct CashflowCategoryHelpContent {
 
     static func make(for kind: CashflowCategoryTransactionSheetKind) -> CashflowCategoryHelpContent {
         return CashflowCategoryHelpContent(
-            title: String(localized: "cashflow.operation.help.title"),
+            title: L("cashflow.operation.help.title"),
             notes: [
-                String(localized: "cashflow.operation.help.note.currency_first"),
-                String(localized: "cashflow.operation.help.note.category_month")
+                L("cashflow.operation.help.note.currency_first"),
+                L("cashflow.operation.help.note.category_month")
             ]
         )
     }
@@ -67,7 +67,7 @@ struct CashflowCategoryHelpSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "cashflow.common.close")) {
+                    Button(L("cashflow.common.close")) {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)

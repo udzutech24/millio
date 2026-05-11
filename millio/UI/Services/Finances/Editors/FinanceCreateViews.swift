@@ -42,7 +42,7 @@ struct FinanceCreateCardView: View {
                         .foregroundStyle(AppColors.textTertiary)
                     Text(
                         String(
-                            format: String(localized: "monetization.finance.products.limit.hard_format"),
+                            format: L("monetization.finance.products.limit.hard_format"),
                             EntitlementPolicy.freeFinanceProductLimit
                         )
                     )
@@ -134,7 +134,7 @@ struct FinanceCreateCreditView: View {
                         .foregroundStyle(AppColors.textTertiary)
                     Text(
                         String(
-                            format: String(localized: "monetization.finance.products.limit.hard_format"),
+                            format: L("monetization.finance.products.limit.hard_format"),
                             EntitlementPolicy.freeFinanceProductLimit
                         )
                     )
@@ -226,7 +226,7 @@ struct FinanceCreateInvestmentView: View {
                         .foregroundStyle(AppColors.textTertiary)
                     Text(
                         String(
-                            format: String(localized: "monetization.finance.products.limit.hard_format"),
+                            format: L("monetization.finance.products.limit.hard_format"),
                             EntitlementPolicy.freeFinanceProductLimit
                         )
                     )

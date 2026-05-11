@@ -23,7 +23,7 @@ struct CashflowCustomPeriodSheetView: View {
 
                 CalendarRangePickerPanel(
                     title: CalendarRangePickerCopy.sheetTitle(locale: locale),
-                    subtitle: String(localized: "cashflow.custom_period.calendar_hint"),
+                    subtitle: L("cashflow.custom_period.calendar_hint"),
                     startDate: $draftStartDate,
                     endDate: $draftEndDate,
                     theme: .cashflow
@@ -35,7 +35,7 @@ struct CashflowCustomPeriodSheetView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     ToolbarGlassIconButton(
                         systemName: "xmark",
-                        accessibilityLabel: String(localized: "cashflow.common.dismiss")
+                        accessibilityLabel: L("cashflow.common.dismiss")
                     ) {
                         dismiss()
                     }
@@ -43,8 +43,8 @@ struct CashflowCustomPeriodSheetView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 CalendarRangeSheetActionBar(
-                    secondaryTitle: String(localized: "cashflow.common.reset"),
-                    primaryTitle: String(localized: "cashflow.custom_period.show"),
+                    secondaryTitle: L("cashflow.common.reset"),
+                    primaryTitle: L("cashflow.custom_period.show"),
                     theme: .cashflow
                 ) {
                         viewModel.handle(.resetToDefaultPeriod)

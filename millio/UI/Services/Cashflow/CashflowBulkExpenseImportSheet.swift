@@ -64,7 +64,7 @@ enum CashflowBulkExpenseImportLayoutPolicy {
 
         guard !hasCards else { return nil }
         return CashflowBulkExpenseImportControlsStatusPresentation(
-            text: String(localized: "cashflow.editor.no_cards_in_currency"),
+            text: L("cashflow.editor.no_cards_in_currency"),
             tone: .warning
         )
     }
@@ -140,9 +140,8 @@ struct CashflowBulkExpenseImportSheet: View {
     private let danger = Color(hex: "FF5A5F")
     private let preferredCurrency = SettingsManager.shared.primaryCurrencyCode
     private let categoryGridColumns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10)
     ]
 
     init(
@@ -414,7 +413,7 @@ struct CashflowBulkExpenseImportSheet: View {
                     }
                 } label: {
                     compactSelectorLabel(
-                        title: String(localized: "cashflow.editor.currency"),
+                        title: L("cashflow.editor.currency"),
                         value: selectedCurrency,
                         style: .compact
                     )
@@ -1208,7 +1207,7 @@ struct CashflowBulkExpenseImportSheet: View {
                 }
             }
 
-            LazyVGrid(columns: categoryGridColumns, spacing: 8) {
+            LazyVGrid(columns: categoryGridColumns, spacing: 10) {
                 ForEach(orderedDraftIndices, id: \.self) { index in
                     categoryTile($categoryDrafts[index])
                 }
@@ -1327,18 +1326,27 @@ struct CashflowBulkExpenseImportSheet: View {
 
         return VStack(spacing: 6) {
             HStack(alignment: .top) {
-                CashflowCategoryIconView(
-                    icon: draft.wrappedValue.category.icon,
-                    fontSize: 18,
-                    fontWeight: .semibold,
-                    tint: AnyShapeStyle(Color.white.opacity(0.95))
-                )
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.10))
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.22), lineWidth: 1)
+                        )
+                    CashflowCategoryIconView(
+                        icon: draft.wrappedValue.category.icon,
+                        fontSize: 20,
+                        fontWeight: .semibold,
+                        tint: AnyShapeStyle(Color.white.opacity(0.95))
+                    )
+                }
+                .frame(width: 38, height: 38)
                 Spacer(minLength: 6)
             }
-            .frame(height: 20)
+            .frame(height: 38)
 
             Text(draft.wrappedValue.category.displayName)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.94))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -1371,10 +1379,10 @@ struct CashflowBulkExpenseImportSheet: View {
                 categoryBreakdownLabel(breakdown)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
-        .frame(minHeight: 96)
+        .frame(minHeight: 110)
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -2036,14 +2044,14 @@ struct CashflowBulkExpenseImportSheet: View {
 
         if let snapshot = selectedCardBalanceSnapshot {
             return String(
-                format: String(localized: "cashflow.editor.available_format"),
+                format: L("cashflow.editor.available_format"),
                 CashflowBulkExpenseRowDraft.formatAmount(snapshot.availableAmount),
                 snapshot.currency
             )
         }
 
         return String(
-            format: String(localized: "cashflow.editor.available_format"),
+            format: L("cashflow.editor.available_format"),
             CashflowBulkExpenseRowDraft.formatAmount(selectedCard.balance),
             selectedCard.currency
         )

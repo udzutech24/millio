@@ -32,6 +32,17 @@ final class LanguageManager: LanguageManagerProtocol {
         return storedCurrentLanguage
     }
 
+    /// Возвращает bundle для текущего языка приложения.
+    /// Используется как явный `bundle:` параметр в `String(localized:)`.
+    var currentBundle: Bundle {
+        Self.languageLock.lock()
+        defer { Self.languageLock.unlock() }
+        guard let locale = storedCurrentLanguage.locale,
+              let lb = AppLocalization.localizedBundle(for: locale, bundle: .main)
+        else { return .main }
+        return lb
+    }
+
     private init() {
         if let saved = UserDefaults.standard.string(forKey: userDefaultsKey),
            let language = Language(rawValue: saved) {

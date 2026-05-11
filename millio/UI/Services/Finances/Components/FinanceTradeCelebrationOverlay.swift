@@ -41,7 +41,7 @@ struct FinanceTradeCelebrationOverlay: View {
                         .lineSpacing(2)
                 }
 
-                Text(String(localized: "finances.dynamics.trade.celebration.badge"))
+                Text(L("finances.dynamics.trade.celebration.badge"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary.opacity(0.82))
                     .padding(.horizontal, 14)
@@ -75,9 +75,9 @@ struct FinanceTradeCelebrationOverlay: View {
     private var titleText: String {
         switch celebration.side {
         case .buy:
-            return String(localized: "finances.dynamics.trade.celebration.buy.title")
+            return L("finances.dynamics.trade.celebration.buy.title")
         case .sell:
-            return String(localized: "finances.dynamics.trade.celebration.sell.title")
+            return L("finances.dynamics.trade.celebration.sell.title")
         }
     }
 

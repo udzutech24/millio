@@ -76,7 +76,7 @@ struct PremiumUpsellAlert: View {
             dismiss(notifyCancel: false)
             onSubscribe()
         } label: {
-            Text(String(localized: "subscription.button.subscribe", locale: localizationLocale))
+            Text(String(localized: "subscription.button.subscribe", bundle: LanguageManager.shared.currentBundle, locale: localizationLocale))
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -102,7 +102,7 @@ struct PremiumUpsellAlert: View {
         Button {
             dismiss(notifyCancel: true)
         } label: {
-            Text(String(localized: "finances.common.cancel", locale: localizationLocale))
+            Text(String(localized: "finances.common.cancel", bundle: LanguageManager.shared.currentBundle, locale: localizationLocale))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .frame(maxWidth: .infinity)

@@ -23,7 +23,6 @@ struct RootTabView: View {
     // Отдельные стеки для каждого таба
     @State private var dashboardPath = NavigationPath()
     @State private var financesPath = NavigationPath()
-    @State private var dynamicsPath = NavigationPath()
     @State private var cashflowPath = NavigationPath()
 
     // ViewModels (ленивая инициализация)
@@ -40,6 +39,8 @@ struct RootTabView: View {
 
     // Profile
     @State private var showProfileSheet = false
+    @State private var showDeltaPeriodPicker = false
+    @State private var dashboardPeriodDays: Int = SettingsManager.shared.dashboardDeltaPeriodDays
 
     // Internal finances tab state (для обратной совместимости с FinancesContentViewInternal)
     @State private var financesInternalTab: FinancesInternalTab = .main
@@ -48,7 +49,7 @@ struct RootTabView: View {
         switch router.selectedTab {
         case .dashboard: !dashboardPath.isEmpty
         case .finances:  !financesPath.isEmpty
-        case .dynamics:  !dynamicsPath.isEmpty
+        case .dynamics:  false
         case .cashflow:  !cashflowPath.isEmpty
         }
     }
@@ -123,6 +124,16 @@ struct RootTabView: View {
             }
             .environment(appState)
         }
+        .sheet(isPresented: $showDeltaPeriodPicker) {
+            DashboardDeltaPeriodPickerSheet(selectedPeriod: $dashboardPeriodDays)
+                .presentationDetents([.fraction(0.32)])
+                .presentationDragIndicator(.visible)
+        }
+        .onChange(of: dashboardPeriodDays) { _, newValue in
+            SettingsManager.shared.dashboardDeltaPeriodDays = newValue
+            showDeltaPeriodPicker = false
+            Task { await financeViewModel?.computeDashboardSparkline() }
+        }
     }
 
     // MARK: - Tab Content
@@ -184,27 +195,19 @@ struct RootTabView: View {
                 cashflowExpense: cashflowViewModel?.state.contributedExpense ?? 0,
                 cashflowAssetChange: cashflowViewModel?.state.assetValueChange ?? 0,
                 cashflowCurrency: cashflowViewModel?.state.displayCurrency ?? appState.primaryCurrencyCode,
-                cashflowPeriodLabel: cashflowViewModel?.state.chartPeriod.displayName ?? "Месяц"
+                cashflowPeriodLabel: cashflowViewModel?.state.chartPeriod.displayName ?? "Месяц",
+                onOpenHistory: {
+                    ensureCashflowViewModel()
+                    appState.pendingOpenCashflowHistory = true
+                },
+                onShowProfile: {
+                    showProfileSheet = true
+                },
+                onDaysChipTap: {
+                    showDeltaPeriodPicker = true
+                }
             )
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        ensureCashflowViewModel()
-                        appState.pendingOpenCashflowHistory = true
-                    } label: {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundStyle(Color.white.opacity(0.75))
-                            .frame(width: 38, height: 38)
-                    }
-                    .buttonStyle(.plain)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    profileButton
-                }
-            }
             .navigationDestination(for: FinancesStackRoute.self) { route in
                 switch route {
                 case .courses:
@@ -242,11 +245,6 @@ struct RootTabView: View {
                 .padding(.bottom, 72) // отступ под таб бар
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    financeSettingsButton
-                }
-            }
             .navigationDestination(for: FinancesStackRoute.self) { route in
                 switch route {
                 case .courses:
@@ -270,73 +268,18 @@ struct RootTabView: View {
         }
     }
 
-    // MARK: - Profile Button
-
-    private var profileButton: some View {
-        let size: CGFloat = 34
-        return Button {
-            showProfileSheet = true
-        } label: {
-            Group {
-                if let path = appState.profileAvatarPath,
-                   FileManager.default.fileExists(atPath: path),
-                   let uiImage = UIImage(contentsOfFile: path) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Image("profile")
-                        .resizable()
-                        .scaledToFit()
-                }
-            }
-            .frame(width: size, height: size)
-            .clipShape(Circle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Finance Settings Button
-
-    @State private var showFinanceSettingsSheet = false
-
-    private var financeSettingsButton: some View {
-        Group {
-            if financeViewModel != nil {
-                Button {
-                    showFinanceSettingsSheet = true
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary.opacity(0.92))
-                        .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain)
-                .sheet(isPresented: $showFinanceSettingsSheet) {
-                    if let vm = financeViewModel {
-                        FinancesSettingsSheetWrapper(viewModel: vm, modelContext: modelContext)
-                    }
-                }
-            } else {
-                EmptyView()
-            }
-        }
-    }
-
     // MARK: - Dynamics Tab
 
     private var dynamicsTab: some View {
-        NavigationStack(path: $dynamicsPath) {
-            ZStack {
-                GradientBackground()
+        ZStack {
+            GradientBackground()
 
-                if let vm = financeViewModel {
-                    FinanceDynamicsTabView(financeViewModel: vm)
-                        .padding(.bottom, 72)
-                } else {
-                    ProgressView()
-                        .tint(AppColors.textPrimary)
-                }
+            if let vm = financeViewModel {
+                FinanceDynamicsTabView(financeViewModel: vm)
+                    .padding(.bottom, 72)
+            } else {
+                ProgressView()
+                    .tint(AppColors.textPrimary)
             }
         }
     }

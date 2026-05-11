@@ -26,6 +26,7 @@ struct ProfileView: View {
         targetCount: DebugMenuAccessPolicy.unlockTapCount,
         resetInterval: DebugMenuAccessPolicy.unlockTapResetInterval
     )
+    @State private var rateBlockDismissed = false
 
     private enum ProfileLayout {
         static let contentHorizontalInset: CGFloat = 20
@@ -33,8 +34,14 @@ struct ProfileView: View {
         static let cardCornerRadius: CGFloat = 22
     }
 
+    private var shouldShowRateBlock: Bool {
+        guard !rateBlockDismissed, !SettingsManager.shared.hasRatedApp else { return false }
+        let twoWeeks: TimeInterval = 14 * 24 * 3600
+        return Date().timeIntervalSince(SettingsManager.shared.appFirstLaunchDate) >= twoWeeks
+    }
+
     private var accountDetailsTitle: String {
-        String(localized: "profile.auth.details", defaultValue: "Details", comment: "Account details entry button title")
+        L("profile.auth.details", defaultValue: "Details")
     }
 
     private var legalLinks: ProfileLegalLinks {
@@ -93,7 +100,7 @@ struct ProfileView: View {
                                 sectionContent(for: section.id)
                             }
 
-                            if section.id == .contacts {
+                            if section.id == .contacts, shouldShowRateBlock {
                                 card {
                                     RateAppBlock(
                                         canOpenAppStoreReview: AppStoreReviewLink.url != nil,
@@ -167,7 +174,7 @@ struct ProfileView: View {
             .buttonStyle(.plain)
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("profile.greeting")
+                Text(L("profile.greeting"))
                     .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(AppColors.textSecondary)
 
@@ -681,6 +688,8 @@ struct ProfileView: View {
     }
 
     private func sendFeedback() {
+        SettingsManager.shared.hasRatedApp = true
+        rateBlockDismissed = true
         showContactSheet = true
     }
 
@@ -695,6 +704,8 @@ struct ProfileView: View {
     }
 
     private func openAppStoreReview() {
+        SettingsManager.shared.hasRatedApp = true
+        rateBlockDismissed = true
         if let url = AppStoreReviewLink.url {
             openURL(url)
             return

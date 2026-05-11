@@ -32,7 +32,7 @@ struct ProfilePremiumDiagnosticsView: View {
     private var summaryCard: some View {
         card {
             VStack(alignment: .leading, spacing: 14) {
-                Text("profile.premium.diagnostics.current_access")
+                Text(L("profile.premium.diagnostics.current_access"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
 
@@ -88,7 +88,7 @@ struct ProfilePremiumDiagnosticsView: View {
     private var diagnosticsCard: some View {
         card {
             VStack(alignment: .leading, spacing: 16) {
-                Text("profile.premium.diagnostics.behavior")
+                Text(L("profile.premium.diagnostics.behavior"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
 

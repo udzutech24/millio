@@ -547,11 +547,11 @@ enum CashflowInsightsChartBuilder {
         let comparisonText: String
 
         if abs(delta) <= epsilon {
-            comparisonText = "Как в \(previousLabel)"
+            comparisonText = "\(L("cashflow.insights.comparison.same_as")) \(previousLabel)"
         } else if delta > 0 {
-            comparisonText = "Больше, чем в \(previousLabel)"
+            comparisonText = "\(L("cashflow.insights.comparison.more_than")) \(previousLabel)"
         } else {
-            comparisonText = "Меньше, чем в \(previousLabel)"
+            comparisonText = "\(L("cashflow.insights.comparison.less_than")) \(previousLabel)"
         }
 
         let tone: CashflowValueTone

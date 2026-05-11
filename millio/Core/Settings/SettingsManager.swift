@@ -46,6 +46,9 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     private let lastLaunchSplashShownAtKey = "lastLaunchSplashShownAt"
     private let guestModeEnabledKey = "guestModeEnabled"
     private let debugMenuUnlockedKey = "debugMenuUnlocked"
+    private let appFirstLaunchDateKey = "appFirstLaunchDate"
+    private let hasRatedAppKey = "hasRatedApp"
+    private let dashboardDeltaPeriodDaysKey = "dashboardDeltaPeriodDays"
     private static let legacyDefaultProfileDisplayNames: Set<String> = ["Гость", "Guest"]
     private let defaults: UserDefaults
 
@@ -397,6 +400,27 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        if defaults.object(forKey: appFirstLaunchDateKey) == nil {
+            defaults.set(Date(), forKey: appFirstLaunchDateKey)
+        }
+    }
+
+    var appFirstLaunchDate: Date {
+        defaults.object(forKey: appFirstLaunchDateKey) as? Date ?? Date()
+    }
+
+    var hasRatedApp: Bool {
+        get { defaults.bool(forKey: hasRatedAppKey) }
+        set { defaults.set(newValue, forKey: hasRatedAppKey) }
+    }
+
+    /// Период (в днях) для отображения дельты баланса на дашборде. Опции: 1, 3, 7, 14, 30.
+    var dashboardDeltaPeriodDays: Int {
+        get {
+            let stored = defaults.integer(forKey: dashboardDeltaPeriodDaysKey)
+            return stored > 0 ? stored : 7
+        }
+        set { defaults.set(newValue, forKey: dashboardDeltaPeriodDaysKey) }
     }
 
     /// Возвращает пользовательские настройки к безопасным дефолтам приложения.

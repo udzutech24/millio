@@ -60,7 +60,7 @@ struct CashflowCategoryActionOverlay: View {
                                     .foregroundStyle(AppColors.textPrimary)
                                     .multilineTextAlignment(.leading)
 
-                                Text(String(localized: "cashflow.category.actions.message"))
+                                Text(L("cashflow.category.actions.message"))
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .multilineTextAlignment(.leading)
@@ -89,7 +89,7 @@ struct CashflowCategoryActionOverlay: View {
                             }
 
                             actionButton(
-                                title: String(localized: "cashflow.common.edit"),
+                                title: L("cashflow.common.edit"),
                                 systemImage: "pencil",
                                 tint: AppColors.textPrimary,
                                 action: onEdit
@@ -97,7 +97,7 @@ struct CashflowCategoryActionOverlay: View {
 
                             if let onDelete {
                                 actionButton(
-                                    title: deleteActionTitle ?? String(localized: "cashflow.category.actions.delete"),
+                                    title: deleteActionTitle ?? L("cashflow.category.actions.delete"),
                                     systemImage: deleteActionIcon ?? "trash",
                                     tint: AppColors.error,
                                     action: onDelete

@@ -137,11 +137,11 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                         showCurrencyPicker = false
                     }
                 )
-                .navigationTitle(String(localized: "finances.add_account.currency_picker.title"))
+                .navigationTitle(L("finances.add_account.currency_picker.title"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button(String(localized: "finances.common.cancel")) { showCurrencyPicker = false }
+                        Button(L("finances.common.cancel")) { showCurrencyPicker = false }
                     }
                 }
             }
@@ -202,14 +202,14 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     
     private var typeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.type"))
+            FinancesSectionHeader(title: L("finances.add_account.section.type"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     Button {
                         onOpenProductPicker?()
                     } label: {
                         HStack(spacing: 12) {
-                            Text(String(localized: "finances.add_account.product.type"))
+                            Text(L("finances.add_account.product.type"))
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
 
@@ -254,7 +254,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                         }
                     } label: {
                         HStack(spacing: 12) {
-                            Text(String(localized: "finances.add_account.card.type"))
+                            Text(L("finances.add_account.card.type"))
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
 
@@ -302,12 +302,12 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     
     private var balanceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.balance"))
+            FinancesSectionHeader(title: L("finances.add_account.section.balance"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     if card.cardType == .credit {
                         HStack(spacing: 12) {
-                            Text(String(localized: "finances.add_account.card.credit_limit"))
+                            Text(L("finances.add_account.card.credit_limit"))
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
@@ -333,7 +333,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                         FinancesRowDivider(leadingPadding: 16)
                         
                         HStack(spacing: 12) {
-                            Text(String(localized: "finances.add_account.card.total_debt"))
+                            Text(L("finances.add_account.card.total_debt"))
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
@@ -358,7 +358,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                         FinancesRowDivider(leadingPadding: 16)
 
                         HStack(spacing: 12) {
-                            Text(String(localized: "finances.add_account.card.remaining_limit"))
+                            Text(L("finances.add_account.card.remaining_limit"))
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
@@ -370,7 +370,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                         .padding(.horizontal, 16)
                     } else {
                         HStack(spacing: 12) {
-                            Text(String(localized: "finances.add_account.field.amount"))
+                            Text(L("finances.add_account.field.amount"))
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
@@ -387,7 +387,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                     FinancesRowDivider(leadingPadding: 16)
 
                     HStack(spacing: 12) {
-                        Text(String(localized: "finances.add_account.field.currency"))
+                        Text(L("finances.add_account.field.currency"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -418,31 +418,31 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     
     private var calculationsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.calculations"))
+            FinancesSectionHeader(title: L("finances.add_account.section.calculations"))
             FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                 VStack(alignment: .leading, spacing: 14) {
                     if card.cardType == .credit {
                         HStack(spacing: 10) {
-                            Text(String(localized: "finances.add_account.total_impact.title"))
+                            Text(L("finances.add_account.total_impact.title"))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
-                            Text(String(localized: "finances.add_account.total_impact.decreases"))
+                            Text(L("finances.add_account.total_impact.decreases"))
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(AppColors.error.opacity(0.9))
                         }
                     } else {
-                        Toggle(String(localized: "finances.add_account.total_impact.include"), isOn: $card.includeInTotal)
+                        Toggle(L("finances.add_account.total_impact.include"), isOn: $card.includeInTotal)
                             .tint(AppColors.toggleOnGreen)
                             .foregroundStyle(AppColors.textPrimary)
                     }
                     
-                    Text(String(localized: "finances.add_account.total_impact.description"))
+                    Text(L("finances.add_account.total_impact.description"))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.35))
                         .fixedSize(horizontal: false, vertical: true)
 
                     if card.cardType == .credit {
-                        Text(String(localized: "finances.add_account.total_impact.credit_note"))
+                        Text(L("finances.add_account.total_impact.credit_note"))
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(AppColors.error.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)
@@ -454,22 +454,22 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     
     private var prioritySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.priority"))
+            FinancesSectionHeader(title: L("finances.add_account.section.priority"))
             FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle(String(localized: "finances.add_account.favorite.single"), isOn: $card.isFavorite)
+                    Toggle(L("finances.add_account.favorite.single"), isOn: $card.isFavorite)
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                     
                     FinancesRowDivider(leadingPadding: 0)
                     
                     HStack(spacing: 12) {
-                        FinancesRadioOption(title: String(localized: "finances.priority.low"), isSelected: card.priority == .low) { card.priority = .low }
-                        FinancesRadioOption(title: String(localized: "finances.priority.normal"), isSelected: card.priority == .normal) { card.priority = .normal }
-                        FinancesRadioOption(title: String(localized: "finances.priority.high"), isSelected: card.priority == .high) { card.priority = .high }
+                        FinancesRadioOption(title: L("finances.priority.low"), isSelected: card.priority == .low) { card.priority = .low }
+                        FinancesRadioOption(title: L("finances.priority.normal"), isSelected: card.priority == .normal) { card.priority = .normal }
+                        FinancesRadioOption(title: L("finances.priority.high"), isSelected: card.priority == .high) { card.priority = .high }
                     }
                     
-                    Text(String(localized: "finances.add_account.priority.hint"))
+                    Text(L("finances.add_account.priority.hint"))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.35))
                 }
@@ -655,11 +655,11 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                         showCurrencyPicker = false
                     }
                 )
-                .navigationTitle(String(localized: "finances.add_account.currency_picker.title"))
+                .navigationTitle(L("finances.add_account.currency_picker.title"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button(String(localized: "finances.common.cancel")) { showCurrencyPicker = false }
+                        Button(L("finances.common.cancel")) { showCurrencyPicker = false }
                     }
                 }
             }
@@ -710,11 +710,11 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     
     private var balanceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.balance"))
+            FinancesSectionHeader(title: L("finances.add_account.section.balance"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
-                        Text(String(localized: "finances.add_account.credit.amount"))
+                        Text(L("finances.add_account.credit.amount"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -730,7 +730,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                     FinancesRowDivider(leadingPadding: 16)
                     
                     HStack(spacing: 12) {
-                        Text(String(localized: "finances.add_account.credit.remaining_debt"))
+                        Text(L("finances.add_account.credit.remaining_debt"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -746,7 +746,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                     FinancesRowDivider(leadingPadding: 16)
                     
                     HStack(spacing: 12) {
-                        Text(String(localized: "finances.add_account.field.currency"))
+                        Text(L("finances.add_account.field.currency"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -777,11 +777,11 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
 
     private var paymentSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.credit.payment.section"))
+            FinancesSectionHeader(title: L("finances.add_account.credit.payment.section"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
-                        Text(String(localized: "finances.add_account.credit.monthly_payment"))
+                        Text(L("finances.add_account.credit.monthly_payment"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -797,7 +797,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                     FinancesRowDivider(leadingPadding: 16)
 
                     HStack(spacing: 12) {
-                        Text(String(localized: "finances.add_account.credit.payment_mode"))
+                        Text(L("finances.add_account.credit.payment_mode"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -824,7 +824,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
 
                     if paymentMode == .dayOfMonth {
                         HStack(spacing: 12) {
-                            Text(String(localized: "finances.add_account.credit.payment_day"))
+                            Text(L("finances.add_account.credit.payment_day"))
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
@@ -848,7 +848,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                         .padding(.horizontal, 16)
                     } else {
                         DatePicker(
-                            String(localized: "finances.add_account.credit.next_payment_date"),
+                            L("finances.add_account.credit.next_payment_date"),
                             selection: $nextPaymentDate,
                             displayedComponents: .date
                         )
@@ -863,10 +863,10 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
 
     private var reminderSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.credit.reminder.section"))
+            FinancesSectionHeader(title: L("finances.add_account.credit.reminder.section"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
-                    Toggle(String(localized: "finances.add_account.credit.reminder.toggle"), isOn: $reminderEnabled)
+                    Toggle(L("finances.add_account.credit.reminder.toggle"), isOn: $reminderEnabled)
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
@@ -876,7 +876,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                         FinancesRowDivider(leadingPadding: 16)
 
                         HStack(spacing: 12) {
-                            Text(String(localized: "finances.add_account.credit.reminder.days_before"))
+                            Text(L("finances.add_account.credit.reminder.days_before"))
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
@@ -892,7 +892,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                         FinancesRowDivider(leadingPadding: 16)
 
                         DatePicker(
-                            String(localized: "finances.add_account.credit.reminder.time"),
+                            L("finances.add_account.credit.reminder.time"),
                             selection: $reminderTime,
                             displayedComponents: .hourAndMinute
                         )
@@ -907,24 +907,24 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     
     private var calculationsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.calculations"))
+            FinancesSectionHeader(title: L("finances.add_account.section.calculations"))
             FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 10) {
-                        Text(String(localized: "finances.add_account.total_impact.title"))
+                        Text(L("finances.add_account.total_impact.title"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Text(String(localized: "finances.add_account.total_impact.decreases"))
+                        Text(L("finances.add_account.total_impact.decreases"))
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppColors.error.opacity(0.9))
                     }
                     
-                    Text(String(localized: "finances.add_account.total_impact.description"))
+                    Text(L("finances.add_account.total_impact.description"))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.35))
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text(String(localized: "finances.add_account.total_impact.credit_remaining_note"))
+                    Text(L("finances.add_account.total_impact.credit_remaining_note"))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.error.opacity(0.8))
                         .fixedSize(horizontal: false, vertical: true)
@@ -944,9 +944,9 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     
     private var prioritySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.priority"))
+            FinancesSectionHeader(title: L("finances.add_account.section.priority"))
             FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
-                Toggle(String(localized: "finances.add_account.favorite"), isOn: $isFavorite)
+                Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
                     .tint(AppColors.toggleOnGreen)
                     .foregroundStyle(AppColors.textPrimary)
             }
@@ -1256,11 +1256,11 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                         showCurrencyPicker = false
                     }
                 )
-                .navigationTitle(String(localized: "finances.add_account.currency_picker.title"))
+                .navigationTitle(L("finances.add_account.currency_picker.title"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button(String(localized: "finances.common.cancel")) { showCurrencyPicker = false }
+                        Button(L("finances.common.cancel")) { showCurrencyPicker = false }
                     }
                 }
             }
@@ -1300,13 +1300,13 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
 
     private var marketSymbolHintText: String {
         selectedCategory == .crypto
-            ? String(localized: "finances.add_account.hint.select_coin_or_pair")
-            : String(localized: "finances.add_account.hint.select_ticker")
+            ? L("finances.add_account.hint.select_coin_or_pair")
+            : L("finances.add_account.hint.select_ticker")
     }
     
     private var marketInstrumentSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.market.section_symbol"))
+            FinancesSectionHeader(title: L("finances.market.section_symbol"))
             FinancesGlassCard(
                 accentColor: needsMarketSymbolSelection
                     ? Color(red: 0.18, green: 0.95, blue: 0.45)
@@ -1393,7 +1393,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     private var marketPositionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.market.section_position"))
+            FinancesSectionHeader(title: L("finances.market.section_position"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
@@ -1413,7 +1413,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                     FinancesRowDivider(leadingPadding: 16)
                     
                     HStack(spacing: 12) {
-                        Text(String(localized: "finances.market.field_unit_price"))
+                        Text(L("finances.market.field_unit_price"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -1442,7 +1442,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                     FinancesRowDivider(leadingPadding: 16)
 
                     HStack(spacing: 12) {
-                        Text(String(localized: "finances.add_account.investment.purchase_price"))
+                        Text(L("finances.add_account.investment.purchase_price"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -1463,7 +1463,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                     FinancesRowDivider(leadingPadding: 16)
                     
                     HStack(spacing: 12) {
-                        Text(String(localized: "finances.market.field_position_total"))
+                        Text(L("finances.market.field_position_total"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -1482,7 +1482,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                     .foregroundStyle(AppColors.error)
                     .padding(.horizontal, 4)
             } else if let lastKnownPriceUpdatedAt {
-                Text("\(String(localized: "finances.market.price_updated_prefix")) \(formatDate(lastKnownPriceUpdatedAt))")
+                Text("\(L("finances.market.price_updated_prefix")) \(formatDate(lastKnownPriceUpdatedAt))")
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textPrimary.opacity(0.35))
                     .padding(.horizontal, 4)
@@ -1492,11 +1492,11 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     private var balanceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.balance"))
+            FinancesSectionHeader(title: L("finances.add_account.section.balance"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
-                        Text(String(localized: "finances.add_account.field.amount"))
+                        Text(L("finances.add_account.field.amount"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -1512,7 +1512,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                     FinancesRowDivider(leadingPadding: 16)
                     
                     HStack(spacing: 12) {
-                        Text(String(localized: "finances.add_account.field.currency"))
+                        Text(L("finances.add_account.field.currency"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -1543,33 +1543,33 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     private var calculationsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.calculations"))
+            FinancesSectionHeader(title: L("finances.add_account.section.calculations"))
             FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                 VStack(alignment: .leading, spacing: 14) {
-                    Toggle(String(localized: "finances.add_account.total_impact.include"), isOn: $includeInTotal)
+                    Toggle(L("finances.add_account.total_impact.include"), isOn: $includeInTotal)
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                     
                     HStack(spacing: 12) {
                         FinancesCheckboxOption(
-                            title: String(localized: "finances.add_account.total_impact.increases"),
+                            title: L("finances.add_account.total_impact.increases"),
                             isSelected: selectedInvestmentType == .positive,
                             onTap: { selectedInvestmentType = .positive }
                         )
                         FinancesCheckboxOption(
-                            title: String(localized: "finances.add_account.total_impact.decreases"),
+                            title: L("finances.add_account.total_impact.decreases"),
                             isSelected: selectedInvestmentType == .negative,
                             onTap: { selectedInvestmentType = .negative }
                         )
                     }
                     
-                    Text(String(localized: "finances.add_account.total_impact.description"))
+                    Text(L("finances.add_account.total_impact.description"))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.35))
                         .fixedSize(horizontal: false, vertical: true)
 
                     if selectedCategory == .debt {
-                        Text(String(localized: "finances.add_account.total_impact.debt_note"))
+                        Text(L("finances.add_account.total_impact.debt_note"))
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(AppColors.textPrimary.opacity(0.6))
                             .fixedSize(horizontal: false, vertical: true)
@@ -1581,22 +1581,22 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     private var prioritySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.priority"))
+            FinancesSectionHeader(title: L("finances.add_account.section.priority"))
             FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle(String(localized: "finances.add_account.favorite"), isOn: $isFavorite)
+                    Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                     
                     FinancesRowDivider(leadingPadding: 0)
                     
                     HStack(spacing: 12) {
-                        FinancesRadioOption(title: String(localized: "finances.priority.low"), isSelected: selectedPriority == .low) { selectedPriority = .low }
-                        FinancesRadioOption(title: String(localized: "finances.priority.normal"), isSelected: selectedPriority == .normal) { selectedPriority = .normal }
-                        FinancesRadioOption(title: String(localized: "finances.priority.high"), isSelected: selectedPriority == .high) { selectedPriority = .high }
+                        FinancesRadioOption(title: L("finances.priority.low"), isSelected: selectedPriority == .low) { selectedPriority = .low }
+                        FinancesRadioOption(title: L("finances.priority.normal"), isSelected: selectedPriority == .normal) { selectedPriority = .normal }
+                        FinancesRadioOption(title: L("finances.priority.high"), isSelected: selectedPriority == .high) { selectedPriority = .high }
                     }
                     
-                    Text(String(localized: "finances.add_account.priority.hint"))
+                    Text(L("finances.add_account.priority.hint"))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.35))
                 }

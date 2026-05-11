@@ -195,7 +195,8 @@ enum ProfileMenuStructure {
             .premiumAccess,
             .trialDisabled,
             .premiumDiagnostics,
-            .showOnboarding
+            .showOnboarding,
+            .smartDataReset
         ]
 #if DEBUG
         items.append(.adminStats)
@@ -231,8 +232,7 @@ enum ProfileMenuStructure {
             ProfileMenuSection(
                 id: .support,
                 items: [
-                    .faq,
-                    .smartDataReset
+                    .faq
                 ]
             ),
             ProfileMenuSection(

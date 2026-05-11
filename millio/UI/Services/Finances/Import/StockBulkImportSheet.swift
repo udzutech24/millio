@@ -630,7 +630,7 @@ struct StockBulkImportSheet: View {
                             .frame(width: 30, height: 30)
                     }
                     .foregroundStyle(AppColors.textPrimary)
-                    .accessibilityLabel(Text(String(localized: "finances.common.cancel")))
+                    .accessibilityLabel(Text(L("finances.common.cancel")))
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1119,7 +1119,7 @@ struct StockBulkImportSheet: View {
 
                     FinancesRowDivider()
 
-                    Button(String(localized: "finances.common.reset")) {
+                    Button(L("finances.common.reset")) {
                         viewModel.clearAll()
                     }
                     .foregroundStyle(AppColors.textTertiary)
@@ -1300,7 +1300,7 @@ struct StockBulkImportSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text(String(localized: "finances.common.delete")))
+                    .accessibilityLabel(Text(L("finances.common.delete")))
                 }
             }
 

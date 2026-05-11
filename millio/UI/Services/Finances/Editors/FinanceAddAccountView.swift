@@ -49,9 +49,9 @@ struct FinanceAddAccountView: View {
         var title: String {
             switch self {
             case .create:
-                String(localized: "finances.add_account.mode.create")
+                L("finances.add_account.mode.create")
             case .archived:
-                String(localized: "finances.add_account.mode.archived")
+                L("finances.add_account.mode.archived")
             }
         }
     }
@@ -126,7 +126,7 @@ struct FinanceAddAccountView: View {
     
     private var nameSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.name"))
+            FinancesSectionHeader(title: L("finances.add_account.section.name"))
             FinancesGlassCard {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 12) {
@@ -145,7 +145,7 @@ struct FinanceAddAccountView: View {
                     }
                     
                     if isTickerDrivenName {
-                        Text(String(localized: "finances.add_account.name.autofill_hint"))
+                        Text(L("finances.add_account.name.autofill_hint"))
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(AppColors.textPrimary.opacity(0.35))
                             .padding(.leading, 34)
@@ -168,35 +168,35 @@ struct FinanceAddAccountView: View {
     private var placeholderForSelectedType: String {
         switch selectedAccountType {
         case .card:
-            return String(localized: "finances.add_account.placeholder.card")
+            return L("finances.add_account.placeholder.card")
         case .credit:
-            return String(localized: "finances.add_account.placeholder.credit")
+            return L("finances.add_account.placeholder.credit")
         case .investment:
             if isTickerDrivenName {
-                return String(localized: "finances.add_account.placeholder.market")
+                return L("finances.add_account.placeholder.market")
             }
             if selectedInvestmentCategory == .other, selectedInvestmentPreset == .account {
-                return String(localized: "finances.add_account.placeholder.account")
+                return L("finances.add_account.placeholder.account")
             }
             switch selectedInvestmentCategory {
             case .house:
-                return String(localized: "finances.add_account.placeholder.investment.house")
+                return L("finances.add_account.placeholder.investment.house")
             case .stocks:
-                return String(localized: "finances.add_account.placeholder.investment.stocks")
+                return L("finances.add_account.placeholder.investment.stocks")
             case .business:
-                return String(localized: "finances.add_account.placeholder.investment.business")
+                return L("finances.add_account.placeholder.investment.business")
             case .debt:
-                return String(localized: "finances.add_account.placeholder.investment.debt")
+                return L("finances.add_account.placeholder.investment.debt")
             case .crypto:
-                return String(localized: "finances.add_account.placeholder.investment.crypto")
+                return L("finances.add_account.placeholder.investment.crypto")
             case .car:
-                return String(localized: "finances.add_account.placeholder.investment.car")
+                return L("finances.add_account.placeholder.investment.car")
             case .bonds:
-                return String(localized: "finances.add_account.placeholder.investment.bonds")
+                return L("finances.add_account.placeholder.investment.bonds")
             case .metals:
-                return String(localized: "finances.add_account.placeholder.investment.metals")
+                return L("finances.add_account.placeholder.investment.metals")
             case .other:
-                return String(localized: "finances.add_account.placeholder.investment.other")
+                return L("finances.add_account.placeholder.investment.other")
             }
         }
     }
@@ -207,13 +207,13 @@ struct FinanceAddAccountView: View {
     
     private var accountTypeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.type"))
+            FinancesSectionHeader(title: L("finances.add_account.section.type"))
             FinancesGlassCard {
                 Button {
                     showProductPicker = true
                 } label: {
                     HStack(spacing: 12) {
-                        Text(String(localized: "finances.add_account.product.type"))
+                        Text(L("finances.add_account.product.type"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         
@@ -261,12 +261,12 @@ struct FinanceAddAccountView: View {
     
     private var groupSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.group"))
+            FinancesSectionHeader(title: L("finances.add_account.section.group"))
             
             if viewModel.state.groups.isEmpty {
                 FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                     VStack(spacing: 12) {
-                        Text(String(localized: "finances.add_account.group.default_hint"))
+                        Text(L("finances.add_account.group.default_hint"))
                             .font(.system(size: 14, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -276,7 +276,7 @@ struct FinanceAddAccountView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "folder.badge.plus")
-                                Text(String(localized: "finances.add_account.group.create"))
+                                Text(L("finances.add_account.group.create"))
                                     .font(.system(size: 15, weight: .semibold))
                             }
                             .foregroundStyle(
@@ -291,8 +291,8 @@ struct FinanceAddAccountView: View {
                 }
             } else {
                 let currentGroupID = resolvedGroup?.groupUniqueID
-                let currentGroupName = resolvedGroup?.name ?? String(localized: "finances.group.ungrouped")
-                let selectableGroups = viewModel.state.groups.filter { $0.name != String(localized: "finances.group.ungrouped") }
+                let currentGroupName = resolvedGroup?.name ?? L("finances.group.ungrouped")
+                let selectableGroups = viewModel.state.groups.filter { $0.name != L("finances.group.ungrouped") }
                 
                 FinancesGlassCard {
                     Menu {
@@ -304,7 +304,7 @@ struct FinanceAddAccountView: View {
                                     .foregroundStyle(AppColors.textTertiary)
                                     .frame(width: 12, height: 12)
 
-                                Text(String(localized: "finances.group.ungrouped"))
+                                Text(L("finances.group.ungrouped"))
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundStyle(AppColors.textPrimary)
 
@@ -357,7 +357,7 @@ struct FinanceAddAccountView: View {
                         }
                     } label: {
                         HStack(spacing: 12) {
-                            Text(String(localized: "finances.add_account.section.group"))
+                            Text(L("finances.add_account.section.group"))
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             
@@ -387,7 +387,7 @@ struct FinanceAddAccountView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "folder.badge.plus")
-                        Text(String(localized: "finances.add_account.group.create_new"))
+                        Text(L("finances.add_account.group.create_new"))
                             .font(.system(size: 15, weight: .semibold))
                     }
                     .foregroundStyle(
@@ -509,7 +509,7 @@ struct FinanceAddAccountView: View {
         case .card:
             if cardViewModel == nil {
                 VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: editingCard == nil ? String(localized: "finances.add_account.card.create") : String(localized: "finances.add_account.card.edit"))
+                    FinancesSectionHeader(title: editingCard == nil ? L("finances.add_account.card.create") : L("finances.add_account.card.edit"))
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
                         ProgressView()
                             .tint(AppColors.textPrimary)
@@ -544,7 +544,7 @@ struct FinanceAddAccountView: View {
         case .credit:
             if creditViewModel == nil {
                 VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: editingCredit == nil ? String(localized: "finances.add_account.credit.create") : String(localized: "finances.add_account.credit.edit"))
+                    FinancesSectionHeader(title: editingCredit == nil ? L("finances.add_account.credit.create") : L("finances.add_account.credit.edit"))
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
                         ProgressView()
                             .tint(AppColors.textPrimary)
@@ -574,7 +574,7 @@ struct FinanceAddAccountView: View {
         case .investment:
             if investmentViewModel == nil {
                 VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: editingInvestment == nil ? String(localized: "finances.add_account.investment.create") : String(localized: "finances.add_account.investment.edit"))
+                    FinancesSectionHeader(title: editingInvestment == nil ? L("finances.add_account.investment.create") : L("finances.add_account.investment.edit"))
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
                         ProgressView()
                             .tint(AppColors.textPrimary)
@@ -610,7 +610,7 @@ struct FinanceAddAccountView: View {
         if addAccountMode == .create, !validationHints.isEmpty, !areHintsHidden {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
-                    FinancesSectionHeader(title: String(localized: "finances.add_account.section.hints"))
+                    FinancesSectionHeader(title: L("finances.add_account.section.hints"))
                     Spacer()
                     Button {
                         areHintsHidden = true
@@ -626,7 +626,7 @@ struct FinanceAddAccountView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "finances.add_account.hints.hide"))
+                    .accessibilityLabel(L("finances.add_account.hints.hide"))
                 }
                 FinancesGlassCard(accentColor: warningAccentColor, contentPadding: EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -663,13 +663,13 @@ struct FinanceAddAccountView: View {
     @ViewBuilder
     private var archivedSelectionSections: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.archived"))
+            FinancesSectionHeader(title: L("finances.add_account.section.archived"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     switch selectedAccountType {
                     case .card:
                         if viewModel.state.archivedCards.isEmpty {
-                            Text(String(localized: "finances.add_account.archived.cards.empty"))
+                            Text(L("finances.add_account.archived.cards.empty"))
                                 .font(.system(size: 14, weight: .regular))
                                 .foregroundStyle(AppColors.textTertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -690,7 +690,7 @@ struct FinanceAddAccountView: View {
                         
                     case .credit:
                         if viewModel.state.archivedCredits.isEmpty {
-                            Text(String(localized: "finances.add_account.archived.credits.empty"))
+                            Text(L("finances.add_account.archived.credits.empty"))
                                 .font(.system(size: 14, weight: .regular))
                                 .foregroundStyle(AppColors.textTertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -711,7 +711,7 @@ struct FinanceAddAccountView: View {
                         
                     case .investment:
                         if viewModel.state.archivedInvestments.isEmpty {
-                            Text(String(localized: "finances.add_account.archived.investments.empty"))
+                            Text(L("finances.add_account.archived.investments.empty"))
                                 .font(.system(size: 14, weight: .regular))
                                 .foregroundStyle(AppColors.textTertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -790,7 +790,7 @@ struct FinanceAddAccountView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     ToolbarGlassIconButton(
                         systemName: "xmark",
-                        accessibilityLabel: String(localized: "finances.common.cancel")
+                        accessibilityLabel: L("finances.common.cancel")
                     ) {
                         dismiss()
                     }
@@ -1041,12 +1041,12 @@ struct FinanceAddAccountView: View {
                 let selectedSymbol = investmentData?.marketData?.symbol?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 if selectedSymbol.isEmpty {
                     let tickerHint = selectedInvestmentCategory == .crypto
-                    ? String(localized: "finances.add_account.hint.select_coin_or_pair")
-                    : String(localized: "finances.add_account.hint.select_ticker")
+                    ? L("finances.add_account.hint.select_coin_or_pair")
+                    : L("finances.add_account.hint.select_ticker")
                     hints.append(ValidationHint(text: tickerHint, kind: .required))
                 }
             } else if trimmedAccountName.isEmpty {
-            hints.append(ValidationHint(text: String(localized: "finances.add_account.hint.fill_name"), kind: .required))
+            hints.append(ValidationHint(text: L("finances.add_account.hint.fill_name"), kind: .required))
         }
 
         return hints
@@ -1060,21 +1060,21 @@ struct FinanceAddAccountView: View {
             switch selectedAccountType {
             case .card:
                 amountHint = cardData?.cardType == .credit
-                ? String(localized: "finances.add_account.hint.recommended_credit_limit")
-                : String(localized: "finances.add_account.hint.recommended_amount")
+                ? L("finances.add_account.hint.recommended_credit_limit")
+                : L("finances.add_account.hint.recommended_amount")
             case .credit:
-                amountHint = String(localized: "finances.add_account.hint.recommended_credit_amount")
+                amountHint = L("finances.add_account.hint.recommended_credit_amount")
             case .investment:
                 if selectedInvestmentCategory == .stocks || selectedInvestmentCategory == .crypto {
-                    amountHint = String(localized: "finances.add_account.hint.recommended_quantity")
+                    amountHint = L("finances.add_account.hint.recommended_quantity")
                 } else {
-                    amountHint = String(localized: "finances.add_account.hint.recommended_amount")
+                    amountHint = L("finances.add_account.hint.recommended_amount")
                 }
             }
             hints.append(ValidationHint(text: amountHint, kind: .recommended))
         }
         if targetGroup == nil {
-            hints.append(ValidationHint(text: String(localized: "finances.add_account.hint.recommended_group"), kind: .recommended))
+            hints.append(ValidationHint(text: L("finances.add_account.hint.recommended_group"), kind: .recommended))
         }
         if selectedAccountType == .investment,
            selectedInvestmentCategory.isMarketTickerCategory,
@@ -1085,7 +1085,7 @@ struct FinanceAddAccountView: View {
                 hints.append(
                     ValidationHint(
                         text: String(
-                            format: String(localized: "monetization.ticker.limit.remaining_format"),
+                            format: L("monetization.ticker.limit.remaining_format"),
                             remaining,
                             EntitlementPolicy.freeTrackedTickerLimit
                         ),

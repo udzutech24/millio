@@ -370,7 +370,7 @@ final class NotificationManager: NotificationManagerProtocol {
 
         let notifID = Self.depositNotificationPrefix + identifier
         let content = UNMutableNotificationContent()
-        content.title = String(localized: "finances.deposit.notification.title", defaultValue: "millio")
+        content.title = L("finances.deposit.notification.title", defaultValue: "millio")
         let locale = Locale.current
         let formattedEnd = formattedDate(endDate, locale: locale)
         content.body = String(format: String(

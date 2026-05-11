@@ -82,7 +82,7 @@ struct CashflowCategoryDeletionSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "cashflow.common.cancel")) {
+                    Button(L("cashflow.common.cancel")) {
                         dismiss()
                     }
                 }

@@ -172,6 +172,7 @@ struct RootTabBar: View {
             .padding(.vertical, 4)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("tab.\(tab.rawValue)")
     }
 
     // MARK: - FAB Button

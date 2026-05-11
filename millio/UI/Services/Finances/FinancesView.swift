@@ -32,19 +32,8 @@ struct FinancesView: View {
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     @State private var viewModel: FinanceViewModel?
-    @State private var showFinanceSettingsSheet: Bool = false
-    @State private var showBalanceAuditSheetFromSettings: Bool = false
-    @State private var showMassTickerImportSheet: Bool = false
     @State private var showQuickNavigationPopover: Bool = false
     private let currentRoute: AppRoute = .finances
-
-    private var isDailyAuditDebugOnlyEnabled: Bool {
-#if DEBUG
-        true
-#else
-        false
-#endif
-    }
     
     var body: some View {
         Group {
@@ -79,9 +68,10 @@ struct FinancesView: View {
         .onDisappear {
             viewModel?.handle(.setDisplayCurrency(appState.primaryCurrencyCode))
         }
-        .navigationTitle(financesLocalized("finances.main.title"))
+        .navigationTitle("")
         .navigationBarBackButtonHidden(true)
         .interactiveBackSwipe()
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItemGroup(placement: .topBarLeading) {
                 Button {
@@ -110,54 +100,7 @@ struct FinancesView: View {
                 }
             }
 
-            if viewModel != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showFinanceSettingsSheet = true
-                    } label: {
-                        toolbarButtonLabel(systemName: "gearshape", weight: .semibold)
-                    }
-                    .accessibilityLabel(financesLocalized("finances.common.settings"))
-                }
             }
-        }
-        .sheet(isPresented: $showFinanceSettingsSheet) {
-            if let viewModel {
-                FinancesSettingsSheet(
-                    isDailyAuditAvailable: isDailyAuditDebugOnlyEnabled,
-                    onOpenSavingsGoal: {
-                        showFinanceSettingsSheet = false
-                        viewModel.handle(.showSavingsGoalSheet)
-                    },
-                    onOpenDailyAudit: {
-                        guard isDailyAuditDebugOnlyEnabled else { return }
-                        showFinanceSettingsSheet = false
-                        showBalanceAuditSheetFromSettings = true
-                    },
-                    onOpenMassTickerImport: {
-                        showFinanceSettingsSheet = false
-                        showMassTickerImportSheet = true
-                    }
-                )
-            }
-        }
-        .sheet(isPresented: $showBalanceAuditSheetFromSettings) {
-            if isDailyAuditDebugOnlyEnabled, let viewModel {
-                FinanceBalanceAuditSheet(
-                    financeViewModel: viewModel,
-                    modelContext: modelContext
-                )
-            }
-        }
-        .sheet(isPresented: $showMassTickerImportSheet) {
-            if let viewModel {
-                StockBulkImportSheet(
-                    financeViewModel: viewModel,
-                    modelContext: modelContext,
-                    marketDataClient: viewModel.marketDataClient
-                )
-            }
-        }
     }
 
     private func toolbarButtonLabel(systemName: String, weight: Font.Weight) -> some View {
@@ -173,7 +116,7 @@ struct FinancesView: View {
 private struct FinancesContentViewInternal: View {
     @ObservedObject var viewModel: FinanceViewModel
     @State private var selectedTab: FinancesInternalTab = .main
-    
+
     var body: some View {
         TabView(selection: $selectedTab) {
             // Вкладка 1: Основной экран
@@ -335,35 +278,95 @@ struct FinancesSettingsSheet: View {
 struct FinancesMainTabView: View {
     @ObservedObject var viewModel: FinanceViewModel
     @Binding var selectedTab: FinancesInternalTab
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     var onNavigateToDynamics: (() -> Void)? = nil
     @State private var draggedGroupID: String?
     @State private var isEmptyIntroHidden: Bool = FinancesEmptyStateIntroPrefs().isHidden()
-    @State private var isRefreshActionOverlayPresented: Bool = false
-    
+    @State private var showFinanceSettingsSheet = false
+    @State private var showBalanceAuditSheetFromSettings = false
+    @State private var showMassTickerImportSheet = false
+
+    private var isDailyAuditDebugOnlyEnabled: Bool {
+#if DEBUG
+        true
+#else
+        false
+#endif
+    }
+
     var body: some View {
         mainContent
             .modifier(SheetsModifier(viewModel: viewModel))
+            .sheet(isPresented: $showFinanceSettingsSheet) {
+                FinancesSettingsSheet(
+                    isDailyAuditAvailable: isDailyAuditDebugOnlyEnabled,
+                    onOpenSavingsGoal: {
+                        showFinanceSettingsSheet = false
+                        viewModel.handle(.showSavingsGoalSheet)
+                    },
+                    onOpenDailyAudit: {
+                        guard isDailyAuditDebugOnlyEnabled else { return }
+                        showFinanceSettingsSheet = false
+                        showBalanceAuditSheetFromSettings = true
+                    },
+                    onOpenMassTickerImport: {
+                        showFinanceSettingsSheet = false
+                        showMassTickerImportSheet = true
+                    }
+                )
+            }
+            .sheet(isPresented: $showBalanceAuditSheetFromSettings) {
+                if isDailyAuditDebugOnlyEnabled {
+                    FinanceBalanceAuditSheet(
+                        financeViewModel: viewModel,
+                        modelContext: modelContext
+                    )
+                }
+            }
+            .sheet(isPresented: $showMassTickerImportSheet) {
+                StockBulkImportSheet(
+                    financeViewModel: viewModel,
+                    modelContext: modelContext,
+                    marketDataClient: viewModel.marketDataClient
+                )
+            }
             .onAppear {
                 isEmptyIntroHidden = FinancesEmptyStateIntroPrefs().isHidden()
             }
+            .onChange(of: scenePhase) { _, newPhase in
+                guard newPhase == .active else { return }
+                let lastRefresh = viewModel.state.lastRefreshedAt ?? .distantPast
+                guard Date().timeIntervalSince(lastRefresh) > 15 * 60 else { return }
+                Task { await viewModel.refreshAll() }
+            }
     }
-    
+
     private var mainContent: some View {
         ZStack {
             GradientBackground()
-            
+
             let visibleGroups = viewModel.visibleGroupsForList()
             let showsAddFAB = FinancesMainLayoutPolicy.showsAddFAB(visibleGroupsCount: visibleGroups.count)
 
-            ScrollView {
-                LazyVStack(spacing: FinancesMainLayoutPolicy.sectionSpacing) {
-                    overviewUnifiedModule(hasSnapshot: !visibleGroups.isEmpty)
+            GeometryReader { proxy in
+                let topInset = proxy.safeAreaInsets.top
+                ScrollView {
+                    VStack(spacing: 0) {
+                        overviewUnifiedModule(hasSnapshot: !visibleGroups.isEmpty, topInset: topInset)
 
-                    groupsListSection(visibleGroups)
+                        LazyVStack(spacing: FinancesMainLayoutPolicy.sectionSpacing) {
+                            groupsListSection(visibleGroups)
+                        }
+                        .padding(.horizontal, FinancesMainLayoutPolicy.horizontalPadding)
+                        .padding(.top, FinancesMainLayoutPolicy.sectionSpacing)
+                        .padding(.bottom, FinancesMainLayoutPolicy.scrollContentBottomPadding(showsAddFAB: showsAddFAB))
+                    }
                 }
-                .padding(.horizontal, FinancesMainLayoutPolicy.horizontalPadding)
-                .padding(.top, 8)
-                .padding(.bottom, FinancesMainLayoutPolicy.scrollContentBottomPadding(showsAddFAB: showsAddFAB))
+                .refreshable {
+                    await viewModel.refreshAll()
+                }
+                .ignoresSafeArea(edges: .top)
             }
 
             if showsAddFAB {
@@ -388,20 +391,19 @@ struct FinancesMainTabView: View {
                     )
                 }
             }
-
-            FinanceRefreshActionOverlay(
-                isPresented: isRefreshActionOverlayPresented,
-                isLoading: viewModel.state.isLoadingRates,
-                onSelect: handleRefreshAction(_:),
-                onDismiss: { isRefreshActionOverlayPresented = false }
-            )
         }
     }
-    
+
     // MARK: - Unified Hero + Overview Module
 
-    private func overviewUnifiedModule(hasSnapshot: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+    private func overviewUnifiedModule(hasSnapshot: Bool, topInset: CGFloat = 0) -> some View {
+        let r = FinancesMainLayoutPolicy.heroCornerRadius
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: 0, bottomLeadingRadius: r,
+            bottomTrailingRadius: r, topTrailingRadius: 0,
+            style: .continuous
+        )
+        return VStack(alignment: .leading, spacing: 0) {
             totalAmountSection
 
             if hasSnapshot {
@@ -412,9 +414,46 @@ struct FinancesMainTabView: View {
                 .padding(.top, 10)
             }
         }
-        .padding(18)
-        .background(heroModuleBackground)
-        .clipShape(RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.heroCornerRadius, style: .continuous))
+        .padding(.horizontal, 20)
+        .padding(.top, topInset + 18)
+        .padding(.bottom, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            shape
+                .fill(FinanceScreenChrome.elevatedSurfaceFillGradient)
+                .overlay {
+                    shape
+                        .fill(
+                            LinearGradient(
+                                colors: [(AppColors.financesGradient.first ?? .cyan).opacity(0.10), Color.clear],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .opacity(0.7)
+                }
+                .overlay(alignment: .topLeading) {
+                    Circle()
+                        .fill((AppColors.financesGradient.first ?? .cyan).opacity(0.12))
+                        .blur(radius: 46)
+                        .frame(width: 180, height: 180)
+                        .offset(x: -44, y: -52)
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.clear, AppColors.brandPrimary.opacity(0.08)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: 180, height: 100)
+                        .blur(radius: 18)
+                        .offset(x: 30, y: 22)
+                }
+        }
+        .clipShape(shape)
     }
     
     // MARK: - Total Amount Section
@@ -461,6 +500,7 @@ struct FinancesMainTabView: View {
                         }
                         .offset(y: -2)
                     }
+
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -469,7 +509,10 @@ struct FinancesMainTabView: View {
                         viewModel.handle(.toggleAmountVisibility)
                     }
 
-                    refreshMenu
+                    headerActionButton(systemName: "gearshape") {
+                        showFinanceSettingsSheet = true
+                    }
+                    .accessibilityLabel(financesLocalized("finances.common.settings"))
                 }
             }
 
@@ -540,53 +583,10 @@ struct FinancesMainTabView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var refreshMenu: some View {
-        Button {
-            guard viewModel.state.isLoadingRates == false else { return }
-            isRefreshActionOverlayPresented = true
-        } label: {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.clear)
-                    .background(
-                        FinanceChromeCardBackground(
-                            cornerRadius: FinanceScreenChrome.controlCornerRadius,
-                            isElevated: false
-                        )
-                    )
-                    .frame(
-                        width: FinanceScreenChrome.headerControlSide,
-                        height: FinanceScreenChrome.headerControlSide
-                    )
-
-                if viewModel.state.isLoadingRates {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(AppColors.textSecondary)
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(viewModel.state.isLoadingRates
-            ? financesLocalized("finances.common.refreshing")
-            : financesLocalized("finances.common.refresh"))
-    }
-
-    private func handleRefreshAction(_ action: FinanceRefreshAction) {
-        isRefreshActionOverlayPresented = false
-
-        Task {
-            switch action {
-            case .quotes:
-                await viewModel.refreshCurrencyQuotes()
-            case .stocks:
-                await viewModel.refreshStockPrices()
-            }
-        }
+    private func lastRefreshedLabel(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     private func headerActionButton(systemName: String, action: @escaping () -> Void) -> some View {
