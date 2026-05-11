@@ -115,6 +115,12 @@ struct LanguageSelectionView: View {
                     Circle()
                         .fill(AppColors.textPrimary.opacity(0.12))
                 )
+        case .german:
+            Image("de")
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
         case .system:
             Image(systemName: "globe")
                 .renderingMode(.template)

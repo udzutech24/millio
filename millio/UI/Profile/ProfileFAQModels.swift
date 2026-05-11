@@ -28,7 +28,7 @@ enum ProfileFAQContent {
             return russianSections
         case .simplifiedChinese:
             return simplifiedChineseSections
-        case .english, .system:
+        case .english, .system, .german:
             return englishSections
         }
     }
