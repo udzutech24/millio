@@ -1,6 +1,7 @@
 import SwiftData
 
-// MARK: - V1 (исходная схема без UserSubscription)
+// MARK: - V1 (исходная схема без UserSubscription и без Cashback)
+// Не изменять: реальные сторы на устройствах пользователей были записаны с этой схемой.
 
 enum AppSchemaV1: VersionedSchema {
     static var versionIdentifier = Schema.Version(1, 0, 0)
@@ -11,7 +12,6 @@ enum AppSchemaV1: VersionedSchema {
         CashflowCustomCategory.self,
         BudgetPlan.self,
         BudgetCategoryLimit.self,
-        Cashback.self,
         CashbackCustomCategory.self,
         Card.self,
         FinanceAccount.self,
@@ -24,10 +24,37 @@ enum AppSchemaV1: VersionedSchema {
     ]
 }
 
-// MARK: - V2 (добавлена UserSubscription)
+// MARK: - V2 (добавлена UserSubscription; Cashback отсутствовал — историческая ошибка)
+// Не изменять: реальные сторы на устройствах пользователей были записаны с этой схемой.
 
 enum AppSchemaV2: VersionedSchema {
     static var versionIdentifier = Schema.Version(2, 0, 0)
+    static var models: [any PersistentModel.Type] = [
+        Item.self,
+        CashflowTransaction.self,
+        CashflowSystemCategoryOverride.self,
+        CashflowCustomCategory.self,
+        BudgetPlan.self,
+        BudgetCategoryLimit.self,
+        UserSubscription.self,
+        CashbackCustomCategory.self,
+        Card.self,
+        FinanceAccount.self,
+        FinanceGroup.self,
+        Credit.self,
+        Investment.self,
+        AssetCatalogItem.self,
+        AssetProviderMapping.self,
+        HistoricalRate.self,
+    ]
+}
+
+// MARK: - V3 (Cashback добавлен в схему явно)
+// Исправляет историческую ошибку: Cashback был в ModelTypeRegistry, но не в V1/V2.
+// Пользователи со старыми V2-сторами мигрируют сюда lightweight-миграцией (добавляется таблица).
+
+enum AppSchemaV3: VersionedSchema {
+    static var versionIdentifier = Schema.Version(3, 0, 0)
     static var models: [any PersistentModel.Type] = [
         Item.self,
         CashflowTransaction.self,
@@ -56,7 +83,7 @@ enum AppSchemaV2: VersionedSchema {
 //   2. Добавить lightweight stage V{N}→V{N+1} в AppMigrationPlan.stages
 //   3. Обновить этот typealias на AppSchemaV{N+1}
 //   4. Запустить SchemaConsistencyTests — должны быть зелёными
-typealias AppSchemaCurrent = AppSchemaV2
+typealias AppSchemaCurrent = AppSchemaV3
 
 // MARK: - План миграции
 
@@ -65,10 +92,12 @@ enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] = [
         AppSchemaV1.self,
         AppSchemaV2.self,
+        AppSchemaV3.self,
     ]
 
     static var stages: [MigrationStage] = [
         .lightweight(fromVersion: AppSchemaV1.self, toVersion: AppSchemaV2.self),
+        .lightweight(fromVersion: AppSchemaV2.self, toVersion: AppSchemaV3.self),
     ]
 }
 

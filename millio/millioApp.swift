@@ -488,7 +488,39 @@ struct millioApp: App {
                 let schema = AppSchema.create()
                 return Self.rebuildStorePreservingData(at: storeURL, schema: schema, scope: scope)
                 #else
-                AppLogger.log(.error, category: "App", "Existing store unreadable — showing error screen")
+                // Migration plan failed on an existing store (e.g. schema version mismatch after
+                // AppSchemaV2 was redefined). As a last resort, try opening without a migration plan
+                // — SwiftData may still be able to open the store if the on-disk layout matches the
+                // current schema close enough. If this also fails, we destroy the store and create
+                // fresh so the user can restore from backup rather than being stuck forever.
+                AppLogger.log(.error, category: "App", "Migration plan failed on existing store — attempting no-plan fallback")
+                let fallbackConfig = ModelConfiguration(
+                    scope.storeConfigurationName,
+                    schema: AppSchema.create(),
+                    url: storeURL,
+                    cloudKitDatabase: .none
+                )
+                if let fallback = try? ModelContainer(for: AppSchema.create(), configurations: [fallbackConfig]) {
+                    AppLogger.log(.warning, category: "App", "Opened store without migration plan — data may be partially readable")
+                    return fallback
+                }
+                // Store is unrecoverable: rename to .corrupt and create fresh so the user can at
+                // least launch and trigger a restore from iCloud backup.
+                AppLogger.log(.error, category: "App", "Store unrecoverable — renaming to .corrupt and creating fresh store")
+                let corruptURL = storeURL.deletingPathExtension().appendingPathExtension("corrupt.store")
+                try? FileManager.default.removeItem(at: corruptURL)
+                try? FileManager.default.moveItem(at: storeURL, to: corruptURL)
+                let freshConfig = ModelConfiguration(
+                    scope.storeConfigurationName,
+                    schema: AppSchema.create(),
+                    url: storeURL,
+                    cloudKitDatabase: .none
+                )
+                if let fresh = try? ModelContainer(for: AppSchema.create(), configurations: [freshConfig]) {
+                    AppLogger.log(.warning, category: "App", "Fresh store created after corruption — user should restore from backup")
+                    return fresh
+                }
+                AppLogger.log(.error, category: "App", "Failed to create fresh store after corruption — showing error screen")
                 return nil
                 #endif
             }

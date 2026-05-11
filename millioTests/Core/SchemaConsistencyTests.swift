@@ -47,6 +47,19 @@ struct SchemaConsistencyTests {
             ))
     }
 
+    /// AppSchemaV3.models ⊇ AppSchemaV2.models — V3 не теряет типы из V2.
+    @Test
+    func v3IsSupersetOfV2() {
+        let v2Names = Set(AppSchemaV2.models.map { entityName(for: $0) })
+        let v3Names = Set(AppSchemaV3.models.map { entityName(for: $0) })
+        let missing = v2Names.subtracting(v3Names)
+        #expect(missing.isEmpty,
+            Comment(rawValue:
+                "V2 содержит типы, отсутствующие в V3: \(missing). " +
+                "V3 должна быть надмножеством V2."
+            ))
+    }
+
     /// AppSchema.create() возвращает схему из тех же типов что и AppSchemaCurrent.
     @Test
     func appSchemaCreateMatchesSchemaCurrent() {
