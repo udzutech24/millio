@@ -162,59 +162,26 @@ struct RootTabView: View {
 
     // MARK: - Dashboard Tab
 
+    @ViewBuilder
     private var dashboardTab: some View {
-        NavigationStack(path: $dashboardPath) {
-            DashboardView(
-                onOpenConverter: { dashboardPath.append(FinancesStackRoute.courses) },
-                onOpenCashback: { dashboardPath.append(FinancesStackRoute.cashback) },
-                onAddIncome: {
-                    ensureCashflowViewModel()
-                    showIncomeSheet = true
-                },
-                onAddExpense: {
-                    ensureCashflowViewModel()
-                    showExpenseSheet = true
-                },
-                onAddTransfer: {
-                    ensureCashflowViewModel()
-                    showTransferSheet = true
-                },
+        if let fvm = financeViewModel, let cvm = cashflowViewModel {
+            DashboardTabHostView(
+                financeViewModel: fvm,
+                cashflowViewModel: cvm,
+                path: $dashboardPath,
+                onAddIncome: { ensureCashflowViewModel(); showIncomeSheet = true },
+                onAddExpense: { ensureCashflowViewModel(); showExpenseSheet = true },
+                onAddTransfer: { ensureCashflowViewModel(); showTransferSheet = true },
                 onOpenFinances: { router.selectedTab = .finances },
                 onOpenDynamics: { router.selectedTab = .dynamics },
                 onOpenCashflow: { router.selectedTab = .cashflow },
-                totalBalance: financeViewModel?.state.totalAmount ?? 0,
-                displayCurrency: financeViewModel?.state.displayCurrency ?? appState.primaryCurrencyCode,
-                sparklinePoints: financeViewModel?.state.dashboardSparkline ?? [],
-                weekDelta: financeViewModel?.state.dashboardWeekDelta ?? (0.0, 0.0),
-                sparklineDaysCount: financeViewModel?.state.dashboardSparklineDaysCount ?? 7,
-                cashflowTotal: {
-                    let s = cashflowViewModel?.state
-                    return (s?.totalIncome ?? 0) + (s?.assetValueChange ?? 0) - (s?.contributedExpense ?? 0)
-                }(),
-                cashflowIncome: cashflowViewModel?.state.totalIncome ?? 0,
-                cashflowExpense: cashflowViewModel?.state.contributedExpense ?? 0,
-                cashflowAssetChange: cashflowViewModel?.state.assetValueChange ?? 0,
-                cashflowCurrency: cashflowViewModel?.state.displayCurrency ?? appState.primaryCurrencyCode,
-                cashflowPeriodLabel: cashflowViewModel?.state.chartPeriod.displayName ?? "Месяц",
-                onOpenHistory: {
-                    ensureCashflowViewModel()
-                    appState.pendingOpenCashflowHistory = true
-                },
-                onShowProfile: {
-                    showProfileSheet = true
-                },
-                onDaysChipTap: {
-                    showDeltaPeriodPicker = true
-                }
+                onOpenHistory: { ensureCashflowViewModel(); appState.pendingOpenCashflowHistory = true },
+                onShowProfile: { showProfileSheet = true },
+                onDaysChipTap: { showDeltaPeriodPicker = true }
             )
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: FinancesStackRoute.self) { route in
-                switch route {
-                case .courses:
-                    CoursesView()
-                case .cashback:
-                    CashbackView()
-                }
+        } else {
+            NavigationStack(path: $dashboardPath) {
+                Color.clear.navigationBarTitleDisplayMode(.inline)
             }
         }
     }
@@ -365,6 +332,68 @@ struct RootTabView: View {
             vm.handle(.loadCards)
             vm.handle(.loadTransactions)
             cashflowViewModel = vm
+        }
+    }
+}
+
+// MARK: - Dashboard Tab Host
+
+/// Отдельная view для таба Dashboard, чтобы @ObservedObject корректно
+/// подписывался на изменения FinanceViewModel/@CashflowViewModel.
+/// Без этого @State в RootTabView не реагирует на @Published-изменения внутри VM
+/// и дашборд остаётся с нулями до следующего ре-рендера родителя.
+private struct DashboardTabHostView: View {
+    @ObservedObject var financeViewModel: FinanceViewModel
+    @ObservedObject var cashflowViewModel: CashflowViewModel
+    @Binding var path: NavigationPath
+    @Environment(AppState.self) private var appState
+
+    var onAddIncome: () -> Void
+    var onAddExpense: () -> Void
+    var onAddTransfer: () -> Void
+    var onOpenFinances: () -> Void
+    var onOpenDynamics: () -> Void
+    var onOpenCashflow: () -> Void
+    var onOpenHistory: () -> Void
+    var onShowProfile: () -> Void
+    var onDaysChipTap: () -> Void
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            DashboardView(
+                onOpenConverter: { path.append(FinancesStackRoute.courses) },
+                onOpenCashback: { path.append(FinancesStackRoute.cashback) },
+                onAddIncome: onAddIncome,
+                onAddExpense: onAddExpense,
+                onAddTransfer: onAddTransfer,
+                onOpenFinances: onOpenFinances,
+                onOpenDynamics: onOpenDynamics,
+                onOpenCashflow: onOpenCashflow,
+                totalBalance: financeViewModel.state.totalAmount,
+                displayCurrency: financeViewModel.state.displayCurrency,
+                sparklinePoints: financeViewModel.state.dashboardSparkline,
+                weekDelta: financeViewModel.state.dashboardWeekDelta,
+                sparklineDaysCount: financeViewModel.state.dashboardSparklineDaysCount,
+                cashflowTotal: {
+                    let s = cashflowViewModel.state
+                    return s.totalIncome + s.assetValueChange - s.contributedExpense
+                }(),
+                cashflowIncome: cashflowViewModel.state.totalIncome,
+                cashflowExpense: cashflowViewModel.state.contributedExpense,
+                cashflowAssetChange: cashflowViewModel.state.assetValueChange,
+                cashflowCurrency: cashflowViewModel.state.displayCurrency,
+                cashflowPeriodLabel: cashflowViewModel.state.chartPeriod.displayName,
+                onOpenHistory: onOpenHistory,
+                onShowProfile: onShowProfile,
+                onDaysChipTap: onDaysChipTap
+            )
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: FinancesStackRoute.self) { route in
+                switch route {
+                case .courses: CoursesView()
+                case .cashback: CashbackView()
+                }
+            }
         }
     }
 }

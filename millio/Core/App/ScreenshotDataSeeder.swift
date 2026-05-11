@@ -9,20 +9,44 @@
 import Foundation
 import SwiftData
 
+// Локаль для засева данных. Расширяй по мере добавления языков в Snapfile.
+enum SeedLocale: Equatable {
+    case russian
+    case english
+    // case german   // de → EUR, Deutsche Bank / Sparkasse
+    // case chinese  // zh-Hans → CNY, 工商银行 / 建设银行
+
+    static var current: SeedLocale {
+        let lang = Locale.preferredLanguages.first ?? ""
+        if lang.hasPrefix("en") { return .english }
+        return .russian
+    }
+
+    var currency: String {
+        switch self {
+        case .english: return "USD"
+        case .russian: return "RUB"
+        }
+    }
+
+    /// Обратная совместимость с ternary-паттернами внутри seeder
+    var isEN: Bool { self == .english }
+}
+
 @MainActor
 enum ScreenshotDataSeeder {
 
     static func seed(into context: ModelContext) async {
         purgeAll(context)
-        let isEN = Locale.preferredLanguages.first?.hasPrefix("en") ?? false
-        let cards = seedCards(into: context, isEN: isEN)
-        let investments = seedInvestments(into: context, isEN: isEN)
-        seedGroups(into: context, cards: cards, investmentIDs: investments, isEN: isEN)
-        seedCashback(into: context, cardID: cards.debit.uniqueID, isEN: isEN)
+        let locale = SeedLocale.current
+        let cards = seedCards(into: context, locale: locale)
+        let investments = seedInvestments(into: context, locale: locale)
+        seedGroups(into: context, cards: cards, investmentIDs: investments, locale: locale)
+        seedCashback(into: context, cardID: cards.debit.uniqueID, locale: locale)
         seedCashflowTransactions(into: context,
                                  debitCardID: cards.debit.uniqueID,
                                  creditCardID: cards.credit.uniqueID,
-                                 isEN: isEN)
+                                 locale: locale)
         try? context.save()
     }
 
@@ -48,7 +72,8 @@ enum ScreenshotDataSeeder {
     }
 
     @discardableResult
-    private static func seedCards(into context: ModelContext, isEN: Bool) -> SeedCards {
+    private static func seedCards(into context: ModelContext, locale: SeedLocale) -> SeedCards {
+        let isEN = locale.isEN
         let primary = Card(
             name: isEN ? "Chase Sapphire" : "Tinkoff Black",
             cardNumber: "4273",
@@ -112,7 +137,8 @@ enum ScreenshotDataSeeder {
 
     // MARK: - Investments
 
-    private static func seedInvestments(into context: ModelContext, isEN: Bool) -> [String] {
+    private static func seedInvestments(into context: ModelContext, locale: SeedLocale) -> [String] {
+        let isEN = locale.isEN
         let stock1 = Investment(
             name: isEN ? "Apple Inc." : "AAPL",
             investmentType: .positive,
@@ -190,8 +216,9 @@ enum ScreenshotDataSeeder {
         into context: ModelContext,
         cards: SeedCards,
         investmentIDs: [String],
-        isEN: Bool
+        locale: SeedLocale
     ) {
+        let isEN = locale.isEN
         func account(_ type: FinanceAccountType, _ id: String, group: FinanceGroup, order: Int) {
             let a = FinanceAccount(accountType: type, accountID: id)
             a.group = group; a.order = order; context.insert(a)
@@ -228,7 +255,8 @@ enum ScreenshotDataSeeder {
 
     // MARK: - Cashback
 
-    private static func seedCashback(into context: ModelContext, cardID: String, isEN: Bool) {
+    private static func seedCashback(into context: ModelContext, cardID: String, locale: SeedLocale) {
+        let isEN = locale.isEN
         let monthKey = Cashback.monthKey(for: Date())
 
         let items: [(CashbackCategory, Double)] = [
@@ -262,8 +290,9 @@ enum ScreenshotDataSeeder {
         into context: ModelContext,
         debitCardID: String,
         creditCardID: String,
-        isEN: Bool
+        locale: SeedLocale
     ) {
+        let isEN = locale.isEN
         var cal = Calendar.current
         cal.timeZone = TimeZone(identifier: "UTC")!
 

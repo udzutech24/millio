@@ -81,6 +81,11 @@ struct CashflowCategorySettingsSheet: View {
                                 ForEach(systemOptions) { option in
                                     categoryVisibilityRow(for: option)
                                 }
+                                if !customOptions.isEmpty {
+                                    ForEach(customOptions) { option in
+                                        categoryVisibilityRow(for: option)
+                                    }
+                                }
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -230,11 +235,19 @@ struct CashflowCategorySettingsSheet: View {
                 isOn: Binding(
                     get: { isVisible },
                     set: { newValue in
-                        _ = viewModel.setSystemCategoryHidden(
-                            kind: kind.categoryKind,
-                            categoryRaw: option.rawValue,
-                            isHidden: !newValue
-                        )
+                        if option.isCustom {
+                            _ = viewModel.setCustomCategoryHidden(
+                                kind: kind.categoryKind,
+                                categoryRaw: option.rawValue,
+                                isHidden: !newValue
+                            )
+                        } else {
+                            _ = viewModel.setSystemCategoryHidden(
+                                kind: kind.categoryKind,
+                                categoryRaw: option.rawValue,
+                                isHidden: !newValue
+                            )
+                        }
                     }
                 )
             )
