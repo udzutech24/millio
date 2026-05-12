@@ -257,6 +257,7 @@ enum ExpenseCategory: String, Codable, CaseIterable {
     case gifts = "gifts"             // Подарки
     case beauty = "beauty"           // Красота и уход
     case insurance = "insurance"     // Страхование
+    case sports = "sports"           // Спорт и фитнес
     case taxesFees = "taxes_fees"    // Налоги и комиссии
     case transfers = "transfers"     // Переводы
     case other = "other"             // Другое
@@ -296,6 +297,7 @@ enum ExpenseCategory: String, Codable, CaseIterable {
             .gifts,
             .beauty,
             .insurance,
+            .sports,
             .taxesFees,
             .transfers,
             .other

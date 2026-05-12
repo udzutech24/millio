@@ -27,9 +27,9 @@ enum FinanceBalanceReviewFrequency: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .off: return "Off"
-        case .weekly: return "Weekly"
-        case .monthly: return "Monthly"
+        case .off: return FinancesL10n.tr("finances.audit.frequency.off")
+        case .weekly: return FinancesL10n.tr("finances.audit.frequency.weekly")
+        case .monthly: return FinancesL10n.tr("finances.audit.frequency.monthly")
         }
     }
 }

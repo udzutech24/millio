@@ -28,7 +28,11 @@ enum ProfileFAQContent {
             return russianSections
         case .simplifiedChinese:
             return simplifiedChineseSections
-        case .english, .system, .german:
+        case .german:
+            return germanSections
+        case .spanish:
+            return spanishSections
+        case .english, .system:
             return englishSections
         }
     }
@@ -168,6 +172,144 @@ enum ProfileFAQContent {
                     answerParagraphs: [
                         "Управление подпиской выполняется в настройках Apple ID на устройстве.",
                         "В приложении откройте Профиль и нажмите карточку PRO, чтобы проверить статус."
+                    ],
+                    note: nil
+                )
+            ]
+        )
+    ]
+
+    private static let germanSections: [ProfileFAQSection] = [
+        ProfileFAQSection(
+            id: "general",
+            title: "Allgemein",
+            items: [
+                ProfileFAQItem(
+                    id: "what-is-millio",
+                    question: "Was ist millio?",
+                    answerParagraphs: [
+                        "millio ist eine App für persönliche Finanzen: Kontostände, Cashflow, Währungsumrechnung, Kredite und Investitionen – alles an einem Ort.",
+                        "Der Fokus liegt auf dem täglichen Einsatz: schnelles Hinzufügen, übersichtliche Dashboards und einfache Bedienung."
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: "is-my-data-safe",
+                    question: "Sind meine Daten sicher?",
+                    answerParagraphs: [
+                        "Deine lokalen Daten werden auf deinem Gerät gespeichert. Du kannst auch ein Cloud-Backup in den Einstellungen aktivieren.",
+                        "Für zusätzlichen Schutz aktiviere die App-Sperre mit PIN und Biometrie."
+                    ],
+                    note: "Keine App kann 100 % Sicherheit garantieren. Nutze einen sicheren Gerätecode und halte dein System aktuell."
+                ),
+                ProfileFAQItem(
+                    id: "change-language-currency",
+                    question: "Wie kann ich die App-Sprache und Hauptwährung ändern?",
+                    answerParagraphs: [
+                        "Öffne Profil > Allgemein und wähle Sprache oder Währung.",
+                        "Die Hauptwährung beeinflusst Standardwerte in der gesamten App."
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: "backup-restore",
+                    question: "Wie funktionieren Backup und Wiederherstellung?",
+                    answerParagraphs: [
+                        "Öffne Profil > Einstellungen > Backup, um automatische Backups zu aktivieren und den Status einzusehen.",
+                        "Beim Wechsel auf ein neues Gerät nutze den Wiederherstellungsvorgang beim ersten Start oder über die entsprechenden Einstellungen."
+                    ],
+                    note: nil
+                )
+            ]
+        ),
+        ProfileFAQSection(
+            id: "billing",
+            title: "Abonnement",
+            items: [
+                ProfileFAQItem(
+                    id: "what-is-pro",
+                    question: "Was ist in PRO enthalten?",
+                    answerParagraphs: [
+                        "PRO schaltet erweiterte Funktionen frei und hebt die Einschränkungen des kostenlosen Tarifs für ausgewählte Module auf.",
+                        "Die aktuellen PRO-Funktionen findest du auf dem Abonnement-Bildschirm."
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: "manage-subscription",
+                    question: "Wie kann ich mein Abonnement verwalten oder kündigen?",
+                    answerParagraphs: [
+                        "Die Abonnementverwaltung erfolgt über die Apple-ID-Einstellungen auf deinem Gerät.",
+                        "In der App öffne Profil und tippe auf die PRO-Karte, um den Status zu prüfen."
+                    ],
+                    note: nil
+                )
+            ]
+        )
+    ]
+
+    private static let spanishSections: [ProfileFAQSection] = [
+        ProfileFAQSection(
+            id: "general",
+            title: "General",
+            items: [
+                ProfileFAQItem(
+                    id: "what-is-millio",
+                    question: "¿Qué es millio?",
+                    answerParagraphs: [
+                        "millio es una aplicación de finanzas personales que te ayuda a gestionar saldos, flujos de caja, conversión de divisas, créditos e inversiones en un solo lugar.",
+                        "La app está pensada para el uso diario: añadir transacciones rápidamente, paneles claros y controles sencillos."
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: "is-my-data-safe",
+                    question: "¿Están seguros mis datos?",
+                    answerParagraphs: [
+                        "Tus datos locales se almacenan en tu dispositivo. También puedes activar la copia de seguridad en la nube desde Ajustes.",
+                        "Para mayor protección, usa el bloqueo de la app con PIN y biometría."
+                    ],
+                    note: "Ninguna app puede garantizar el 100% de seguridad. Usa un código de dispositivo seguro y mantén las actualizaciones del sistema activadas."
+                ),
+                ProfileFAQItem(
+                    id: "change-language-currency",
+                    question: "¿Cómo puedo cambiar el idioma y la moneda principal?",
+                    answerParagraphs: [
+                        "Abre Perfil > General y selecciona Idioma o Moneda.",
+                        "La moneda principal afecta a los valores predeterminados de toda la app."
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: "backup-restore",
+                    question: "¿Cómo funcionan la copia de seguridad y la restauración?",
+                    answerParagraphs: [
+                        "Abre Perfil > Ajustes > Copia de seguridad para activar las copias automáticas y consultar el estado.",
+                        "Si cambias de dispositivo, usa el flujo de restauración en el primer inicio o desde los ajustes correspondientes."
+                    ],
+                    note: nil
+                )
+            ]
+        ),
+        ProfileFAQSection(
+            id: "billing",
+            title: "Suscripción",
+            items: [
+                ProfileFAQItem(
+                    id: "what-is-pro",
+                    question: "¿Qué incluye PRO?",
+                    answerParagraphs: [
+                        "PRO desbloquea funciones avanzadas y elimina los límites del plan gratuito en los módulos seleccionados.",
+                        "Puedes consultar los detalles actuales de PRO en la pantalla de suscripción."
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: "manage-subscription",
+                    question: "¿Cómo puedo gestionar o cancelar mi suscripción?",
+                    answerParagraphs: [
+                        "La gestión de la suscripción se realiza desde los ajustes del Apple ID en tu dispositivo.",
+                        "En la app, abre Perfil y toca la tarjeta PRO para ver el estado."
                     ],
                     note: nil
                 )

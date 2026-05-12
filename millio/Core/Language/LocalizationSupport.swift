@@ -16,7 +16,7 @@ enum LocalizationSupport {
     static let fallbackLanguage: Language = .english
     /// Public selectors expose the three product languages that must work today.
     /// Hardening is enforced through tests and UI audits rather than hiding a language.
-    static let releaseReadySelectableLanguages: [Language] = [.system, .english, .russian, .simplifiedChinese, .german]
+    static let releaseReadySelectableLanguages: [Language] = [.system, .english, .russian, .simplifiedChinese, .german, .spanish]
 
     static var userSelectableLanguages: [Language] {
         releaseReadySelectableLanguages
@@ -24,7 +24,7 @@ enum LocalizationSupport {
 
     static func releaseReadiness(for language: Language) -> LocalizationReleaseReadiness {
         switch language {
-        case .system, .english, .russian, .simplifiedChinese, .german:
+        case .system, .english, .russian, .simplifiedChinese, .german, .spanish:
             return .releaseReady
         }
     }
@@ -44,6 +44,8 @@ enum LocalizationSupport {
             return .simplifiedChinese
         case Language.english.rawValue:
             return .english
+        case Language.spanish.rawValue:
+            return .spanish
         default:
             return fallbackLanguage
         }
@@ -61,6 +63,7 @@ enum LocalizationSupport {
             || normalizedLanguageCode(from: preferredLanguage) == Language.simplifiedChinese.rawValue
             || normalizedLanguageCode(from: preferredLanguage) == Language.english.rawValue
             || normalizedLanguageCode(from: preferredLanguage) == Language.german.rawValue
+            || normalizedLanguageCode(from: preferredLanguage) == Language.spanish.rawValue
     }
 
     static func quickSetupSelectableLanguages(

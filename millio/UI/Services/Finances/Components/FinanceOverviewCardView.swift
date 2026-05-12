@@ -935,7 +935,7 @@ struct FinanceOverviewCardView: View {
     private var blockedState: some View {
         ProChartUpsellView(
             titleKey: "finances.dynamics.pro.title",
-            subtitleKey: "finances.dynamics.pro.subtitle",
+            subtitleKey: nil,
             ctaKey: "finances.dynamics.pro.cta",
             size: .compact,
             onTapCTA: { router.push(.subscription) }

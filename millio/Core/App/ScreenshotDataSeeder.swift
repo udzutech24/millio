@@ -256,7 +256,6 @@ enum ScreenshotDataSeeder {
     // MARK: - Cashback
 
     private static func seedCashback(into context: ModelContext, cardID: String, locale: SeedLocale) {
-        let isEN = locale.isEN
         let monthKey = Cashback.monthKey(for: Date())
 
         let items: [(CashbackCategory, Double)] = [

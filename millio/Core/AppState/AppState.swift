@@ -29,6 +29,10 @@ final class AppState {
                     await NotificationManager.shared.scheduleDailyReminder(using: settings)
                 }
             }
+            // Во время онбординга не пересоздаём UI-дерево: смена языка на шаге 1
+            // вызвала бы полный teardown OnboardingView → сброс на шаг 1.
+            // completeOnboarding / skipOnboarding вызовут refreshLanguageToken() явно.
+            guard lifecycle != .onboarding else { return }
             languageRefreshToken = UUID()
             Logger(subsystem: "millio", category: "AppState").debug("[AppState] languageRefreshToken updated: \(self.languageRefreshToken) (language: \(self.selectedLanguage.rawValue))")
             if SettingsManager.isDefaultProfileDisplayName(profileDisplayName) {
@@ -175,6 +179,12 @@ final class AppState {
                 defaults.set(newPrimary, forKey: key)
             }
         }
+    }
+
+    /// Принудительно обновляет токен языка (пересоздаёт UI-дерево).
+    /// Вызывается после завершения онбординга, если язык изменился во время него.
+    func refreshLanguageToken() {
+        languageRefreshToken = UUID()
     }
 }
 

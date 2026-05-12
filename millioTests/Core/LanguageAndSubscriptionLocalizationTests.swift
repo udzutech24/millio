@@ -120,6 +120,17 @@ struct LanguageAndSubscriptionLocalizationTests {
         #expect(AppLocalization.string("subscription.button.restore", locale: locale) == "恢复购买")
     }
 
+    @Test("Spanish language is release-ready and uses native self-name")
+    func testSpanishLanguageDisplayName() {
+        let locale = Locale(identifier: "en")
+
+        #expect(Language.spanish.displayName(for: locale) == "Español")
+        #expect(Language.spanish.locale == Locale(identifier: "es"))
+        #expect(LocalizationSupport.releaseReadySelectableLanguages.contains(.spanish))
+        #expect(Language.spanish.searchableNames(for: locale).contains("Spanish"))
+        #expect(Language.spanish.searchableNames(for: locale).contains("Español"))
+    }
+
     @Test("Legal titles follow the selected app locale for system Chinese")
     func testLegalTitlesForSystemChinese() {
         let links = ProfileLegalLinks.make(for: .system, fallbackLocale: Locale(identifier: "zh_Hans_CN"))

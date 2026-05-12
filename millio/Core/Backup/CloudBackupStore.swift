@@ -576,7 +576,9 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
                 }
                 .sorted { $0.date > $1.date }
             logger.info("BackupList source=snapshotQuery count=\(versions.count) env=\(Self.cloudKitEnvironment, privacy: .public)")
-            snapshotCache = SnapshotCache(versions: versions, expiresAt: now().addingTimeInterval(snapshotCacheTTL))
+            if !versions.isEmpty {
+                snapshotCache = SnapshotCache(versions: versions, expiresAt: now().addingTimeInterval(snapshotCacheTTL))
+            }
 
             // Диагностика расхождения с индексом — только логируем, не перезаписываем в read-path.
             if let indexEntries = try? await loadIndexEntries(from: database), !indexEntries.isEmpty {

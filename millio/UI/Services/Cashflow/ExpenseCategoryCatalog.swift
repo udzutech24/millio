@@ -23,6 +23,7 @@ enum ExpenseCategoryGroup: String, CaseIterable, Codable {
     case subscriptions = "subscriptions"
     case pets = "pets"
     case insurance = "insurance"
+    case sports = "sports"
     case taxesFees = "taxes_fees"
     case transfers = "transfers"
     case other = "other"
@@ -42,6 +43,10 @@ struct ExpenseCategoryMetadata: Equatable {
             return displayNameRU
         case "zh":
             return ExpenseCategoryCatalog.chineseDisplayName(for: category) ?? displayNameEN
+        case "de":
+            return ExpenseCategoryCatalog.germanDisplayName(for: category) ?? displayNameEN
+        case "es":
+            return ExpenseCategoryCatalog.spanishDisplayName(for: category) ?? displayNameEN
         default:
             return displayNameEN
         }
@@ -92,7 +97,7 @@ enum ExpenseCategoryCatalog {
         .init(
             category: .fuel,
             group: .auto,
-            displayNameRU: "АЗС",
+            displayNameRU: "Топливо",
             displayNameEN: "Fuel",
             icon: "⛽️",
             aliases: ["топливо", "азс", "заправки", "бензин", "fuel", "gas station", "gas stations", "petrol", "petrol station", "газпромнефть", "лукойл"]
@@ -258,19 +263,27 @@ enum ExpenseCategoryCatalog {
             group: .transfers,
             displayNameRU: "Переводы",
             displayNameEN: "Transfers",
-            icon: "⇄",
+            icon: "🔄",
             aliases: [
                 "перевод", "переводы", "перевод себе", "сбп", "sbp", "p2p", "card to card",
                 "между счетами", "между счетов", "перевод между счетами", "transfer", "transfers"
             ]
         ),
         .init(
+            category: .sports,
+            group: .sports,
+            displayNameRU: "Спорт и фитнес",
+            displayNameEN: "Sports & fitness",
+            icon: "🏋️",
+            aliases: ["спорт", "фитнес", "спортзал", "зал", "тренировка", "тренировки", "gym", "fitness", "sport", "sports", "workout", "training", "бассейн", "swimming", "бег", "running", "йога", "yoga", "football", "футбол"]
+        ),
+        .init(
             category: .other,
             group: .other,
-            displayNameRU: "Разное",
+            displayNameRU: "Другое",
             displayNameEN: "Other",
             icon: "🧩",
-            aliases: ["разное", "прочее", "other", "misc", "unknown", "uncategorized"]
+            aliases: ["другое", "разное", "прочее", "other", "misc", "unknown", "uncategorized"]
         ),
 
         // Legacy categories kept to resolve and display old saved raw values.
@@ -393,6 +406,8 @@ enum ExpenseCategoryCatalog {
             return "保险"
         case .taxesFees:
             return "税费"
+        case .sports:
+            return "运动健身"
         case .transfers:
             return "转账"
         case .other:
@@ -413,6 +428,86 @@ enum ExpenseCategoryCatalog {
             return "医疗服务"
         case .digitalServices:
             return "数字服务"
+        }
+    }
+
+    static func germanDisplayName(for category: ExpenseCategory) -> String? {
+        switch category {
+        case .groceries:        return "Lebensmittel"
+        case .dining:           return "Essen gehen"
+        case .transport:        return "Nahverkehr"
+        case .taxi:             return "Taxi"
+        case .fuel:             return "Tankstelle"
+        case .carService:       return "Autowerkstatt"
+        case .housing:          return "Wohnen"
+        case .utilities:        return "Nebenkosten"
+        case .telecom:          return "Telekommunikation"
+        case .health:           return "Gesundheit"
+        case .pharmacy:         return "Apotheke"
+        case .shopping:         return "Einkaufen"
+        case .clothing:         return "Kleidung"
+        case .electronics:      return "Elektronik"
+        case .homeGoods:        return "Haushaltswaren"
+        case .education:        return "Bildung"
+        case .entertainment:    return "Unterhaltung"
+        case .travel:           return "Reisen"
+        case .subscriptions:    return "Abonnements"
+        case .pets:             return "Haustiere"
+        case .gifts:            return "Geschenke"
+        case .beauty:           return "Beauty"
+        case .insurance:        return "Versicherung"
+        case .taxesFees:        return "Steuern & Gebühren"
+        case .sports:           return "Sport & Fitness"
+        case .transfers:        return "Überweisungen"
+        case .other:            return "Sonstiges"
+        case .cafe:             return "Café"
+        case .fastFood:         return "Fast Food"
+        case .coffeeShops:      return "Kaffeehaus"
+        case .marketplaces:     return "Online-Marktplätze"
+        case .bills:            return "Rechnungen"
+        case .pharmacies:       return "Apotheken"
+        case .medicalServices:  return "Medizinische Leistungen"
+        case .digitalServices:  return "Digitale Dienste"
+        }
+    }
+
+    static func spanishDisplayName(for category: ExpenseCategory) -> String? {
+        switch category {
+        case .groceries:        return "Supermercado"
+        case .dining:           return "Restaurantes"
+        case .transport:        return "Transporte público"
+        case .taxi:             return "Taxi"
+        case .fuel:             return "Gasolinera"
+        case .carService:       return "Taller mecánico"
+        case .housing:          return "Vivienda"
+        case .utilities:        return "Suministros"
+        case .telecom:          return "Telecomunicaciones"
+        case .health:           return "Salud"
+        case .pharmacy:         return "Farmacia"
+        case .shopping:         return "Compras"
+        case .clothing:         return "Ropa"
+        case .electronics:      return "Electrónica"
+        case .homeGoods:        return "Artículos del hogar"
+        case .education:        return "Educación"
+        case .entertainment:    return "Entretenimiento"
+        case .travel:           return "Viajes"
+        case .subscriptions:    return "Suscripciones"
+        case .pets:             return "Mascotas"
+        case .gifts:            return "Regalos"
+        case .beauty:           return "Belleza"
+        case .insurance:        return "Seguros"
+        case .taxesFees:        return "Impuestos y tasas"
+        case .sports:           return "Deporte y fitness"
+        case .transfers:        return "Transferencias"
+        case .other:            return "Otros"
+        case .cafe:             return "Cafetería"
+        case .fastFood:         return "Comida rápida"
+        case .coffeeShops:      return "Cafés"
+        case .marketplaces:     return "Tiendas online"
+        case .bills:            return "Facturas"
+        case .pharmacies:       return "Farmacias"
+        case .medicalServices:  return "Servicios médicos"
+        case .digitalServices:  return "Servicios digitales"
         }
     }
 
@@ -490,10 +585,10 @@ enum ExpenseCategoryCatalog {
     private static let fallbackMetadata = ExpenseCategoryMetadata(
         category: .other,
         group: .other,
-        displayNameRU: "Разное",
+        displayNameRU: "Другое",
         displayNameEN: "Other",
         icon: "🧩",
-        aliases: ["разное", "прочее", "other", "unknown"]
+        aliases: ["другое", "разное", "прочее", "other", "unknown"]
     )
 
     private static let defaultSuggestedIcons = ["🧩", "🛒", "🍽️", "🚕", "✈️", "🏠", "📱", "🎮", "💄", "🐾"]
@@ -522,8 +617,9 @@ enum ExpenseCategoryCatalog {
         .gifts: ["🎁", "💐", "🌸"],
         .beauty: ["💄", "💅", "🧴"],
         .insurance: ["🛡️", "📋", "🚘"],
+        .sports: ["🏋️", "🏃", "⚽️"],
         .taxesFees: ["🏛️", "🧾", "💸"],
-        .transfers: ["⇄", "💳", "🏦"],
+        .transfers: ["🔄", "💳", "🏦"],
         .other: ["🧩", "📌", "📦"]
     ]
 

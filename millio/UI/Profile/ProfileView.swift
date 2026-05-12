@@ -27,6 +27,7 @@ struct ProfileView: View {
         resetInterval: DebugMenuAccessPolicy.unlockTapResetInterval
     )
     @State private var rateBlockDismissed = false
+    @State private var showSubscriptionSheet = false
 
     private enum ProfileLayout {
         static let contentHorizontalInset: CGFloat = 20
@@ -138,6 +139,12 @@ struct ProfileView: View {
                 }
                 return isValid
             })
+        }
+        .sheet(isPresented: $showSubscriptionSheet) {
+            NavigationStack {
+                SubscriptionView()
+            }
+            .environment(appState)
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {
@@ -297,14 +304,14 @@ struct ProfileView: View {
             ProfilePremiumCard(
                 titleKey: "profile.premium.title"
             ) {
-                router.push(.subscription)
+                showSubscriptionSheet = true
             }
             .padding(.horizontal, ProfileLayout.contentHorizontalInset)
 
         case .compact(let status):
             card {
                 Button {
-                    router.push(.subscription)
+                    showSubscriptionSheet = true
                 } label: {
                     settingsRow(item: .premiumAccess, title: "profile.premium.title") {
                         rowValueText(compactPremiumStatusText(for: status))

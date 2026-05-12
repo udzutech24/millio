@@ -330,7 +330,7 @@ final class NotificationManager: NotificationManagerProtocol {
             return transaction.isRecurringTemplate
                 ? "提醒：周期性\(kind)计划于\(dateText)。"
                 : "提醒：计划\(kind)时间为\(dateText)。"
-        case .system, .english, .german:
+        case .system, .english, .german, .spanish:
             let kind: String = {
                 switch transaction.transactionType {
                 case .income: return "income"

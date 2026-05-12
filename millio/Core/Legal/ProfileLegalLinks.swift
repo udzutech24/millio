@@ -37,7 +37,7 @@ struct ProfileLegalLinks {
                 privacyTitle: privacyTitle,
                 termsTitle: termsTitle
             )
-        case .english, .system, .german:
+        case .english, .system, .german, .spanish:
             return ProfileLegalLinks(
                 privacyURL: URL(string: "https://millio.udzutech.com/?lang=en&page=privacy")!,
                 termsURL: appleStandardEULAURL,

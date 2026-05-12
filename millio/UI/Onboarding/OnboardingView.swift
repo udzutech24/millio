@@ -16,12 +16,14 @@ struct OnboardingView: View {
     private func completeOnboarding() {
         UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
         appState.lifecycle = .ready
+        appState.refreshLanguageToken()
     }
 
     private func skipOnboarding() {
         SettingsManager.shared.isQuickSetupCompleted = false
         UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
         appState.lifecycle = .ready
+        appState.refreshLanguageToken()
     }
 }
 

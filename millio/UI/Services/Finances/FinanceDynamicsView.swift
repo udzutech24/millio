@@ -491,11 +491,25 @@ private struct FinanceDynamicsContentView: View {
                     dynamicsListCard
 
                     if !viewModel.state.isSingleAccountMode && !viewModel.state.dynamicsBreakdown.isEmpty {
-                        groupsDonutCard
+                        if EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) {
+                            groupsDonutCard
+                        } else {
+                            proBlockedDonutCard(
+                                titleKey: "finances.dynamics.chart_type.distribution",
+                                accentColor: Color(red: 0.75, green: 0.60, blue: 1.00)
+                            )
+                        }
                     }
 
                     if !viewModel.state.isSingleAccountMode && !viewModel.state.currencyBreakdown.isEmpty {
-                        currencyBreakdownCard
+                        if EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) {
+                            currencyBreakdownCard
+                        } else {
+                            proBlockedDonutCard(
+                                titleKey: "finances.dynamics.chart_type.currency",
+                                accentColor: Color(red: 1.00, green: 0.72, blue: 0.30)
+                            )
+                        }
                     }
 
                     // Блок прогноза дохода по вкладу (Phase 5 + 8)
@@ -3291,17 +3305,70 @@ private struct FinanceDynamicsContentView: View {
 
     // MARK: - Blocked/Empty Views
 
-    /// Единая заглушка для PRO-блокировки графика (без "подсказок"/вспомогательных карточек),
-    /// чтобы внешний вид был консистентным во всех местах приложения.
     private func proBlockedView(size: ProChartUpsellMetrics.Size) -> some View {
         ProChartUpsellView(
             titleKey: nil,
-            subtitleKey: "finances.dynamics.pro.subtitle",
+            subtitleKey: nil,
             ctaKey: "finances.dynamics.pro.cta",
             size: size,
             onTapCTA: { showSubscriptionSheet = true }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func proBlockedDonutCard(titleKey: LocalizedStringKey, accentColor: Color) -> some View {
+        let fillGradient = LinearGradient(
+            colors: [Color(white: 0.08), Color(white: 0.04), Color.black],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(titleKey)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(accentColor)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+
+            ZStack {
+                FakeDonutBackground(accentColor: accentColor)
+                    .blur(radius: 8)
+                    .clipped()
+                    .overlay(Color.black.opacity(0.6))
+
+                Button(action: { showSubscriptionSheet = true }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(L("finances.dynamics.pro.cta"))
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(accentColor)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule().stroke(accentColor.opacity(0.7), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(maxWidth: .infinity, minHeight: 120)
+            .padding(.bottom, 16)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(fillGradient)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(LinearGradient(
+                            colors: [accentColor.opacity(0.10), Color.clear],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        ))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(accentColor.opacity(0.28), lineWidth: 0.9)
+                )
+        )
     }
 
     private var emptyChartView: some View {
