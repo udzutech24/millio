@@ -14,6 +14,8 @@ enum Language: String, Codable, CaseIterable, Hashable {
     case simplifiedChinese = "zh-Hans"
     case german = "de"
     case spanish = "es"
+    case turkish = "tr"
+    case french = "fr"
 
     var displayName: String {
         displayName(for: AppLocalization.currentAppLocale)
@@ -33,6 +35,10 @@ enum Language: String, Codable, CaseIterable, Hashable {
             return "Deutsch"
         case .spanish:
             return "Español"
+        case .turkish:
+            return "Türkçe"
+        case .french:
+            return "Français"
         }
     }
 
@@ -67,6 +73,16 @@ enum Language: String, Codable, CaseIterable, Hashable {
             names.append("Spanish")
             names.append("Español")
             names.append("Испанский")
+        case .turkish:
+            names.append(AppLocalization.string("language.option.turkish", locale: locale))
+            names.append("Turkish")
+            names.append("Türkçe")
+            names.append("Турецкий")
+        case .french:
+            names.append(AppLocalization.string("language.option.french", locale: locale))
+            names.append("French")
+            names.append("Français")
+            names.append("Французский")
         }
 
         var seen = Set<String>()
@@ -92,6 +108,10 @@ enum Language: String, Codable, CaseIterable, Hashable {
             return Locale(identifier: "de")
         case .spanish:
             return Locale(identifier: "es")
+        case .turkish:
+            return Locale(identifier: "tr")
+        case .french:
+            return Locale(identifier: "fr")
         }
     }
 }

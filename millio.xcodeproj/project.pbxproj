@@ -316,6 +316,8 @@
 				"zh-Hans",
 				de,
 				es,
+				fr,
+				tr,
 				Base,
 			);
 			mainGroup = 772BE5142F12DBED00193DE9;
