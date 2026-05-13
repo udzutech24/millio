@@ -39,15 +39,32 @@ enum ScreenshotDataSeeder {
     static func seed(into context: ModelContext) async {
         purgeAll(context)
         let locale = SeedLocale.current
+        seedSettings(locale: locale)
         let cards = seedCards(into: context, locale: locale)
         let investments = seedInvestments(into: context, locale: locale)
         seedGroups(into: context, cards: cards, investmentIDs: investments, locale: locale)
-        seedCashback(into: context, cardID: cards.debit.uniqueID, locale: locale)
+        seedCashback(into: context, cards: cards, locale: locale)
         seedCashflowTransactions(into: context,
                                  debitCardID: cards.debit.uniqueID,
                                  creditCardID: cards.credit.uniqueID,
                                  locale: locale)
         try? context.save()
+    }
+
+    // MARK: - Settings (UserDefaults)
+
+    private static func seedSettings(locale: SeedLocale) {
+        let defaults = UserDefaults.standard
+        // Принудительно задаём primaryCurrency — иначе значение из предыдущего locale-запуска
+        // может остаться в UserDefaults (например, USD после EN-прогона persist'ится на RU-прогон)
+        defaults.set(locale.currency, forKey: "primaryCurrencyCode")
+        let favorites: [String] = locale.isEN
+            ? ["USD", "EUR", "GBP", "JPY", "CAD"]
+            : ["RUB", "USD", "EUR", "CNY", "TRY"]
+        defaults.set(favorites, forKey: "favoriteCurrencyCodes")
+        // Конвертер использует собственный ключ — отдельно от favoriteCurrencyCodes
+        let converterCodes = locale.isEN ? "USD,EUR,GBP,JPY,CAD" : "RUB,USD,EUR,TRY,GBP,KZT"
+        defaults.set(converterCodes, forKey: "conv_selected_codes")
     }
 
     // MARK: - Purge
@@ -255,31 +272,41 @@ enum ScreenshotDataSeeder {
 
     // MARK: - Cashback
 
-    private static func seedCashback(into context: ModelContext, cardID: String, locale: SeedLocale) {
+    private static func seedCashback(into context: ModelContext, cards: SeedCards, locale: SeedLocale) {
         let monthKey = Cashback.monthKey(for: Date())
 
-        let items: [(CashbackCategory, Double)] = [
+        // Три банка с разными категориями — подтверждает буллет «Несколько банков сразу»
+        // Card 1 (primary debit): высокодоходные категории
+        let primaryItems: [(CashbackCategory, Double)] = [
             (.carSharing, 10),
             (.pharmacy, 5),
             (.taxi, 5),
             (.autoServices, 5),
+        ]
+        // Card 2 (secondary debit): транспорт и досуг
+        let secondaryItems: [(CashbackCategory, Double)] = [
             (.railway, 4),
-            (.airlines, 3),
-            (.healthcare, 3),
-            (.transport, 2),
             (.restaurant, 3),
+            (.airlines, 3),
+        ]
+        // Card 3 (credit): базовые категории
+        let creditItems: [(CashbackCategory, Double)] = [
+            (.healthcare, 3),
             (.supermarket, 2),
+            (.transport, 2),
         ]
 
-        for (category, pct) in items {
-            let cb = Cashback(
-                name: category.displayName,
-                category: category,
-                percentage: pct,
-                cardIDs: [cardID],
-                monthKey: monthKey
-            )
-            context.insert(cb)
+        for (category, pct) in primaryItems {
+            context.insert(Cashback(name: category.displayName, category: category,
+                                    percentage: pct, cardIDs: [cards.debit.uniqueID], monthKey: monthKey))
+        }
+        for (category, pct) in secondaryItems {
+            context.insert(Cashback(name: category.displayName, category: category,
+                                    percentage: pct, cardIDs: [cards.secondary.uniqueID], monthKey: monthKey))
+        }
+        for (category, pct) in creditItems {
+            context.insert(Cashback(name: category.displayName, category: category,
+                                    percentage: pct, cardIDs: [cards.credit.uniqueID], monthKey: monthKey))
         }
     }
 

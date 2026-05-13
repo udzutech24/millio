@@ -17,11 +17,10 @@ struct ProChartUpsellMetricsTests {
         let compact = ProChartUpsellMetrics.make(for: .compact)
         let regular = ProChartUpsellMetrics.make(for: .regular)
 
-        #expect(compact.iconPointSize < regular.iconPointSize)
         #expect(compact.titlePointSize < regular.titlePointSize)
-        #expect(compact.subtitlePointSize < regular.subtitlePointSize)
         #expect(compact.ctaPointSize < regular.ctaPointSize)
         #expect(compact.ctaVerticalPadding < regular.ctaVerticalPadding)
+        #expect(compact.blurRadius < regular.blurRadius)
     }
 
     @Test("Metrics are positive and finite")
@@ -30,12 +29,10 @@ struct ProChartUpsellMetricsTests {
             let metrics = ProChartUpsellMetrics.make(for: size)
 
             let values: [CGFloat] = [
-                metrics.iconPointSize,
                 metrics.titlePointSize,
-                metrics.subtitlePointSize,
                 metrics.ctaPointSize,
-                metrics.verticalSpacing,
-                metrics.ctaVerticalPadding
+                metrics.ctaVerticalPadding,
+                metrics.blurRadius
             ]
 
             #expect(values.allSatisfy { $0.isFinite && $0 > 0 })

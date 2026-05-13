@@ -85,6 +85,14 @@ struct millioApp: App {
             appState.isAppLocked = false
             appState.lifecycle = .ready
             appState.subscriptionAccessSource = .subscription
+            // Locale-aware currency for screenshots: EN → USD, others → RUB (default)
+            if (Locale.preferredLanguages.first ?? "").hasPrefix("en") {
+                appState.primaryCurrencyCode = "USD"
+            }
+            // Show backup as enabled so the backup screen looks meaningful
+            appState.isBackupEnabled = true
+            appState.isAutoBackupEnabled = true
+            appState.isICloudAvailable = true
             _appState = State(initialValue: appState)
         } else if runtimeEnvironment.isUITesting {
             let appState = AppState()

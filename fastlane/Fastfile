@@ -62,7 +62,33 @@ platform :ios do
   После захвата: cd Маркетинг/screenshots-remotion && npm run render — финальные карточки.
   Запуск: bundle exec fastlane screenshots"
   lane :screenshots do
-    capture_screenshots
+    capture_screenshots(
+      override_status_bar: true,
+      override_status_bar_arguments: "--time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4"
+    )
+  end
+
+  desc "Загружает метаданные App Store (описания, ключевые слова, release notes) из fastlane/metadata/ без бинарника.
+  Запуск: bundle exec fastlane upload_metadata
+  Флаги: skip_screenshots:true (по умолчанию), force:true — без подтверждения"
+  lane :upload_metadata do |options|
+    asc_api_key = app_store_connect_api_key_from_env
+
+    upload_to_app_store(
+      api_key: asc_api_key,
+      app_identifier: "com.millio.app",
+      skip_binary_upload: true,
+      skip_screenshots: options[:skip_screenshots] != false,
+      skip_metadata: false,
+      metadata_path: "fastlane/metadata",
+      force: options[:force] || false,
+      overwrite_screenshots: false,
+      submit_for_review: false,
+      automatic_release: false,
+      precheck_include_in_app_purchases: false,
+      run_precheck_before_submit: false,
+      languages: ["en-US", "ru", "zh-Hans", "de-DE", "es-ES"]
+    )
   end
 
   desc "Distribute already-uploaded build to internal testers (millio group)"
