@@ -820,8 +820,8 @@ struct CashflowCategoryTransactionSheet: View {
                 }
                 quickEntryCategory = option
             } label: {
-                VStack(alignment: .leading, spacing: metrics.contentSpacing) {
-                    HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .top, spacing: 8) {
                         ZStack {
                             Circle()
                                 .fill(kind.accentColor.opacity(0.18))
@@ -831,53 +831,46 @@ struct CashflowCategoryTransactionSheet: View {
                                 )
                             CashflowCategoryIconView(
                                 icon: option.icon,
-                                fontSize: 20,
+                                fontSize: 14,
                                 fontWeight: .semibold,
                                 tint: AnyShapeStyle(AppColors.textPrimary)
                             )
                         }
-                        .frame(width: 38, height: 38)
-                        Spacer(minLength: 6)
+                        .frame(width: 28, height: 28)
 
-                        HStack(spacing: 6) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(option.displayName)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+
                             if let summary, let badge = categoryBudgetBadgeText(summary.status) {
                                 Text(badge)
                                     .font(.system(size: 9, weight: .bold))
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
                                     .foregroundStyle(budgetStatusColor(summary.status))
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
                                     .background(
                                         Capsule(style: .continuous)
                                             .fill(budgetStatusColor(summary.status).opacity(0.14))
                                     )
                             }
-
-                            if pinPlacement == .inlineBadge {
-                                pinnedBadge
-                            }
                         }
-                    }
-                    .frame(maxWidth: .infinity, minHeight: metrics.topRowMinHeight, alignment: .topLeading)
 
-                    Text(option.displayName)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.72)
-                        .frame(maxWidth: .infinity, minHeight: metrics.titleMinHeight, alignment: .topLeading)
+                        Spacer(minLength: 4)
 
-                    if metrics.usesFlexibleSpacer {
-                        Spacer(minLength: 0)
+                        if pinPlacement == .inlineBadge {
+                            pinnedBadge
+                        }
                     }
 
                     Text(formattedCategoryTotal(for: option))
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundStyle((summary == nil ? AppColors.textSecondary : AppColors.textPrimary).opacity(0.98))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-                        .padding(.top, metrics.amountTopPadding)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentTransition(.numericText())
                         .scaleEffect(isHighlighted ? 1.07 : 1)
@@ -888,7 +881,7 @@ struct CashflowCategoryTransactionSheet: View {
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(feedbackColor)
                             .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
+                            .padding(.vertical, 4)
                             .background(
                                 Capsule(style: .continuous)
                                     .fill(Color.white.opacity(0.08))
@@ -905,38 +898,31 @@ struct CashflowCategoryTransactionSheet: View {
                             )
                     }
 
-                    Group {
-                        if let summary {
-                            VStack(alignment: .leading, spacing: metrics.contentSpacing) {
-                                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                    Text(categoryBudgetLimitLabel(summary.limit))
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(Color.white.opacity(0.66))
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.72)
-                                }
+                    if let summary {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(categoryBudgetLimitLabel(summary.limit))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Color.white.opacity(0.66))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
 
-                                GeometryReader { proxy in
-                                    let progress = min(max(summary.progress, 0), 1)
-                                    ZStack(alignment: .leading) {
-                                        Capsule(style: .continuous)
-                                            .fill(Color.white.opacity(0.08))
-                                        Capsule(style: .continuous)
-                                            .fill(budgetStatusColor(summary.status))
-                                            .frame(width: max(8, proxy.size.width * progress))
-                                    }
+                            GeometryReader { proxy in
+                                let progress = min(max(summary.progress, 0), 1)
+                                ZStack(alignment: .leading) {
+                                    Capsule(style: .continuous)
+                                        .fill(Color.white.opacity(0.08))
+                                    Capsule(style: .continuous)
+                                        .fill(budgetStatusColor(summary.status))
+                                        .frame(width: max(6, proxy.size.width * progress))
                                 }
-                                .frame(height: 6)
                             }
-                        } else {
-                            Color.clear
+                            .frame(height: 5)
                         }
                     }
-                    .frame(maxWidth: .infinity, minHeight: metrics.footerMinHeight, alignment: .bottomLeading)
                 }
-                .frame(maxWidth: .infinity, minHeight: metrics.cardMinHeight, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
                 .padding(.horizontal, 10)
-                .padding(.vertical, metrics.verticalPadding)
+                .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(Color.black.opacity(0.28))

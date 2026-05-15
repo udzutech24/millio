@@ -996,6 +996,21 @@ final class FinanceViewModel: ViewModelProtocol {
         return nil
     }
 
+    /// Возвращает customIconName и customIconColor для счёта (если задано пользователем)
+    func customIconInfo(for account: FinanceAccount) -> (iconName: String?, iconColor: String?) {
+        switch account.accountType {
+        case .card:
+            guard let card = cardByID[account.accountID] else { return (nil, nil) }
+            return (card.customIconName, card.customIconColor)
+        case .credit:
+            guard let credit = creditByID[account.accountID] else { return (nil, nil) }
+            return (credit.customIconName, credit.customIconColor)
+        case .investment:
+            guard let investment = investmentByID[account.accountID] else { return (nil, nil) }
+            return (investment.customIconName, investment.customIconColor)
+        }
+    }
+
     /// Возвращает true, если продукт является обязательством и должен подсвечиваться как "кредитный" в списке.
     /// Важно: UI часто показывает сумму обязательства как положительную (долг), поэтому подсветка не может опираться на знак.
     func isAccountLiabilityForTotals(account: FinanceAccount) -> Bool {

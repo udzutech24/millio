@@ -35,6 +35,9 @@ struct CreditEditorView: View {
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
     @State private var showCryptoProAlert: Bool = false
+    @State private var customIconName: String? = nil
+    @State private var customIconColor: String? = nil
+    @State private var showIconPicker: Bool = false
 
     init(viewModel: CreditViewModel, onClose: (() -> Void)? = nil, onDelete: (() -> Void)? = nil) {
         self.viewModel = viewModel
@@ -104,6 +107,8 @@ struct CreditEditorView: View {
             .onAppear {
                 if let editing = viewModel.state.editingCredit {
                     name = editing.name
+                    customIconName = editing.customIconName
+                    customIconColor = editing.customIconColor
                     amountText = AmountInputFormatter.display(AmountInputFormatter.plainString(from: editing.amount))
                     remainingAmountText = AmountInputFormatter.display(
                         AmountInputFormatter.plainString(from: editing.remainingAmount)
@@ -181,11 +186,36 @@ struct CreditEditorView: View {
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    Button { showIconPicker = true } label: {
+                        HStack(spacing: 12) {
+                            AccountIconBadgeView(
+                                iconName: customIconName,
+                                iconColor: customIconColor,
+                                fallback: selectedCreditType.icon,
+                                size: 32
+                            )
+                            Text(LocalizedStringKey("account.icon_picker.title"))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+                    .sheet(isPresented: $showIconPicker) {
+                        AccountIconPickerSheet(iconName: $customIconName, iconColor: $customIconColor)
+                    }
                 }
             }
         }
     }
-    
+
     private var creditParamsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: L("finances.editor.credit.params_section"))
@@ -492,6 +522,8 @@ struct CreditEditorView: View {
             includeInTotal: true,
             uniqueID: nil
         ))
+        viewModel.state.editingCredit?.customIconName = customIconName
+        viewModel.state.editingCredit?.customIconColor = customIconColor
 
         if let onClose {
             onClose()

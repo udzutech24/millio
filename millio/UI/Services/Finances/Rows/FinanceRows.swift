@@ -242,11 +242,10 @@ struct FinanceGroupRow: View {
                 .padding(.leading, expandedDividerLeadingInset)
                 .padding(.trailing, contentTrailingInset)
 
-            let displayAccounts: [(account: FinanceAccount, info: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool))] = viewModel.orderedAccounts(for: group).compactMap { account in
-                guard let info = viewModel.getAccountInfo(account: account) else {
-                    return nil
-                }
-                return (account: account, info: info)
+            let displayAccounts: [(account: FinanceAccount, info: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool), customIconName: String?, customIconColor: String?)] = viewModel.orderedAccounts(for: group).compactMap { account in
+                guard let info = viewModel.getAccountInfo(account: account) else { return nil }
+                let iconInfo = viewModel.customIconInfo(for: account)
+                return (account: account, info: info, customIconName: iconInfo.iconName, customIconColor: iconInfo.iconColor)
             }
 
             if displayAccounts.isEmpty {
@@ -266,6 +265,8 @@ struct FinanceGroupRow: View {
                         amount: item.info.amount,
                         currency: item.info.currency,
                         icon: item.info.icon,
+                        customIconName: item.customIconName,
+                        customIconColor: item.customIconColor,
                         accountType: item.account.accountType,
                         isCreditCardDebt: item.info.isCreditCardDebt,
                         onEdit: {
@@ -433,6 +434,8 @@ private struct FinanceAccountRow: View {
     let amount: Double
     let currency: String
     let icon: String
+    let customIconName: String?
+    let customIconColor: String?
     let accountType: FinanceAccountType
     let isCreditCardDebt: Bool
     let onEdit: () -> Void
@@ -451,10 +454,13 @@ private struct FinanceAccountRow: View {
 
     private var defaultRow: some View {
         HStack(spacing: 12) {
-            iconBadge(
-                colors: isDebtHighlighted ? [AppColors.error, AppColors.error] : AppColors.financesGradient
+            AccountIconBadgeView(
+                iconName: customIconName,
+                iconColor: customIconColor,
+                fallback: icon,
+                isError: isDebtHighlighted
             )
-            
+
             VStack(alignment: .leading, spacing: 3) {
                 OverflowFadeText(
                     text: name,
@@ -499,8 +505,11 @@ private struct FinanceAccountRow: View {
 
     private var marketInvestmentRow: some View {
         HStack(spacing: 12) {
-            iconBadge(
-                colors: isDebtHighlighted ? [AppColors.error, AppColors.error] : AppColors.financesGradient
+            AccountIconBadgeView(
+                iconName: customIconName,
+                iconColor: customIconColor,
+                fallback: icon,
+                isError: isDebtHighlighted
             )
 
             VStack(alignment: .leading, spacing: 3) {

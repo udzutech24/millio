@@ -232,6 +232,23 @@ struct FinanceOverviewCardView: View {
             defaultSide: .debit
         ) else { return nil }
 
+        let customIconName: String?
+        let customIconColor: String?
+        switch account.accountType {
+        case .card:
+            let card = cardsByID[account.accountID]
+            customIconName = card?.customIconName
+            customIconColor = card?.customIconColor
+        case .credit:
+            let credit = creditsByID[account.accountID]
+            customIconName = credit?.customIconName
+            customIconColor = credit?.customIconColor
+        case .investment:
+            let investment = investmentsByID[account.accountID]
+            customIconName = investment?.customIconName
+            customIconColor = investment?.customIconColor
+        }
+
         return FinanceOverviewLedgerSourceItem(
             groupID: groupID,
             groupName: groupName,
@@ -239,6 +256,8 @@ struct FinanceOverviewCardView: View {
             accountID: account.accountID,
             accountName: info.name,
             accountIcon: info.icon,
+            customIconName: customIconName,
+            customIconColor: customIconColor,
             amount: normalized.amount,
             side: normalized.side
         )
@@ -266,7 +285,9 @@ struct FinanceOverviewCardView: View {
             groupColorHex: nil,
             accountID: card.cardUniqueID,
             accountName: card.name,
-            accountIcon: card.cardType.icon,
+            accountIcon: card.resolvedIconName,
+            customIconName: card.customIconName,
+            customIconColor: card.customIconColor,
             amount: normalized.amount,
             side: normalized.side
         )
@@ -294,7 +315,9 @@ struct FinanceOverviewCardView: View {
             groupColorHex: nil,
             accountID: credit.creditUniqueID,
             accountName: credit.name,
-            accountIcon: credit.creditType.icon,
+            accountIcon: credit.resolvedIconName,
+            customIconName: credit.customIconName,
+            customIconColor: credit.customIconColor,
             amount: normalized.amount,
             side: normalized.side
         )
@@ -322,7 +345,9 @@ struct FinanceOverviewCardView: View {
             groupColorHex: nil,
             accountID: investment.investmentUniqueID,
             accountName: financeViewModel.investmentDisplayName(investment),
-            accountIcon: investment.category.icon,
+            accountIcon: investment.resolvedIconName,
+            customIconName: investment.customIconName,
+            customIconColor: investment.customIconColor,
             amount: normalized.amount,
             side: normalized.side
         )
@@ -743,14 +768,12 @@ struct FinanceOverviewCardView: View {
         color: Color
     ) -> some View {
         HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(color.opacity(0.14))
-                .frame(width: 28, height: 28)
-                .overlay {
-                    Image(systemName: account.icon)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(color)
-                }
+            AccountIconBadgeView(
+                iconName: account.customIconName,
+                iconColor: account.customIconColor,
+                fallback: account.icon,
+                size: 28
+            )
 
             Text(account.name)
                 .font(.system(size: 13, weight: .medium))
@@ -814,14 +837,12 @@ struct FinanceOverviewCardView: View {
 
     private func accountRow(_ account: FinanceOverviewLedgerAccount, color: Color) -> some View {
         HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(color.opacity(0.16))
-                .frame(width: 32, height: 32)
-                .overlay {
-                    Image(systemName: account.icon)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(color)
-                }
+            AccountIconBadgeView(
+                iconName: account.customIconName,
+                iconColor: account.customIconColor,
+                fallback: account.icon,
+                size: 32
+            )
 
             Text(account.name)
                 .font(.system(size: 13, weight: .medium))

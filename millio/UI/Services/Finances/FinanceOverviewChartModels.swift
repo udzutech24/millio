@@ -299,6 +299,8 @@ struct FinanceOverviewLedgerSourceItem: Equatable {
     let accountID: String
     let accountName: String
     let accountIcon: String
+    let customIconName: String?
+    let customIconColor: String?
     let amount: Double
     let side: FinanceOverviewLedgerSide
 }
@@ -307,6 +309,8 @@ struct FinanceOverviewLedgerAccount: Identifiable, Equatable {
     let id: String
     let name: String
     let icon: String
+    let customIconName: String?
+    let customIconColor: String?
     let amount: Double
 }
 
@@ -382,6 +386,8 @@ enum FinanceOverviewLedgerBuilder {
                         id: $0.accountID,
                         name: $0.accountName,
                         icon: $0.accountIcon,
+                        customIconName: $0.customIconName,
+                        customIconColor: $0.customIconColor,
                         amount: $0.amount
                     )
                 }

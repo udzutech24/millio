@@ -54,6 +54,9 @@ struct InvestmentEditorView: View {
     @State private var showPaywallAlert = false
     @State private var paywallMessage: LocalizedTextResolver = .empty
     @State private var showCryptoProAlert = false
+    @State private var customIconName: String? = nil
+    @State private var customIconColor: String? = nil
+    @State private var showIconPicker: Bool = false
     @State private var showDeleteConfirmation = false
 
     // MARK: - Deposit @State
@@ -217,6 +220,8 @@ struct InvestmentEditorView: View {
             .onAppear {
                 if let editing = viewModel.state.editingInvestment {
                     name = editing.name
+                    customIconName = editing.customIconName
+                    customIconColor = editing.customIconColor
                     selectedInvestmentType = editing.investmentType
                     selectedCategory = editing.category
                     amountText = String(format: "%.2f", editing.amount)
@@ -376,11 +381,36 @@ struct InvestmentEditorView: View {
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    Button { showIconPicker = true } label: {
+                        HStack(spacing: 12) {
+                            AccountIconBadgeView(
+                                iconName: customIconName,
+                                iconColor: customIconColor,
+                                fallback: selectedCategory.icon,
+                                size: 32
+                            )
+                            Text(LocalizedStringKey("account.icon_picker.title"))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+                    .sheet(isPresented: $showIconPicker) {
+                        AccountIconPickerSheet(iconName: $customIconName, iconColor: $customIconColor)
+                    }
                 }
             }
         }
     }
-    
+
     private var investmentParamsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: L("finances.editor.investment.params_section"))
@@ -1133,6 +1163,9 @@ struct InvestmentEditorView: View {
             isDeposit: effectiveIsDeposit,
             depositData: depositData
         ))
+
+        viewModel.state.editingInvestment?.customIconName = customIconName
+        viewModel.state.editingInvestment?.customIconColor = customIconColor
 
         if let inv = depositSyncTarget {
             viewModel.syncDepositIncome(for: inv)

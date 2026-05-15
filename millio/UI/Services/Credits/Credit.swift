@@ -146,7 +146,18 @@ final class Credit: Persistable {
 
     /// Стабильный идентификатор для связей между сущностями
     var uniqueID: String = ""
-    
+
+    // MARK: - Custom icon
+
+    /// SF Symbol name или "monogram:ВТБ". nil = иконка по типу кредита
+    var customIconName: String?
+
+    /// Hex цвет фона бейджа. nil = дефолтный акцент типа
+    var customIconColor: String?
+
+    /// Иконка с учётом кастомизации
+    var resolvedIconName: String { customIconName ?? creditType.icon }
+
     var bank: Bank {
         get { Bank(rawValue: bankRaw) ?? .other }
         set { bankRaw = newValue.rawValue }

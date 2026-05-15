@@ -28,6 +28,7 @@ struct CardEditorView: View {
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
     @State private var showCryptoProAlert: Bool = false
+    @State private var showIconPicker: Bool = false
 
     init(viewModel: CardViewModel, onClose: (() -> Void)? = nil, onDelete: (() -> Void)? = nil) {
         self.viewModel = viewModel
@@ -210,6 +211,40 @@ struct CardEditorView: View {
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    Button { showIconPicker = true } label: {
+                        HStack(spacing: 12) {
+                            AccountIconBadgeView(
+                                iconName: card.customIconName,
+                                iconColor: card.customIconColor,
+                                fallback: card.cardType.icon,
+                                size: 32
+                            )
+                            Text(LocalizedStringKey("account.icon_picker.title"))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+                    .sheet(isPresented: $showIconPicker) {
+                        AccountIconPickerSheet(
+                            iconName: Binding(
+                                get: { card.customIconName },
+                                set: { card.customIconName = $0 }
+                            ),
+                            iconColor: Binding(
+                                get: { card.customIconColor },
+                                set: { card.customIconColor = $0 }
+                            )
+                        )
+                    }
 
                     FinancesRowDivider()
 

@@ -79,6 +79,9 @@ struct FinanceAddAccountView: View {
     @State private var showProductPicker = false
     @State private var hasConfirmedProductSelection = false
     @State private var didInitializePresentationState = false
+    @State private var draftIconName: String? = nil
+    @State private var draftIconColor: String? = nil
+    @State private var showIconPicker = false
 
     private enum HintsPrefs {
         static let hiddenKey = "finance_add_account_hints_hidden"
@@ -130,11 +133,22 @@ struct FinanceAddAccountView: View {
             FinancesGlassCard {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 12) {
-                        Image(systemName: iconForSelectedType)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppColors.textTertiary)
-                            .frame(width: 22)
-                        
+                        Button { showIconPicker = true } label: {
+                            AccountIconBadgeView(
+                                iconName: draftIconName,
+                                iconColor: draftIconColor,
+                                fallback: iconForSelectedType,
+                                size: 32
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .sheet(isPresented: $showIconPicker) {
+                            AccountIconPickerSheet(
+                                iconName: $draftIconName,
+                                iconColor: $draftIconColor
+                            )
+                        }
+
                         TextField(placeholderForSelectedType, text: $accountName)
                             .foregroundStyle(AppColors.textPrimary)
                             .focused($isNameFieldFocused)
@@ -1273,13 +1287,16 @@ struct FinanceAddAccountView: View {
 
     private func createCardAndAddToGroup(cardViewModel: CardViewModel, group: FinanceGroup?) {
         guard let cardData = cardData else { return }
-        
+
         if cardData.uniqueID.isEmpty {
             cardData.uniqueID = UUID().uuidString
         }
-        
+
+        cardData.customIconName = draftIconName
+        cardData.customIconColor = draftIconColor
+
         let createdCardID = cardData.cardUniqueID
-        
+
         // Создаем карту из данных формы
         cardViewModel.handle(.updateCard(cardData))
         
@@ -1319,6 +1336,10 @@ struct FinanceAddAccountView: View {
         ))
         
         guard creditViewModel.state.credits.contains(where: { $0.creditUniqueID == createdCreditID }) else { return }
+        if let draftIconName, let created = creditViewModel.state.credits.first(where: { $0.creditUniqueID == createdCreditID }) {
+            created.customIconName = draftIconName
+            created.customIconColor = draftIconColor
+        }
         
         viewModel.handle(.addAccountToGroup(
             accountType: .credit,
@@ -1400,7 +1421,12 @@ struct FinanceAddAccountView: View {
         ))
         
         guard investmentViewModel.state.investments.contains(where: { $0.investmentUniqueID == createdInvestmentID }) else { return }
-        
+
+        if let draftIconName, let created = investmentViewModel.state.investments.first(where: { $0.investmentUniqueID == createdInvestmentID }) {
+            created.customIconName = draftIconName
+            created.customIconColor = draftIconColor
+        }
+
         viewModel.handle(.addAccountToGroup(
             accountType: .investment,
             accountID: createdInvestmentID,

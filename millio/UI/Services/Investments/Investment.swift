@@ -212,6 +212,17 @@ final class Investment: Persistable {
     /// За сколько дней до конца срока уведомить (nil = выключено)
     var depositNotifyDaysBefore: Int?
 
+    // MARK: - Custom icon
+
+    /// SF Symbol name или "monogram:BTC". nil = иконка по категории
+    var customIconName: String?
+
+    /// Hex цвет фона бейджа. nil = дефолтный акцент типа
+    var customIconColor: String?
+
+    /// Иконка с учётом кастомизации
+    var resolvedIconName: String { customIconName ?? category.icon }
+
     var investmentType: InvestmentType {
         get { InvestmentType(rawValue: investmentTypeRaw) ?? .positive }
         set { investmentTypeRaw = newValue.rawValue }
