@@ -13,10 +13,10 @@ struct FinanceOverviewLedgerModelsTests {
     func ledgerBuilderBuildsDebitCreditSides() {
         let presentation = FinanceOverviewLedgerBuilder.makePresentation(
             items: [
-                .init(groupID: "inventory", groupName: "Склад", groupColorHex: "#FFDD00", accountID: "a1", accountName: "Склад ФФ", accountIcon: "shippingbox.fill", amount: 2_518_023, side: .debit),
-                .init(groupID: "debtors", groupName: "Дебиторы", groupColorHex: "#7AD7FF", accountID: "a2", accountName: "WB", accountIcon: "person.2.fill", amount: 2_059_702, side: .debit),
-                .init(groupID: "inventory", groupName: "Склад", groupColorHex: "#FFDD00", accountID: "a3", accountName: "Склад МП ВБ", accountIcon: "shippingbox.fill", amount: 3_579_015, side: .debit),
-                .init(groupID: "loan", groupName: "Денежный кредит", groupColorHex: "#FF6B6B", accountID: "c1", accountName: "Банк", accountIcon: "banknote.fill", amount: 16_657_223, side: .credit)
+                .init(groupID: "inventory", groupName: "Склад", groupColorHex: "#FFDD00", accountID: "a1", accountName: "Склад ФФ", accountIcon: "shippingbox.fill", customIconName: nil, customIconColor: nil, amount: 2_518_023, side: .debit),
+                .init(groupID: "debtors", groupName: "Дебиторы", groupColorHex: "#7AD7FF", accountID: "a2", accountName: "WB", accountIcon: "person.2.fill", customIconName: nil, customIconColor: nil, amount: 2_059_702, side: .debit),
+                .init(groupID: "inventory", groupName: "Склад", groupColorHex: "#FFDD00", accountID: "a3", accountName: "Склад МП ВБ", accountIcon: "shippingbox.fill", customIconName: nil, customIconColor: nil, amount: 3_579_015, side: .debit),
+                .init(groupID: "loan", groupName: "Денежный кредит", groupColorHex: "#FF6B6B", accountID: "c1", accountName: "Банк", accountIcon: "banknote.fill", customIconName: nil, customIconColor: nil, amount: 16_657_223, side: .credit)
             ]
         )
 
@@ -33,8 +33,8 @@ struct FinanceOverviewLedgerModelsTests {
     func ledgerBuilderIgnoresZeroBalances() {
         let presentation = FinanceOverviewLedgerBuilder.makePresentation(
             items: [
-                .init(groupID: "cash", groupName: "Счета", groupColorHex: nil, accountID: "1", accountName: "Касса", accountIcon: "creditcard.fill", amount: 0, side: .debit),
-                .init(groupID: "loan", groupName: "Кредит", groupColorHex: nil, accountID: "2", accountName: "Банк", accountIcon: "banknote.fill", amount: 4_000, side: .credit)
+                .init(groupID: "cash", groupName: "Счета", groupColorHex: nil, accountID: "1", accountName: "Касса", accountIcon: "creditcard.fill", customIconName: nil, customIconColor: nil, amount: 0, side: .debit),
+                .init(groupID: "loan", groupName: "Кредит", groupColorHex: nil, accountID: "2", accountName: "Банк", accountIcon: "banknote.fill", customIconName: nil, customIconColor: nil, amount: 4_000, side: .credit)
             ]
         )
 
@@ -67,8 +67,8 @@ struct FinanceOverviewLedgerModelsTests {
     func ledgerPresentationReturnsSelectedSide() {
         let presentation = FinanceOverviewLedgerBuilder.makePresentation(
             items: [
-                .init(groupID: "cash", groupName: "Счета", groupColorHex: nil, accountID: "1", accountName: "Касса", accountIcon: "creditcard.fill", amount: 12_000, side: .debit),
-                .init(groupID: "loan", groupName: "Кредит", groupColorHex: nil, accountID: "2", accountName: "Банк", accountIcon: "banknote.fill", amount: 4_000, side: .credit)
+                .init(groupID: "cash", groupName: "Счета", groupColorHex: nil, accountID: "1", accountName: "Касса", accountIcon: "creditcard.fill", customIconName: nil, customIconColor: nil, amount: 12_000, side: .debit),
+                .init(groupID: "loan", groupName: "Кредит", groupColorHex: nil, accountID: "2", accountName: "Банк", accountIcon: "banknote.fill", customIconName: nil, customIconColor: nil, amount: 4_000, side: .credit)
             ]
         )
 
