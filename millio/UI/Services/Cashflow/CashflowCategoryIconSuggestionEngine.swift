@@ -52,5 +52,5 @@ enum CashflowCategoryIconSuggestionEngine {
         return Array(unique.prefix(10))
     }
 
-    private static let incomeDefaultSuggested = ["💰", "💵", "💹", "📈", "💼", "🧑‍💻", "🏦", "🎁", "🏆", "🧩"]
+    private static let incomeDefaultSuggested = ["💰", "💵", "💹", "📈", "🏦", "💳", "💼", "🧑‍💻", "🏢", "🧩"]
 }
