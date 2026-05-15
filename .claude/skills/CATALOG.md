@@ -67,6 +67,15 @@ git clone https://github.com/artemiimillier/graphify.git .claude/skills/graphify
 
 ---
 
+### 4. Nova (millio-aso) ⭐ Project-specific
+**Что даёт:** Nova — App Store Manager для Millio iOS. Знает все credentials (V28GXBGRBV / C6CGA97P5N), структуру метаданных, текущие названия/подзаголовки/keywords по 5 локалям, fastlane lanes, процесс релиза и типичные rejection-фиксы. Работает автономно — не надо объяснять структуру или передавать ключи.  
+**Когда нужен:** обновить описание, release notes, keywords, выгрузить метаданные, подготовить релиз, разобраться с rejection.  
+**Расположение:** `~/.claude/skills/millio-aso/` (симлинк в проекте)  
+**Активация:** `/aso`  
+**ID:** `millio-aso`
+
+---
+
 ## MCP-серверы
 
 ### 4. GitHub MCP
