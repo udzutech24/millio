@@ -221,7 +221,7 @@ struct MarketSymbolSearchViewModelTests {
         #expect(
             viewModel.emptyStateHintText ==
             String(
-                format: String(localized: "finances.market.search.min_chars_format"),
+                format: L("finances.market.search.min_chars_format"),
                 MarketSymbolSearchViewModel.minimumRemoteQueryLength
             )
         )

@@ -18,11 +18,11 @@ struct AppStateTests {
         // Очищаем сохраненный язык для чистого теста
         UserDefaults.standard.removeObject(forKey: "selectedLanguage")
         UserDefaults.standard.synchronize()
-        
-        // Сбрасываем LanguageManager, устанавливая системный язык
-        // Это нужно, так как LanguageManager - singleton и может иметь старое значение
+
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
         LanguageManager.shared.setLanguage(.system)
-        
+
         let appState = AppState()
         
         #expect(appState.lifecycle == .launching)
@@ -264,11 +264,14 @@ struct AppStateTests {
     func testSelectedLanguagePersistsToUserDefaults() {
         UserDefaults.standard.removeObject(forKey: "selectedLanguage")
         UserDefaults.standard.synchronize()
+
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
         LanguageManager.shared.setLanguage(.system)
-        
+
         let appState = AppState()
         appState.selectedLanguage = .english
-        
+
         #expect(UserDefaults.standard.string(forKey: "selectedLanguage") == Language.english.rawValue)
     }
     
@@ -344,10 +347,13 @@ struct AppStateTests {
         #expect(LanguageManager.defaultLanguage(forPreferredLanguage: "en-US") == .system)
     }
 
-    @Test("LanguageManager выбирает english для неподдерживаемого системного языка")
+    @Test("LanguageManager выбирает system для поддерживаемых языков, english — для остальных")
     func testLanguageManagerDefaultLanguageUnsupportedSystem() {
-        #expect(LanguageManager.defaultLanguage(forPreferredLanguage: "de-DE") == .english)
+        #expect(LanguageManager.defaultLanguage(forPreferredLanguage: "de-DE") == .system)
+        #expect(LanguageManager.defaultLanguage(forPreferredLanguage: "es-ES") == .system)
         #expect(LanguageManager.defaultLanguage(forPreferredLanguage: "zh-Hans-CN") == .system)
+        #expect(LanguageManager.defaultLanguage(forPreferredLanguage: "fr-FR") == .english)
+        #expect(LanguageManager.defaultLanguage(forPreferredLanguage: "ja-JP") == .english)
         #expect(LanguageManager.defaultLanguage(forPreferredLanguage: nil) == .english)
     }
 }

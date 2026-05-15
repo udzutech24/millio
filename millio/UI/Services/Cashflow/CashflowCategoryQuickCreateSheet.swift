@@ -28,6 +28,7 @@ struct CashflowCategoryQuickCreateSheet: View {
 
     @Binding var name: String
     @Binding var icon: String
+    let kind: CashflowCategoryKind
     let onSave: (String, String) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -48,14 +49,18 @@ struct CashflowCategoryQuickCreateSheet: View {
     private var visibleIcons: [String] {
         switch selectedTab {
         case .emoji:
-            return CashflowCustomCategory.allowedEmojiIcons
+            return kind == .income
+                ? CashflowCustomCategory.allowedEmojiIconsIncome
+                : CashflowCustomCategory.allowedEmojiIcons
         case .symbols:
             return filteredSymbolIcons
         }
     }
 
     private var suggestedIcons: [String] {
-        CashflowCategoryIconSuggestionEngine.suggestedIcons(forExpenseName: name)
+        kind == .income
+            ? CashflowCategoryIconSuggestionEngine.suggestedIcons(forIncomeName: name)
+            : CashflowCategoryIconSuggestionEngine.suggestedIcons(forExpenseName: name)
     }
 
     var body: some View {

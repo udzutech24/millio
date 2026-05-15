@@ -65,6 +65,29 @@ enum ScreenshotDataSeeder {
         // Конвертер использует собственный ключ — отдельно от favoriteCurrencyCodes
         let converterCodes = locale.isEN ? "USD,EUR,GBP,JPY,CAD" : "RUB,USD,EUR,TRY,GBP,KZT"
         defaults.set(converterCodes, forKey: "conv_selected_codes")
+        // Dashboard: показываем все 4 виджета чтобы экран выглядел заполненным
+        let allWidgets = ["totalBalance", "cashflowSummary", "currencyRates", "quickActions"]
+        if let data = try? JSONEncoder().encode(allWidgets) {
+            defaults.set(data, forKey: "dashboard.active_widgets.v1")
+        }
+        // Card 06: seed курсов конвертера — без этого экран показывает 0 и error toast
+        // Формат: "CODE": value означает 1 USD = value CODE
+        // Ключи conv_cached_rates_millio / conv_last_rates_ts_millio — из CurrencyWidgetShared.Keys
+        let seedRates: [String: Double] = [
+            "USD": 1.0,
+            "EUR": 0.92,
+            "GBP": 0.78,
+            "JPY": 155.20,
+            "CAD": 1.36,
+            "TRY": 38.50,
+            "RUB": 92.50,
+            "CNY": 7.25,
+            "KZT": 520.0,
+            "CHF": 0.89,
+            "AUD": 1.55,
+        ]
+        defaults.set(seedRates, forKey: "conv_cached_rates_millio")
+        defaults.set(Date().timeIntervalSince1970, forKey: "conv_last_rates_ts_millio")
     }
 
     // MARK: - Purge

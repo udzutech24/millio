@@ -2808,7 +2808,7 @@ extension CashflowViewModelTests {
             currency: "USD",
             transactionDate: tradeDate,
             investmentID: investment.investmentUniqueID,
-            note: String(localized: "finances.transaction.note.investment_buy"),
+            note: L("finances.transaction.note.investment_buy"),
             operationGroupID: operationGroupID
         )
         assetLeg.applyAssetChangeSnapshot(
@@ -2836,7 +2836,7 @@ extension CashflowViewModelTests {
             cardID: card.cardUniqueID,
             investmentID: investment.investmentUniqueID,
             expenseCategory: .other,
-            note: String(localized: "finances.transaction.note.investment_buy"),
+            note: L("finances.transaction.note.investment_buy"),
             operationGroupID: operationGroupID,
             affectsCashflowTotals: false
         )
@@ -3056,7 +3056,7 @@ extension CashflowViewModelTests {
             transactionDate: fixedNow,
             cardID: card.cardUniqueID,
             expenseCategoryRaw: ExpenseCategory.other.rawValue,
-            note: String(localized: "finances.transaction.note.investment_buy")
+            note: L("finances.transaction.note.investment_buy")
         )
         let regularIncome = CashflowTransaction(
             transactionType: .income,
@@ -3074,7 +3074,7 @@ extension CashflowViewModelTests {
             transactionDate: fixedNow,
             cardID: card.cardUniqueID,
             incomeCategoryRaw: IncomeCategory.investment.rawValue,
-            note: String(localized: "finances.transaction.note.investment_sell")
+            note: L("finances.transaction.note.investment_sell")
         )
 
         modelContext.insert(regularExpense)

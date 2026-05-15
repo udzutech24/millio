@@ -1,0 +1,8 @@
+Novedades en la versión 1.7:
+
+• Nuevo panel principal — mini-apps con cuentas, cashflow, cashback e inversiones de un vistazo
+• Rediseño del cashflow — diseño más limpio, panel de entrada rápida, tarjetas mensuales
+• Protección de datos — sin más pérdidas de datos al actualizar la app (migración de esquema)
+• Backup más fiable — aviso automático de restauración cuando faltan datos al iniciar
+• Pantalla de actualización PRO — resumen claro de funciones antes de suscribirte
+• Mejoras de estabilidad y rendimiento

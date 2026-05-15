@@ -2,7 +2,7 @@
 
 **Slug:** `app-store-screenshots`
 **Дата создания:** 2026-05-11
-**Status:** В РАБОТЕ
+**Status:** РЕАЛИЗОВАН
 **Spec:** [`specs/2026-05-11-app-store-screenshots.md`](../specs/2026-05-11-app-store-screenshots.md)
 
 ---

@@ -9,6 +9,7 @@ enum DashboardWidgetID: String, CaseIterable, Codable, Identifiable {
     case totalBalance = "totalBalance"
     case quickActions = "quickActions"
     case cashflowSummary = "cashflowSummary"
+    case currencyRates = "currencyRates"
 
     var id: String { rawValue }
 
@@ -17,6 +18,7 @@ enum DashboardWidgetID: String, CaseIterable, Codable, Identifiable {
         case .totalBalance: return L("Общий баланс")
         case .quickActions: return L("Быстрые действия")
         case .cashflowSummary: return L("Кэшфлоу за период")
+        case .currencyRates: return L("dashboard.currency_rates.title")
         }
     }
 
@@ -25,6 +27,7 @@ enum DashboardWidgetID: String, CaseIterable, Codable, Identifiable {
         case .totalBalance: return "chart.line.uptrend.xyaxis"
         case .quickActions: return "bolt.fill"
         case .cashflowSummary: return "arrow.up.arrow.down.circle.fill"
+        case .currencyRates: return "arrow.2.squarepath"
         }
     }
 }

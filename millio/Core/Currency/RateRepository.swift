@@ -9,6 +9,9 @@ struct RateSnapshot: Sendable {
 
 protocol RateRepositoryProtocol: Sendable {
     func getLatestRates(source: RateSource, forceRefresh: Bool, allowStaleOnError: Bool) async throws -> RateSnapshot
+    /// Возвращает последний известный снимок из памяти/UserDefaults без сетевых запросов.
+    /// Используется как последний резерв, когда все сетевые источники недоступны.
+    func peekCachedSnapshot(source: RateSource) async -> RateSnapshot?
 }
 
 actor RateRepository: RateRepositoryProtocol {
@@ -72,6 +75,11 @@ actor RateRepository: RateRepositoryProtocol {
         }
     }
 
+    func peekCachedSnapshot(source: RateSource) -> RateSnapshot? {
+        if let cached = cache[source]?.snapshot { return cached }
+        return loadPersisted(source: source)
+    }
+
     private func fetchLatestRates(source: RateSource) async throws -> RateSnapshot {
         guard let url = source.latestURL else {
             throw URLError(.badURL)
@@ -87,6 +95,21 @@ actor RateRepository: RateRepositoryProtocol {
         var updatedAt: Double = fetchedAt
 
         switch source {
+        case .millio:
+            // Формат совпадает с erapi: { "result": "success", "rates": {...}, "time_last_update_unix": ... }
+            struct MillioRatesResponse: Decodable {
+                let result: String
+                let rates: [String: Double]
+                let time_last_update_unix: Int
+            }
+
+            let decoded = try JSONDecoder().decode(MillioRatesResponse.self, from: data)
+            guard decoded.result == "success" else {
+                throw URLError(.cannotParseResponse)
+            }
+            rates = decoded.rates
+            updatedAt = TimeInterval(decoded.time_last_update_unix)
+
         case .erapi:
             struct ERAPIResponse: Decodable {
                 let result: String

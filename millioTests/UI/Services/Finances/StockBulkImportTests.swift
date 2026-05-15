@@ -748,7 +748,7 @@ struct StockBulkImportTests {
         #expect(accounts.count == 1)
         #expect(groups.count == 1)
         #expect(accounts[0].group != nil)
-        #expect(accounts[0].group?.name == String(localized: "finances.group.ungrouped"))
+        #expect(accounts[0].group?.name == L("finances.group.ungrouped"))
         #expect(investments[0].currency == "USD")
         #expect(investments[0].marketCurrency == "USD")
         #expect(investments[0].marketSymbol == "NASDAQ:AAPL")

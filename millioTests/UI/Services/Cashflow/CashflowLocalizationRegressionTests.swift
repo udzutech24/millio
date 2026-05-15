@@ -334,7 +334,7 @@ struct CashflowLocalizationRegressionTests {
         #expect(AppLocalization.string("cashflow.asset_change.subtitle", locale: locale) == "这是在计入所有已记录收入和支出后，期初与期末之间剩余的差额")
         #expect(AppLocalization.string("cashflow.asset_change.substitution", locale: locale) == "计算")
         #expect(AppLocalization.string("finances.account.type.investment", locale: locale) == "资产")
-        #expect(AppLocalization.string("finances.dynamics.pro.cta", locale: locale) == "开通 PRO")
+        #expect(AppLocalization.string("finances.dynamics.pro.cta", locale: locale) == "PRO")
     }
 
     @Test("Planner helper copy stays localized for both locales")

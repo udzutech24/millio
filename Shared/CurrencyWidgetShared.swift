@@ -43,7 +43,7 @@ enum CurrencyWidgetShared {
                     ?? "RUB,USD,EUR,TRY,GBP,KZT"
             )
 
-            let rateSourceRaw = defaults.string(forKey: Keys.rateSource) ?? "erapi"
+            let rateSourceRaw = defaults.string(forKey: Keys.rateSource) ?? "millio"
             let ratesKey = Keys.cachedRates(for: rateSourceRaw)
             let lastRatesKey = Keys.lastRatesTimestamp(for: rateSourceRaw)
 

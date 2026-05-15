@@ -9,21 +9,24 @@ import Foundation
 
 /// Источник курсов валют
 enum RateSource: String, CaseIterable, Identifiable {
+    case millio
     case erapi
     case frankfurter
-    
+
     var id: String { rawValue }
-    
+
     var title: String {
         ConverterL10n.rateSourceTitle(self)
     }
-    
+
     var subtitle: String {
         ConverterL10n.rateSourceSubtitle(self)
     }
-    
+
     var latestURL: URL? {
         switch self {
+        case .millio:
+            return URL(string: "https://api.iqdrop.ru/api/v1/rates/latest")
         case .erapi:
             return URL(string: "https://open.er-api.com/v6/latest/USD")
         case .frankfurter:

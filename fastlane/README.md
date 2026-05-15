@@ -33,6 +33,25 @@ Build and upload the app to TestFlight
   После захвата: cd Маркетинг/screenshots-remotion && npm run render — финальные карточки.
   Запуск: bundle exec fastlane screenshots
 
+### ios upload_screenshots
+
+```sh
+[bundle exec] fastlane ios upload_screenshots
+```
+
+Загружает скриншоты App Store из fastlane/screenshots/ (EN + RU, iPhone67Display).
+  Запуск: bundle exec fastlane upload_screenshots
+
+### ios upload_metadata
+
+```sh
+[bundle exec] fastlane ios upload_metadata
+```
+
+Загружает метаданные App Store (описания, ключевые слова, release notes) из fastlane/metadata/ без бинарника.
+  Запуск: bundle exec fastlane upload_metadata
+  Флаги: skip_screenshots:true (по умолчанию), force:true — без подтверждения
+
 ### ios distribute
 
 ```sh

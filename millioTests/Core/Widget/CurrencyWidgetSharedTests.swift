@@ -42,7 +42,7 @@ struct CurrencyWidgetSharedTests {
         #expect(snapshot.activeCode == "RUB")
         #expect(snapshot.primaryCode == "RUB")
         #expect(snapshot.inputText == "1200")
-        #expect(snapshot.rateSourceRaw == "erapi")
+        #expect(snapshot.rateSourceRaw == "millio")
         #expect(snapshot.rates == ["USD": 1.0])
         #expect(snapshot.lastUpdatedAt == nil)
     }

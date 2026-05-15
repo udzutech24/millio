@@ -142,6 +142,9 @@ struct FinanceDynamicsView: View {
         }) { _, _ in
             dynamicsViewModel?.handle(.loadData)
         }
+        .onChange(of: appState.primaryCurrencyCode) { _, newValue in
+            dynamicsViewModel?.handle(.setDisplayCurrency(newValue))
+        }
 
         if wrapInNavigationStack {
             NavigationStack {

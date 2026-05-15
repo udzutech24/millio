@@ -23,7 +23,7 @@ struct ProfileMenuStructureTests {
         #expect(!settingsSection.items.contains(.smartDataReset))
 
         #expect(experienceSection.items == [.quickSetup, .launchSplash])
-        #expect(supportSection.items == [.faq, .smartDataReset])
+        #expect(supportSection.items == [.faq])
     }
 
     @Test("Section order follows Apple-style scan path")
@@ -68,7 +68,7 @@ struct ProfileMenuStructureTests {
     func testDebugSectionItems() throws {
 #if DEBUG
         let debugSection = try #require(ProfileMenuStructure.sections.first { $0.id == .debug })
-        #expect(debugSection.items == [.premiumAccess, .trialDisabled, .premiumDiagnostics, .showOnboarding, .adminStats])
+        #expect(debugSection.items == [.premiumAccess, .trialDisabled, .premiumDiagnostics, .showOnboarding, .smartDataReset, .adminStats])
 #else
         #expect(ProfileMenuStructure.sections.contains { $0.id == .debug } == false)
 #endif

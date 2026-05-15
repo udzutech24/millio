@@ -251,6 +251,7 @@ struct CashflowCategoryTransactionSheet: View {
                 CashflowCategoryQuickCreateSheet(
                     name: $newCategoryName,
                     icon: $newCategoryIcon,
+                    kind: kind.categoryKind,
                     onSave: handleCreateCategory
                 )
             }

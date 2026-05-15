@@ -13,9 +13,9 @@ struct BackupManagementView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
     @Environment(\.diContainer) private var diContainer
+    @Environment(ToastCenter.self) private var toastCenter
 
     @State private var isBusy = false
-    @State private var backupError: AppError?
     @State private var passphrase: String = ""
     @State private var passphraseConfirmation: String = ""
     @State private var isPassphraseVisible = false
@@ -25,13 +25,10 @@ struct BackupManagementView: View {
     @State private var isHydratingStoredPassphrase = false
     @State private var hydratedStoredPassphrase: String?
     @State private var encryptionMode: BackupEncryptionMode = .deviceKey
-    @State private var isAutoBackupOptionsExpanded = false
-    @State private var isActionsExpanded = false
     @State private var backupVersions: [BackupVersionInfo] = []
     @State private var deletingRecordName: String?
-    @State private var isVersionsExpanded = false
     @State private var selectedRestoreRecordName: String?
-    @State private var showRestoreConfirmation = false
+    @State private var selectedVersionForSheet: BackupVersionInfo?
     @State private var showRestoreSuccessPrompt = false
     @State private var isImportingVersion = false
     @State private var isExportingVersion = false
@@ -178,12 +175,6 @@ struct BackupManagementView: View {
             : BackupL10n.tr("backup.actions.create.primary.next", fallback: "Save new backup")
     }
 
-    private var restoreButtonTitle: String {
-        selectedRestoreVersion == nil
-            ? BackupL10n.tr("backup.actions.restore.primary.select", fallback: "Choose a backup to restore")
-            : BackupL10n.tr("backup.actions.restore.primary.go", fallback: "Restore selected backup")
-    }
-
     private var createSliderSubtitle: String {
         if isBusy {
             return BackupL10n.tr("backup.actions.create.subtitle.busy", fallback: "Another backup operation is already running")
@@ -201,13 +192,6 @@ struct BackupManagementView: View {
         return BackupL10n.tr("backup.actions.create.subtitle.safety", fallback: "Creates a saved version that stays until you delete it")
     }
 
-    private var restoreSliderSubtitle: String {
-        guard let selectedRestoreVersion else {
-            return BackupL10n.tr("backup.actions.restore.subtitle.select_first", fallback: "Select a version in the list below first")
-        }
-        return selectedRestoreVersion.date.formatted(date: .abbreviated, time: .shortened)
-    }
-
     private var primaryActionHint: String? {
         guard appState.isBackupEnabled else {
             return BackupL10n.tr("backup.hint.enable_backup", fallback: "Enable backup")
@@ -223,9 +207,6 @@ struct BackupManagementView: View {
         }
         guard encryptionMode != .passphrase || isPassphraseConfirmed else {
             return BackupL10n.tr("backup.hint.confirm_passphrase", fallback: "Tap Done to confirm the passphrase")
-        }
-        guard selectedRestoreRecordName != nil else {
-            return BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore")
         }
         return nil
     }
@@ -247,14 +228,6 @@ struct BackupManagementView: View {
                         debugEnvironmentBanner
                         #endif
                         versionsCard
-
-                        if let backupError {
-                            Text(backupError.localizedDescription)
-                                .font(.system(size: 13, weight: .regular))
-                                .foregroundStyle(AppColors.error)
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 20)
@@ -266,14 +239,13 @@ struct BackupManagementView: View {
                     await refreshStatusIfNeeded(force: true)
                 }
 
-                if showRestoreConfirmation {
-                    restoreConfirmationOverlay
-                }
-
                 if showRestoreSuccessPrompt {
                     restoreSuccessOverlay
                 }
             }
+        }
+        .sheet(item: $selectedVersionForSheet) { version in
+            versionActionSheet(version: version)
         }
         .fileExporter(
             isPresented: $isExportingVersion,
@@ -282,7 +254,7 @@ struct BackupManagementView: View {
             defaultFilename: exportFilename
         ) { result in
             if case .failure(let error) = result {
-                backupError = .backupFailed(error.localizedDescription)
+                toastCenter.show(message: AppError.backupFailed(error.localizedDescription).localizedDescription)
             }
         }
         .fileImporter(
@@ -295,7 +267,7 @@ struct BackupManagementView: View {
                 guard let url = urls.first else { return }
                 Task { await importBackupFile(from: url) }
             case .failure(let error):
-                backupError = .backupFailed(error.localizedDescription)
+                toastCenter.show(message: AppError.backupFailed(error.localizedDescription).localizedDescription)
             }
         }
         .onAppear {
@@ -402,8 +374,8 @@ struct BackupManagementView: View {
                                 appState.isICloudAvailable = false
                                 appState.lastBackupDate = nil
                                 backupVersions = []
-                                isVersionsExpanded = false
                                 selectedRestoreRecordName = nil
+                                selectedVersionForSheet = nil
                             }
 
                             Task { await refreshStatusIfNeeded(force: true) }
@@ -647,79 +619,51 @@ struct BackupManagementView: View {
     private func actionsCard(availableWidth: CGFloat) -> some View {
         FinancesGlassCard(accentColor: AppColors.brandPrimary, cornerRadius: 22, contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
             VStack(alignment: .leading, spacing: 10) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isActionsExpanded.toggle()
-                    }
-                } label: {
-                    HStack(spacing: 10) {
-                        Text(BackupL10n.tr("backup.actions.title", fallback: "Backup actions"))
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(AppColors.textSecondary)
+                Text(BackupL10n.tr("backup.actions.title", fallback: "Backup actions"))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
 
-                        Spacer()
-
-                        Image(systemName: isActionsExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppColors.textTertiary)
-                    }
-                    .contentShape(Rectangle())
+                primaryActionButton(
+                    title: createButtonTitle,
+                    subtitle: createSliderSubtitle,
+                    icon: "arrow.clockwise.circle.fill",
+                    isEnabled: canCreateBackup || hasReachedPinnedVersionLimit
+                ) {
+                    Task { await createBackupNow() }
                 }
-                .buttonStyle(.plain)
 
-                if isActionsExpanded {
-                    primaryActionButton(
-                        title: createButtonTitle,
-                        subtitle: createSliderSubtitle,
-                        icon: "arrow.clockwise.circle.fill",
-                        isEnabled: canCreateBackup || hasReachedPinnedVersionLimit
+                if appState.isAutoBackupEnabled {
+                    Text(BackupL10n.tr("backup.actions.auto_schedule.note", fallback: "One automatic backup is refreshed every 24 hours"))
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                importActionButton
+
+                if let primaryActionHint {
+                    Text(primaryActionHint)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(primaryActionHint == BackupL10n.tr("backup.hint.passphrase_mismatch", fallback: "Passphrases do not match") ? AppColors.error : AppColors.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if hasReachedPinnedVersionLimit, let oldestPinnedVersion {
+                    subtleCallout(
+                        title: BackupL10n.format(
+                            "backup.limit.reached.title",
+                            fallback: "Maximum of %lld manual versions reached",
+                            maxManualVersionCount
+                        ),
+                        text: BackupL10n.tr("backup.limit.reached.message", fallback: "Delete one manual version and try again")
+                    )
+
+                    compactActionButton(
+                        title: BackupL10n.tr("backup.limit.reached.action.delete_oldest", fallback: "Delete oldest version"),
+                        icon: "trash",
+                        isEnabled: deletingRecordName == nil && !isBusy
                     ) {
-                        Task { await createBackupNow() }
-                    }
-
-                    if appState.isAutoBackupEnabled {
-                        Text(BackupL10n.tr("backup.actions.auto_schedule.note", fallback: "One automatic backup is refreshed every 24 hours"))
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(AppColors.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    if BackupManagementLayout.shouldStackActionButtons(availableWidth: availableWidth) {
-                        VStack(spacing: 10) {
-                            exportActionButton
-                            importActionButton
-                        }
-                    } else {
-                        HStack(spacing: 10) {
-                            exportActionButton
-                            importActionButton
-                        }
-                    }
-
-                    if let primaryActionHint {
-                        Text(primaryActionHint)
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(primaryActionHint == BackupL10n.tr("backup.hint.passphrase_mismatch", fallback: "Passphrases do not match") ? AppColors.error : AppColors.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    if hasReachedPinnedVersionLimit, let oldestPinnedVersion {
-                        subtleCallout(
-                            title: BackupL10n.format(
-                                "backup.limit.reached.title",
-                                fallback: "Maximum of %lld manual versions reached",
-                                maxManualVersionCount
-                            ),
-                            text: BackupL10n.tr("backup.limit.reached.message", fallback: "Delete one manual version and try again")
-                        )
-
-                        compactActionButton(
-                            title: BackupL10n.tr("backup.limit.reached.action.delete_oldest", fallback: "Delete oldest version"),
-                            icon: "trash",
-                            isEnabled: deletingRecordName == nil && !isBusy
-                        ) {
-                            Task { await deleteVersion(recordName: oldestPinnedVersion.recordName) }
-                        }
+                        Task { await deleteVersion(recordName: oldestPinnedVersion.recordName) }
                     }
                 }
             }
@@ -729,135 +673,90 @@ struct BackupManagementView: View {
     private var versionsCard: some View {
         FinancesGlassCard(cornerRadius: 20, contentPadding: EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)) {
             VStack(spacing: 0) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isVersionsExpanded.toggle()
-                    }
-                } label: {
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(BackupL10n.tr("backup.versions.title", fallback: "Versions"))
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                            Text(backupVersions.isEmpty
-                                ? BackupL10n.tr("backup.versions.empty.short", fallback: "Nothing saved yet")
-                                : BackupL10n.format("backup.versions.count_format", fallback: "%lld", backupVersions.count)
-                            )
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundStyle(AppColors.textSecondary)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: isVersionsExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppColors.textTertiary)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
-                if isVersionsExpanded {
-                    if backupVersions.isEmpty {
-                        Text(BackupL10n.tr("backup.versions.empty.full", fallback: "Create your first backup above, the daily automatic copy will also appear here"))
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(BackupL10n.tr("backup.versions.title", fallback: "Versions"))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Text(backupVersions.isEmpty
+                            ? BackupL10n.tr("backup.versions.empty.short", fallback: "Nothing saved yet")
+                            : BackupL10n.format("backup.versions.count_format", fallback: "%lld", backupVersions.count)
+                        )
                             .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(AppColors.textTertiary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 10)
-                    } else {
-                        VStack(spacing: 0) {
-                            ForEach(Array(backupVersions.enumerated()), id: \.element.id) { index, version in
-                                if index > 0 {
-                                    FinancesRowDivider()
-                                }
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                    Spacer()
+                }
 
-                                let isSelected = selectedRestoreRecordName == version.recordName
+                if backupVersions.isEmpty {
+                    Text(BackupL10n.tr("backup.versions.empty.full", fallback: "Create your first backup above, the daily automatic copy will also appear here"))
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 10)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(backupVersions.enumerated()), id: \.element.id) { index, version in
+                            if index > 0 {
+                                FinancesRowDivider()
+                            }
 
-                                VStack(spacing: 0) {
-                                    HStack(spacing: 10) {
-                                        Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                                            .font(.system(size: 13, weight: .semibold))
-                                            .foregroundStyle(AppColors.brandPrimary)
-
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(version.date.formatted(date: .abbreviated, time: .shortened))
-                                                .font(.system(size: 13, weight: .semibold))
-                                                .foregroundStyle(AppColors.textPrimary)
-
-                                            Text(
-                                                String(
-                                                    format: L("restore.version_size_format"),
-                                                    ByteCountFormatter.string(fromByteCount: version.size, countStyle: .file),
-                                                    String(version.version)
-                                                )
-                                            )
-                                            .font(.system(size: 11, weight: .regular))
-                                            .foregroundStyle(AppColors.textTertiary)
-                                            #if DEBUG
-                                            Text("src:\(version.source.rawValue) env:\(CloudBackupStore.cloudKitEnvironment)")
-                                                .font(.system(size: 9, weight: .medium))
-                                                .foregroundStyle(.orange.opacity(0.9))
-                                            #else
-                                            if version.source == .index {
-                                                Text("cached")
-                                                    .font(.system(size: 9, weight: .medium))
-                                                    .foregroundStyle(.orange.opacity(0.7))
-                                            }
-                                            #endif
-                                        }
-
-                                        Spacer()
-
-                                        Text(
-                                            version.isPinned
-                                                ? BackupL10n.tr("backup.versions.pinned", fallback: "Saved")
-                                                : BackupL10n.tr("backup.versions.auto", fallback: "Auto")
-                                        )
-                                        .font(.system(size: 10, weight: .semibold))
+                            HStack(spacing: 10) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(version.date.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.system(size: 13, weight: .semibold))
                                         .foregroundStyle(AppColors.textPrimary)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background((version.isPinned ? AppColors.toggleOnGreen : AppColors.brandPrimary).opacity(0.25))
-                                        .clipShape(Capsule())
 
-                                        Button(role: .destructive) {
-                                            Task { await deleteVersion(recordName: version.recordName) }
-                                        } label: {
-                                            if deletingRecordName == version.recordName {
-                                                ProgressView()
-                                                    .scaleEffect(0.75)
-                                            } else {
-                                                Image(systemName: "trash")
-                                                    .font(.system(size: 13, weight: .semibold))
-                                            }
-                                        }
-                                        .buttonStyle(.plain)
-                                        .disabled(isBusy || deletingRecordName != nil)
-                                    }
-                                    .padding(.vertical, 10)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        withAnimation(.easeInOut(duration: 0.18)) {
-                                            selectedRestoreRecordName = version.recordName
-                                        }
-                                    }
-
-                                    if isSelected {
-                                        compactActionButton(
-                                            title: BackupL10n.tr("backup.restore.action.short", fallback: "Restore this version"),
-                                            icon: "arrow.down.circle.fill",
-                                            isEnabled: canRestoreSelectedVersion
-                                        ) {
-                                            showRestoreConfirmation = true
-                                        }
-                                        .padding(.bottom, 8)
-                                        .transition(.opacity.combined(with: .move(edge: .top)))
-                                    }
+                                    Text(
+                                        String(
+                                            format: L("restore.version_size_format"),
+                                            ByteCountFormatter.string(fromByteCount: version.size, countStyle: .file),
+                                            String(version.version)
+                                        )
+                                    )
+                                    .font(.system(size: 11, weight: .regular))
+                                    .foregroundStyle(AppColors.textTertiary)
+                                    #if DEBUG
+                                    Text("src:\(version.source.rawValue) env:\(CloudBackupStore.cloudKitEnvironment)")
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundStyle(.orange.opacity(0.9))
+                                    #endif
                                 }
+
+                                Spacer()
+
+                                if deletingRecordName == version.recordName {
+                                    ProgressView()
+                                        .scaleEffect(0.75)
+                                        .tint(AppColors.textTertiary)
+                                } else {
+                                    Text(
+                                        version.isPinned
+                                            ? BackupL10n.tr("backup.versions.pinned", fallback: "Saved")
+                                            : BackupL10n.tr("backup.versions.auto", fallback: "Auto")
+                                    )
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background((version.isPinned ? AppColors.toggleOnGreen : AppColors.brandPrimary).opacity(0.25))
+                                    .clipShape(Capsule())
+                                }
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(AppColors.textTertiary)
+                            }
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                guard deletingRecordName == nil && !isBusy else { return }
+                                selectedRestoreRecordName = version.recordName
+                                selectedVersionForSheet = version
                             }
                         }
-                        .padding(.top, 8)
                     }
+                    .padding(.top, 8)
                 }
             }
         }
@@ -865,6 +764,19 @@ struct BackupManagementView: View {
 
     @MainActor
     private func refreshStatusIfNeeded(force: Bool = false) async {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["MILLIO_SCREENSHOT_MODE"] == "1", backupVersions.isEmpty {
+            let fakeDate = Calendar.current.date(byAdding: .hour, value: -2, to: Date()) ?? Date()
+            backupVersions = [
+                BackupVersionInfo(recordName: "screenshot-v1", date: fakeDate, size: 24_576, version: "3", isPinned: true),
+                BackupVersionInfo(recordName: "screenshot-v2", date: Calendar.current.date(byAdding: .day, value: -3, to: Date()) ?? Date(), size: 23_040, version: "3", isPinned: false),
+                BackupVersionInfo(recordName: "screenshot-v3", date: Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date(), size: 22_528, version: "3", isPinned: false),
+            ]
+            appState.lastBackupDate = fakeDate
+            selectedRestoreRecordName = "screenshot-v1"
+            return
+        }
+        #endif
         guard BackupStatusRefreshPolicy.shouldSkipManagementRefresh(
             force: force,
             isBackupEnabled: appState.isBackupEnabled,
@@ -874,8 +786,6 @@ struct BackupManagementView: View {
         ) == false else {
             return
         }
-
-        backupError = nil
 
         let cloudStore = CloudBackupStore()
         appState.isICloudAvailable = await cloudStore.isAvailable()
@@ -887,35 +797,24 @@ struct BackupManagementView: View {
         if selectedRestoreRecordName == nil || backupVersions.contains(where: { $0.recordName == selectedRestoreRecordName }) == false {
             selectedRestoreRecordName = backupVersions.first?.recordName
         }
-
-        if !backupVersions.isEmpty && !isVersionsExpanded {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isVersionsExpanded = true
-            }
-        }
     }
 
     @MainActor
     private func createBackupNow() async {
         guard let backupManager else {
-            backupError = .iCloudUnavailable
+            toastCenter.show(message: AppError.iCloudUnavailable.localizedDescription)
             return
         }
         guard hasReachedPinnedVersionLimit == false else {
-            isActionsExpanded = true
-            isVersionsExpanded = true
-            backupError = .backupFailed(
-                BackupL10n.format(
-                    "backup.actions.create.subtitle.limit",
-                    fallback: "Maximum of %lld manual versions reached, delete one old version to save a new one",
-                    maxManualVersionCount
-                )
-            )
+            toastCenter.show(message: BackupL10n.format(
+                "backup.actions.create.subtitle.limit",
+                fallback: "Maximum of %lld manual versions reached, delete one old version to save a new one",
+                maxManualVersionCount
+            ))
             return
         }
 
         isBusy = true
-        backupError = nil
         defer { isBusy = false }
 
         do {
@@ -928,21 +827,20 @@ struct BackupManagementView: View {
             }
             await refreshStatusIfNeeded(force: true)
         } catch let appError as AppError {
-            backupError = appError
+            toastCenter.show(message: appError.localizedDescription)
         } catch {
-            backupError = .unknown(error)
+            toastCenter.show(message: AppError.unknown(error).localizedDescription)
         }
     }
 
     @MainActor
     private func restoreSelectedVersion() async {
         guard let backupManager, let selectedRestoreRecordName else {
-            backupError = .restoreFailed(BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore"))
+            toastCenter.show(message: AppError.restoreFailed(BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore")).localizedDescription)
             return
         }
 
         isBusy = true
-        backupError = nil
         defer { isBusy = false }
 
         do {
@@ -950,44 +848,43 @@ struct BackupManagementView: View {
             let passphraseToUse = trimmedPassphrase.isEmpty ? nil : trimmedPassphrase
             try await backupManager.restoreVersion(recordName: selectedRestoreRecordName, passphrase: passphraseToUse)
             await refreshStatusIfNeeded(force: true)
+            selectedVersionForSheet = nil
             showRestoreSuccessPrompt = true
         } catch let appError as AppError {
-            backupError = appError
+            toastCenter.show(message: appError.localizedDescription)
         } catch {
-            backupError = .unknown(error)
+            toastCenter.show(message: AppError.unknown(error).localizedDescription)
         }
     }
 
     @MainActor
     private func deleteVersion(recordName: String) async {
         guard let backupManager else {
-            backupError = .iCloudUnavailable
+            toastCenter.show(message: AppError.iCloudUnavailable.localizedDescription)
             return
         }
 
         deletingRecordName = recordName
-        backupError = nil
         defer { deletingRecordName = nil }
 
         do {
             try await backupManager.deleteBackupVersion(recordName: recordName)
             await refreshStatusIfNeeded(force: true)
         } catch let appError as AppError {
-            backupError = appError
+            toastCenter.show(message: appError.localizedDescription)
         } catch {
-            backupError = .unknown(error)
+            toastCenter.show(message: AppError.unknown(error).localizedDescription)
         }
     }
 
     @MainActor
     private func exportSelectedVersion() async {
         guard let backupManager, let selectedRestoreRecordName else {
-            backupError = .backupFailed(BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore"))
+            toastCenter.show(message: AppError.backupFailed(BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore")).localizedDescription)
             return
         }
 
         isBusy = true
-        backupError = nil
 
         do {
             let payload = try await backupManager.exportVersion(recordName: selectedRestoreRecordName)
@@ -997,22 +894,21 @@ struct BackupManagementView: View {
             isExportingVersion = true
         } catch let appError as AppError {
             isBusy = false
-            backupError = appError
+            toastCenter.show(message: appError.localizedDescription)
         } catch {
             isBusy = false
-            backupError = .unknown(error)
+            toastCenter.show(message: AppError.unknown(error).localizedDescription)
         }
     }
 
     @MainActor
     private func importBackupFile(from url: URL) async {
         guard let backupManager else {
-            backupError = .iCloudUnavailable
+            toastCenter.show(message: AppError.iCloudUnavailable.localizedDescription)
             return
         }
 
         isBusy = true
-        backupError = nil
         defer { isBusy = false }
 
         let didAccessScope = url.startAccessingSecurityScopedResource()
@@ -1026,12 +922,11 @@ struct BackupManagementView: View {
             let data = try Data(contentsOf: url)
             let importedVersion = try await backupManager.importVersion(from: data)
             selectedRestoreRecordName = importedVersion.recordName
-            isVersionsExpanded = true
             await refreshStatusIfNeeded(force: true)
         } catch let appError as AppError {
-            backupError = appError
+            toastCenter.show(message: appError.localizedDescription)
         } catch {
-            backupError = .backupFailed(error.localizedDescription)
+            toastCenter.show(message: AppError.backupFailed(error.localizedDescription).localizedDescription)
         }
     }
 
@@ -1140,37 +1035,14 @@ struct BackupManagementView: View {
     private var autoBackupToggleRow: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(BackupL10n.tr("backup.auto_toggle.title", fallback: "Daily auto backup"))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
+                Text(BackupL10n.tr("backup.auto_toggle.title", fallback: "Daily auto backup"))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
 
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            isAutoBackupOptionsExpanded.toggle()
-                        }
-                    } label: {
-                        Image(systemName: isAutoBackupOptionsExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppColors.textTertiary)
-                            .frame(width: 22, height: 22)
-                            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isBusy)
-                }
-
-                if isAutoBackupOptionsExpanded {
-                    Text(
-                        BackupL10n.tr(
-                            "backup.auto_toggle.subtitle",
-                            fallback: "Keeps one auto backup per day and replaces the previous one"
-                        )
-                    )
+                Text(BackupL10n.tr("backup.auto_toggle.subtitle", fallback: "Keeps one auto backup per day and replaces the previous one"))
                     .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(AppColors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                }
             }
 
             Spacer(minLength: 8)
@@ -1401,62 +1273,83 @@ struct BackupManagementView: View {
     }
     #endif
 
-    private var restoreConfirmationOverlay: some View {
+    @ViewBuilder
+    private func versionActionSheet(version: BackupVersionInfo) -> some View {
         ZStack {
-            Color.black.opacity(0.65)
-                .ignoresSafeArea()
+            GradientBackground()
 
-            FinancesGlassCard(accentColor: AppColors.error, cornerRadius: 24) {
-                VStack(spacing: 18) {
-                    Image(systemName: "arrow.down.doc.fill")
-                        .font(.system(size: 34, weight: .semibold))
-                        .foregroundStyle(AppColors.brandPrimary)
+            VStack(spacing: 20) {
+                VStack(spacing: 4) {
+                    Text(version.date.formatted(date: .abbreviated, time: .shortened))
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppColors.textPrimary)
+                    Text(
+                        String(
+                            format: L("restore.version_size_format"),
+                            ByteCountFormatter.string(fromByteCount: version.size, countStyle: .file),
+                            String(version.version)
+                        )
+                    )
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AppColors.textSecondary)
 
-                    VStack(spacing: 8) {
-                        Text(BackupL10n.tr("backup.restore.confirm.title", fallback: "Restore This Version?"))
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .multilineTextAlignment(.center)
-
-                        Text(BackupL10n.tr("backup.restore.confirm.message", fallback: "Current local data will be fully replaced by the selected backup"))
-                            .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(AppColors.textSecondary)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    VStack(spacing: 10) {
-                        Button {
-                            Task { await restoreSelectedVersion() }
-                            showRestoreConfirmation = false
-                        } label: {
-                            Text(BackupL10n.tr("backup.restore.confirm.action", fallback: "Yes, Restore"))
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(AppColors.error)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(AppColors.error.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            showRestoreConfirmation = false
-                        } label: {
-                            Text(BackupL10n.tr("common.cancel", fallback: "Cancel"))
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    statusPill(
+                        title: version.isPinned
+                            ? BackupL10n.tr("backup.versions.pinned", fallback: "Saved")
+                            : BackupL10n.tr("backup.versions.auto", fallback: "Auto"),
+                        icon: version.isPinned ? "pin.fill" : "clock.fill",
+                        color: version.isPinned ? AppColors.toggleOnGreen : AppColors.brandPrimary
+                    )
+                    .padding(.top, 4)
                 }
-                .padding(22)
+
+                SlideToConfirmControl(
+                    title: BackupL10n.tr("backup.restore.action.short", fallback: "Restore this version"),
+                    subtitle: BackupL10n.tr("backup.restore.slide.subtitle", fallback: "Slide to replace local data"),
+                    loadingTitle: BackupL10n.tr("backup.restore.slide.loading.title", fallback: "Restoring data..."),
+                    loadingSubtitle: BackupL10n.tr("backup.restore.slide.loading.subtitle", fallback: "Don't close the app while replacing"),
+                    icon: "arrow.right",
+                    gradientColors: AppColors.financesGradient,
+                    isEnabled: canRestoreSelectedVersion,
+                    isLoading: isBusy
+                ) {
+                    Task { await restoreSelectedVersion() }
+                }
+
+                compactActionButton(
+                    title: BackupL10n.tr("backup.actions.export.title", fallback: "Export selected"),
+                    icon: "square.and.arrow.up",
+                    isEnabled: canExportSelectedVersion
+                ) {
+                    selectedVersionForSheet = nil
+                    Task { await exportSelectedVersion() }
+                }
+
+                Button(role: .destructive) {
+                    selectedVersionForSheet = nil
+                    Task { await deleteVersion(recordName: version.recordName) }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(BackupL10n.tr("backup.versions.delete", fallback: "Delete version"))
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(AppColors.error)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+                .disabled(isBusy || deletingRecordName != nil)
+
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.96)))
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showRestoreConfirmation)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 
     private var restoreSuccessOverlay: some View {

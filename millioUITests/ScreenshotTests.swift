@@ -27,7 +27,7 @@ final class ScreenshotTests: XCTestCase {
 
         waitForMainUI(app)
         tap(app, id: "tab.finances")
-        sleep(1)
+        sleep(2)
         snapshot("01-finances")
     }
 
@@ -41,7 +41,7 @@ final class ScreenshotTests: XCTestCase {
 
         waitForMainUI(app)
         tap(app, id: "tab.dynamics")
-        sleep(1)
+        sleep(2)
         snapshot("02-dynamics")
     }
 
@@ -55,7 +55,7 @@ final class ScreenshotTests: XCTestCase {
 
         waitForMainUI(app)
         tap(app, id: "tab.cashflow")
-        sleep(1)
+        sleep(2)
         snapshot("03-cashflow")
     }
 
@@ -69,7 +69,7 @@ final class ScreenshotTests: XCTestCase {
 
         waitForMainUI(app)
         tap(app, id: "dashboard.chip.courses")
-        sleep(1)
+        sleep(2)
         snapshot("04-rates")
     }
 
@@ -83,7 +83,7 @@ final class ScreenshotTests: XCTestCase {
 
         waitForMainUI(app)
         tap(app, id: "dashboard.chip.cashback")
-        sleep(1)
+        sleep(2)
         snapshot("05-cashback")
     }
 
@@ -97,7 +97,7 @@ final class ScreenshotTests: XCTestCase {
 
         waitForMainUI(app)
         tap(app, id: "tab.dashboard")
-        sleep(1)
+        sleep(2)
         snapshot("06-dashboard")
     }
 
@@ -111,9 +111,9 @@ final class ScreenshotTests: XCTestCase {
 
         waitForMainUI(app)
         tap(app, id: "root.profileButton")
-        sleep(1)
+        sleep(2)
         tap(app, id: "profile.backupLink")
-        sleep(1)
+        sleep(4)
         snapshot("07-backup")
     }
 

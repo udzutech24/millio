@@ -34,6 +34,10 @@ final class MockConverterRateRepository: RateRepositoryProtocol, @unchecked Send
             fetchedAt: payload.fetchedAt
         )
     }
+
+    nonisolated func peekCachedSnapshot(source: RateSource) async -> RateSnapshot? {
+        return nil
+    }
 }
 
 // MARK: - Tests
@@ -462,7 +466,8 @@ struct ConverterViewModelTests {
     func testShareAndLastUpdatedUseSelectedAppLanguage() async {
         let previousLanguage = LanguageManager.shared.currentLanguage
         let defaults = UserDefaults.standard
-        let key = CurrencyWidgetShared.Keys.lastRatesTimestamp(for: RateSource.erapi.rawValue)
+        // Ключ должен совпадать с дефолтным источником ViewModel (.millio)
+        let key = CurrencyWidgetShared.Keys.lastRatesTimestamp(for: RateSource.millio.rawValue)
         let hadValue = defaults.object(forKey: key) != nil
         let previousValue = defaults.double(forKey: key)
         defer {

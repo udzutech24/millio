@@ -20,6 +20,7 @@ struct RestoreView: View {
     @State private var restoreError: AppError?
     @State private var showSkipConfirmation = false
     @State private var backupPassphrase: String = ""
+    @State private var isPassphraseExpanded = false
     @State private var backupVersions: [BackupVersionInfo] = []
     @State private var selectedRecordName: String?
     @State private var isVersionsExpanded = false
@@ -279,12 +280,44 @@ struct RestoreView: View {
             }
 
             FinancesGlassCard(cornerRadius: 20, contentPadding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)) {
-                SecureField(BackupL10n.tr("backup.restore.passphrase.placeholder", fallback: "Passphrase (if any)"), text: $backupPassphrase)
-                    .textContentType(.password)
-                    .privacySensitive()
-                    .foregroundStyle(AppColors.textPrimary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
+                VStack(spacing: 0) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isPassphraseExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: backupPassphrase.isEmpty ? "lock" : "lock.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(backupPassphrase.isEmpty ? AppColors.textTertiary : AppColors.brandPrimary)
+                            Text(backupPassphrase.isEmpty
+                                ? BackupL10n.tr("backup.restore.passphrase.toggle", fallback: "Protected with passphrase?")
+                                : BackupL10n.tr("backup.restore.passphrase.toggle.set", fallback: "Passphrase entered")
+                            )
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            Image(systemName: isPassphraseExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if isPassphraseExpanded {
+                        FinancesRowDivider(leadingPadding: 14)
+
+                        SecureField(BackupL10n.tr("backup.restore.passphrase.placeholder", fallback: "Enter passphrase"), text: $backupPassphrase)
+                            .textContentType(.password)
+                            .privacySensitive()
+                            .foregroundStyle(AppColors.textPrimary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                    }
+                }
             }
 
             SlideToConfirmControl(

@@ -68,16 +68,18 @@ struct CashbackLocalizationTests {
 
     @Test("Ошибки импорта cashback используют локализацию")
     func cashbackImportErrorsAreLocalized() {
-        let checks: [(CashbackScreenshotImportError, String)] = [
-            (.invalidImage, "cashback.import.error.invalid_image"),
-            (.noTextFound, "cashback.import.error.no_text"),
-            (.noCashbackLinesFound, "cashback.import.error.no_cashback_lines")
-        ]
+        AppLanguageTestSupport.withLockedAppLanguage {
+            let checks: [(CashbackScreenshotImportError, String)] = [
+                (.invalidImage, "cashback.import.error.invalid_image"),
+                (.noTextFound, "cashback.import.error.no_text"),
+                (.noCashbackLinesFound, "cashback.import.error.no_cashback_lines")
+            ]
 
-        for (error, key) in checks {
-            let expected = String(localized: String.LocalizationValue(key))
-            #expect(error.errorDescription == expected)
-            #expect(error.errorDescription != key)
+            for (error, key) in checks {
+                let expected = AppLocalization.string(key, locale: AppLocalization.currentAppLocale)
+                #expect(error.errorDescription == expected)
+                #expect(error.errorDescription != key)
+            }
         }
     }
 

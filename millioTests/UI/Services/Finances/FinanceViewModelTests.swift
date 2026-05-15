@@ -339,7 +339,7 @@ struct FinanceViewModelTests {
         #expect(groups.count == 1)
         #expect(accounts[0].accountType == .investment)
         #expect(accounts[0].accountID == investment.investmentUniqueID)
-        #expect(accounts[0].group?.name == String(localized: "finances.group.ungrouped"))
+        #expect(accounts[0].group?.name == L("finances.group.ungrouped"))
     }
 
     @Test("Кредиты без FinanceAccount привязываются к \"Без группы\" и уменьшают Итого")
@@ -375,7 +375,7 @@ struct FinanceViewModelTests {
         #expect(groups.count == 1)
         #expect(accounts[0].accountType == .credit)
         #expect(accounts[0].accountID == credit.creditUniqueID)
-        #expect(accounts[0].group?.name == String(localized: "finances.group.ungrouped"))
+        #expect(accounts[0].group?.name == L("finances.group.ungrouped"))
 
         let total = await viewModel.calculateGroupTotal(group: groups[0], in: "RUB")
         #expect(abs(total + 2_500) < 0.01)
@@ -1037,7 +1037,7 @@ struct FinanceViewModelTests {
         let expectedSubtitle = FinancesL10n.format(
             "finances.investment.position_subtitle",
             "2",
-            String(localized: "finances.investment.unit.shares_short"),
+            L("finances.investment.unit.shares_short"),
             "500",
             "$"
         )
@@ -2462,7 +2462,7 @@ struct FinanceViewModelTests {
         let currencyService = MockCurrencyRateService()
 
         let primaryGroup = FinanceGroup(name: "Основная", colorHex: "#123456")
-        let staleGroup = FinanceGroup(name: String(localized: "finances.group.ungrouped"), colorHex: "#654321")
+        let staleGroup = FinanceGroup(name: L("finances.group.ungrouped"), colorHex: "#654321")
         modelContext.insert(primaryGroup)
         modelContext.insert(staleGroup)
 
@@ -2836,7 +2836,7 @@ struct FinanceViewModelTests {
     func testLoadGroupsHidesEmptyUngroupedGroup() throws {
         let modelContext = try createTestModelContext()
 
-        let ungroupedName = String(localized: "finances.group.ungrouped")
+        let ungroupedName = L("finances.group.ungrouped")
         let ungroupedGroup = FinanceGroup(name: ungroupedName, colorHex: "#3C4B5E")
         let regularGroup = FinanceGroup(name: "Основная", colorHex: "#112233")
         modelContext.insert(ungroupedGroup)
@@ -2859,7 +2859,7 @@ struct FinanceViewModelTests {
     func testVisibleGroupsHidesUngroupedWithArchivedAccounts() throws {
         let modelContext = try createTestModelContext()
 
-        let ungroupedName = String(localized: "finances.group.ungrouped")
+        let ungroupedName = L("finances.group.ungrouped")
         let ungroupedGroup = FinanceGroup(name: ungroupedName, colorHex: "#3C4B5E")
         modelContext.insert(ungroupedGroup)
 
@@ -2924,7 +2924,7 @@ struct FinanceViewModelTests {
         let createdLink = try #require(links.first(where: {
             $0.accountType == .card && $0.accountID == card.cardUniqueID
         }))
-        let ungroupedName = String(localized: "finances.group.ungrouped")
+        let ungroupedName = L("finances.group.ungrouped")
         #expect(createdLink.group?.name == ungroupedName)
     }
 

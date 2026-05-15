@@ -1,0 +1,8 @@
+What's new in 1.7:
+
+• New Dashboard — mini-apps with accounts, cashflow, cashback and investments at a glance
+• Cashflow redesign — cleaner layout, quick entry panel, monthly summary cards
+• Smarter data protection — no more data loss on app update (schema migration)
+• Reliable backup — automatic restore prompt when data is missing at launch
+• PRO upgrade screen — see what's included before subscribing
+• Improved stability and performance

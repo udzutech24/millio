@@ -17,6 +17,8 @@ final class MockRateRepository: RateRepositoryProtocol, @unchecked Sendable {
     var rates: [String: Double] = [:]
     var shouldFail: Bool = false
     var callCount: Int = 0
+    /// Предзаполненный stale-кэш, возвращаемый через peekCachedSnapshot (только если shouldFail = true).
+    var stubbedStaleRates: [String: Double] = [:]
 
     nonisolated func getLatestRates(source: RateSource, forceRefresh: Bool, allowStaleOnError: Bool) async throws -> RateSnapshot {
         await MainActor.run {
@@ -35,6 +37,12 @@ final class MockRateRepository: RateRepositoryProtocol, @unchecked Sendable {
             updatedAt: Date().timeIntervalSince1970,
             fetchedAt: Date().timeIntervalSince1970
         )
+    }
+
+    nonisolated func peekCachedSnapshot(source: RateSource) async -> RateSnapshot? {
+        let stale = await MainActor.run { stubbedStaleRates }
+        guard !stale.isEmpty else { return nil }
+        return RateSnapshot(source: source, rates: stale, updatedAt: 0, fetchedAt: 0)
     }
 }
 
@@ -119,6 +127,22 @@ struct CurrencyRateServiceTests {
 
         let rateReverse = await service.getRate(from: "XYZ", to: "USD")
         #expect(rateReverse == nil)
+    }
+
+    @Test("Свежий запуск + нет сети: загружается stale-кэш из UserDefaults")
+    func testFreshLaunchNetworkDownUsesStaleCached() async {
+        let mockRepo = MockRateRepository()
+        // Сеть недоступна с первого запроса
+        mockRepo.shouldFail = true
+        // Но в UserDefaults есть протухшие курсы от прошлого запуска
+        mockRepo.stubbedStaleRates = ["USD": 1.0, "EUR": 0.92, "RUB": 90.0]
+
+        let service = CurrencyRateService(rateSource: .erapi, rateRepository: mockRepo)
+
+        // Конвертер должен работать на stale-данных, а не возвращать nil
+        let rate = await service.getRate(from: "USD", to: "EUR")
+        #expect(rate != nil, "При отключённой сети и наличии stale-кэша курс должен быть доступен")
+        #expect(abs((rate ?? 0) - 0.92) < 0.01)
     }
 
     @Test("Ошибка API: используются старые значения из кэша")

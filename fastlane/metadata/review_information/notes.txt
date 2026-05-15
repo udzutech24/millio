@@ -1,0 +1,9 @@
+millio is an offline-first personal finance app. No login is required to use the app — all data is stored locally on device.
+
+To test the app:
+1. Launch the app
+2. Add an account (e.g. "My Card", type: debit, balance: 1000 USD)
+3. Add a transaction to see cashflow tracking
+4. The Backup feature requires iCloud to be enabled on the device
+
+No special credentials are needed.

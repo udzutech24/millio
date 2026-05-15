@@ -176,6 +176,8 @@ struct DashboardView: View {
                 periodLabel: cashflowPeriodLabel,
                 onTap: onOpenCashflow
             )
+        case .currencyRates:
+            CurrencyRatesWidget(onTap: onOpenConverter)
         }
     }
 

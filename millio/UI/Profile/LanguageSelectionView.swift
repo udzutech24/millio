@@ -127,6 +127,18 @@ struct LanguageSelectionView: View {
                 .scaledToFill()
                 .frame(width: size, height: size)
                 .clipShape(Circle())
+        case .turkish:
+            Image("tr")
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        case .french:
+            Image("fr")
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
         case .system:
             Image(systemName: "globe")
                 .renderingMode(.template)

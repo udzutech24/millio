@@ -72,7 +72,7 @@ struct CashflowCategoryGridLayoutTests {
         #expect(compact.topRowMinHeight == budget.topRowMinHeight)
         #expect(compact.topRowMinHeight == CashflowCategoryGridLayout.unifiedTopRowMinHeight)
         #expect(compact.amountTopPadding > budget.amountTopPadding)
-        #expect(compact.usesFlexibleSpacer == true)
+        #expect(compact.usesFlexibleSpacer == false)
         #expect(budget.usesFlexibleSpacer == true)
         #expect(compact.footerMinHeight == budget.footerMinHeight)
         #expect(compact.footerMinHeight == CashflowCategoryGridLayout.unifiedFooterMinHeight)

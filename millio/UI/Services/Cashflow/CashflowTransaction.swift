@@ -585,7 +585,18 @@ final class CashflowCustomCategory: Persistable {
         "🪙", "🏦", "📈", "📊", "🧯", "🛡️", "🔒", "❤️", "🧡", "💜",
         "⭐️", "✨", "🎁", "🏆", "🏅", "⚽️", "🏀", "🏋️", "🧘", "🧑‍💻"
     ]
-    static let allowedIcons: [String] = allowedSFSymbolIcons + allowedEmojiIcons
+    static let allowedEmojiIconsIncome: [String] = [
+        "💰", "💵", "💴", "💶", "💷", "🪙", "💸", "💹", "📈", "📊",
+        "🏦", "💳", "🏗️", "🏘️", "🏠", "🔑",
+        "💼", "👔", "📋", "📝", "🤝", "🏢", "🏭",
+        "🧑‍💻", "💻", "🖥️", "📱", "⌚️",
+        "🎨", "✍️", "📸", "🎵", "🎬", "🎤", "🎧", "📖", "🖌️",
+        "🎁", "🎀", "🎉", "🥳", "🏆", "🥇", "🏅", "⭐️", "✨",
+        "🏷️", "🛒", "🛍️", "🚚", "📦", "🏬",
+        "🌊", "☀️", "🌱", "🍀", "🔧", "🛠️",
+        "🧩", "↩️", "🔄", "🚀", "🌐", "🎰"
+    ]
+    static let allowedIcons: [String] = allowedSFSymbolIcons + allowedEmojiIcons + allowedEmojiIconsIncome
 
     static func isSFSymbolIcon(_ icon: String) -> Bool {
         allowedSFSymbolIcons.contains(icon)

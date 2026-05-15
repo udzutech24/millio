@@ -3,7 +3,7 @@
 **Slug:** `tab-bar-navigation`
 **Дата:** 2026-05-05
 **Размер:** L
-**Статус:** НЕ НАЧАТ
+**Статус:** РЕАЛИЗОВАН
 **Spec:** [`specs/2026-05-05-tab-bar-navigation.md`](../specs/2026-05-05-tab-bar-navigation.md)
 
 ---

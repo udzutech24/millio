@@ -42,7 +42,7 @@ struct ConverterState {
     var showSettingsSheet: Bool = false
     
     // Настройки
-    var rateSource: RateSource = .erapi
+    var rateSource: RateSource = .millio
     var showOfflineBadge: Bool = true
     var hapticsEnabled: Bool = true
     var isOffline: Bool = false
@@ -118,7 +118,7 @@ final class ConverterViewModel: ViewModelProtocol {
     }
     
     private var storedRateSource: String {
-        get { defaults.string(forKey: "conv_rate_source") ?? "erapi" }
+        get { defaults.string(forKey: "conv_rate_source") ?? "millio" }
         set {
             defaults.set(newValue, forKey: "conv_rate_source")
             CurrencyWidgetSyncService.setString(newValue, forKey: CurrencyWidgetShared.Keys.rateSource)
@@ -463,7 +463,7 @@ final class ConverterViewModel: ViewModelProtocol {
         state.activeCode = storedActive.isEmpty ? "TRY" : storedActive
         state.inputText = storedInput.isEmpty ? "0" : storedInput
         
-        state.rateSource = RateSource(rawValue: storedRateSource) ?? .erapi
+        state.rateSource = RateSource(rawValue: storedRateSource) ?? .millio
         state.showOfflineBadge = storedShowOfflineBadge
         state.hapticsEnabled = storedHapticsEnabled
         if state.expressionText.isEmpty {

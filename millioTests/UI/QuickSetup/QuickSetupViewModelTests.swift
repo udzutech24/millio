@@ -416,7 +416,7 @@ final class QuickSetupViewModelTests: XCTestCase {
 
         let viewModel = QuickSetupViewModel(appState: appState, systemContext: systemContext, defaults: isolatedDefaults)
 
-        XCTAssertEqual(viewModel.availableLanguages, [.system, .english, .russian, .simplifiedChinese])
+        XCTAssertEqual(viewModel.availableLanguages, [.system, .english, .russian, .simplifiedChinese, .german, .spanish])
         XCTAssertEqual(viewModel.primaryCurrencyCode, "USD")
         XCTAssertEqual(viewModel.favoriteCurrencyCodes, ["EUR", "CNY"])
         XCTAssertEqual(Array(viewModel.recommendedCurrencyCodes.prefix(5)), ["USD", "EUR", "CNY", "GBP", "JPY"])
@@ -434,7 +434,7 @@ final class QuickSetupViewModelTests: XCTestCase {
 
         let viewModel = QuickSetupViewModel(appState: appState, systemContext: systemContext, defaults: isolatedDefaults)
 
-        XCTAssertEqual(viewModel.availableLanguages, [.system, .english, .russian, .simplifiedChinese])
+        XCTAssertEqual(viewModel.availableLanguages, [.system, .english, .russian, .simplifiedChinese, .german, .spanish])
         XCTAssertEqual(viewModel.primaryCurrencyCode, "RUB")
         XCTAssertEqual(viewModel.favoriteCurrencyCodes, ["USD", "CNY", "EUR", "TRY"])
         XCTAssertEqual(viewModel.recommendedCurrencyCodes, ["RUB", "USD", "CNY", "EUR", "TRY"])
@@ -449,7 +449,7 @@ final class QuickSetupViewModelTests: XCTestCase {
 
         let viewModel = QuickSetupViewModel(appState: appState, systemContext: systemContext, defaults: isolatedDefaults)
 
-        XCTAssertEqual(viewModel.availableLanguages, [.system, .english, .russian, .simplifiedChinese])
+        XCTAssertEqual(viewModel.availableLanguages, [.system, .english, .russian, .simplifiedChinese, .german, .spanish])
         XCTAssertEqual(viewModel.primaryCurrencyCode, "CNY")
         XCTAssertEqual(viewModel.favoriteCurrencyCodes, ["USD", "EUR"])
         XCTAssertTrue(viewModel.recommendedCurrencyCodes.contains("CNY"))

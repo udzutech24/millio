@@ -3,10 +3,14 @@ import Testing
 @testable import millio
 
 struct LocalizationRolloutTests {
-    @Test("Profile language picker includes the three supported product languages")
+    @Test("Profile language picker includes all release-ready languages")
     func testUserSelectableLanguages() {
-        #expect(LocalizationSupport.userSelectableLanguages == [.system, .english, .russian, .simplifiedChinese])
+        #expect(LocalizationSupport.userSelectableLanguages == [.system, .english, .russian, .simplifiedChinese, .german, .spanish])
         #expect(LocalizationSupport.releaseReadiness(for: .simplifiedChinese) == .releaseReady)
+        #expect(LocalizationSupport.releaseReadiness(for: .german) == .releaseReady)
+        #expect(LocalizationSupport.releaseReadiness(for: .spanish) == .releaseReady)
+        #expect(LocalizationSupport.releaseReadiness(for: .turkish) == .planned)
+        #expect(LocalizationSupport.releaseReadiness(for: .french) == .planned)
     }
 
     @Test("System locale resolves to Simplified Chinese when device language is zh-Hans")
@@ -20,7 +24,7 @@ struct LocalizationRolloutTests {
         ))
     }
 
-    @Test("Quick setup includes Simplified Chinese for Chinese system locale")
+    @Test("Quick setup exposes all release-ready languages regardless of system locale")
     func testQuickSetupSelectableLanguages() {
         let chineseSystem = QuickSetupSystemContext(
             preferredLanguageIdentifiers: ["zh-Hans-CN"],
@@ -30,9 +34,10 @@ struct LocalizationRolloutTests {
             preferredLanguageIdentifiers: ["ru-RU"],
             locale: Locale(identifier: "ru_RU")
         )
+        let expected: [Language] = [.system, .english, .russian, .simplifiedChinese, .german, .spanish]
 
-        #expect(chineseSystem.quickSetupAvailableLanguages == [.system, .english, .russian, .simplifiedChinese])
-        #expect(russianSystem.quickSetupAvailableLanguages == [.system, .english, .russian, .simplifiedChinese])
+        #expect(chineseSystem.quickSetupAvailableLanguages == expected)
+        #expect(russianSystem.quickSetupAvailableLanguages == expected)
     }
 
     @Test("Presentation locale prefers selected app language over device locale for product copy")

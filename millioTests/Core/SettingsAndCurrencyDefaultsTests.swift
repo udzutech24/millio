@@ -356,12 +356,12 @@ struct SettingsAndCurrencyDefaultsTests {
         #expect(appState.languageRefreshToken != initialToken)
     }
     
-    @Test("CurrencyRateService ignores conv_rate_source and stays on ERAPI")
+    @Test("CurrencyRateService ignores conv_rate_source and stays on Millio")
     @MainActor
     func testCurrencyRateServiceRateSourceIsolation() {
         defer { UserDefaults.standard.removeObject(forKey: "conv_rate_source") }
-        
+
         UserDefaults.standard.set("frankfurter", forKey: "conv_rate_source")
-        #expect(CurrencyRateService.shared.rateSource == .erapi)
+        #expect(CurrencyRateService.shared.rateSource == .millio)
     }
 }

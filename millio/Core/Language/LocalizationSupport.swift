@@ -26,6 +26,8 @@ enum LocalizationSupport {
         switch language {
         case .system, .english, .russian, .simplifiedChinese, .german, .spanish:
             return .releaseReady
+        case .turkish, .french:
+            return .planned
         }
     }
 

@@ -30,7 +30,7 @@ protocol CurrencyRateServiceProtocol {
 /// Соответствует принципам Offline-First: кэширует курсы и работает без интернета
 @MainActor
 final class CurrencyRateService: CurrencyRateServiceProtocol {
-    static let shared = CurrencyRateService(rateSource: .erapi, rateRepository: RateRepository.shared)
+    static let shared = CurrencyRateService(rateSource: .millio, rateRepository: RateRepository.shared)
     
     /// Источник курсов для данного экземпляра сервиса.
     /// Глобально для приложения используется `.erapi`.
@@ -155,21 +155,38 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         rubHistoricalFallbackProvider?.resetTransientCache()
     }
     
-    /// Обновить курсы из выбранного источника
+    /// Обновить курсы из выбранного источника.
+    /// Цепочка fallback: millio → erapi → frankfurter → stale-кэш (без сети).
+    /// Последовательность фиксирована и не зависит от rateSource, чтобы гарантировать
+    /// доступность конвертера в любой сетевой среде (в т.ч. при блокировках, например GFW).
     private func refreshRates(force: Bool = false) async {
-        let source = rateSource
         let now = Date().timeIntervalSince1970
         let needsUpdate = force || cachedRates.count <= 1 || (now - lastUpdateTS) > cacheTimeout
-        
-        do {
-            let snapshot = try await rateRepository.getLatestRates(source: source, forceRefresh: needsUpdate, allowStaleOnError: true)
-            if !snapshot.rates.isEmpty {
-                cachedRates = snapshot.rates
-                lastUpdateTS = snapshot.updatedAt
+
+        let chain: [RateSource] = [.millio, .erapi, .frankfurter]
+
+        for (index, source) in chain.enumerated() {
+            do {
+                let snapshot = try await rateRepository.getLatestRates(source: source, forceRefresh: index == 0 ? needsUpdate : true, allowStaleOnError: false)
+                if !snapshot.rates.isEmpty {
+                    cachedRates = snapshot.rates
+                    lastUpdateTS = snapshot.updatedAt
+                }
+                return
+            } catch {
+                let next = index + 1 < chain.count ? chain[index + 1].rawValue : "stale"
+                AppLogger.log(.warning, category: "CurrencyRateService", "Source \(source.rawValue) failed, trying \(next): \(error.localizedDescription)")
             }
-        } catch {
-            // Оставляем старые значения в кэше
-            AppLogger.log(.error, category: "CurrencyRateService", "Failed to refresh rates: \(error.localizedDescription)")
+        }
+
+        // Все источники недоступны — используем последний известный кэш без сетевых запросов.
+        // Это сохраняет работоспособность конвертера при полной блокировке сети (например, GFW).
+        if let stale = await rateRepository.peekCachedSnapshot(source: rateSource), !stale.rates.isEmpty {
+            cachedRates = stale.rates
+            lastUpdateTS = stale.updatedAt
+            AppLogger.log(.info, category: "CurrencyRateService", "Using stale cached rates (age: \(Int((now - stale.fetchedAt) / 3600))h)")
+        } else {
+            AppLogger.log(.error, category: "CurrencyRateService", "All rate sources failed and no stale cache available")
         }
     }
 

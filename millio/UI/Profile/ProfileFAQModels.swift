@@ -32,7 +32,7 @@ enum ProfileFAQContent {
             return germanSections
         case .spanish:
             return spanishSections
-        case .english, .system:
+        case .english, .system, .turkish, .french:
             return englishSections
         }
     }

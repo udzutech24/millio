@@ -1,0 +1,13 @@
+# Missing translations for [fr] — millio iOS
+# Generated: see l10n-check-new-language.sh
+# Total: 9 keys
+
+-
+·
+%
+%@ %%
++
+−%@
+📋
+0
+R
