@@ -1,12 +1,12 @@
-Deja de usar cinco apps distintas para tus finanzas.
+Sabe exactamente a dónde va tu dinero. Sin cuenta. Sin nube obligatoria.
 
 millio reúne cuentas, cashflow, cashback, inversiones y conversor de divisas en una sola app — privada, sin necesidad de crear cuenta, tus datos siempre en tu dispositivo.
 
 PANEL PRINCIPAL
-Saldo total, transacciones recientes, rendimiento del portfolio y resumen de cashback en una pantalla personalizable. Añade los widgets que más te interesan.
+Saldo total, transacciones recientes, rendimiento del portfolio, resumen de cashback y tipos de cambio en vivo — todo en una pantalla personalizable. Añade los widgets que más te interesan. Widget en pantalla de inicio — tipos de cambio en vivo sin abrir la app.
 
 FINANZAS
-Tarjetas, cuentas bancarias, créditos, ahorros e inversiones — todo gestionado en un solo lugar. Multidivisa. Tu patrimonio neto real, siempre actualizado.
+Tarjetas, cuentas bancarias, créditos, ahorros e inversiones — todo gestionado en un solo lugar. Asigna un icono y color personalizados a cada cuenta para identificarla al instante. Multidivisa. Tu patrimonio neto real, siempre actualizado.
 
 CASHFLOW
 Registra ingresos y gastos por categorías. Descubre exactamente a dónde va tu dinero cada mes. Panel de entrada rápida para registrar sobre la marcha.
@@ -29,9 +29,11 @@ Cuentas, seguimiento de gastos, cashback (10 categorías/mes), conversor de divi
 QUÉ DESBLOQUEA PRO
 • Cuentas, tarjetas e inversiones ilimitadas
 • Gráficos de dinámicas financieras y análisis avanzado
-• Importación de capturas de pantalla para registrar gastos al instante
+• Lector de capturas con IA — fotografía un extracto bancario, millio extrae las transacciones automáticamente
 • Categorías de cashback ilimitadas
 • Acceso anticipado a nuevas funciones
+
+Empieza gratis — sin cuenta, sin registro, sin nube obligatoria.
 
 —
 millio. Tu dinero. Tus reglas.

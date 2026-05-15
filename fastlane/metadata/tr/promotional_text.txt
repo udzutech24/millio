@@ -1,0 +1,1 @@
+1.8 yenilik: ana ekran döviz kuru widget'ı ve AI ekran görüntüsü okuyucu. Hesaplar, cashback, yatırımlar — veriler cihazınızda, hesap gerekmez.

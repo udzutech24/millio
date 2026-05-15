@@ -1,0 +1,7 @@
+Nouveautés de la version 1.8 :
+
+• Icônes personnalisées — choisissez une icône et une couleur pour chaque compte, carte, crédit et investissement
+• Widget de taux de change — cours en direct directement sur le tableau de bord
+• Nouvelles langues — turc et français
+• Aperçu PRO — explorez toutes les fonctionnalités avant de vous abonner
+• Améliorations de stabilité et de performances

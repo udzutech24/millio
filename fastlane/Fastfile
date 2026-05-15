@@ -89,6 +89,41 @@ platform :ios do
     )
   end
 
+  desc "Загружает App Preview видео из fastlane/app_previews/ (EN + RU, iPhone67Display).
+  Ожидает: fastlane/app_previews/{en-US,ru}/iPhone67Display/AppPreview-1.mp4
+  Источник: Маркетинг/screenshots-remotion/out/preview/{EN,RU}.mp4
+  Запуск: bundle exec fastlane upload_previews"
+  lane :upload_previews do |options|
+    asc_api_key = app_store_connect_api_key_from_env
+
+    # Копируем отрендеренные видео из out/{locale}/preview.mp4 в структуру fastlane
+    remotion_out = File.expand_path("../../Маркетинг/screenshots-remotion/out", __dir__)
+    previews_base = File.expand_path("fastlane/app_previews", Dir.pwd)
+
+    ["en-US", "ru"].each do |locale|
+      src = File.join(remotion_out, locale, "preview.mp4")
+      dst_dir = File.join(previews_base, locale, "iPhone67Display")
+      FileUtils.mkdir_p(dst_dir)
+      FileUtils.cp(src, File.join(dst_dir, "AppPreview-1.mp4"))
+      UI.message("Скопировано #{locale}/preview.mp4 → fastlane/app_previews/#{locale}/iPhone67Display/AppPreview-1.mp4")
+    end
+
+    upload_to_app_store(
+      api_key: asc_api_key,
+      app_identifier: "com.millio.app",
+      skip_binary_upload: true,
+      skip_screenshots: false,
+      skip_metadata: true,
+      screenshots_path: "fastlane/app_previews",
+      overwrite_screenshots: true,
+      force: true,
+      submit_for_review: false,
+      automatic_release: false,
+      precheck_include_in_app_purchases: false,
+      run_precheck_before_submit: false
+    )
+  end
+
   desc "Загружает метаданные App Store (описания, ключевые слова, release notes) из fastlane/metadata/ без бинарника.
   Запуск: bundle exec fastlane upload_metadata
   Флаги: skip_screenshots:true (по умолчанию), force:true — без подтверждения"

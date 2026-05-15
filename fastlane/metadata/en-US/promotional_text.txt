@@ -1,1 +1,1 @@
-One app for accounts, cashflow, cashback, investments & currency conversion. Your data stays on your device — private, encrypted, no account required.
+New in 1.8: home screen widget with live rates and AI screenshot reader. Accounts, cashback, investments & converter — your data stays on device, no account required.

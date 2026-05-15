@@ -1,8 +1,9 @@
 What's new in 1.7:
 
-• New Dashboard — mini-apps with accounts, cashflow, cashback and investments at a glance
+• Updated Dashboard — widgets for accounts, cashflow, cashback, investments & live exchange rates
+• Custom icons — set any icon and color for every account, card, credit, and investment
 • Cashflow redesign — cleaner layout, quick entry panel, monthly summary cards
-• Smarter data protection — no more data loss on app update (schema migration)
+• Data protection — no more data loss on app update (schema migration)
 • Reliable backup — automatic restore prompt when data is missing at launch
-• PRO upgrade screen — see what's included before subscribing
-• Improved stability and performance
+• PRO preview — explore what's included before subscribing
+• New languages — Turkish and French

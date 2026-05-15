@@ -1,8 +1,9 @@
 Neu in Version 1.7:
 
-• Neues Dashboard — Mini-Apps mit Konten, Cashflow, Cashback und Investments auf einen Blick
+• Aktualisiertes Dashboard — Widgets für Konten, Cashflow, Cashback, Investments und Live-Wechselkurse
+• Individuelle Icons — eigenes Icon und Farbe für jedes Konto, jede Karte, jeden Kredit und jede Investition
 • Cashflow-Redesign — übersichtlicheres Layout, Schnelleingabe-Panel, Monatskarten
-• Datenschutz-Update — keine Datenverluste mehr bei App-Updates (Schema-Migration)
+• Datenschutz — keine Datenverluste mehr bei App-Updates (Schema-Migration)
 • Zuverlässiges Backup — automatische Wiederherstellungsaufforderung bei fehlendem Datenbestand
-• PRO-Upgrade-Bildschirm — klare Übersicht aller Funktionen vor dem Abonnement
-• Stabilitäts- und Leistungsverbesserungen
+• PRO-Vorschau — alle Funktionen im Überblick vor dem Abonnieren
+• Neue Sprachen — Türkisch und Französisch

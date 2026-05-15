@@ -1,8 +1,9 @@
 Novedades en la versión 1.7:
 
-• Nuevo panel principal — mini-apps con cuentas, cashflow, cashback e inversiones de un vistazo
+• Panel principal actualizado — widgets con cuentas, cashflow, cashback, inversiones y tipos de cambio en vivo
+• Iconos personalizados — elige un icono y color para cada cuenta, tarjeta, crédito e inversión
 • Rediseño del cashflow — diseño más limpio, panel de entrada rápida, tarjetas mensuales
 • Protección de datos — sin más pérdidas de datos al actualizar la app (migración de esquema)
 • Backup más fiable — aviso automático de restauración cuando faltan datos al iniciar
-• Pantalla de actualización PRO — resumen claro de funciones antes de suscribirte
-• Mejoras de estabilidad y rendimiento
+• Vista previa PRO — explora todas las funciones antes de suscribirte
+• Nuevos idiomas — turco y francés

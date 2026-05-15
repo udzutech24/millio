@@ -1,1 +1,1 @@
-finanzas,cashback,presupuesto,gastos,inversiones,cripto,cartera,cuentas,efectivo,ahorro
+finanzas,cashback,presupuesto,gastos,inversiones,cripto,cartera,cuentas,efectivo,ahorro,divisas

@@ -42,6 +42,17 @@ Build and upload the app to TestFlight
 Загружает скриншоты App Store из fastlane/screenshots/ (EN + RU, iPhone67Display).
   Запуск: bundle exec fastlane upload_screenshots
 
+### ios upload_previews
+
+```sh
+[bundle exec] fastlane ios upload_previews
+```
+
+Загружает App Preview видео из fastlane/app_previews/ (EN + RU, iPhone67Display).
+  Ожидает: fastlane/app_previews/{en-US,ru}/iPhone67Display/AppPreview-1.mp4
+  Источник: Маркетинг/screenshots-remotion/out/preview/{EN,RU}.mp4
+  Запуск: bundle exec fastlane upload_previews
+
 ### ios upload_metadata
 
 ```sh

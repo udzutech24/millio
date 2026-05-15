@@ -5127,6 +5127,102 @@
         }
       }
     },
+    "account.icon_picker.color.custom" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Custom color" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Свой цвет" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "自定义颜色" } }
+      }
+    },
+    "account.icon_picker.color.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Color" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Цвет" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "颜色" } }
+      }
+    },
+    "account.icon_picker.monogram.label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Monogram (up to 3 characters)" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Монограмма (до 3 символов)" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "字母缩写（最多3个字符）" } }
+      }
+    },
+    "account.icon_picker.monogram.placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "e.g. SB" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "напр. СБ" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "如 工行" } }
+      }
+    },
+    "account.icon_picker.section.assets" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Assets" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Имущество" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "资产" } }
+      }
+    },
+    "account.icon_picker.section.banking" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Banking" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Банки / Счета" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "银行账户" } }
+      }
+    },
+    "account.icon_picker.section.invest" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Investments" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Инвестиции" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "投资" } }
+      }
+    },
+    "account.icon_picker.section.other" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Other" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Прочее" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "其他" } }
+      }
+    },
+    "account.icon_picker.section.savings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Savings" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сбережения" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "储蓄" } }
+      }
+    },
+    "account.icon_picker.tab.monogram" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Monogram" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Монограмма" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "字母" } }
+      }
+    },
+    "account.icon_picker.tab.presets" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Presets" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Пресеты" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "预设" } }
+      }
+    },
+    "account.icon_picker.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Icon" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Иконка" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "图标" } }
+      }
+    },
     "cashback.accessibility.back" : {
       "extractionState" : "manual",
       "localizations" : {

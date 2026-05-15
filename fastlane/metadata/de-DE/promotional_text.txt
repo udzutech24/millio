@@ -1,1 +1,1 @@
-Konten, Cashflow, Cashback, Investments und Währungsrechner — eine App. Deine Daten bleiben auf deinem Gerät. Kein Account erforderlich.
+Neu in 1.8: Home-Screen-Widget mit Live-Kursen und KI-Screenshot-Erkennung. Konten, Cashback, Investments, Währungsrechner — Daten bleiben lokal, kein Account nötig.

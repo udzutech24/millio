@@ -1,0 +1,7 @@
+1.8 sürümündeki yenilikler:
+
+• Özel ikonlar — her hesap, kart, kredi ve yatırım için ikon ve renk seçin
+• Döviz kuru widget'ı — canlı kurlar doğrudan panelde
+• Yeni diller — Türkçe ve Fransızca
+• PRO önizleme — abone olmadan önce tüm özellikleri keşfedin
+• Kararlılık ve performans iyileştirmeleri

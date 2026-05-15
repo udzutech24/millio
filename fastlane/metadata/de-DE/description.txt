@@ -1,12 +1,12 @@
-Schluss mit fünf Apps für deine Finanzen.
+Behalte den Überblick über dein Geld. Kein Account. Keine Cloud-Pflicht.
 
 millio vereint Konten, Cashflow, Cashback, Investments und Währungsrechner in einer App — offline-first, kein Account erforderlich, deine Daten bleiben auf deinem Gerät.
 
 DASHBOARD
-Gesamtvermögen, letzte Transaktionen, Portfolio-Performance und Cashback-Übersicht auf einem anpassbaren Bildschirm. Füge die Widgets hinzu, die dir wichtig sind.
+Gesamtvermögen, letzte Transaktionen, Portfolio-Performance, Cashback-Übersicht und Live-Wechselkurse auf einem anpassbaren Bildschirm. Füge die Widgets hinzu, die dir wichtig sind. Home-Screen-Widget — Live-Wechselkurse auf einen Blick, ohne die App zu öffnen.
 
 FINANZEN
-Karten, Bankkonten, Kredite, Sparkonten und Investments — alles an einem Ort. Multiwährung. Dein tatsächliches Nettovermögen, immer aktuell.
+Karten, Bankkonten, Kredite, Sparkonten und Investments — alles an einem Ort. Vergib jedem Konto ein eigenes Icon und eine Farbe zur schnellen Wiedererkennung. Multiwährung. Dein tatsächliches Nettovermögen, immer aktuell.
 
 CASHFLOW
 Erfasse Einnahmen und Ausgaben nach Kategorien. Erkenne genau, wohin dein Geld jeden Monat fließt. Schnelleingabe für unterwegs.
@@ -29,9 +29,11 @@ Konten, Cashflow-Tracking, Cashback (10 Kategorien/Monat), Währungsrechner, Das
 WAS PRO FREISCHALTET
 • Unbegrenzte Konten, Karten und Investments
 • Finanz-Analyse-Charts und Dynamiken
-• Screenshot-Import für schnelle Ausgabenerfassung
+• KI-Screenshot-Erkennung — fotografiere einen Kontoauszug, millio extrahiert Transaktionen automatisch
 • Unbegrenzte Cashback-Kategorien
 • Frühzeitiger Zugang zu neuen Funktionen
+
+Kostenlos starten — kein Account, keine Registrierung, keine Pflicht-Cloud.
 
 —
 millio. Dein Geld. Deine Regeln.
