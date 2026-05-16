@@ -37,12 +37,17 @@ enum CashflowCategoryIconSuggestionEngine {
             (["консульт", "consult", "коуч", "coach", "mentor"], ["🤝", "💼", "📋", "💡", "📝"]),
         ]
 
-        var result: [String] = []
+        var matched: [String] = []
         for entry in keywords {
             if entry.tokens.contains(where: { q.contains($0) }) {
-                result.append(contentsOf: entry.icons)
+                matched.append(contentsOf: entry.icons)
             }
         }
+
+        // Уникальные иконки (не из дефолтов) ставим первыми — изменение заметно при вводе
+        let nonDefaults = matched.filter { !incomeDefaultSuggested.contains($0) }
+        let overlapping = matched.filter { incomeDefaultSuggested.contains($0) }
+        var result = nonDefaults + overlapping
         result.append(contentsOf: incomeDefaultSuggested)
 
         var unique: [String] = []
