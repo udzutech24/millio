@@ -61,8 +61,28 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         self.historicalLoader = historicalLoader
         self.frankfurterHistoricalProvider = frankfurterHistoricalProvider
         self.rubHistoricalFallbackProvider = rubHistoricalFallbackProvider
+        // Синхронный прогрев из UserDefaults — конвертация и виджет работают мгновенно без сети.
+        // Не используем async/actor чтобы избежать race condition с первым обращением к getRate().
+        let udKey = "rate_repo_rates_\(rateSource.rawValue)"
+        let udFetchedKey = "rate_repo_fetched_at_\(rateSource.rawValue)"
+        if let saved = UserDefaults.standard.dictionary(forKey: udKey) as? [String: Double], !saved.isEmpty {
+            cachedRates = saved
+            lastUpdateTS = UserDefaults.standard.double(forKey: udFetchedKey)
+        }
     }
     
+    /// Синхронно возвращает курс из текущего in-memory кэша без сетевых запросов.
+    /// Используется для мгновенного показа stale данных, пока идёт фоновое обновление.
+    func getCachedRate(from: String, to: String) -> Double? {
+        let f = from.uppercased()
+        let t = to.uppercased()
+        if f == t { return 1.0 }
+        let rateFromUSD = f == "USD" ? 1.0 : cachedRates[f]
+        let rateToUSD = t == "USD" ? 1.0 : cachedRates[t]
+        guard let rFrom = rateFromUSD, let rTo = rateToUSD, rFrom > 0, rTo > 0 else { return nil }
+        return rTo / rFrom
+    }
+
     /// Получить курс конвертации: сколько единиц 'to' за 1 единицу 'from'
     func getRate(from: String, to: String) async -> Double? {
         let f = from.uppercased()

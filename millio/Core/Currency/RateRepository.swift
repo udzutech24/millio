@@ -24,6 +24,14 @@ actor RateRepository: RateRepositoryProtocol {
     private var cache: [RateSource: CacheEntry] = [:]
     private let cacheTimeout: TimeInterval = 12 * 3600
 
+    // Короткий таймаут — не ждём зависшего источника дольше 10 сек на сотовой
+    private static let urlSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForResource = 30
+        return URLSession(configuration: config)
+    }()
+
     // MARK: - UserDefaults persistence keys
 
     private func udRatesKey(_ source: RateSource) -> String { "rate_repo_rates_\(source.rawValue)" }
@@ -35,14 +43,30 @@ actor RateRepository: RateRepositoryProtocol {
         ud.set(snapshot.rates, forKey: udRatesKey(snapshot.source))
         ud.set(snapshot.updatedAt, forKey: udUpdatedAtKey(snapshot.source))
         ud.set(snapshot.fetchedAt, forKey: udFetchedAtKey(snapshot.source))
+        // Дублируем в iCloud KV — выживает при переустановке приложения
+        let kv = NSUbiquitousKeyValueStore.default
+        kv.set(snapshot.rates, forKey: udRatesKey(snapshot.source))
+        kv.set(snapshot.updatedAt, forKey: udUpdatedAtKey(snapshot.source))
+        kv.set(snapshot.fetchedAt, forKey: udFetchedAtKey(snapshot.source))
+        kv.synchronize()
     }
 
     private func loadPersisted(source: RateSource) -> RateSnapshot? {
         let ud = UserDefaults.standard
-        guard let rates = ud.dictionary(forKey: udRatesKey(source)) as? [String: Double],
-              !rates.isEmpty else { return nil }
-        let updatedAt = ud.double(forKey: udUpdatedAtKey(source))
-        let fetchedAt = ud.double(forKey: udFetchedAtKey(source))
+        // Сначала UserDefaults (быстрее), при переустановке fallback на iCloud KV
+        if let rates = ud.dictionary(forKey: udRatesKey(source)) as? [String: Double], !rates.isEmpty {
+            let updatedAt = ud.double(forKey: udUpdatedAtKey(source))
+            let fetchedAt = ud.double(forKey: udFetchedAtKey(source))
+            return RateSnapshot(source: source, rates: rates, updatedAt: updatedAt, fetchedAt: fetchedAt)
+        }
+        let kv = NSUbiquitousKeyValueStore.default
+        guard let rates = kv.dictionary(forKey: udRatesKey(source)) as? [String: Double], !rates.isEmpty else { return nil }
+        let updatedAt = kv.double(forKey: udUpdatedAtKey(source))
+        let fetchedAt = kv.double(forKey: udFetchedAtKey(source))
+        // Восстанавливаем в UserDefaults чтобы следующий старт был быстрым
+        ud.set(rates, forKey: udRatesKey(source))
+        ud.set(updatedAt, forKey: udUpdatedAtKey(source))
+        ud.set(fetchedAt, forKey: udFetchedAtKey(source))
         return RateSnapshot(source: source, rates: rates, updatedAt: updatedAt, fetchedAt: fetchedAt)
     }
 
@@ -68,6 +92,10 @@ actor RateRepository: RateRepositoryProtocol {
             persist(snapshot)
             return snapshot
         } catch {
+            // Детальный лог для диагностики проблем на сотовой сети
+            let urlErr = error as? URLError
+            AppLogger.log(.warning, category: "RateRepository",
+                "[\(source.rawValue)] fetch failed — code=\(urlErr?.code.rawValue.description ?? "?") msg=\(error.localizedDescription)")
             if allowStaleOnError, let cached = cache[source]?.snapshot {
                 return cached
             }
@@ -86,8 +114,10 @@ actor RateRepository: RateRepositoryProtocol {
         }
 
         let fetchedAt = Date().timeIntervalSince1970
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await RateRepository.urlSession.data(from: url)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            AppLogger.log(.error, category: "RateRepository", "[\(source.rawValue)] HTTP \(status) from \(url.host ?? "?")")
             throw URLError(.badServerResponse)
         }
 

@@ -136,13 +136,26 @@ struct CurrencyRatesWidget: View {
         }
         codes = Array(codes.prefix(3))
 
-        var result: [CurrencyRateRow] = []
+        // Фаза 1: мгновенно показываем stale данные из in-memory кэша (прогретого при старте)
+        let stale = codes.compactMap { code -> CurrencyRateRow? in
+            guard let rate = CurrencyRateService.shared.getCachedRate(from: code, to: primary) else { return nil }
+            return CurrencyRateRow(code: code, rate: rate, primaryCode: primary)
+        }
+        if !stale.isEmpty {
+            rows = stale
+            isLoading = false
+        }
+
+        // Фаза 2: обновляем из сети фоново, обновляем строки по готовности
+        var fresh: [CurrencyRateRow] = []
         for code in codes {
             if let rate = await CurrencyRateService.shared.getRate(from: code, to: primary) {
-                result.append(CurrencyRateRow(code: code, rate: rate, primaryCode: primary))
+                fresh.append(CurrencyRateRow(code: code, rate: rate, primaryCode: primary))
             }
         }
-        rows = result
+        if !fresh.isEmpty {
+            rows = fresh
+        }
         isLoading = false
     }
 }
