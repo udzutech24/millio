@@ -47,6 +47,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     private var cachedRates: [String: Double] = ["USD": 1.0]
     private var lastUpdateTS: Double = 0
     private let cacheTimeout: TimeInterval = 12 * 3600 // 12 часов
+    private var refreshTask: Task<Void, Never>?
     
     init(
         rateSource: RateSource = .erapi,
@@ -162,32 +163,46 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     private func refreshRates(force: Bool = false) async {
         let now = Date().timeIntervalSince1970
         let needsUpdate = force || cachedRates.count <= 1 || (now - lastUpdateTS) > cacheTimeout
+        guard needsUpdate else { return }
 
-        let chain: [RateSource] = [.millio, .erapi, .frankfurter]
+        // Дедупликация: если обновление уже выполняется — ждём его результата, новый запрос не отправляем.
+        // Это предотвращает N параллельных HTTP-запросов при одновременном вызове getRate() из нескольких ViewModels.
+        if let existing = refreshTask {
+            await existing.value
+            return
+        }
 
-        for (index, source) in chain.enumerated() {
-            do {
-                let snapshot = try await rateRepository.getLatestRates(source: source, forceRefresh: index == 0 ? needsUpdate : true, allowStaleOnError: false)
-                if !snapshot.rates.isEmpty {
-                    cachedRates = snapshot.rates
-                    lastUpdateTS = snapshot.updatedAt
+        let task = Task {
+            let chain: [RateSource] = [.millio, .erapi, .frankfurter]
+            for (index, source) in chain.enumerated() {
+                do {
+                    let snapshot = try await self.rateRepository.getLatestRates(source: source, forceRefresh: true, allowStaleOnError: false)
+                    if !snapshot.rates.isEmpty {
+                        self.cachedRates = snapshot.rates
+                        self.lastUpdateTS = snapshot.updatedAt
+                    }
+                    return
+                } catch {
+                    let next = index + 1 < chain.count ? chain[index + 1].rawValue : "stale"
+                    AppLogger.log(.warning, category: "CurrencyRateService", "Source \(source.rawValue) failed, trying \(next): \(error.localizedDescription)")
                 }
-                return
-            } catch {
-                let next = index + 1 < chain.count ? chain[index + 1].rawValue : "stale"
-                AppLogger.log(.warning, category: "CurrencyRateService", "Source \(source.rawValue) failed, trying \(next): \(error.localizedDescription)")
+            }
+
+            // Все источники недоступны — используем последний известный кэш без сетевых запросов.
+            // Это сохраняет работоспособность конвертера при полной блокировке сети (например, GFW).
+            let fetchTime = Date().timeIntervalSince1970
+            if let stale = await self.rateRepository.peekCachedSnapshot(source: self.rateSource), !stale.rates.isEmpty {
+                self.cachedRates = stale.rates
+                self.lastUpdateTS = stale.updatedAt
+                AppLogger.log(.info, category: "CurrencyRateService", "Using stale cached rates (age: \(Int((fetchTime - stale.fetchedAt) / 3600))h)")
+            } else {
+                AppLogger.log(.error, category: "CurrencyRateService", "All rate sources failed and no stale cache available")
             }
         }
 
-        // Все источники недоступны — используем последний известный кэш без сетевых запросов.
-        // Это сохраняет работоспособность конвертера при полной блокировке сети (например, GFW).
-        if let stale = await rateRepository.peekCachedSnapshot(source: rateSource), !stale.rates.isEmpty {
-            cachedRates = stale.rates
-            lastUpdateTS = stale.updatedAt
-            AppLogger.log(.info, category: "CurrencyRateService", "Using stale cached rates (age: \(Int((now - stale.fetchedAt) / 3600))h)")
-        } else {
-            AppLogger.log(.error, category: "CurrencyRateService", "All rate sources failed and no stale cache available")
-        }
+        refreshTask = task
+        await task.value
+        refreshTask = nil
     }
 
     nonisolated static func makeLatestURL(for source: RateSource) -> URL? {
