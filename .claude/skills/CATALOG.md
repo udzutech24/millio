@@ -76,6 +76,24 @@ git clone https://github.com/artemiimillier/graphify.git .claude/skills/graphify
 
 ---
 
+### 5. millio-qa ⭐ Project-specific
+**Что даёт:** QA-агент для Millio iOS. Запускает xcodebuild-тесты, тянет краш-дайджест из Sentry, проверяет GitHub Actions, валидирует локализацию. Диагностирует root cause падений и предлагает/применяет фиксы. Все credentials встроены — работает автономно.  
+**Когда нужен:** тест упал и непонятно почему, пришёл новый краш, нужен QA-прогон перед релизом, проверка локализации.  
+**Расположение:** `~/.claude/skills/millio-qa/` (симлинк в проекте)  
+**Активация:** `/millio-qa` (или `/millio-qa tests | crashes | ci | l10n | fix | report`)  
+**ID:** `millio-qa`
+
+---
+
+### 6. millio-grou ⭐ Project-specific
+**Что даёт:** Growth-агент Millio. Покрывает три зоны: SMM (контент-план, тексты постов, апрув, поддержка пользователей), платная реклама (Apple Search Ads — кампании, ставки, ROAS), аналитика роста (DAU/MAU, retention D1/D7/D30, воронка, юнит-экономика). Все credentials встроены: ASC, Telegram bot, Sentry (read-only), Google Sheets.  
+**Когда нужен:** написать пост, проверить рост метрик, проанализировать рекламные кампании, ответить пользователю из группы поддержки, сводка по retention.  
+**Расположение:** `~/.claude/skills/millio-grou/` (симлинк в проекте)  
+**Активация:** `/grou` (или `/grou write | approve | plan | release | ads | analytics | support | sentry-run`)  
+**ID:** `millio-grou`
+
+---
+
 ## MCP-серверы
 
 ### 4. GitHub MCP
