@@ -1,20 +1,33 @@
-# UI Unification — Phase 1+2 Progress
+# UI Unification — Phase 1+2+3 Progress
 
 Дата: 2026-05-16
-Статус: РЕАЛИЗОВАН
-Ветка: feature/ui-unification-foundation
+Статус: РЕАЛИЗОВАН (Phase 1+2+3)
+Ветка: develop (смержено из feature/ui-unification-foundation)
 
-## Что создано
+## Что создано (Phase 1)
 
-- **AppTypography.swift** — 18 Font-токенов (display, title, headline, subheadline, body, callout, caption, micro)
+- **AppTypography.swift** — 19 Font-токенов (display, title, headline, subheadline, body, callout, caption, micro)
 - **AppSpacing.swift** — 8 констант (xs=4, s=8, m=12, ml=14, l=16, xl=20, xxl=24, xxxl=32)
 - **AppAnimation.swift** — 6 анимаций (standard, medium, fast, easeOut, spring, springGentle)
 
-## Мигрированный экран (POC)
+## Мигрированные экраны (Phase 2+3)
 
+### AppLockScreenView.swift (Phase 2 — POC)
 - Файл: `millio/UI/Security/AppLockScreenView.swift` (171 строк)
 - Заменено Font хардкодов: 5
 - Заменено padding/spacing хардкодов: 11
+
+### Phase 3 — дополнительные экраны и компоненты
+
+| Файл | Fonts | Spacing | Animation |
+|------|-------|---------|-----------|
+| `millio/UI/Shared/ToastView.swift` | 2 | 5 | 1 |
+| `millio/UI/Shared/InlineSearchBar.swift` | — | 2 | — |
+| `millio/UI/Services/Cashflow/CashflowCategoryHelpSheet.swift` | 2 | 4 | — |
+| `millio/UI/Dashboard/Widgets/QuickActionsWidget.swift` | 2 | — | — |
+| `millio/UI/Dashboard/DashboardDeltaPeriodPickerSheet.swift` | 1 | 4 | — |
+
+**Итого Phase 3:** 7 font-токенов, 15 spacing-токенов, 1 animation-токен
 
 ## Research-находки
 
@@ -50,13 +63,19 @@
 
 ## Билд и тесты
 
-- **BUILD SUCCEEDED** — новые токены не нарушили компиляцию
-- **TEST FAILED (pre-existing)** — `QuickSetupViewModelTests.swift` падает на develop до и после изменений (баг с параметром `telegramChannelHandle`). Не связан с ui-unification.
+- **BUILD SUCCEEDED** — все фазы не нарушили компиляцию
+- **TEST FAILED (pre-existing)** — следующие тесты падали до UI-unification и не связаны с ним:
+  - `QuickSetupViewModelTests` → ПОЧИНЕНО: обновлена сигнатура `SupportContactConfig` (убран `whatsappNumber`, добавлен `telegramChannelHandle`)
+  - `CashflowCategoryHelpContentTests` → L() vs String(localized:) несовместимость в тестах
+  - `AppLockPinStoreTests` → Keychain нестабильно в симуляторе без прав
+  - `ProfileLocalizationTests/testProfileNestedFlowLocalizationInSimplifiedChinese` → zh-Hans gap
+  - `CashflowTransactionEditorViewLayoutTests` → L() vs String(localized:) несовместимость
 
-## Что осталось для Phase 3
+## Что осталось
 
-- [ ] Мигрировать остальные экраны по одному в PR (кандидаты: QuickSetupView, ProfileView, ToastView)
+- [ ] Продолжить миграцию оставшихся экранов (OnboardingView, ProfileView верхняя часть и др.)
 - [ ] Добавить правило в CLAUDE.md: новый код использует только AppTypography/AppSpacing/AppAnimation
 - [ ] Отдельная задача `color-hardcode-cleanup` — заменить 840+ `Color.white` на AppColors
 - [ ] Отдельная задача `accessibility-audit` — поднять a11y с ~10% до 80%+
-- [ ] Зафиксировать pre-existing баг `QuickSetupViewModelTests` в отдельном тикете
+- [ ] Починить pre-existing баги тестов: L() vs String(localized:) несовместимость (отдельный тикет)
+- [ ] AppLockPinStoreTests — нужен флаг entitlement или mock для Keychain в тестах
