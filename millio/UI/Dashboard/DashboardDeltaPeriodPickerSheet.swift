@@ -20,17 +20,17 @@ struct DashboardDeltaPeriodPickerSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             Text(L("dashboard.period.picker_title"))
-                .font(.system(size: 15, weight: .semibold))
+                .font(.millioSubheadline)
                 .foregroundStyle(Color.white.opacity(0.85))
-                .padding(.top, 24)
-                .padding(.bottom, 20)
+                .padding(.top, AppSpacing.xxl)
+                .padding(.bottom, AppSpacing.xl)
 
             HStack(spacing: 10) {
                 ForEach(options, id: \.days) { option in
                     periodChip(option.days, label: option.label)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, AppSpacing.l)
 
             Spacer()
         }
@@ -44,8 +44,8 @@ struct DashboardDeltaPeriodPickerSheet: View {
             Text(label)
                 .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                 .foregroundStyle(isSelected ? Color.black : Color.white.opacity(0.75))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, AppSpacing.m)
+                .padding(.vertical, AppSpacing.s)
                 .background(
                     Capsule().fill(isSelected ? Color.white : Color.white.opacity(0.10))
                 )

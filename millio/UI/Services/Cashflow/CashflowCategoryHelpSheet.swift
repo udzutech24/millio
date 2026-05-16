@@ -34,20 +34,20 @@ struct CashflowCategoryHelpSheet: View {
             ZStack {
                 GradientBackground()
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: AppSpacing.m) {
                         ForEach(Array(content.notes.enumerated()), id: \.offset) { _, line in
                             HStack(alignment: .top, spacing: 10) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.millioSubheadline)
                                     .foregroundStyle(AppColors.brandPrimary)
                                     .padding(.top, 1)
                                 Text(line)
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(.millioBody)
                                     .foregroundStyle(AppColors.textPrimary)
                                     .multilineTextAlignment(.leading)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
+                            .padding(AppSpacing.ml)
                             .background(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                                     .fill(Color.white.opacity(0.04))
@@ -58,9 +58,9 @@ struct CashflowCategoryHelpSheet: View {
                             )
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 24)
+                    .padding(.horizontal, AppSpacing.l)
+                    .padding(.top, AppSpacing.m)
+                    .padding(.bottom, AppSpacing.xxl)
                 }
             }
             .navigationTitle(content.title)

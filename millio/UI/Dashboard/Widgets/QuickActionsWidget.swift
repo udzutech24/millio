@@ -51,13 +51,13 @@ struct QuickActionsWidget: View {
                     Circle()
                         .fill(accent.opacity(0.18))
                     Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.millioHeadline)
                         .foregroundStyle(accent)
                 }
                 .frame(width: 38, height: 38)
 
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.millioCallout)
                     .foregroundStyle(Color.white.opacity(0.92))
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)

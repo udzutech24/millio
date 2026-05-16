@@ -30,18 +30,18 @@ struct InlineSearchBar: View {
             endPoint: .trailing
         )
         
-        HStack(spacing: 12) {
+        HStack(spacing: AppSpacing.m) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(AppColors.textTertiary)
-            
+
             TextField(placeholder, text: $text)
                 .font(.system(size: 17))
                 .foregroundStyle(AppColors.textPrimary)
                 .tint(AppColors.brandPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-            
+
             if !text.isEmpty {
                 Button {
                     text = ""
@@ -53,8 +53,8 @@ struct InlineSearchBar: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, AppSpacing.l)
+        .padding(.vertical, AppSpacing.m)
         .background {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(fillGradient)

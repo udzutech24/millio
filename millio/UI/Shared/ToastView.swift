@@ -17,25 +17,25 @@ struct ToastView: View {
     
     var body: some View {
         if isPresented {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: AppSpacing.m) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.millioHeadline)
                     .foregroundStyle(AppColors.error)
                     .padding(.top, 2)
 
                 Text(message)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.millioBody)
                     .foregroundStyle(AppColors.textPrimary)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Spacer(minLength: 8)
+                Spacer(minLength: AppSpacing.s)
 
                 Button {
                     isPresented = false
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.millioCaption)
                         .foregroundStyle(AppColors.textSecondary)
                         .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
@@ -43,8 +43,8 @@ struct ToastView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text(closeLabel))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, AppSpacing.l)
+            .padding(.vertical, AppSpacing.m)
             .background {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(.ultraThinMaterial)
@@ -60,10 +60,10 @@ struct ToastView: View {
                             )
                     }
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, AppSpacing.xxl)
             .padding(.bottom, 40)
             .transition(.move(edge: .bottom).combined(with: .opacity))
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isPresented)
+            .animation(AppAnimation.spring, value: isPresented)
         }
     }
 }
