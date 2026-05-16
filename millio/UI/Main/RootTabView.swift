@@ -407,6 +407,7 @@ struct FinancesSettingsSheetWrapper: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showBalanceAudit = false
     @State private var showMassTickerImport = false
+    @State private var showQuickAudit = false
 
     private var isDailyAuditAvailable: Bool {
 #if DEBUG
@@ -435,8 +436,15 @@ struct FinancesSettingsSheetWrapper: View {
             onOpenMassTickerImport: {
                 dismiss()
                 showMassTickerImport = true
+            },
+            onOpenQuickAudit: {
+                dismiss()
+                showQuickAudit = true
             }
         )
+        .fullScreenCover(isPresented: $showQuickAudit) {
+            AccountQuickAuditView()
+        }
         .sheet(isPresented: $showBalanceAudit) {
             if isDailyAuditAvailable {
                 FinanceBalanceAuditSheet(

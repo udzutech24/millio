@@ -163,6 +163,7 @@ struct FinancesSettingsSheet: View {
     let onOpenSavingsGoal: () -> Void
     let onOpenDailyAudit: () -> Void
     let onOpenMassTickerImport: () -> Void
+    let onOpenQuickAudit: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -215,6 +216,17 @@ struct FinancesSettingsSheet: View {
                         }
                         .buttonStyle(.plain)
                     }
+
+                    Button {
+                        onOpenQuickAudit()
+                    } label: {
+                        settingsRow(
+                            title: "Актуализировать балансы",
+                            subtitle: "Быстрая проверка всех счетов",
+                            icon: "arrow.triangle.2.circlepath"
+                        )
+                    }
+                    .buttonStyle(.plain)
 
                     Spacer()
                 }
@@ -353,6 +365,7 @@ struct FinancesMainTabView: View {
     @State private var showFinanceSettingsSheet = false
     @State private var showBalanceAuditSheetFromSettings = false
     @State private var showMassTickerImportSheet = false
+    @State private var showQuickAuditCover = false
 
     private var isDailyAuditDebugOnlyEnabled: Bool {
 #if DEBUG
@@ -384,6 +397,10 @@ struct FinancesMainTabView: View {
                     onOpenMassTickerImport: {
                         showFinanceSettingsSheet = false
                         showMassTickerImportSheet = true
+                    },
+                    onOpenQuickAudit: {
+                        showFinanceSettingsSheet = false
+                        showQuickAuditCover = true
                     }
                 )
             }
@@ -401,6 +418,9 @@ struct FinancesMainTabView: View {
                     modelContext: modelContext,
                     marketDataClient: viewModel.marketDataClient
                 )
+            }
+            .fullScreenCover(isPresented: $showQuickAuditCover) {
+                AccountQuickAuditView()
             }
             .onAppear {
                 isEmptyIntroHidden = FinancesEmptyStateIntroPrefs().isHidden()
