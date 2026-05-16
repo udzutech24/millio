@@ -34,7 +34,7 @@ enum DashboardWidgetID: String, CaseIterable, Codable, Identifiable {
 
 enum DashboardWidgetStorage {
     private static let key = "dashboard.active_widgets.v1"
-    static let defaultWidgets: [DashboardWidgetID] = [.totalBalance, .quickActions, .cashflowSummary]
+    static let defaultWidgets: [DashboardWidgetID] = [.totalBalance, .quickActions, .cashflowSummary, .currencyRates]
 
     static func load() -> [DashboardWidgetID] {
         guard let data = UserDefaults.standard.data(forKey: key),

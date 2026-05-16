@@ -34532,6 +34532,52 @@
         }
       }
     },
+    "dashboard.settings.button" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dashboard anpassen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Customize"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personalizar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personnaliser"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Настроить"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Özelleştir"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义"
+          }
+        }
+      }
+    },
     "dashboard.currency_rates.title" : {
       "localizations" : {
         "de" : {
@@ -67496,49 +67542,49 @@
         }
       }
     },
-    "profile.contact.option.whatsapp" : {
+    "profile.contact.option.telegram_channel" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhatsApp"
+            "value" : "Telegram-Kanal"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhatsApp"
+            "value" : "Telegram Channel"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhatsApp"
+            "value" : "Canal de Telegram"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhatsApp"
+            "value" : "Chaîne Telegram"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhatsApp"
+            "value" : "Телеграм-канал"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhatsApp"
+            "value" : "Telegram Kanalı"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhatsApp"
+            "value" : "Telegram 频道"
           }
         }
       }

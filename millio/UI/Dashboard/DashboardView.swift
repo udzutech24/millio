@@ -34,6 +34,7 @@ struct DashboardView: View {
     var onShowProfile: () -> Void = {}
     var onDaysChipTap: (() -> Void)? = nil
 
+    @AppStorage("finance_amount_hidden") private var isAmountHidden: Bool = false
     @State private var activeWidgets: [DashboardWidgetID] = DashboardWidgetStorage.load()
     @State private var isEditing = false
     @State private var showAddWidget = false
@@ -98,6 +99,9 @@ struct DashboardView: View {
                     widgetsSection
                 }
 
+                dashboardSettingsButton
+                    .padding(.top, 12)
+
                 Spacer(minLength: 88)
             }
         }
@@ -119,6 +123,16 @@ struct DashboardView: View {
             .buttonStyle(.plain)
 
             Spacer()
+
+            Button {
+                isAmountHidden.toggle()
+            } label: {
+                Image(systemName: isAmountHidden ? "eye.slash" : "eye")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(Color.white.opacity(isAmountHidden ? 0.45 : 0.75))
+                    .frame(width: 38, height: 38)
+            }
+            .buttonStyle(.plain)
 
             Button {
                 onShowProfile()
@@ -156,6 +170,7 @@ struct DashboardView: View {
                 sparklinePoints: sparklinePoints,
                 weekDelta: weekDelta,
                 sparklineDaysCount: sparklineDaysCount,
+                isAmountHidden: isAmountHidden,
                 onTap: onOpenFinances,
                 onSparklineTap: onOpenDynamics,
                 onDaysChipTap: onDaysChipTap
@@ -174,11 +189,37 @@ struct DashboardView: View {
                 assetValueChange: cashflowAssetChange,
                 displayCurrency: cashflowCurrency,
                 periodLabel: cashflowPeriodLabel,
+                isAmountHidden: isAmountHidden,
                 onTap: onOpenCashflow
             )
         case .currencyRates:
             CurrencyRatesWidget(onTap: onOpenConverter)
         }
+    }
+
+    // MARK: - Dashboard Settings Button
+
+    private var dashboardSettingsButton: some View {
+        Button {
+            enterEditMode()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 13, weight: .medium))
+                Text(L("dashboard.settings.button"))
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundStyle(Color.white.opacity(0.35))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.05))
+                    .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 0.7))
+            )
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Edit Mode

@@ -10,11 +10,16 @@ struct TotalBalanceWidget: View {
     var sparklinePoints: [Double] = []
     var weekDelta: (absolute: Double, percent: Double) = (0.0, 0.0)
     var sparklineDaysCount: Int = 7
+    var isAmountHidden: Bool = false
     var onTap: (() -> Void)? = nil
     var onSparklineTap: (() -> Void)? = nil
     var onDaysChipTap: (() -> Void)? = nil
 
     private var formattedBalance: String {
+        if isAmountHidden {
+            let digits = Int(totalBalance.rounded())
+            return String(repeating: "•", count: max(3, String(digits).count))
+        }
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 0
@@ -31,6 +36,13 @@ struct TotalBalanceWidget: View {
     private var hasDelta: Bool { abs(weekDelta.absolute) > 0.01 }
 
     private var formattedDelta: String {
+        if isAmountHidden {
+            let sign = deltaIsPositive ? "+" : ""
+            let pct = String(format: "%.1f%%", weekDelta.percent)
+            let digits = Int(abs(weekDelta.absolute).rounded())
+            let masked = String(repeating: "•", count: max(3, String(digits).count))
+            return "\(sign)\(masked)  \(sign)\(pct)"
+        }
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 0

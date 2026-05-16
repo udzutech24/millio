@@ -11,6 +11,7 @@ struct CashflowSummaryWidget: View {
     let assetValueChange: Double
     let displayCurrency: String
     let periodLabel: String
+    var isAmountHidden: Bool = false
     var onTap: (() -> Void)? = nil
 
     private var currencySymbol: String {
@@ -142,6 +143,10 @@ struct CashflowSummaryWidget: View {
     // MARK: - Formatters
 
     private func formatted(_ value: Double) -> String {
+        if isAmountHidden {
+            let digits = Int(abs(value).rounded())
+            return String(repeating: "•", count: max(3, String(digits).count))
+        }
         let f = NumberFormatter()
         f.numberStyle = .decimal
         f.maximumFractionDigits = 0
