@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import Network
 #if os(iOS)
 import UIKit
 import AudioToolbox
@@ -840,7 +841,21 @@ final class ConverterViewModel: ViewModelProtocol {
     }
     
     // MARK: - Network
-    
+
+    /// Стрим изменений сетевой доступности. true = есть соединение, false = нет.
+    /// Lifecycle мониторинга привязан к lifetime стрима (отменяется когда Task отменяется).
+    nonisolated var networkStatusStream: AsyncStream<Bool> {
+        AsyncStream { continuation in
+            let monitor = NWPathMonitor()
+            let queue = DispatchQueue(label: "millio.converter.network", qos: .utility)
+            monitor.pathUpdateHandler = { path in
+                continuation.yield(path.status == .satisfied)
+            }
+            monitor.start(queue: queue)
+            continuation.onTermination = { _ in monitor.cancel() }
+        }
+    }
+
     func fetchRates(haptic: Bool = false, force: Bool = false) async {
         if state.isFetchingRates { return }
 
@@ -867,7 +882,7 @@ final class ConverterViewModel: ViewModelProtocol {
         }
         
         do {
-            let snapshot = try await rateRepository.getLatestRates(source: state.rateSource, forceRefresh: true, allowStaleOnError: false)
+            let snapshot = try await rateRepository.getLatestRates(source: state.rateSource, forceRefresh: true, allowStaleOnError: true)
             state.allRates = snapshot.rates
 
             _ = await refreshCryptoRates(requiredCodes: requiredCrypto)

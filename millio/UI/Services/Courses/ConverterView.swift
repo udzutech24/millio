@@ -81,8 +81,15 @@ struct ConverterView: View {
         }
         .task {
             viewModel.enforceCryptoAccess(allowCrypto: EntitlementPolicy.canUseConverterCrypto(isPro: appState.isPro))
-            if viewModel.state.allRates.count <= 1 {
-                await viewModel.fetchRates()
+            await viewModel.fetchRates()
+        }
+        .task {
+            var wasOffline = false
+            for await isConnected in viewModel.networkStatusStream {
+                if isConnected && wasOffline {
+                    await viewModel.fetchRates(haptic: false, force: false)
+                }
+                wasOffline = !isConnected
             }
         }
         .onChange(of: appState.isPro) { _, isPro in
@@ -198,7 +205,7 @@ struct ConverterView: View {
         let safeRowSpacing = layout.rowSpacing.isFinite && layout.rowSpacing >= 0 ? layout.rowSpacing : 8
         let regularRowHeight: CGFloat = layout.rowHeight
         let activeRowHeight: CGFloat = min(layout.rowHeight + 4, 76)
-        
+
         VStack(spacing: safeRowSpacing) {
             ForEach(Array(viewModel.state.selectedCurrencies.enumerated()), id: \.offset) { idx, code in
                 let isActive = (viewModel.state.activeCode == code)
@@ -217,6 +224,40 @@ struct ConverterView: View {
                     }
             }
         }
+        .overlay {
+            if viewModel.state.isOffline && viewModel.state.allRates.count <= 1 {
+                offlineEmptyState
+            }
+        }
+    }
+
+    private var offlineEmptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 46, weight: .thin))
+                .foregroundStyle(Color.white.opacity(0.4))
+            VStack(spacing: 6) {
+                Text(ConverterL10n.noInternetError)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.75))
+                    .multilineTextAlignment(.center)
+                Text(ConverterL10n.noDataSubtitle)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(Color.white.opacity(0.4))
+                    .multilineTextAlignment(.center)
+            }
+            Button {
+                Task { await viewModel.fetchRates(haptic: false, force: true) }
+            } label: {
+                Text(ConverterL10n.refreshRates)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(neonCyan)
+            }
+        }
+        .padding(.horizontal, 32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.black.opacity(0.7))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
     
     private var pickerSheet: some View {

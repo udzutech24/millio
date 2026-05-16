@@ -32833,6 +32833,53 @@
         }
       }
     },
+    "converter.offline.no_data.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffne die App mit Internet – Kurse werden automatisch geladen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open the app online — rates will load automatically"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la app con internet – los tipos se cargarán automáticamente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrez l'app avec internet – les taux se chargeront automatiquement"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Откройте приложение с интернетом — курсы загрузятся автоматически"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İnternete bağlıyken aç – kurlar otomatik yüklenecek"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "联网后打开应用，汇率将自动加载"
+          }
+        }
+      }
+    },
     "converter.rate_source.erapi.subtitle" : {
       "extractionState" : "manual",
       "localizations" : {

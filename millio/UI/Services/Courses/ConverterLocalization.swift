@@ -78,6 +78,7 @@ enum ConverterL10n {
     static var close: String { tr("converter.common.close") }
 
     static var noInternetError: String { tr("converter.error.no_internet") }
+    static var noDataSubtitle: String { tr("converter.offline.no_data.subtitle") }
     static var timeoutError: String { tr("converter.error.timeout") }
     static var genericUpdateError: String { tr("converter.error.update_failed") }
 
