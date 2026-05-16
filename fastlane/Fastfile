@@ -38,7 +38,8 @@ platform :ios do
       include_symbols: true,
       include_bitcode: false,
       output_directory: "build/testflight",
-      output_name: "millio.ipa"
+      output_name: "millio.ipa",
+      derived_data_path: "/tmp/millio-derived-data"
     )
 
     upload_to_testflight(

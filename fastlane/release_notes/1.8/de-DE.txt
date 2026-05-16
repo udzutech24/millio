@@ -1,0 +1,7 @@
+Neu in Version 1.8:
+
+• Individuelle Icons — eigenes Icon und Farbe für jedes Konto, jede Karte, jeden Kredit und jede Investition
+• Wechselkurs-Widget — Live-Kurse direkt auf dem Dashboard
+• Neue Sprachen — Türkisch und Französisch
+• PRO-Vorschau — alle Funktionen im Überblick vor dem Abonnieren
+• Stabilitäts- und Leistungsverbesserungen

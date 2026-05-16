@@ -897,27 +897,33 @@ struct CashflowCategoryTransactionSheet: View {
                             )
                     }
 
-                    if let summary {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(categoryBudgetLimitLabel(summary.limit))
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Color.white.opacity(0.66))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.72)
+                    // Резервируем фиксированную высоту всегда — карточки одинаковые независимо от наличия плана
+                    Group {
+                        if let summary {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(categoryBudgetLimitLabel(summary.limit))
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(Color.white.opacity(0.66))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.72)
 
-                            GeometryReader { proxy in
-                                let progress = min(max(summary.progress, 0), 1)
-                                ZStack(alignment: .leading) {
-                                    Capsule(style: .continuous)
-                                        .fill(Color.white.opacity(0.08))
-                                    Capsule(style: .continuous)
-                                        .fill(budgetStatusColor(summary.status))
-                                        .frame(width: max(6, proxy.size.width * progress))
+                                GeometryReader { proxy in
+                                    let progress = min(max(summary.progress, 0), 1)
+                                    ZStack(alignment: .leading) {
+                                        Capsule(style: .continuous)
+                                            .fill(Color.white.opacity(0.08))
+                                        Capsule(style: .continuous)
+                                            .fill(budgetStatusColor(summary.status))
+                                            .frame(width: max(6, proxy.size.width * progress))
+                                    }
                                 }
+                                .frame(height: 5)
                             }
-                            .frame(height: 5)
+                        } else {
+                            Color.clear
                         }
                     }
+                    .frame(height: 24)
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
                 .padding(.horizontal, 10)
