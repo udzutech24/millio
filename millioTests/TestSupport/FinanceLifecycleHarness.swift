@@ -27,7 +27,15 @@ final class FinanceLifecycleHarness {
         HistoricalRate.self
     ])
 
-    static var retainedContainers: [ModelContainer] = []
+    // Shared across all harness instances: SwiftData crashes when multiple
+    // ModelContainers for the same @Model types are active simultaneously.
+    // Background tasks spawned by ViewModels create a retain cycle that keeps
+    // old containers alive past test teardown, so we reuse a single container
+    // and wipe all records at the start of each test instead.
+    private static let sharedContainer: ModelContainer = {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        return try! ModelContainer(for: FinanceLifecycleHarness.schema, configurations: [config])
+    }()
 
     let modelContext: ModelContext
     let financeViewModel: FinanceViewModel
@@ -45,11 +53,29 @@ final class FinanceLifecycleHarness {
         defaults.set(0, forKey: "finance_savings_goal_amount")
         defaults.removeObject(forKey: "finance_savings_goal_currency")
 
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Self.schema, configurations: [config])
-        Self.retainedContainers.append(container)
-
+        let container = Self.sharedContainer
         self.modelContext = container.mainContext
+
+        // Wipe all records so each test starts with a clean slate.
+        try modelContext.delete(model: CashflowSystemCategoryOverride.self)
+        try modelContext.delete(model: CashflowCustomCategory.self)
+        try modelContext.delete(model: CashflowTransaction.self)
+        try modelContext.delete(model: FinanceAccount.self)
+        try modelContext.delete(model: FinanceGroup.self)
+        try modelContext.delete(model: HistoricalRate.self)
+        try modelContext.delete(model: AssetProviderMapping.self)
+        try modelContext.delete(model: AssetCatalogItem.self)
+        try modelContext.delete(model: Investment.self)
+        try modelContext.delete(model: Credit.self)
+        try modelContext.delete(model: Card.self)
+        try modelContext.save()
+
+        // ViewModels from previous harnesses stay alive via a retain cycle:
+        // EventBus holds their subscription closures, which in turn capture the VM strongly.
+        // Break the cycle here so old VMs no longer receive events and can be released,
+        // preventing them from flooding @MainActor with stale loads during this test.
+        EventBus.shared.removeAllSubscribers()
+
         self.group = FinanceGroup(name: "Main", colorHex: "#FFFFFF", order: 0)
         modelContext.insert(group)
         try modelContext.save()
@@ -221,8 +247,15 @@ final class FinanceLifecycleHarness {
             unitPrice: unitPrice,
             funding: funding
         ))
+        // Wait until transactions are loaded AND history reflects the position change.
+        // Waiting for state.transactions alone is insufficient: old ViewModels kept alive
+        // by retain cycles may fire loadTransactions() and transiently clear filteredTransactions
+        // between the moment transactions appears non-empty and when historyTransactions() is called.
         try await waitUntil {
             !self.cashflowViewModel.state.transactions.isEmpty
+                && !self.cashflowViewModel.historyTransactions(
+                    matching: CashflowHistoryQuery(typeFilter: .all)
+                ).isEmpty
         }
     }
 

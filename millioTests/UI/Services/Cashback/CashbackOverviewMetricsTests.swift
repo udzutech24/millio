@@ -26,16 +26,13 @@ struct CashbackOverviewMetricsTests {
 
     @Test("Featured cashback prefers more linked cards when percentage is tied")
     func prefersMoreLinkedCardsForTie() {
-        let previousLanguage = LanguageManager.shared.currentLanguage
-        defer { LanguageManager.shared.setLanguage(previousLanguage) }
-        LanguageManager.shared.setLanguage(.russian)
-
         let first = Cashback(name: "Рестораны", category: .restaurant, percentage: 10, cardIDs: ["a"], monthKey: "2026-03")
         let second = Cashback(name: "Заправки", category: .gasStation, percentage: 10, cardIDs: ["a", "b"], monthKey: "2026-03")
 
         let metrics = CashbackOverviewMetrics.make(from: [first, second])
 
-        #expect(metrics.featuredCategoryName == "Заправки")
+        // featuredCashbackKey identifies the winner; featuredCategoryName is a computed displayName
+        // that reads LanguageManager.shared at call time — verified separately in the metrics unit test.
         #expect(metrics.featuredCashbackKey == CashbackOverviewMetrics.stableKey(for: second))
     }
 

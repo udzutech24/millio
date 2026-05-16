@@ -49,6 +49,13 @@ final class EventBus {
     func unsubscribe(_ id: UUID) {
         subscribers.removeValue(forKey: id)
     }
+
+    #if DEBUG
+    /// Отписывает всех подписчиков. Используется только в тестах для изоляции между тест-кейсами.
+    func removeAllSubscribers() {
+        subscribers.removeAll()
+    }
+    #endif
     
     /// Опубликовать событие
     func publish(_ event: AppEvent) {

@@ -11,6 +11,7 @@ import Testing
 struct CashbackCardPresentationTests {
     @Test("Подзаголовок карты включает банк, тип и маску номера")
     func testSubtitleIncludesBankTypeAndMaskedNumber() {
+        let locale = Locale(identifier: "en")
         let card = Card(
             name: "T-Bank Black",
             cardNumber: "1234",
@@ -20,15 +21,16 @@ struct CashbackCardPresentationTests {
             balance: 1500
         )
 
-        let subtitle = CashbackCardPresentation.subtitle(for: card)
+        let subtitle = CashbackCardPresentation.subtitle(for: card, locale: locale)
 
-        #expect(subtitle.contains(card.bank.displayName))
-        #expect(subtitle.contains(card.cardType.displayName))
+        #expect(subtitle.contains(card.bank.displayName(for: locale)))
+        #expect(subtitle.contains(card.cardType.displayName(for: locale)))
         #expect(subtitle.contains("•••• 1234"))
     }
 
     @Test("Подзаголовок picker держит только банк и тип без маски номера")
     func testPickerSubtitleKeepsPrimaryMetadataCompact() {
+        let locale = Locale(identifier: "en")
         let card = Card(
             name: "T-Bank Black",
             cardNumber: "1234",
@@ -38,9 +40,9 @@ struct CashbackCardPresentationTests {
             balance: 1500
         )
 
-        let subtitle = CashbackCardPresentation.pickerSubtitle(for: card)
+        let subtitle = CashbackCardPresentation.pickerSubtitle(for: card, locale: locale)
 
-        #expect(subtitle == "\(card.bank.displayName) • \(card.cardType.displayName)")
+        #expect(subtitle == "\(card.bank.displayName(for: locale)) • \(card.cardType.displayName(for: locale))")
         #expect(!subtitle.contains("1234"))
     }
 
@@ -129,6 +131,7 @@ struct CashbackCardPresentationTests {
 
     @Test("Если банк не задан, подзаголовок не засоряется other")
     func testSubtitleSkipsOtherBank() {
+        let locale = Locale(identifier: "en")
         let card = Card(
             name: "Free Card",
             cardNumber: "",
@@ -138,14 +141,15 @@ struct CashbackCardPresentationTests {
             balance: 0
         )
 
-        let subtitle = CashbackCardPresentation.subtitle(for: card)
+        let subtitle = CashbackCardPresentation.subtitle(for: card, locale: locale)
 
-        #expect(!subtitle.contains(card.bank.displayName))
-        #expect(subtitle == card.cardType.displayName)
+        #expect(!subtitle.contains(card.bank.displayName(for: locale)))
+        #expect(subtitle == card.cardType.displayName(for: locale))
     }
 
     @Test("Если банк не задан, picker подзаголовок показывает только тип")
     func testPickerSubtitleSkipsOtherBank() {
+        let locale = Locale(identifier: "en")
         let card = Card(
             name: "Free Card",
             cardNumber: "",
@@ -155,8 +159,8 @@ struct CashbackCardPresentationTests {
             balance: 0
         )
 
-        let subtitle = CashbackCardPresentation.pickerSubtitle(for: card)
+        let subtitle = CashbackCardPresentation.pickerSubtitle(for: card, locale: locale)
 
-        #expect(subtitle == card.cardType.displayName)
+        #expect(subtitle == card.cardType.displayName(for: locale))
     }
 }
