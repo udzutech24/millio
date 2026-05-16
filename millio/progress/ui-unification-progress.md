@@ -1,8 +1,8 @@
-# UI Unification — Phase 1+2+3 Progress
+# UI Unification — Phase 1+2+3+4 Progress
 
 Дата: 2026-05-16
-Статус: РЕАЛИЗОВАН (Phase 1+2+3)
-Ветка: develop (смержено из feature/ui-unification-foundation)
+Статус: РЕАЛИЗОВАН (Phase 1+2+3+4)
+Ветка: develop
 
 ## Что создано (Phase 1)
 
@@ -10,7 +10,7 @@
 - **AppSpacing.swift** — 8 констант (xs=4, s=8, m=12, ml=14, l=16, xl=20, xxl=24, xxxl=32)
 - **AppAnimation.swift** — 6 анимаций (standard, medium, fast, easeOut, spring, springGentle)
 
-## Мигрированные экраны (Phase 2+3)
+## Мигрированные экраны (Phase 2+3+4)
 
 ### AppLockScreenView.swift (Phase 2 — POC)
 - Файл: `millio/UI/Security/AppLockScreenView.swift` (171 строк)
@@ -28,6 +28,32 @@
 | `millio/UI/Dashboard/DashboardDeltaPeriodPickerSheet.swift` | 1 | 4 | — |
 
 **Итого Phase 3:** 7 font-токенов, 15 spacing-токенов, 1 animation-токен
+
+### Phase 4 — оставшиеся небольшие компоненты
+
+| Файл | Fonts | Spacing | Animation |
+|------|-------|---------|-----------|
+| `millio/UI/Shared/PremiumUpsellAlert.swift` | 4 | — | 1 |
+| `millio/UI/Shared/SlideToConfirmControl.swift` | 1 | — | 2 |
+| `millio/UI/Auth/AuthWelcomeView.swift` | 1 | — | — |
+| `millio/UI/Shared/MiniAppQuickNavigationPopover.swift` | 1 | 1 | — |
+| `millio/UI/Shared/CalendarRangeSheetComponents.swift` | 5 | 3 | — |
+
+**Итого Phase 4:** 12 font-токенов, 4 spacing-токенов, 3 animation-токена
+
+**Итого по всем фазам:** 31+ font-токенов, 34+ spacing-токенов, 5+ animation-токенов
+
+## Что намеренно НЕ мигрировано (причины)
+
+- `AuthWelcomeView` — большинство `Font.system()` обёрнуты в `scaled()` с динамическими метриками от `AuthWelcomeLayoutPolicy` — это intentional accessibility scaling
+- `ProChartUpsellView` — шрифты через `ProChartUpsellMetrics.size` — intentional dynamic metrics
+- `CalendarRangeMonthView` — размеры 12 semibold (нет токена), 18 (нет токена), dynamic weight
+- `LaunchingView/BrandWordmarkView` — size 56 .rounded design — уникальный splash-экран вне токенов
+- `QuickSetupView.swift` — 1869 строк, 58 Font.system — **отдельная задача Phase 5**
+
+## CLAUDE.md обновлён
+
+Добавлено правило в «Проектные правила»: UI-токены обязательны в новом коде.
 
 ## Research-находки
 
@@ -73,8 +99,7 @@
 
 ## Что осталось
 
-- [ ] Продолжить миграцию оставшихся экранов (OnboardingView, ProfileView верхняя часть и др.)
-- [ ] Добавить правило в CLAUDE.md: новый код использует только AppTypography/AppSpacing/AppAnimation
+- [ ] **Phase 5:** `QuickSetupView.swift` (1869 строк, 58 Font.system) — отдельная сессия
 - [ ] Отдельная задача `color-hardcode-cleanup` — заменить 840+ `Color.white` на AppColors
 - [ ] Отдельная задача `accessibility-audit` — поднять a11y с ~10% до 80%+
 - [ ] Починить pre-existing баги тестов: L() vs String(localized:) несовместимость (отдельный тикет)

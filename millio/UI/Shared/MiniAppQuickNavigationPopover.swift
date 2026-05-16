@@ -18,11 +18,11 @@ struct MiniAppQuickNavigationPopover: View {
                             .frame(width: 22, alignment: .center)
 
                         Text(destination.title)
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.millioSubheadlineMedium)
                             .foregroundStyle(AppColors.textPrimary.opacity(0.96))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, AppSpacing.ml)
                     .padding(.vertical, 11)
                     .contentShape(Rectangle())
                 }

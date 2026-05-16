@@ -70,7 +70,7 @@ struct SlideToConfirmControl: View {
 
                 VStack(alignment: .center, spacing: 3) {
                     Text(isLoading ? loadingTitle : title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.millioSubheadline)
                         .foregroundStyle(AppColors.textPrimary)
                     Text(isLoading ? loadingSubtitle : subtitle)
                         .font(.system(size: 11, weight: .regular))
@@ -121,8 +121,8 @@ struct SlideToConfirmControl: View {
         }
         .frame(height: 72)
         .opacity(isEnabled || isLoading ? 1 : 0.45)
-        .animation(.easeInOut(duration: 0.2), value: isEnabled)
-        .animation(.easeInOut(duration: 0.2), value: isLoading)
+        .animation(AppAnimation.standard, value: isEnabled)
+        .animation(AppAnimation.standard, value: isLoading)
     }
 
     private func handleDragProgress(offset: CGFloat, maxOffset: CGFloat) {

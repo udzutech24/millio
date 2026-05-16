@@ -35,7 +35,7 @@ struct CalendarRangePickerPanel: View {
 
                     if let subtitle, !subtitle.isEmpty {
                         Text(subtitle)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.millioBody)
                             .foregroundStyle(AppColors.textSecondary)
                     }
                 }
@@ -92,9 +92,9 @@ struct CalendarRangePickerPanel: View {
                         activeEndpoint = .end
                     } label: {
                         Text(preset.title(locale: locale))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.millioBodySemibold)
                             .foregroundStyle(AppColors.textPrimary)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, AppSpacing.l)
                             .padding(.vertical, 10)
                             .background(
                                 Capsule(style: .continuous)
@@ -124,17 +124,17 @@ struct CalendarRangePickerPanel: View {
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.millioCallout)
                     .foregroundStyle(AppColors.textSecondary)
 
                 Text(CalendarRangeFormatting.endpointDate(date, locale: locale))
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.millioTitle3)
                     .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.88)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, AppSpacing.l)
             .padding(.vertical, 18)
             .background(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -172,9 +172,9 @@ struct CalendarRangeSheetActionBar: View {
             actionButton(title: secondaryTitle, style: .secondary, action: secondaryAction)
             actionButton(title: primaryTitle, style: .primary, action: primaryAction)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, AppSpacing.l)
         .padding(.top, 10)
-        .padding(.bottom, 8)
+        .padding(.bottom, AppSpacing.s)
         .background(
             LinearGradient(
                 colors: [
@@ -197,7 +197,7 @@ struct CalendarRangeSheetActionBar: View {
     ) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.millioHeadline)
                 .foregroundStyle(AppColors.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)

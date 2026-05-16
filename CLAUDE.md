@@ -61,6 +61,7 @@ Swift · SwiftUI · SwiftData · CloudKit · Swift Concurrency (async/await, Act
 - **Навигация:** глобально через `AppState`/`AppRouter`; локальные переходы — `NavigationLink`.
 - **Concurrency:** `async/await`, без GCD и ручных очередей.
 - **Dark Mode only.**
+- **UI-токены обязательны:** шрифты — только через `Font` extension (`AppTypography.swift`), отступы — только через `AppSpacing`, анимации — только через `AppAnimation`. `Font.system(size:)` и числа-литералы в padding/spacing в новом коде **запрещены**. Файлы: `millio/UI/Design/`.
 - **Локализация:** все строки в `Localizable.xcstrings`. Подробности — [`docs/MULTILINGUAL_HARDENING_PLAN.md`](docs/MULTILINGUAL_HARDENING_PLAN.md).
 
 Полный список правил — [`docs/CORE_RULES.md`](docs/CORE_RULES.md).

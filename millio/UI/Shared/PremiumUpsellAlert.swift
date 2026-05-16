@@ -38,12 +38,12 @@ struct PremiumUpsellAlert: View {
         VStack(spacing: 16) {
             VStack(spacing: 8) {
                 Text(AppLocalization.string(titleKey, locale: localizationLocale))
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.millioTitle3)
                     .foregroundStyle(AppColors.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(message.resolve(in: localizationLocale))
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.millioSubheadlineMedium)
                     .foregroundStyle(AppColors.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -77,7 +77,7 @@ struct PremiumUpsellAlert: View {
             onSubscribe()
         } label: {
             Text(String(localized: "subscription.button.subscribe", bundle: LanguageManager.shared.currentBundle, locale: localizationLocale))
-                .font(.system(size: 16, weight: .bold))
+                .font(.millioHeadlineBold)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -103,7 +103,7 @@ struct PremiumUpsellAlert: View {
             dismiss(notifyCancel: true)
         } label: {
             Text(String(localized: "finances.common.cancel", bundle: LanguageManager.shared.currentBundle, locale: localizationLocale))
-                .font(.system(size: 15, weight: .semibold))
+                .font(.millioSubheadline)
                 .foregroundStyle(AppColors.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
@@ -150,7 +150,7 @@ private struct PremiumUpsellAlertModifier: ViewModifier {
                     .transition(.opacity)
                 }
             }
-            .animation(.easeOut(duration: 0.2), value: isPresented)
+            .animation(AppAnimation.easeOut, value: isPresented)
     }
 }
 

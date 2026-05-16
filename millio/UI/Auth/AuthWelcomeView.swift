@@ -164,7 +164,7 @@ struct AuthWelcomeView: View {
 
             if let errorMessage = authManager.errorMessage, !errorMessage.isEmpty {
                 Text(errorMessage)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.millioCallout)
                     .foregroundStyle(Color.red.opacity(0.92))
             }
         }
