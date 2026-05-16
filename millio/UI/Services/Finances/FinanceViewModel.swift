@@ -485,6 +485,7 @@ final class FinanceViewModel: ViewModelProtocol {
         state.accountSortMode = storedAccountSortMode
         subscribeToFinanceEvents()
         if !skipInitialLoad {
+            FinanceSystemGroups.normalizeUngroupedGroupName(in: modelContext)
             loadGroups()
             loadAccounts()
         }
