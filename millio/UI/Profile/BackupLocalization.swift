@@ -422,6 +422,11 @@ private enum BackupInlineCatalog {
             ru: "Ваши данные восстановлены и скоро отобразятся в приложении",
             zhHans: "您的数据已恢复，稍后将显示在应用中"
         ),
+        "backup.versions.delete": .init(
+            en: "Delete version",
+            ru: "Удалить версию",
+            zhHans: "删除版本"
+        ),
         "common.done": .init(
             en: "Done",
             ru: "Готово",
