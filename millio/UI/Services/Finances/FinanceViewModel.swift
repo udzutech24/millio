@@ -146,6 +146,9 @@ struct FinanceState {
     
     /// Скрыты ли суммы денег (показывать точки вместо цифр)
     var isAmountHidden: Bool = false
+
+    /// Режим сортировки счетов внутри группы
+    var accountSortMode: AccountSortMode = .amountDescending
     
     /// Сообщение об ошибке или предупреждении при конвертации валют
     var currencyConversionWarning: String? = nil
@@ -267,6 +270,7 @@ enum FinanceAction {
     case setSavingsGoalEnabled(Bool)
     case setSavingsGoalAmount(Double)
     case toggleAmountVisibility
+    case setAccountSortMode(AccountSortMode)
     case clearTradeCelebration
 }
 
@@ -444,6 +448,14 @@ final class FinanceViewModel: ViewModelProtocol {
         set { defaults.set(newValue, forKey: "finance_amount_hidden") }
     }
 
+    private var storedAccountSortMode: AccountSortMode {
+        get {
+            let raw = defaults.string(forKey: "finance_account_sort_mode") ?? ""
+            return AccountSortMode(rawValue: raw) ?? .amountDescending
+        }
+        set { defaults.set(newValue.rawValue, forKey: "finance_account_sort_mode") }
+    }
+
     init(
         modelContext: ModelContext,
         currencyService: CurrencyRateServiceProtocol? = nil,
@@ -470,6 +482,7 @@ final class FinanceViewModel: ViewModelProtocol {
         state.savingsGoalAmount = storedSavingsGoalAmount
         let storedGoalCurrency = storedSavingsGoalCurrency
         state.isAmountHidden = storedAmountHidden
+        state.accountSortMode = storedAccountSortMode
         subscribeToFinanceEvents()
         if !skipInitialLoad {
             loadGroups()
@@ -700,6 +713,15 @@ final class FinanceViewModel: ViewModelProtocol {
         case .toggleAmountVisibility:
             state.isAmountHidden.toggle()
             storedAmountHidden = state.isAmountHidden
+
+        case .setAccountSortMode(let mode):
+            state.accountSortMode = mode
+            storedAccountSortMode = mode
+            // Сбрасываем ручной порядок: пользователь выбрал критерий сортировки
+            for group in state.groups where group.usesManualAccountOrdering {
+                group.usesManualAccountOrdering = false
+            }
+            try? modelContext.save()
 
         case .clearTradeCelebration:
             state.tradeCelebration = nil
@@ -1036,9 +1058,16 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     func orderedAccounts(for group: FinanceGroup) -> [FinanceAccount] {
-        groupService.orderedAccounts(for: group, amountResolver: { [weak self] account in
-            self?.getAccountInfo(account: account)?.amount ?? 0
-        })
+        groupService.orderedAccounts(
+            for: group,
+            sortMode: state.accountSortMode,
+            amountResolver: { [weak self] account in
+                self?.getAccountInfo(account: account)?.amount ?? 0
+            },
+            nameResolver: { [weak self] account in
+                self?.getAccountInfo(account: account)?.name ?? ""
+            }
+        )
     }
 
     private func scheduleGroupTotalRefresh(for groupUniqueID: String, fallbackCurrency: String? = nil) {
