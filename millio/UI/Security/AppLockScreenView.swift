@@ -24,11 +24,11 @@ struct AppLockScreenView: View {
             GradientBackground()
                 .ignoresSafeArea()
 
-            VStack(spacing: 20) {
-                Spacer(minLength: 32)
+            VStack(spacing: AppSpacing.xl) {
+                Spacer(minLength: AppSpacing.xxxl)
 
                 Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 52, weight: .semibold))
+                    .font(.millioDisplayLarge)
                     .foregroundStyle(
                         LinearGradient(
                             colors: AppColors.incomeGradient,
@@ -38,14 +38,14 @@ struct AppLockScreenView: View {
                     )
 
                 Text(localized("profile.app_lock.screen.title", fallback: "Enter PIN code"))
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.millioTitle)
                     .foregroundStyle(AppColors.textPrimary)
 
                 pinDots
 
                 if let errorText {
                     Text(errorText)
-                        .font(.system(size: 13, weight: .regular))
+                        .font(.millioCalloutRegular)
                         .foregroundStyle(AppColors.error)
                 }
 
@@ -55,16 +55,16 @@ struct AppLockScreenView: View {
                     Button {
                         Task { await unlockWithBiometrics() }
                     } label: {
-                        HStack(spacing: 8) {
+                        HStack(spacing: AppSpacing.s) {
                             if isBiometricBusy {
                                 ProgressView()
                                     .scaleEffect(0.85)
                             }
                             Text(AppLockBiometricAuth.buttonTitle())
-                                .font(.system(size: 15, weight: .medium))
+                                .font(.millioSubheadlineMedium)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, AppSpacing.m)
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .fill(Color.white.opacity(0.08))
@@ -72,12 +72,12 @@ struct AppLockScreenView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(isBiometricBusy)
-                    .padding(.top, 8)
+                    .padding(.top, AppSpacing.s)
                 }
 
-                Spacer(minLength: 24)
+                Spacer(minLength: AppSpacing.xxl)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, AppSpacing.xxl)
         }
         .task {
             if canUseBiometricButton {
@@ -91,7 +91,7 @@ struct AppLockScreenView: View {
     }
 
     private var pinDots: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: AppSpacing.ml) {
             ForEach(0..<4, id: \.self) { idx in
                 Circle()
                     .fill(idx < enteredPin.count ? AppColors.brandPrimary : AppColors.textPrimary.opacity(0.25))
@@ -102,10 +102,10 @@ struct AppLockScreenView: View {
     }
 
     private var pinPad: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 14), count: 3)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: AppSpacing.ml), count: 3)
         let values = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"]
 
-        return LazyVGrid(columns: columns, spacing: 14) {
+        return LazyVGrid(columns: columns, spacing: AppSpacing.ml) {
             ForEach(values, id: \.self) { value in
                 if value.isEmpty {
                     Color.clear
@@ -115,7 +115,7 @@ struct AppLockScreenView: View {
                         handleKey(value)
                     } label: {
                         Text(value)
-                            .font(.system(size: 24, weight: .medium))
+                            .font(.millioTitle2)
                             .foregroundStyle(AppColors.textPrimary)
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
@@ -128,7 +128,7 @@ struct AppLockScreenView: View {
                 }
             }
         }
-        .padding(.top, 8)
+        .padding(.top, AppSpacing.s)
     }
 
     private func handleKey(_ key: String) {
