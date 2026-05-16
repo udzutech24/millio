@@ -712,9 +712,8 @@ final class SupportContactResolverTests: XCTestCase {
         let config = SupportContactConfig(
             emailAddress: "hello@millio.app",
             telegramHandle: "millio_help",
-            whatsappNumber: "1234567890",
-            telegramIconAssetName: "telegram",
-            whatsappIconAssetName: "whatsapp"
+            telegramChannelHandle: "millio_channel",
+            telegramIconAssetName: "telegram"
         )
         let resolver = SupportContactResolver(config: config)
 
@@ -725,25 +724,23 @@ final class SupportContactResolverTests: XCTestCase {
         let config = SupportContactConfig(
             emailAddress: "hello@millio.app",
             telegramHandle: "millio_help",
-            whatsappNumber: "1234567890",
-            telegramIconAssetName: "telegram",
-            whatsappIconAssetName: "whatsapp"
+            telegramChannelHandle: "millio_channel",
+            telegramIconAssetName: "telegram"
         )
         let resolver = SupportContactResolver(config: config)
 
         XCTAssertEqual(resolver.url(for: .telegram)?.absoluteString, "https://t.me/millio_help")
     }
 
-    func testWhatsAppContactBuildsPublicURL() {
+    func testTelegramChannelContactBuildsPublicURL() {
         let config = SupportContactConfig(
             emailAddress: "hello@millio.app",
             telegramHandle: "millio_help",
-            whatsappNumber: "1234567890",
-            telegramIconAssetName: "telegram",
-            whatsappIconAssetName: "whatsapp"
+            telegramChannelHandle: "millio_channel",
+            telegramIconAssetName: "telegram"
         )
         let resolver = SupportContactResolver(config: config)
 
-        XCTAssertEqual(resolver.url(for: .whatsapp)?.absoluteString, "https://wa.me/1234567890")
+        XCTAssertEqual(resolver.url(for: .telegramChannel)?.absoluteString, "https://t.me/millio_channel")
     }
 }
