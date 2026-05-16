@@ -503,6 +503,10 @@ struct CreditEditorView: View {
         let monthlyPayment = parseNumber(monthlyPaymentText) ?? resolvedMonthlyPayment(for: amount)
         let reminderDaysBefore = parseReminderDays(reminderDaysBeforeText)
 
+        // Сохраняем иконку до handle — modelContext.save() вызывается внутри handle
+        viewModel.state.editingCredit?.customIconName = customIconName
+        viewModel.state.editingCredit?.customIconColor = customIconColor
+
         viewModel.handle(.updateCredit(
             name: name,
             amount: amount,
@@ -522,8 +526,6 @@ struct CreditEditorView: View {
             includeInTotal: true,
             uniqueID: nil
         ))
-        viewModel.state.editingCredit?.customIconName = customIconName
-        viewModel.state.editingCredit?.customIconColor = customIconColor
 
         if let onClose {
             onClose()

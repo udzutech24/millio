@@ -1123,6 +1123,12 @@ struct InvestmentEditorView: View {
             effectiveCategory = selectedCategory
         }
 
+        // Сохраняем кастомную иконку до handle — modelContext.save() вызывается внутри handle
+        if let editing = viewModel.state.editingInvestment {
+            editing.customIconName = customIconName
+            editing.customIconColor = customIconColor
+        }
+
         // Сохраняем deposit-поля перед handle (SwiftData персистит их при modelContext.save внутри handle)
         if isDepositMode, let editing = viewModel.state.editingInvestment {
             editing.depositInterestRate = parseNumber(depositInterestRateText)
@@ -1163,9 +1169,6 @@ struct InvestmentEditorView: View {
             isDeposit: effectiveIsDeposit,
             depositData: depositData
         ))
-
-        viewModel.state.editingInvestment?.customIconName = customIconName
-        viewModel.state.editingInvestment?.customIconColor = customIconColor
 
         if let inv = depositSyncTarget {
             viewModel.syncDepositIncome(for: inv)

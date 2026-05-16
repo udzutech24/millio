@@ -159,6 +159,7 @@ private struct FinancesContentViewInternal: View {
 struct FinancesSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     let isDailyAuditAvailable: Bool
+    @Binding var accountSortMode: AccountSortMode
     let onOpenSavingsGoal: () -> Void
     let onOpenDailyAudit: () -> Void
     let onOpenMassTickerImport: () -> Void
@@ -187,6 +188,17 @@ struct FinancesSettingsSheet: View {
                             title: financesLocalized("finances.settings.savings_goal.title"),
                             subtitle: financesLocalized("finances.settings.savings_goal.subtitle"),
                             icon: "target"
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    NavigationLink {
+                        AccountSortPickerView(sortMode: $accountSortMode)
+                    } label: {
+                        settingsRow(
+                            title: "Сортировка счетов",
+                            subtitle: accountSortMode.title,
+                            icon: "arrow.up.arrow.down"
                         )
                     }
                     .buttonStyle(.plain)
@@ -263,11 +275,66 @@ struct FinancesSettingsSheet: View {
     }
 }
 
+// MARK: - Account Sort Picker
+
+private struct AccountSortPickerView: View {
+    @Binding var sortMode: AccountSortMode
+
+    var body: some View {
+        ZStack {
+            GradientBackground()
+            VStack(spacing: 10) {
+                ForEach(AccountSortMode.allCases, id: \.rawValue) { mode in
+                    Button {
+                        sortMode = mode
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: mode.icon)
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .frame(width: 30, height: 30)
+                                .background(Color.white.opacity(0.08))
+                                .clipShape(Circle())
+
+                            Text(mode.title)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                            if sortMode == mode {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(AppColors.incomeGradient.first ?? .green)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.white.opacity(sortMode == mode ? 0.09 : 0.05))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(Color.white.opacity(sortMode == mode ? 0.3 : 0.15), lineWidth: 0.8)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+        }
+        .navigationTitle("Сортировка счетов")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 #Preview {
     let schema = AppSchema.create()
     let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: schema, configurations: [configuration])
-    
+
     FinancesView()
         .modelContainer(container)
         .environment(AppState())
@@ -301,6 +368,10 @@ struct FinancesMainTabView: View {
             .sheet(isPresented: $showFinanceSettingsSheet) {
                 FinancesSettingsSheet(
                     isDailyAuditAvailable: isDailyAuditDebugOnlyEnabled,
+                    accountSortMode: Binding(
+                        get: { viewModel.state.accountSortMode },
+                        set: { viewModel.handle(.setAccountSortMode($0)) }
+                    ),
                     onOpenSavingsGoal: {
                         showFinanceSettingsSheet = false
                         viewModel.handle(.showSavingsGoalSheet)

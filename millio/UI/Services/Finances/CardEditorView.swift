@@ -51,6 +51,8 @@ struct CardEditorView: View {
                 includeInTotal: editing.includeInTotal
             )
             newCard.uniqueID = editing.uniqueID
+            newCard.customIconName = editing.customIconName
+            newCard.customIconColor = editing.customIconColor
             _card = State(initialValue: newCard)
             _balanceText = State(initialValue: AmountInputFormatter.display(AmountInputFormatter.plainString(from: editing.balance)))
             _creditLimitText = State(initialValue: editing.creditLimit.map {

@@ -47,22 +47,20 @@ struct AccountIconBadgeView: View {
     private var cornerRadius: CGFloat { size * 0.31 }
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.white.opacity(0.05))
-            .overlay {
-                if isMonogram {
-                    Text(monogramText)
-                        .font(.system(size: monogramFontSize, weight: .bold, design: .rounded))
-                        .foregroundStyle(foregroundStyle)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                } else {
-                    Image(systemName: resolvedIconName)
-                        .font(.system(size: iconFontSize, weight: .semibold))
-                        .foregroundStyle(foregroundStyle)
-                }
+        Group {
+            if isMonogram {
+                Text(monogramText)
+                    .font(.system(size: monogramFontSize, weight: .bold, design: .rounded))
+                    .foregroundStyle(foregroundStyle)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            } else {
+                Image(systemName: resolvedIconName)
+                    .font(.system(size: iconFontSize, weight: .semibold))
+                    .foregroundStyle(foregroundStyle)
             }
-            .frame(width: size, height: size)
+        }
+        .frame(width: size, height: size)
     }
 
     private var foregroundStyle: some ShapeStyle {

@@ -329,10 +329,10 @@ struct FinanceGroupRow: View {
         )
             .overlay(alignment: .leading) {
                 Capsule(style: .continuous)
-                    .fill(accentColor.opacity(0.85))
-                    .frame(width: 4)
+                    .fill(accentColor.opacity(0.9))
+                    .frame(width: 2.5)
                     .padding(.vertical, 14)
-                    .padding(.leading, 10)
+                    .padding(.leading, 12)
             }
     }
     
@@ -458,6 +458,7 @@ private struct FinanceAccountRow: View {
                 iconName: customIconName,
                 iconColor: customIconColor,
                 fallback: icon,
+                size: 36,
                 isError: isDebtHighlighted
             )
 
@@ -509,6 +510,7 @@ private struct FinanceAccountRow: View {
                 iconName: customIconName,
                 iconColor: customIconColor,
                 fallback: icon,
+                size: 36,
                 isError: isDebtHighlighted
             )
 

@@ -79,22 +79,40 @@ final class FinanceGroupService {
         orderedAccounts(for: group).filter { accountInfoResolver($0) }
     }
 
-    func orderedAccounts(for group: FinanceGroup, amountResolver: ((FinanceAccount) -> Double)? = nil) -> [FinanceAccount] {
+    func orderedAccounts(
+        for group: FinanceGroup,
+        sortMode: AccountSortMode = .amountDescending,
+        amountResolver: ((FinanceAccount) -> Double)? = nil,
+        nameResolver: ((FinanceAccount) -> String)? = nil
+    ) -> [FinanceAccount] {
         let accounts = (group.accounts ?? []).filter { accountInfoResolver($0) }
         if group.usesManualAccountOrdering {
             return accounts.sorted { lhs, rhs in
-                if lhs.order != rhs.order {
-                    return lhs.order < rhs.order
-                }
+                if lhs.order != rhs.order { return lhs.order < rhs.order }
                 return lhs.createdAt < rhs.createdAt
             }
         }
 
         return accounts.sorted { lhs, rhs in
-            let lhsAmount = amountResolver?(lhs) ?? 0
-            let rhsAmount = amountResolver?(rhs) ?? 0
-            if lhsAmount != rhsAmount {
-                return lhsAmount > rhsAmount
+            switch sortMode {
+            case .amountDescending:
+                let lhsAmt = amountResolver?(lhs) ?? 0
+                let rhsAmt = amountResolver?(rhs) ?? 0
+                if lhsAmt != rhsAmt { return lhsAmt > rhsAmt }
+            case .amountAscending:
+                let lhsAmt = amountResolver?(lhs) ?? 0
+                let rhsAmt = amountResolver?(rhs) ?? 0
+                if lhsAmt != rhsAmt { return lhsAmt < rhsAmt }
+            case .nameAscending:
+                let lhsName = nameResolver?(lhs) ?? ""
+                let rhsName = nameResolver?(rhs) ?? ""
+                let cmp = lhsName.localizedCompare(rhsName)
+                if cmp != .orderedSame { return cmp == .orderedAscending }
+            case .nameDescending:
+                let lhsName = nameResolver?(lhs) ?? ""
+                let rhsName = nameResolver?(rhs) ?? ""
+                let cmp = lhsName.localizedCompare(rhsName)
+                if cmp != .orderedSame { return cmp == .orderedDescending }
             }
             return lhs.createdAt < rhs.createdAt
         }

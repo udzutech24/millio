@@ -419,6 +419,10 @@ struct FinancesSettingsSheetWrapper: View {
     var body: some View {
         FinancesSettingsSheet(
             isDailyAuditAvailable: isDailyAuditAvailable,
+            accountSortMode: Binding(
+                get: { viewModel.state.accountSortMode },
+                set: { viewModel.handle(.setAccountSortMode($0)) }
+            ),
             onOpenSavingsGoal: {
                 dismiss()
                 viewModel.handle(.showSavingsGoalSheet)

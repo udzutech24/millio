@@ -333,6 +333,8 @@ final class CardViewModel: ViewModelProtocol {
             existing.expiryDate = card.expiryDate
             existing.cardholderName = card.cardholderName
             existing.cardColor = card.cardColor
+            existing.customIconName = card.customIconName
+            existing.customIconColor = card.customIconColor
             existing.isFavorite = card.isFavorite
             existing.includeInTotal = card.includeInTotal
             existing.updatedAt = Date()
@@ -385,6 +387,8 @@ final class CardViewModel: ViewModelProtocol {
             if !card.uniqueID.isEmpty {
                 newCard.uniqueID = card.uniqueID
             }
+            newCard.customIconName = card.customIconName
+            newCard.customIconColor = card.customIconColor
             modelContext.insert(newCard)
         }
         

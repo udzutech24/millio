@@ -847,11 +847,15 @@ struct FinanceAddAccountView: View {
                     selectedAccountType = .card
                     selectedProductTypeTitle = FinanceAccountType.card.displayName(for: localizationLocale)
                     accountName = editingCard.name
+                    draftIconName = editingCard.customIconName
+                    draftIconColor = editingCard.customIconColor
                 } else if let editingCredit {
                     hasConfirmedProductSelection = true
                     selectedAccountType = .credit
                     selectedProductTypeTitle = FinanceAccountType.credit.displayName(for: localizationLocale)
                     accountName = editingCredit.name
+                    draftIconName = editingCredit.customIconName
+                    draftIconColor = editingCredit.customIconColor
                 } else if let editingInvestment {
                     hasConfirmedProductSelection = true
                     selectedAccountType = .investment
@@ -859,6 +863,8 @@ struct FinanceAddAccountView: View {
                     selectedInvestmentPreset = .category
                     selectedProductTypeTitle = editingInvestment.category.displayName(for: localizationLocale)
                     accountName = editingInvestment.name
+                    draftIconName = editingInvestment.customIconName
+                    draftIconColor = editingInvestment.customIconColor
                 } else if let preselectedAccountType {
                     hasConfirmedProductSelection = true
                     selectedAccountType = preselectedAccountType
@@ -1356,6 +1362,9 @@ struct FinanceAddAccountView: View {
             cardData.uniqueID = card.uniqueID
         }
 
+        cardData.customIconName = draftIconName
+        cardData.customIconColor = draftIconColor
+
         cardViewModel.handle(.editCard(card))
         cardViewModel.handle(.updateCard(cardData))
 
@@ -1370,7 +1379,10 @@ struct FinanceAddAccountView: View {
     private func updateCreditAndGroup(creditViewModel: CreditViewModel, credit: Credit, group: FinanceGroup?) {
         guard let creditData = creditData else { return }
 
-        creditViewModel.handle(.editCredit(credit))
+        // Устанавливаем editingCredit и иконку до updateCredit — modelContext.save() вызывается внутри updateCredit
+        creditViewModel.state.editingCredit = credit
+        creditViewModel.state.editingCredit?.customIconName = draftIconName
+        creditViewModel.state.editingCredit?.customIconColor = draftIconColor
         creditViewModel.handle(.updateCredit(
             name: creditData.name,
             amount: creditData.amount,
@@ -1441,6 +1453,11 @@ struct FinanceAddAccountView: View {
         group: FinanceGroup?
     ) {
         guard let investmentData = investmentData else { return }
+
+        // Устанавливаем editingInvestment и иконку до updateInvestment — modelContext.save() вызывается внутри updateInvestment
+        investmentViewModel.state.editingInvestment = investment
+        investmentViewModel.state.editingInvestment?.customIconName = draftIconName
+        investmentViewModel.state.editingInvestment?.customIconColor = draftIconColor
 
         investmentViewModel.handle(.updateInvestment(
             name: investmentData.name,

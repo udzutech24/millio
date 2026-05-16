@@ -1003,7 +1003,7 @@ private struct SupportContactHeaderView: View {
 enum SupportContactChannel: String, Identifiable, CaseIterable {
     case email
     case telegram
-    case whatsapp
+    case telegramChannel
 
     var id: String { rawValue }
 
@@ -1013,8 +1013,8 @@ enum SupportContactChannel: String, Identifiable, CaseIterable {
             return "profile.contact.option.email"
         case .telegram:
             return "profile.contact.option.telegram"
-        case .whatsapp:
-            return "profile.contact.option.whatsapp"
+        case .telegramChannel:
+            return "profile.contact.option.telegram_channel"
         }
     }
 
@@ -1024,8 +1024,8 @@ enum SupportContactChannel: String, Identifiable, CaseIterable {
             return "Email"
         case .telegram:
             return "Telegram"
-        case .whatsapp:
-            return "WhatsApp"
+        case .telegramChannel:
+            return "Telegram-канал"
         }
     }
 
@@ -1035,8 +1035,8 @@ enum SupportContactChannel: String, Identifiable, CaseIterable {
             return .system("envelope.fill")
         case .telegram:
             return .asset(name: SupportContactConfig.default.telegramIconAssetName, fallbackSystemName: "paperplane.fill")
-        case .whatsapp:
-            return .asset(name: SupportContactConfig.default.whatsappIconAssetName, fallbackSystemName: "phone.fill")
+        case .telegramChannel:
+            return .asset(name: SupportContactConfig.default.telegramIconAssetName, fallbackSystemName: "paperplane.fill")
         }
     }
 }
@@ -1072,17 +1072,14 @@ private struct SupportContactIconView: View {
 struct SupportContactConfig {
     let emailAddress: String
     let telegramHandle: String
-    let whatsappNumber: String
+    let telegramChannelHandle: String
     let telegramIconAssetName: String
-    let whatsappIconAssetName: String
 
-    // Replace with real contacts + asset names before release.
     static let `default` = SupportContactConfig(
         emailAddress: "support@millio.app",
         telegramHandle: "millio_support",
-        whatsappNumber: "15551234567",
-        telegramIconAssetName: "telegram",
-        whatsappIconAssetName: "whatsapp"
+        telegramChannelHandle: "millio_app",
+        telegramIconAssetName: "telegram"
     )
 }
 
@@ -1095,8 +1092,8 @@ struct SupportContactResolver {
             return URL(string: "mailto:\(config.emailAddress)")
         case .telegram:
             return URL(string: "https://t.me/\(config.telegramHandle)")
-        case .whatsapp:
-            return URL(string: "https://wa.me/\(config.whatsappNumber)")
+        case .telegramChannel:
+            return URL(string: "https://t.me/\(config.telegramChannelHandle)")
         }
     }
 }
