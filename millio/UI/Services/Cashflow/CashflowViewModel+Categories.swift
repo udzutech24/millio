@@ -26,14 +26,12 @@ extension CashflowViewModel {
     func orderedCategoryOptions(
         for kind: CashflowCategoryKind,
         matching query: String = "",
-        includeHiddenSystem: Bool = false,
-        totalsByCategory: [String: Double] = [:]
+        includeHiddenSystem: Bool = false
     ) -> [CashflowCategoryOption] {
         categoryService.orderedCategoryOptions(
             for: kind,
             matching: query,
-            includeHiddenSystem: includeHiddenSystem,
-            totalsByCategory: totalsByCategory
+            includeHiddenSystem: includeHiddenSystem
         )
     }
 
@@ -62,10 +60,9 @@ extension CashflowViewModel {
 
     static func sortCategoryOptions(
         _ options: [CashflowCategoryOption],
-        totalsByCategory: [String: Double],
         pinnedRawValues: Set<String>
     ) -> [CashflowCategoryOption] {
-        CashflowCategoryService.sortCategoryOptions(options, totalsByCategory: totalsByCategory, pinnedRawValues: pinnedRawValues)
+        CashflowCategoryService.sortCategoryOptions(options, pinnedRawValues: pinnedRawValues)
     }
 
     func categoryOption(for raw: String, kind: CashflowCategoryKind, fallbackName: String = "") -> CashflowCategoryOption {

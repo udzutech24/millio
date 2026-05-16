@@ -594,18 +594,19 @@ private struct CashflowContentView: View {
     private var periodSelectionHeader: some View {
         let range = viewModel.currentDateRange()
         let canExpand = hasChartData && EntitlementPolicy.canUseCashflowChart(isPro: appState.isPro)
-        return HStack(spacing: 6) {
+        return HStack(spacing: 8) {
             Button {
                 draftStartDate = viewModel.state.customStartDate
                 draftEndDate = viewModel.state.customEndDate
                 viewModel.handle(.showPeriodSelector)
                 fireLightImpact()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Image("calendar")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 14, height: 14)
+                        .frame(width: 13, height: 13)
+                        .opacity(0.7)
                     Text(String(format: L("cashflow.period.range_format"), formatPeriod(range.0), formatPeriod(range.1)))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(primarySecondaryText)
@@ -613,7 +614,7 @@ private struct CashflowContentView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(periodControlBackground)
             }
@@ -621,36 +622,43 @@ private struct CashflowContentView: View {
 
             Spacer()
 
-            Button {
-                viewModel.handle(.showCurrencySelector)
-                fireLightImpact()
-            } label: {
-                Text(toolbarCurrencyLabel())
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(0.4)
-                    .foregroundStyle(primarySecondaryText)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(periodControlBackground)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text(L("cashflow.accessibility.display_currency_selector")))
-
-            if canExpand {
+            // Правые контролы в едином чипе
+            HStack(spacing: 0) {
                 Button {
-                    showExpandedChart = true
+                    viewModel.handle(.showCurrencySelector)
                     fireLightImpact()
                 } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .padding(.horizontal, 10)
+                    Text(toolbarCurrencyLabel())
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(0.5)
+                        .foregroundStyle(primarySecondaryText)
+                        .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .background(periodControlBackground)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text(L("cashflow.chart.expand")))
+                .accessibilityLabel(Text(L("cashflow.accessibility.display_currency_selector")))
+
+                if canExpand {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.12))
+                        .frame(width: 0.5)
+                        .padding(.vertical, 6)
+
+                    Button {
+                        showExpandedChart = true
+                        fireLightImpact()
+                    } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.85))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(L("cashflow.chart.expand")))
+                }
             }
+            .background(periodControlBackground)
         }
         .animation(.easeInOut(duration: 0.2), value: viewModel.state.customStartDate)
     }

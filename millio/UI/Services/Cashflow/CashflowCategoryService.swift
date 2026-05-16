@@ -95,8 +95,7 @@ final class CashflowCategoryService {
     func orderedCategoryOptions(
         for kind: CashflowCategoryKind,
         matching query: String = "",
-        includeHiddenSystem: Bool = false,
-        totalsByCategory: [String: Double] = [:]
+        includeHiddenSystem: Bool = false
     ) -> [CashflowCategoryOption] {
         let options = categoryOptions(
             for: kind,
@@ -113,7 +112,6 @@ final class CashflowCategoryService {
         }
         return Self.sortCategoryOptions(
             options,
-            totalsByCategory: totalsByCategory,
             pinnedRawValues: categoryPinPrefs.pinnedRawValues(for: kind)
         )
     }
@@ -140,37 +138,18 @@ final class CashflowCategoryService {
         }
     }
 
+    /// Стабильная сортировка: pinned → системные (порядок enum) → кастомные.
+    /// Относительный порядок внутри каждой группы сохраняется (Swift sorted — stable).
     static func sortCategoryOptions(
         _ options: [CashflowCategoryOption],
-        totalsByCategory: [String: Double],
         pinnedRawValues: Set<String>
     ) -> [CashflowCategoryOption] {
         options.sorted { lhs, rhs in
             let lhsPinned = pinnedRawValues.contains(lhs.rawValue)
             let rhsPinned = pinnedRawValues.contains(rhs.rawValue)
-            if lhsPinned != rhsPinned {
-                return lhsPinned && !rhsPinned
-            }
-
-            let lhsTotal = totalsByCategory[lhs.rawValue] ?? 0
-            let rhsTotal = totalsByCategory[rhs.rawValue] ?? 0
-            let lhsHasActivity = lhsTotal > 0.0000001
-            let rhsHasActivity = rhsTotal > 0.0000001
-
-            if lhsHasActivity != rhsHasActivity {
-                return lhsHasActivity && !rhsHasActivity
-            }
-
-            if abs(lhsTotal - rhsTotal) > 0.0000001 {
-                return lhsTotal > rhsTotal
-            }
-
-            let nameOrder = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
-            if nameOrder != .orderedSame {
-                return nameOrder == .orderedAscending
-            }
-
-            return lhs.rawValue < rhs.rawValue
+            if lhsPinned != rhsPinned { return lhsPinned }
+            if lhs.isCustom != rhs.isCustom { return !lhs.isCustom }
+            return false
         }
     }
 
@@ -630,6 +609,7 @@ final class CashflowCategoryService {
         let hiddenRaws = includeHidden ? Set<String>() : customCategoryVisibilityPrefs.hiddenRawValues(for: kind)
         return customCategoriesProvider()
             .filter { $0.kind == kind }
+            .sorted { $0.createdAt < $1.createdAt }
             .compactMap {
                 let raw = Self.customRawValue(from: $0.categoryID)
                 guard includeHidden || !hiddenRaws.contains(raw) else { return nil }

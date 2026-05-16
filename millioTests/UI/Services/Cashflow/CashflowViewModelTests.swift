@@ -65,27 +65,22 @@ private final class CashflowTestNotificationManager: NotificationManagerProtocol
 }
 
 extension CashflowViewModelTests {
-    @Test("Сортировка категорий ставит pinned сверху, затем активные по убыванию суммы, затем пустые")
-    func sortCategoryOptionsPrioritizesPinnedAndActivity() {
+    @Test("Сортировка категорий: pinned первым, затем системные (порядок enum), затем кастомные")
+    func sortCategoryOptionsStableOrder() {
         let options = [
             CashflowCategoryOption(rawValue: "salary", displayName: "Salary", icon: "💼", isCustom: false),
             CashflowCategoryOption(rawValue: "gift", displayName: "Gift", icon: "🎁", isCustom: false),
             CashflowCategoryOption(rawValue: "bonus", displayName: "Bonus", icon: "✨", isCustom: false),
-            CashflowCategoryOption(rawValue: "other", displayName: "Other", icon: "🧩", isCustom: true)
+            CashflowCategoryOption(rawValue: "custom:abc", displayName: "Мой доход", icon: "🧩", isCustom: true)
         ]
 
         let sorted = CashflowViewModel.sortCategoryOptions(
             options,
-            totalsByCategory: [
-                "salary": 120_000,
-                "gift": 15_000,
-                "bonus": 0,
-                "other": 0
-            ],
             pinnedRawValues: ["bonus"]
         )
 
-        #expect(sorted.map(\.rawValue) == ["bonus", "salary", "gift", "other"])
+        // pinned (bonus) первым; далее системные в исходном порядке (salary, gift); кастомные последними
+        #expect(sorted.map(\.rawValue) == ["bonus", "salary", "gift", "custom:abc"])
     }
 
     @Test("Пины категорий сохраняются отдельно для доходов и расходов")

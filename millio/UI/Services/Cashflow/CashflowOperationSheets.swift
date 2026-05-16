@@ -172,8 +172,7 @@ struct CashflowCategoryTransactionSheet: View {
     private var categories: [CashflowCategoryOption] {
         viewModel.orderedCategoryOptions(
             for: kind.categoryKind,
-            matching: searchText,
-            totalsByCategory: categoryTotals
+            matching: searchText
         )
     }
 
