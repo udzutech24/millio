@@ -55,7 +55,8 @@ platform :ios do
         "millio.xcodeproj/project.pbxproj",
         "millioCurrencyWidgetExtension/Info.plist"
       ],
-      message: "chore(build): bump build number to #{new_build_number}"
+      message: "chore(build): bump build number to #{new_build_number}",
+      allow_nothing_to_commit: true
     )
   end
 
