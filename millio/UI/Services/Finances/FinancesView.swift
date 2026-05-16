@@ -221,8 +221,8 @@ struct FinancesSettingsSheet: View {
                         onOpenQuickAudit()
                     } label: {
                         settingsRow(
-                            title: "Актуализировать балансы",
-                            subtitle: "Быстрая проверка всех счетов",
+                            title: financesLocalized("finances.settings.quick_audit.title"),
+                            subtitle: financesLocalized("finances.settings.quick_audit.subtitle"),
                             icon: "arrow.triangle.2.circlepath"
                         )
                     }

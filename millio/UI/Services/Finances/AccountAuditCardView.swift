@@ -1,5 +1,7 @@
 import SwiftUI
 
+private func qaL(_ key: String) -> String { FinancesL10n.tr(key) }
+
 // MARK: - Модель данных для флоу аудита
 
 struct AuditableAccount: Identifiable {
@@ -60,11 +62,11 @@ struct AccountAuditCardView: View {
     private var progressHeader: some View {
         VStack(spacing: AppSpacing.s) {
             HStack {
-                Text("Проверка балансов")
+                Text(qaL("finances.quick_audit.header"))
                     .font(Font.millioHeadline)
                     .foregroundStyle(AppColors.textSecondary)
                 Spacer()
-                Text("\(index + 1) из \(total)")
+                Text("\(index + 1) / \(total)")
                     .font(Font.millioCalloutSemibold)
                     .foregroundStyle(AppColors.textSecondary)
             }
@@ -150,11 +152,11 @@ struct AccountAuditCardView: View {
                 // Подсказка свайпа
                 if !isEditMode {
                     HStack {
-                        Label("изменить", systemImage: "arrow.left")
+                        Label(qaL("finances.quick_audit.hint_edit"), systemImage: "arrow.left")
                             .font(Font.millioCaption)
                             .foregroundStyle(AppColors.textTertiary.opacity(0.45))
                         Spacer()
-                        Label("верно", systemImage: "arrow.right")
+                        Label(qaL("finances.quick_audit.hint_confirm"), systemImage: "arrow.right")
                             .font(Font.millioCaption)
                             .foregroundStyle(AppColors.textTertiary.opacity(0.45))
                     }
@@ -169,7 +171,7 @@ struct AccountAuditCardView: View {
 
     private var balanceDisplay: some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text("Текущий баланс")
+            Text(qaL("finances.quick_audit.current_balance"))
                 .font(Font.millioCaption)
                 .foregroundStyle(AppColors.textSecondary)
             Text(formattedBalance(account.balance, currency: account.currencyCode))
@@ -185,7 +187,7 @@ struct AccountAuditCardView: View {
 
     private var editField: some View {
         VStack(alignment: .leading, spacing: AppSpacing.s) {
-            Text("Новый баланс")
+            Text(qaL("finances.quick_audit.new_balance"))
                 .font(Font.millioCaption)
                 .foregroundStyle(AppColors.textSecondary)
             HStack(spacing: AppSpacing.s) {
@@ -205,7 +207,7 @@ struct AccountAuditCardView: View {
                     .fill(Color.white.opacity(0.1))
             )
             Button(action: commitEdit) {
-                Text("Сохранить")
+                Text(qaL("finances.quick_audit.save"))
                     .font(Font.millioHeadline)
                     .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
@@ -225,7 +227,7 @@ struct AccountAuditCardView: View {
             Button(action: enterEditMode) {
                 HStack(spacing: AppSpacing.xs) {
                     Image(systemName: "pencil")
-                    Text("Изменить")
+                    Text(qaL("finances.quick_audit.edit"))
                 }
                 .font(Font.millioHeadline)
                 .foregroundStyle(AppColors.textPrimary)
@@ -243,7 +245,7 @@ struct AccountAuditCardView: View {
             Button(action: triggerConfirm) {
                 HStack(spacing: AppSpacing.xs) {
                     Image(systemName: "checkmark")
-                    Text("Верно")
+                    Text(qaL("finances.quick_audit.confirm"))
                 }
                 .font(Font.millioHeadline)
                 .foregroundStyle(.black)

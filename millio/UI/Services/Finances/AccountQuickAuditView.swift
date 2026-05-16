@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
 
+private func qaL(_ key: String) -> String { FinancesL10n.tr(key) }
+
 // MARK: - Оркестратор флоу быстрой актуализации балансов
 
 struct AccountQuickAuditView: View {
@@ -59,15 +61,15 @@ struct AccountQuickAuditView: View {
                 .symbolEffect(.rotate, options: .nonRepeating)
 
             VStack(spacing: AppSpacing.s) {
-                Text("Проверка счетов")
+                Text(qaL("finances.quick_audit.title"))
                     .font(Font.millioTitle)
                     .foregroundStyle(AppColors.textPrimary)
-                Text(accounts.isEmpty ? "Нет счетов" : "\(accounts.count) \(accountsPlural(accounts.count))")
+                Text(accounts.isEmpty ? qaL("finances.quick_audit.empty") : "\(accounts.count)")
                     .font(Font.millioBody)
                     .foregroundStyle(AppColors.textSecondary)
             }
 
-            Text("Пройдитесь по каждому счёту и подтвердите баланс.\nСвайп вправо — всё верно, влево — изменить.")
+            Text(qaL("finances.quick_audit.description"))
                 .font(Font.millioCalloutRegular)
                 .foregroundStyle(AppColors.textTertiary)
                 .multilineTextAlignment(.center)
@@ -76,7 +78,7 @@ struct AccountQuickAuditView: View {
             Spacer()
 
             if accounts.isEmpty {
-                Text("Добавьте счета, чтобы использовать быструю проверку")
+                Text(qaL("finances.quick_audit.empty_hint"))
                     .font(Font.millioCallout)
                     .foregroundStyle(AppColors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -93,7 +95,7 @@ struct AccountQuickAuditView: View {
         Button {
             withAnimation(AppAnimation.springGentle) { flowState = .audit }
         } label: {
-            Text("Начать")
+            Text(qaL("finances.quick_audit.start"))
                 .font(Font.millioHeadline)
                 .foregroundStyle(.black)
                 .frame(maxWidth: .infinity)
@@ -153,10 +155,10 @@ struct AccountQuickAuditView: View {
             }
 
             VStack(spacing: AppSpacing.s) {
-                Text("Всё проверено!")
+                Text(qaL("finances.quick_audit.done_title"))
                     .font(Font.millioTitle)
                     .foregroundStyle(AppColors.textPrimary)
-                Text("Все \(accounts.count) \(accountsPlural(accounts.count)) актуализированы")
+                Text(qaL("finances.quick_audit.done_description"))
                     .font(Font.millioBody)
                     .foregroundStyle(AppColors.textSecondary)
             }
@@ -164,7 +166,7 @@ struct AccountQuickAuditView: View {
             Spacer()
 
             Button { dismiss() } label: {
-                Text("Готово")
+                Text(qaL("finances.quick_audit.done"))
                     .font(Font.millioHeadline)
                     .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
@@ -195,7 +197,7 @@ struct AccountQuickAuditView: View {
                     displayName: card.name,
                     iconName: card.bank.icon,
                     accentColors: AppColors.cardIndexGradient,
-                    typeLabel: "Карта",
+                    typeLabel: qaL("finances.quick_audit.type_card"),
                     typeIcon: "creditcard.fill",
                     currencyCode: card.currency
                 ))
@@ -210,7 +212,7 @@ struct AccountQuickAuditView: View {
                     displayName: inv.name,
                     iconName: inv.resolvedIconName,
                     accentColors: AppColors.investmentsGradient,
-                    typeLabel: "Актив",
+                    typeLabel: qaL("finances.quick_audit.type_investment"),
                     typeIcon: "chart.line.uptrend.xyaxis",
                     currencyCode: inv.currency
                 ))
@@ -225,7 +227,7 @@ struct AccountQuickAuditView: View {
                     displayName: credit.name,
                     iconName: "banknote.fill",
                     accentColors: [Color(hex: "2B8CFF"), Color(hex: "005BFF")],
-                    typeLabel: "Кредит",
+                    typeLabel: qaL("finances.quick_audit.type_credit"),
                     typeIcon: "creditcard.trianglebadge.exclamationmark.fill",
                     currencyCode: credit.currency
                 ))
