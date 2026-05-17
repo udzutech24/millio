@@ -27,6 +27,10 @@ struct FinanceGroupEditorView: View {
     @State private var showCryptoProAlert: Bool = false
     @State private var showDeleteGroupConfirmation: Bool = false
     @State private var pendingAccountDeletion: FinanceAccount? = nil
+    @State private var showArchiveBalanceWarning: Bool = false
+    @State private var archiveBalanceWarningAmount: Double = 0
+    @State private var archiveBalanceWarningCurrency: String = ""
+    @State private var pendingAccountDeletionAfterWarning: FinanceAccount? = nil
     @State private var isColorPaletteExpanded: Bool = false
     
     private let predefinedColors: [Color] = [
@@ -86,6 +90,23 @@ struct FinanceGroupEditorView: View {
                     cancelTitle: L("finances.common.cancel"),
                     onConfirm: confirmDeleteAccount,
                     onCancel: { pendingAccountDeletion = nil }
+                )
+
+                FinancesDestructiveConfirmationOverlay(
+                    isPresented: showArchiveBalanceWarning,
+                    title: L("finances.archive.balance_warning.title"),
+                    message: archiveBalanceWarningMessage,
+                    confirmTitle: L("finances.archive.balance_warning.confirm"),
+                    cancelTitle: L("finances.common.cancel"),
+                    onConfirm: {
+                        showArchiveBalanceWarning = false
+                        pendingAccountDeletion = pendingAccountDeletionAfterWarning
+                        pendingAccountDeletionAfterWarning = nil
+                    },
+                    onCancel: {
+                        showArchiveBalanceWarning = false
+                        pendingAccountDeletionAfterWarning = nil
+                    }
                 )
             }
             .navigationTitle(
@@ -453,7 +474,16 @@ struct FinanceGroupEditorView: View {
                                 
                                 // Кнопка удаления
                                 Button {
-                                    pendingAccountDeletion = account
+                                    let info = viewModel.getAccountInfo(account: account)
+                                    let amount = info?.amount ?? 0
+                                    if abs(amount) > 0.001 {
+                                        archiveBalanceWarningAmount = amount
+                                        archiveBalanceWarningCurrency = info?.currency ?? ""
+                                        pendingAccountDeletionAfterWarning = account
+                                        showArchiveBalanceWarning = true
+                                    } else {
+                                        pendingAccountDeletion = account
+                                    }
                                 } label: {
                                     Image(systemName: "trash")
                                         .font(.system(size: 16, weight: .medium))
@@ -582,6 +612,16 @@ struct FinanceGroupEditorView: View {
 
     private var deleteGroupConfirmationMessage: String {
         FinancesL10n.tr("finances.dynamics.delete_group.confirm.message")
+    }
+
+    private var archiveBalanceWarningMessage: String {
+        let symbol = MonetaCurrency(rawValue: archiveBalanceWarningCurrency)?.symbol ?? archiveBalanceWarningCurrency
+        let formatted = FinanceAmountText.withCurrency(
+            value: abs(archiveBalanceWarningAmount),
+            currencySymbol: symbol,
+            isHidden: false
+        )
+        return FinancesL10n.format("finances.archive.balance_warning.message", formatted)
     }
 
     private func managementRow(title: String, systemImage: String, tint: Color) -> some View {

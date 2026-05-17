@@ -50,6 +50,13 @@ enum FinanceDynamicsHeaderStyle {
     static let summaryAmountFontSize: CGFloat = 24
 }
 
+enum FinanceAccountArchivePolicy {
+    /// Нужно ли показывать предупреждение перед архивированием счёта
+    static func shouldShowBalanceWarning(balance: Double) -> Bool {
+        abs(balance) > 0.01
+    }
+}
+
 enum FinanceDynamicsDeleteLayoutPolicy {
     static func showsDeleteFooter(
         isSingleAccountMode: Bool,
@@ -211,6 +218,9 @@ private struct FinanceDynamicsContentView: View {
     @State private var isOverviewChartLoading: Bool = false
     @State private var showDeleteAccountConfirmation: Bool = false
     @State private var showDeleteGroupConfirmation: Bool = false
+    @State private var showArchiveBalanceWarning: Bool = false
+    @State private var archiveBalanceWarningAmount: Double = 0
+    @State private var archiveBalanceWarningCurrency: String = ""
 
     // Кэшированные значения для графика
     @State private var cachedSelectedPoint: (date: Date, value: Double)? = nil
@@ -338,6 +348,19 @@ private struct FinanceDynamicsContentView: View {
                     cancelTitle: L("finances.common.cancel"),
                     onConfirm: confirmDeleteCurrentGroup,
                     onCancel: { showDeleteGroupConfirmation = false }
+                )
+
+                FinancesDestructiveConfirmationOverlay(
+                    isPresented: showArchiveBalanceWarning,
+                    title: L("finances.archive.balance_warning.title"),
+                    message: archiveBalanceWarningMessage,
+                    confirmTitle: L("finances.archive.balance_warning.confirm"),
+                    cancelTitle: L("finances.common.cancel"),
+                    onConfirm: {
+                        showArchiveBalanceWarning = false
+                        confirmDeleteAccount()
+                    },
+                    onCancel: { showArchiveBalanceWarning = false }
                 )
 
                 if let tradeCelebration = financeViewModel.state.tradeCelebration {
@@ -2188,9 +2211,27 @@ private struct FinanceDynamicsContentView: View {
         FinancesL10n.tr("finances.dynamics.delete_group.confirm.message")
     }
 
+    private var archiveBalanceWarningMessage: String {
+        let symbol = MonetaCurrency(rawValue: archiveBalanceWarningCurrency)?.symbol ?? archiveBalanceWarningCurrency
+        let formatted = FinanceAmountText.withCurrency(
+            value: abs(archiveBalanceWarningAmount),
+            currencySymbol: symbol,
+            isHidden: false
+        )
+        return FinancesL10n.format("finances.archive.balance_warning.message", formatted)
+    }
+
     private func deleteAccountFooterButton(account: FinanceAccount) -> some View {
         Button(role: .destructive) {
-            showDeleteAccountConfirmation = true
+            let info = financeViewModel.getAccountInfo(account: account)
+            let amount = info?.amount ?? 0
+            if FinanceAccountArchivePolicy.shouldShowBalanceWarning(balance: amount) {
+                archiveBalanceWarningAmount = amount
+                archiveBalanceWarningCurrency = info?.currency ?? ""
+                showArchiveBalanceWarning = true
+            } else {
+                showDeleteAccountConfirmation = true
+            }
         } label: {
             Text(String(localized: deleteAccountActionTitle))
                 .font(.footnote.weight(.semibold))
