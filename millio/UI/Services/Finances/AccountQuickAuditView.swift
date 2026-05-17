@@ -250,50 +250,53 @@ struct AccountQuickAuditView: View {
     // MARK: - Audit
 
     private var auditView: some View {
-        VStack(spacing: 0) {
-            progressHeader
-                .padding(.horizontal, AppSpacing.xl)
-                .padding(.top, AppSpacing.xxl)
-
-            Spacer()
-
-            VStack(spacing: AppSpacing.m) {
-                if currentIndex > 0 {
-                    AccountAuditInactiveRow(account: accounts[currentIndex - 1])
-                        .padding(.horizontal, AppSpacing.xl)
-                        .transition(.opacity)
-                }
-
-                AccountAuditActiveRow(
-                    account: accounts[currentIndex],
-                    balanceText: $currentBalance,
-                    isFocused: $fieldFocused,
-                    confirmFlash: confirmFlash
-                )
-                .padding(.horizontal, AppSpacing.xl)
-                .id(currentIndex)
-                .transition(
-                    .asymmetric(
-                        insertion: .move(edge: .bottom).combined(with: .opacity),
-                        removal: .move(edge: .top).combined(with: .opacity)
-                    )
-                )
-
-                if currentIndex < accounts.count - 1 {
-                    AccountAuditInactiveRow(account: accounts[currentIndex + 1])
-                        .padding(.horizontal, AppSpacing.xl)
-                        .transition(.opacity)
-                }
-            }
-            .animation(AppAnimation.springGentle, value: currentIndex)
-
-            Spacer()
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                confirmButton
+        NavigationStack {
+            VStack(spacing: 0) {
+                progressHeader
                     .padding(.horizontal, AppSpacing.xl)
-                    .padding(.vertical, AppSpacing.xs)
+                    .padding(.top, AppSpacing.xxl)
+
+                Spacer()
+
+                VStack(spacing: AppSpacing.m) {
+                    if currentIndex > 0 {
+                        AccountAuditInactiveRow(account: accounts[currentIndex - 1])
+                            .padding(.horizontal, AppSpacing.xl)
+                            .transition(.opacity)
+                    }
+
+                    AccountAuditActiveRow(
+                        account: accounts[currentIndex],
+                        balanceText: $currentBalance,
+                        isFocused: $fieldFocused,
+                        confirmFlash: confirmFlash
+                    )
+                    .padding(.horizontal, AppSpacing.xl)
+                    .id(currentIndex)
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .move(edge: .top).combined(with: .opacity)
+                        )
+                    )
+
+                    if currentIndex < accounts.count - 1 {
+                        AccountAuditInactiveRow(account: accounts[currentIndex + 1])
+                            .padding(.horizontal, AppSpacing.xl)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(AppAnimation.springGentle, value: currentIndex)
+
+                Spacer()
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    confirmButton
+                        .padding(.horizontal, AppSpacing.xl)
+                        .padding(.vertical, AppSpacing.xs)
+                }
             }
         }
         .onAppear {
