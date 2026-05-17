@@ -8,6 +8,7 @@
 import Foundation
 import Testing
 import SwiftData
+import Combine
 @testable import millio
 
 // MARK: - Мок сервиса курсов валют
@@ -3038,5 +3039,136 @@ struct FinanceViewModelTests {
         let investments = try modelContext.fetch(FetchDescriptor<Investment>())
         let updatedInvestment = try #require(investments.first)
         #expect(updatedInvestment.archivedAt != nil)
+    }
+
+    // MARK: - cardByID staleness fix (2026-05-17)
+
+    @Test("cardByID обновляется после повторного loadAccounts — баг stale balance после QuickAudit")
+    func testCardByIDReflectsUpdatedBalanceAfterSecondLoadAccounts() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Карты", colorHex: "#22AAFF")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "Сбербанк Дебетовая",
+            cardNumber: "1234",
+            bank: .sberbank,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 500
+        )
+        modelContext.insert(card)
+
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        // Симуляция save из AccountQuickAuditView
+        card.balance = 800
+        try modelContext.save()
+
+        // Симуляция onCommitted → loadAccounts
+        viewModel.handle(.loadAccounts)
+
+        #expect(viewModel.cardByID[card.cardUniqueID]?.balance == 800)
+
+        let info = viewModel.getAccountInfo(account: account)
+        #expect(abs((info?.amount ?? 0) - 800) < 0.01)
+        #expect(info?.isCreditCardDebt == false)
+    }
+
+    @Test("getAccountInfo возвращает обновлённый долг кредитной карты после повторного loadAccounts")
+    func testCreditCardDebtAmountUpdatesAfterLoadAccounts() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Кредитки", colorHex: "#FF3344")
+        modelContext.insert(group)
+
+        // balance = остаток доступного лимита; долг = creditLimit - balance
+        let card = Card(
+            name: "Альфа Кредитная",
+            cardNumber: "5678",
+            bank: .other,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 45_000,
+            creditLimit: 100_000
+        )
+        modelContext.insert(card)
+
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        // Начальный долг: 100_000 - 45_000 = 55_000
+        let infoInitial = viewModel.getAccountInfo(account: account)
+        #expect(abs((infoInitial?.amount ?? 0) - 55_000) < 0.01)
+        #expect(infoInitial?.isCreditCardDebt == true)
+
+        // AQA записывает новый долг 70_000 → balance = limit - debt = 100_000 - 70_000 = 30_000
+        card.balance = 30_000
+        try modelContext.save()
+        viewModel.handle(.loadAccounts)
+
+        let infoAfter = viewModel.getAccountInfo(account: account)
+        #expect(abs((infoAfter?.amount ?? 0) - 70_000) < 0.01)
+        #expect(infoAfter?.isCreditCardDebt == true)
+        #expect(viewModel.cardByID[card.cardUniqueID]?.balance == 30_000)
+    }
+
+    @Test("@Published cardByID — objectWillChange стреляет после loadAccounts")
+    func testCardByIDPublishedFiresObjectWillChange() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Карты", colorHex: "#22AAFF")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "Тинькофф",
+            cardNumber: "9999",
+            bank: .tinkoff,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+
+        var changeCount = 0
+        var cancellables: Set<AnyCancellable> = []
+        viewModel.objectWillChange.sink { _ in changeCount += 1 }.store(in: &cancellables)
+
+        card.balance = 1_500
+        try modelContext.save()
+        viewModel.handle(.loadAccounts)
+
+        #expect(changeCount > 0)
     }
 }

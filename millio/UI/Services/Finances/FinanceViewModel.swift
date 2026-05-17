@@ -295,9 +295,9 @@ final class FinanceViewModel: ViewModelProtocol {
     private var backgroundTasks: [UUID: Task<Void, Never>] = [:]
 
     /// Быстрые словари для поиска счетов по ID (O(1) вместо O(n))
-    private var cardByID: [String: Card] = [:]
-    private var creditByID: [String: Credit] = [:]
-    private var investmentByID: [String: Investment] = [:]
+    @Published private(set) var cardByID: [String: Card] = [:]
+    @Published private(set) var creditByID: [String: Credit] = [:]
+    @Published private(set) var investmentByID: [String: Investment] = [:]
     private var lastManualStockRefreshAt: Date?
 
     private static let manualStockRefreshCooldown: TimeInterval = 15

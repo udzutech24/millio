@@ -366,9 +366,6 @@ struct FinancesMainTabView: View {
     @State private var showBalanceAuditSheetFromSettings = false
     @State private var showMassTickerImportSheet = false
     @State private var showQuickAuditCover = false
-    // Нативный SwiftData-observer: стреляет ПОСЛЕ того как SwiftData смёрджил save,
-    // гарантируя что cardByID в ViewModel обновится уже с актуальными балансами.
-    @Query private var _cardBalanceMonitor: [Card]
 
     private var isDailyAuditDebugOnlyEnabled: Bool {
 #if DEBUG
@@ -422,19 +419,12 @@ struct FinancesMainTabView: View {
                     marketDataClient: viewModel.marketDataClient
                 )
             }
-            .fullScreenCover(isPresented: $showQuickAuditCover) {
+            .fullScreenCover(isPresented: $showQuickAuditCover, onDismiss: {
+                viewModel.handle(.loadAccounts)
+            }) {
                 AccountQuickAuditView {
                     viewModel.handle(.loadAccounts)
                 }
-            }
-            .onChange(of: showQuickAuditCover) { _, isPresented in
-                guard !isPresented else { return }
-                viewModel.handle(.loadAccounts)
-            }
-            // SwiftData-observer: срабатывает после полного merge save-а в контекст,
-            // гарантируя что loadAccounts увидит актуальные балансы карт.
-            .onChange(of: _cardBalanceMonitor) { _, _ in
-                viewModel.handle(.loadAccounts)
             }
             .onAppear {
                 isEmptyIntroHidden = FinancesEmptyStateIntroPrefs().isHidden()
