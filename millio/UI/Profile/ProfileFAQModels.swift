@@ -416,50 +416,50 @@ enum ProfileFAQContent {
                     id: "change-language-currency",
                     question: "如何更改应用语言和基础货币？",
                     answerParagraphs: [
-                        "打开“个人资料”>“通用”，然后选择“语言”或“货币”。",
+                        "打开「个人资料」>「通用」，然后选择「语言」或「货币」。",
                         "基础货币会影响应用中多个模块的默认值。"
                     ],
                     note: nil
                 ),
                 ProfileFAQItem(
-                    id: “backup-restore”,
-                    question: “备份和恢复如何工作？”,
+                    id: 「backup-restore」,
+                    question: 「备份和恢复如何工作？」,
                     answerParagraphs: [
-                        “打开”个人资料”>”设置”>”备份”，启用自动备份并查看备份状态。”,
-                        “更换新设备时，可在首次启动时或在相关设置页面中使用恢复流程。”
+                        「打开」个人资料」>」设置」>」备份」，启用自动备份并查看备份状态。」,
+                        「更换新设备时，可在首次启动时或在相关设置页面中使用恢复流程。」
                     ],
                     note: nil
                 ),
                 ProfileFAQItem(
-                    id: “home-screen-widget”,
-                    question: “有主屏幕小组件吗？”,
+                    id: 「home-screen-widget」,
+                    question: 「有主屏幕小组件吗？」,
                     answerParagraphs: [
-                        “有。millio 提供免费的实时汇率主屏幕小组件。”,
-                        “通过 iOS 小组件库添加：长按主屏幕，点击 +，搜索 millio。”
+                        「有。millio 提供免费的实时汇率主屏幕小组件。」,
+                        「通过 iOS 小组件库添加：长按主屏幕，点击 +，搜索 millio。」
                     ],
                     note: nil
                 ),
                 ProfileFAQItem(
-                    id: “custom-icons”,
-                    question: “可以更换应用图标吗？”,
+                    id: 「custom-icons」,
+                    question: 「可以更换应用图标吗？」,
                     answerParagraphs: [
-                        “可以。millio 提供多款应用图标供选择。”,
-                        “打开”个人资料”>”外观”，选择你喜欢的风格。”
+                        「可以。millio 提供多款应用图标供选择。」,
+                        「打开」个人资料」>」外观」，选择你喜欢的风格。」
                     ],
                     note: nil
                 )
             ]
         ),
         ProfileFAQSection(
-            id: “billing”,
-            title: “订阅”,
+            id: 「billing」,
+            title: 「订阅」,
             items: [
                 ProfileFAQItem(
-                    id: “what-is-pro”,
-                    question: “PRO 包含什么内容？”,
+                    id: 「what-is-pro」,
+                    question: 「PRO 包含什么内容？」,
                     answerParagraphs: [
-                        “PRO 包含：AI 银行截图导入、Finances 与 Dynamics 图表、无限返现类别及无限金融产品。”,
-                        “如需订阅或查看计划状态，打开”个人资料”并点击 PRO 卡片。”
+                        「PRO 包含：AI 银行截图导入、Finances 与 Dynamics 图表、无限返现类别及无限金融产品。」,
+                        「如需订阅或查看计划状态，打开」个人资料」并点击 PRO 卡片。」
                     ],
                     note: nil
                 ),
@@ -468,7 +468,7 @@ enum ProfileFAQContent {
                     question: "如何管理或取消订阅？",
                     answerParagraphs: [
                         "订阅管理由设备上的 Apple ID 设置负责。",
-                        "在应用中打开“个人资料”，点击 PRO 卡片即可查看状态。"
+                        "在应用中打开「个人资料」，点击 PRO 卡片即可查看状态。"
                     ],
                     note: nil
                 )
