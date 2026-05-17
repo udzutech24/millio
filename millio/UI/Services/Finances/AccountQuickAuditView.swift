@@ -20,11 +20,9 @@ struct AccountQuickAuditView: View {
     @FocusState private var fieldFocused: Bool
     @State private var confirmFlash = false
 
-    // Dismiss с несохранёнными изменениями
-    @State private var showDismissAlert = false
-
     // Настройка порядка
     @State private var showReorderSheet = false
+    @State private var showReminderSheet = false
 
     enum FlowState: Equatable {
         case intro, audit, outro
@@ -48,43 +46,28 @@ struct AccountQuickAuditView: View {
         }
         .animation(AppAnimation.springGentle, value: flowState)
         .overlay(alignment: .topTrailing) {
-            Button(action: handleDismiss) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .padding(AppSpacing.m)
-                    .background(Circle().fill(Color.white.opacity(0.1)))
+            if flowState != .audit {
+                Button(action: handleDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .padding(AppSpacing.m)
+                        .background(Circle().fill(Color.white.opacity(0.1)))
+                }
+                .padding(AppSpacing.xl)
             }
-            .padding(AppSpacing.xl)
-        }
-        .alert(Text(qaL("finances.quick_audit.unsaved_title")), isPresented: $showDismissAlert) {
-            Button(qaL("finances.quick_audit.unsaved_save")) {
-                saveCurrentIfNeeded()
-                dismiss()
-            }
-            Button(qaL("finances.quick_audit.unsaved_discard"), role: .destructive) {
-                dismiss()
-            }
-            Button(qaL("finances.quick_audit.unsaved_cancel"), role: .cancel) {}
-        } message: {
-            Text(qaL("finances.quick_audit.unsaved_message"))
         }
         .onAppear { loadAccounts() }
     }
 
-    // MARK: - Dismiss с проверкой несохранённых изменений
+    // MARK: - Dismiss — сохраняем всё и выходим
 
     private func handleDismiss() {
-        guard flowState == .audit, !accounts.isEmpty else {
-            dismiss()
-            return
+        if flowState == .audit {
+            saveCurrentIfNeeded()
+            commitAllPendingChanges()
         }
-        let rawValue = parsedBalance(currentBalance)
-        if let value = rawValue, abs(value - accounts[currentIndex].balance) > 0.001 {
-            showDismissAlert = true
-        } else {
-            dismiss()
-        }
+        dismiss()
     }
 
     // MARK: - Intro
@@ -127,12 +110,25 @@ struct AccountQuickAuditView: View {
                 VStack(spacing: AppSpacing.m) {
                     startButton
 
-                    Button {
-                        showReorderSheet = true
-                    } label: {
-                        Label(qaL("finances.quick_audit.reorder"), systemImage: "line.3.horizontal")
-                            .font(Font.millioCallout)
-                            .foregroundStyle(AppColors.textSecondary)
+                    HStack(spacing: AppSpacing.xl) {
+                        Button {
+                            showReorderSheet = true
+                        } label: {
+                            Label(qaL("finances.quick_audit.reorder"), systemImage: "line.3.horizontal")
+                                .font(Font.millioCallout)
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+
+                        Button {
+                            showReminderSheet = true
+                        } label: {
+                            Label(qaL("finances.quick_audit.reminder.button"), systemImage: "bell")
+                                .font(Font.millioCallout)
+                                .foregroundStyle(loadAuditReminderSettings().isEnabled
+                                    ? AppColors.brandPrimary
+                                    : AppColors.textSecondary
+                                )
+                        }
                     }
                 }
             }
@@ -141,6 +137,9 @@ struct AccountQuickAuditView: View {
         .padding(.horizontal, AppSpacing.xl)
         .sheet(isPresented: $showReorderSheet) {
             reorderSheet
+        }
+        .sheet(isPresented: $showReminderSheet) {
+            AccountAuditReminderView()
         }
     }
 
@@ -266,16 +265,31 @@ struct AccountQuickAuditView: View {
         }
     }
 
+    private var progressBarColors: [Color] {
+        guard !accounts.isEmpty else { return [AppColors.brandPrimary] }
+        let isComplete = currentIndex + 1 >= accounts.count
+        return isComplete
+            ? [AppColors.positiveColor, Color(hex: "00E0B8")]
+            : accounts[currentIndex].accentColors
+    }
+
     private var progressHeader: some View {
         VStack(spacing: AppSpacing.s) {
-            HStack {
+            HStack(spacing: AppSpacing.s) {
                 Text(qaL("finances.quick_audit.header"))
                     .font(Font.millioHeadline)
                     .foregroundStyle(AppColors.textSecondary)
-                Spacer()
                 Text("\(currentIndex + 1) / \(accounts.count)")
                     .font(Font.millioCalloutSemibold)
-                    .foregroundStyle(AppColors.textSecondary)
+                    .foregroundStyle(AppColors.textTertiary)
+                Spacer()
+                Button(action: handleDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .padding(AppSpacing.s)
+                        .background(Circle().fill(Color.white.opacity(0.1)))
+                }
             }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -285,7 +299,7 @@ struct AccountQuickAuditView: View {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(
                             LinearGradient(
-                                colors: accounts[currentIndex].accentColors,
+                                colors: progressBarColors,
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -349,7 +363,7 @@ struct AccountQuickAuditView: View {
 
             Spacer()
 
-            Button { dismiss() } label: {
+            Button { commitAllPendingChanges(); dismiss() } label: {
                 Text(qaL("finances.quick_audit.done"))
                     .font(Font.millioHeadline)
                     .foregroundStyle(.black)
@@ -458,7 +472,9 @@ struct AccountQuickAuditView: View {
 
         // Применяем сохранённый пользователем порядок
         if let savedOrder = loadSavedOrder(), !savedOrder.isEmpty {
-            let orderMap = Dictionary(uniqueKeysWithValues: savedOrder.enumerated().map { ($1, $0) })
+            let orderMap = savedOrder.enumerated().reduce(into: [String: Int]()) { dict, pair in
+                if dict[pair.element] == nil { dict[pair.element] = pair.offset }
+            }
             result.sort {
                 (orderMap[$0.stableKey] ?? Int.max) < (orderMap[$1.stableKey] ?? Int.max)
             }
@@ -474,7 +490,31 @@ struct AccountQuickAuditView: View {
         case .credit(let credit):   credit.remainingAmount = value
         }
         accounts[index].balance = value
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            print("[QuickAudit] modelContext.save error: \(error)")
+        }
+    }
+
+    // Финальный коммит всех изменений — вызывается при выходе и в outro
+    private func commitAllPendingChanges() {
+        for (i, account) in accounts.enumerated() {
+            switch account.kind {
+            case .card(let card):
+                if abs(card.balance - account.balance) > 0.001 { card.balance = account.balance }
+            case .investment(let inv):
+                if abs(inv.amount - account.balance) > 0.001 { inv.amount = account.balance }
+            case .credit(let credit):
+                if abs(credit.remainingAmount - account.balance) > 0.001 { credit.remainingAmount = account.balance }
+            }
+            _ = i
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            print("[QuickAudit] commitAll save error: \(error)")
+        }
     }
 
     // MARK: - Порядок счетов (UserDefaults)
