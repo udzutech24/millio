@@ -1,6 +1,6 @@
 # Plan: Account Quick Audit
 
-**Статус:** НЕ НАЧАТ  
+**Статус:** РЕАЛИЗОВАН  
 **Spec:** `specs/2026-05-16__account-quick-audit.md`  
 **Дата:** 2026-05-16
 
@@ -36,7 +36,7 @@ struct AuditableAccount {
 
 ## Фазы
 
-### Фаза 1 — AccountAuditCardView (основная карточка) [ ]
+### Фаза 1 — AccountAuditCardView (основная карточка) [x]
 
 Файл: `millio/UI/Services/Finances/AccountAuditCardView.swift`
 
@@ -53,7 +53,7 @@ struct AuditableAccount {
 
 ---
 
-### Фаза 2 — AccountQuickAuditView (оркестратор) [ ]
+### Фаза 2 — AccountQuickAuditView (оркестратор) [x]
 
 Файл: `millio/UI/Services/Finances/AccountQuickAuditView.swift`
 
@@ -70,7 +70,7 @@ struct AuditableAccount {
 
 ---
 
-### Фаза 3 — Интеграция в FinancesSettingsSheet [ ]
+### Фаза 3 — Интеграция в FinancesSettingsSheet [x]
 
 Файл: `millio/UI/Services/Finances/FinancesView.swift`
 
@@ -83,7 +83,7 @@ struct AuditableAccount {
 
 ---
 
-### Фаза 4 — Анимации и полировка [ ]
+### Фаза 4 — Анимации и полировка [x]
 
 **Что делает:**
 - Swipe gesture на карточке: `DragGesture` → при release >80pt X → trigger confirm/edit
@@ -108,4 +108,6 @@ struct AuditableAccount {
 
 | Дата | Фазы | Итог |
 |------|------|------|
-| — | — | — |
+| 2026-05-16 | 1–4 | BUILD SUCCEEDED, коммит 581d2323 |
+| 2026-05-17 | bugfix s1 | Фикс: список счетов не обновлялся после сохранения. Root cause: одновременный dismiss sheet+fullScreenCover ломал onDismiss. Решение: pendingDismissAfterSave flag + onChange(of: showExitConfirmation) в AccountQuickAuditView; onChange(of: showQuickAuditCover) вместо onDismiss в FinancesMainTabView |
+| 2026-05-17 | bugfix s2 | Баг сохранялся через 3 сессии. Root cause установлен: onCommitted/onChange вызывали loadAccounts() СИНХРОННО сразу после save(), до того как SwiftData успевал смёрджить изменения обратно в mainContext — cardByID получал Card со СТАРЫМ балансом. Решение: @Query private var _cardBalanceMonitor: [Card] в FinancesMainTabView. @Query стреляет АСИНХРОННО после полного merge SwiftData-нотификации — гарантирует что loadAccounts() видит актуальные балансы. |
