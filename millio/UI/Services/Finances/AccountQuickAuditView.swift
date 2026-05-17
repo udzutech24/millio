@@ -12,6 +12,8 @@ struct AccountQuickAuditView: View {
     @State private var accounts: [AuditableAccount] = []
     @State private var currentIndex = 0
     @State private var flowState: FlowState = .intro
+    @State private var currentBalance = ""
+    @FocusState private var fieldFocused: Bool
 
     enum FlowState: Equatable {
         case intro, audit, outro
@@ -110,27 +112,106 @@ struct AccountQuickAuditView: View {
     // MARK: - Audit
 
     private var auditView: some View {
-        Group {
-            if currentIndex < accounts.count {
-                AccountAuditCardView(
+        VStack(spacing: 0) {
+            progressHeader
+                .padding(.horizontal, AppSpacing.xl)
+                .padding(.top, AppSpacing.xxl)
+
+            Spacer()
+
+            // 3-slot: предыдущий (peek) → активный → следующий (peek)
+            VStack(spacing: AppSpacing.m) {
+                if currentIndex > 0 {
+                    AccountAuditInactiveRow(account: accounts[currentIndex - 1])
+                        .padding(.horizontal, AppSpacing.xl)
+                        .transition(.opacity)
+                }
+
+                AccountAuditActiveRow(
                     account: accounts[currentIndex],
-                    index: currentIndex,
-                    total: accounts.count,
-                    onConfirm: moveToNext,
-                    onEdit: { newBalance in
-                        applyBalance(newBalance, at: currentIndex)
-                        moveToNext()
-                    }
+                    balanceText: $currentBalance,
+                    isFocused: $fieldFocused
                 )
+                .padding(.horizontal, AppSpacing.xl)
                 .id(currentIndex)
                 .transition(
                     .asymmetric(
                         insertion: .move(edge: .bottom).combined(with: .opacity),
-                        removal: .opacity
+                        removal: .move(edge: .top).combined(with: .opacity)
                     )
                 )
-                .padding(.top, AppSpacing.xxxl)
+
+                if currentIndex < accounts.count - 1 {
+                    AccountAuditInactiveRow(account: accounts[currentIndex + 1])
+                        .padding(.horizontal, AppSpacing.xl)
+                        .transition(.opacity)
+                }
             }
+            .animation(AppAnimation.springGentle, value: currentIndex)
+
+            Spacer()
+
+            confirmButton
+                .padding(.horizontal, AppSpacing.xl)
+                .padding(.bottom, AppSpacing.xxxl)
+        }
+        .onAppear {
+            currentBalance = auditBalanceForEditing(accounts[currentIndex].balance)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                fieldFocused = true
+            }
+        }
+    }
+
+    private var progressHeader: some View {
+        VStack(spacing: AppSpacing.s) {
+            HStack {
+                Text(qaL("finances.quick_audit.header"))
+                    .font(Font.millioHeadline)
+                    .foregroundStyle(AppColors.textSecondary)
+                Spacer()
+                Text("\(currentIndex + 1) / \(accounts.count)")
+                    .font(Font.millioCalloutSemibold)
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.12))
+                        .frame(height: 3)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(
+                            LinearGradient(
+                                colors: accounts[currentIndex].accentColors,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(
+                            width: geo.size.width * CGFloat(currentIndex + 1) / CGFloat(max(accounts.count, 1)),
+                            height: 3
+                        )
+                        .animation(AppAnimation.springGentle, value: currentIndex)
+                }
+            }
+            .frame(height: 3)
+        }
+    }
+
+    private var confirmButton: some View {
+        Button(action: confirmAndAdvance) {
+            HStack(spacing: AppSpacing.s) {
+                Text(qaL("finances.quick_audit.confirm"))
+                Image(systemName: "arrow.right")
+            }
+            .font(Font.millioHeadline)
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppSpacing.l)
+            .background(
+                LinearGradient(colors: AppColors.financesGradient, startPoint: .leading, endPoint: .trailing)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.l))
         }
     }
 
@@ -186,6 +267,29 @@ struct AccountQuickAuditView: View {
 
     // MARK: - Логика
 
+    private func confirmAndAdvance() {
+        let cleaned = currentBalance.replacingOccurrences(of: ",", with: ".")
+        if let value = Double(cleaned), value != accounts[currentIndex].balance {
+            applyBalance(value, at: currentIndex)
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.6)
+        moveToNext()
+    }
+
+    private func moveToNext() {
+        let nextIndex = currentIndex + 1
+        if nextIndex >= accounts.count {
+            fieldFocused = false
+            withAnimation(AppAnimation.springGentle) { flowState = .outro }
+        } else {
+            withAnimation(AppAnimation.springGentle) { currentIndex = nextIndex }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                currentBalance = auditBalanceForEditing(accounts[nextIndex].balance)
+                fieldFocused = true
+            }
+        }
+    }
+
     private func loadAccounts() {
         var result: [AuditableAccount] = []
 
@@ -237,14 +341,6 @@ struct AccountQuickAuditView: View {
         accounts = result
     }
 
-    private func moveToNext() {
-        if currentIndex + 1 >= accounts.count {
-            withAnimation(AppAnimation.springGentle) { flowState = .outro }
-        } else {
-            withAnimation(AppAnimation.springGentle) { currentIndex += 1 }
-        }
-    }
-
     private func applyBalance(_ value: Double, at index: Int) {
         switch accounts[index].kind {
         case .card(let card):       card.balance = value
@@ -253,17 +349,6 @@ struct AccountQuickAuditView: View {
         }
         accounts[index].balance = value
         try? modelContext.save()
-    }
-
-    private func accountsPlural(_ n: Int) -> String {
-        let mod10 = n % 10
-        let mod100 = n % 100
-        if mod100 >= 11 && mod100 <= 14 { return "счетов" }
-        switch mod10 {
-        case 1: return "счёт"
-        case 2, 3, 4: return "счёта"
-        default: return "счетов"
-        }
     }
 }
 
