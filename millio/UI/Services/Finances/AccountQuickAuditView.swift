@@ -442,15 +442,18 @@ struct AccountQuickAuditView: View {
 
         if let investments = try? modelContext.fetch(FetchDescriptor<Investment>()) {
             for inv in investments {
+                let isQtyMode = inv.marketQuantity != nil && inv.lastKnownUnitPrice != nil
                 result.append(AuditableAccount(
                     kind: .investment(inv),
-                    balance: inv.amount,
+                    balance: isQtyMode ? (inv.marketQuantity ?? 0) : inv.amount,
                     displayName: inv.name,
                     iconName: inv.resolvedIconName,
                     accentColors: AppColors.investmentsGradient,
                     typeLabel: qaL("finances.quick_audit.type_investment"),
                     typeIcon: "chart.line.uptrend.xyaxis",
-                    currencyCode: inv.currency
+                    currencyCode: inv.currency,
+                    unitPrice: isQtyMode ? inv.lastKnownUnitPrice : nil,
+                    unitCurrencyCode: isQtyMode ? (inv.marketCurrency ?? inv.currency) : nil
                 ))
             }
         }
@@ -485,9 +488,17 @@ struct AccountQuickAuditView: View {
 
     private func applyBalance(_ value: Double, at index: Int) {
         switch accounts[index].kind {
-        case .card(let card):       card.balance = value
-        case .investment(let inv):  inv.amount = value
-        case .credit(let credit):   credit.remainingAmount = value
+        case .card(let card):
+            card.balance = value
+        case .investment(let inv):
+            if let price = accounts[index].unitPrice {
+                inv.marketQuantity = value
+                inv.amount = value * price
+            } else {
+                inv.amount = value
+            }
+        case .credit(let credit):
+            credit.remainingAmount = value
         }
         accounts[index].balance = value
         do {
@@ -504,7 +515,14 @@ struct AccountQuickAuditView: View {
             case .card(let card):
                 if abs(card.balance - account.balance) > 0.001 { card.balance = account.balance }
             case .investment(let inv):
-                if abs(inv.amount - account.balance) > 0.001 { inv.amount = account.balance }
+                if let price = account.unitPrice {
+                    if abs((inv.marketQuantity ?? 0) - account.balance) > 0.001 {
+                        inv.marketQuantity = account.balance
+                        inv.amount = account.balance * price
+                    }
+                } else {
+                    if abs(inv.amount - account.balance) > 0.001 { inv.amount = account.balance }
+                }
             case .credit(let credit):
                 if abs(credit.remainingAmount - account.balance) > 0.001 { credit.remainingAmount = account.balance }
             }

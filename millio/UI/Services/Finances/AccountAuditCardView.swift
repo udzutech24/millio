@@ -21,6 +21,18 @@ struct AuditableAccount: Identifiable {
     let typeIcon: String
     let currencyCode: String
 
+    // Режим ввода количества (для рыночных инвестиций)
+    // unitPrice != nil → balance хранит количество, amount = balance × unitPrice
+    var unitPrice: Double?
+    var unitCurrencyCode: String?
+
+    // Для неактивных строк — всегда итоговая стоимость
+    var displayBalance: Double {
+        if let p = unitPrice { return balance * p }
+        return balance
+    }
+    var displayCurrency: String { unitCurrencyCode ?? currencyCode }
+
     // Стабильный ключ для сохранения порядка в UserDefaults
     var stableKey: String {
         let k: String
@@ -136,22 +148,40 @@ struct AccountAuditActiveRow: View {
             }
 
             // Баланс — всегда редактируемый, с форматированием тысяч
-            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
-                Text(auditCurrencySymbol(account.currencyCode))
-                    .font(Font.millioTitle)
-                    .foregroundStyle(AppColors.textSecondary)
-                TextField("0", text: $balanceText)
-                    .font(Font.millioDisplayLarge)
-                    .foregroundStyle(AppColors.textPrimary)
-                    .keyboardType(.decimalPad)
-                    .focused(isFocused)
-                    .tint(AppColors.brandPrimary)
-                    .minimumScaleFactor(0.4)
-                    .lineLimit(1)
-                    .onChange(of: balanceText) { _, new in
-                        let formatted = formatNumberInput(new)
-                        if formatted != new { balanceText = formatted }
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
+                    if account.unitPrice == nil {
+                        Text(auditCurrencySymbol(account.currencyCode))
+                            .font(Font.millioTitle)
+                            .foregroundStyle(AppColors.textSecondary)
                     }
+                    TextField("0", text: $balanceText)
+                        .font(Font.millioDisplayLarge)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .keyboardType(.decimalPad)
+                        .focused(isFocused)
+                        .tint(AppColors.brandPrimary)
+                        .minimumScaleFactor(0.4)
+                        .lineLimit(1)
+                        .onChange(of: balanceText) { _, new in
+                            let formatted = formatNumberInput(new)
+                            if formatted != new { balanceText = formatted }
+                        }
+                    if account.unitPrice != nil {
+                        Text(qaL("finances.quick_audit.units"))
+                            .font(Font.millioTitle)
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                }
+                if let unitPrice = account.unitPrice {
+                    let qty = Double(balanceText.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: ",", with: ".")) ?? 0
+                    let total = qty * unitPrice
+                    let cur = account.unitCurrencyCode ?? account.currencyCode
+                    Text("× \(auditFormattedBalance(unitPrice, currency: cur)) = \(auditFormattedBalance(total, currency: cur))")
+                        .font(Font.millioCaption)
+                        .foregroundStyle(AppColors.textTertiary)
+                        .padding(.top, 2)
+                }
             }
         }
         .padding(AppSpacing.xl)
@@ -207,7 +237,7 @@ struct AccountAuditInactiveRow: View {
 
             Spacer()
 
-            Text(auditFormattedBalance(account.balance, currency: account.currencyCode))
+            Text(auditFormattedBalance(account.displayBalance, currency: account.displayCurrency))
                 .font(Font.millioCalloutSemibold)
                 .foregroundStyle(AppColors.textSecondary)
         }
