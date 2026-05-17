@@ -288,10 +288,13 @@ struct AccountQuickAuditView: View {
             .animation(AppAnimation.springGentle, value: currentIndex)
 
             Spacer()
-
-            confirmButton
-                .padding(.horizontal, AppSpacing.xl)
-                .padding(.bottom, AppSpacing.xxxl)
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                confirmButton
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.vertical, AppSpacing.xs)
+            }
         }
         .onAppear {
             currentBalance = auditBalanceForEditing(accounts[currentIndex].balance)
