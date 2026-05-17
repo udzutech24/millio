@@ -366,6 +366,8 @@ struct FinancesMainTabView: View {
     @State private var showBalanceAuditSheetFromSettings = false
     @State private var showMassTickerImportSheet = false
     @State private var showQuickAuditCover = false
+    // Наблюдает за изменениями балансов через SwiftData — гарантирует перерисовку при изменении balance/amount
+    @Query private var _allCards: [Card]
 
     private var isDailyAuditDebugOnlyEnabled: Bool {
 #if DEBUG
@@ -373,6 +375,14 @@ struct FinancesMainTabView: View {
 #else
         false
 #endif
+    }
+
+    // Хэш суммы балансов всех карт — меняется при любом изменении balance,
+    // что гарантирует onChange-срабатывание через SwiftData-нотификацию
+    private var cardBalanceHash: Int {
+        _allCards.reduce(0) { acc, card in
+            acc ^ Int(card.balance.bitPattern) ^ card.cardUniqueID.hashValue
+        }
     }
 
     var body: some View {
@@ -428,6 +438,9 @@ struct FinancesMainTabView: View {
             }
             .onAppear {
                 isEmptyIntroHidden = FinancesEmptyStateIntroPrefs().isHidden()
+            }
+            .onChange(of: cardBalanceHash) { _, _ in
+                viewModel.handle(.loadAccounts)
             }
             .onChange(of: scenePhase) { _, newPhase in
                 guard newPhase == .active else { return }

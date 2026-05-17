@@ -442,8 +442,12 @@ struct FinancesSettingsSheetWrapper: View {
                 showQuickAudit = true
             }
         )
-        .fullScreenCover(isPresented: $showQuickAudit) {
-            AccountQuickAuditView()
+        .fullScreenCover(isPresented: $showQuickAudit, onDismiss: {
+            viewModel.handle(.loadAccounts)
+        }) {
+            AccountQuickAuditView {
+                viewModel.handle(.loadAccounts)
+            }
         }
         .sheet(isPresented: $showBalanceAudit) {
             if isDailyAuditAvailable {

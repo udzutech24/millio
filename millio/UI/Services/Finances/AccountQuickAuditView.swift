@@ -25,6 +25,8 @@ private struct AuditChange: Identifiable {
 // MARK: - Оркестратор флоу быстрой актуализации балансов
 
 struct AccountQuickAuditView: View {
+    var onCommitted: (() -> Void)? = nil
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
@@ -44,6 +46,7 @@ struct AccountQuickAuditView: View {
     // Выход с подтверждением
     @State private var showExitConfirmation = false
     @State private var auditChanges: [AuditChange] = []
+    @State private var pendingDismissAfterSave = false
 
     enum FlowState: Equatable {
         case intro, audit, outro
@@ -66,7 +69,11 @@ struct AccountQuickAuditView: View {
             }
         }
         .animation(AppAnimation.springGentle, value: flowState)
-        .sheet(isPresented: $showExitConfirmation) {
+        .sheet(isPresented: $showExitConfirmation, onDismiss: {
+            guard pendingDismissAfterSave else { return }
+            pendingDismissAfterSave = false
+            dismiss()
+        }) {
             exitConfirmationSheet
         }
         .overlay(alignment: .topTrailing) {
@@ -508,7 +515,8 @@ struct AccountQuickAuditView: View {
     private func loadAccounts() {
         var result: [AuditableAccount] = []
 
-        if let cards = try? modelContext.fetch(FetchDescriptor<Card>()) {
+        let cardDescriptor = FetchDescriptor<Card>(predicate: #Predicate { $0.archivedAt == nil })
+        if let cards = try? modelContext.fetch(cardDescriptor) {
             for card in cards {
                 result.append(AuditableAccount(
                     kind: .card(card),
@@ -524,7 +532,8 @@ struct AccountQuickAuditView: View {
             }
         }
 
-        if let investments = try? modelContext.fetch(FetchDescriptor<Investment>()) {
+        let investmentDescriptor = FetchDescriptor<Investment>(predicate: #Predicate { $0.archivedAt == nil })
+        if let investments = try? modelContext.fetch(investmentDescriptor) {
             for inv in investments {
                 let isQtyMode = inv.marketQuantity != nil && inv.lastKnownUnitPrice != nil
                 let invBalance = isQtyMode ? (inv.marketQuantity ?? 0) : inv.amount
@@ -544,7 +553,8 @@ struct AccountQuickAuditView: View {
             }
         }
 
-        if let credits = try? modelContext.fetch(FetchDescriptor<Credit>()) {
+        let creditDescriptor = FetchDescriptor<Credit>(predicate: #Predicate { $0.archivedAt == nil })
+        if let credits = try? modelContext.fetch(creditDescriptor) {
             for credit in credits where !credit.isClosed {
                 result.append(AuditableAccount(
                     kind: .credit(credit),
@@ -597,21 +607,35 @@ struct AccountQuickAuditView: View {
 
     // Финальный коммит всех изменений — вызывается при выходе и в outro
     private func commitAllPendingChanges() {
+        var changedCards = false
+        var changedInvestments = false
+        var changedCredits = false
+
         for (i, account) in accounts.enumerated() {
             switch account.kind {
             case .card(let card):
-                if abs(card.balance - account.balance) > 0.001 { card.balance = account.balance }
+                if abs(card.balance - account.balance) > 0.001 {
+                    card.balance = account.balance
+                    changedCards = true
+                }
             case .investment(let inv):
                 if let price = account.unitPrice {
                     if abs((inv.marketQuantity ?? 0) - account.balance) > 0.001 {
                         inv.marketQuantity = account.balance
                         inv.amount = account.balance * price
+                        changedInvestments = true
                     }
                 } else {
-                    if abs(inv.amount - account.balance) > 0.001 { inv.amount = account.balance }
+                    if abs(inv.amount - account.balance) > 0.001 {
+                        inv.amount = account.balance
+                        changedInvestments = true
+                    }
                 }
             case .credit(let credit):
-                if abs(credit.remainingAmount - account.balance) > 0.001 { credit.remainingAmount = account.balance }
+                if abs(credit.remainingAmount - account.balance) > 0.001 {
+                    credit.remainingAmount = account.balance
+                    changedCredits = true
+                }
             }
             _ = i
         }
@@ -620,6 +644,20 @@ struct AccountQuickAuditView: View {
         } catch {
             print("[QuickAudit] commitAll save error: \(error)")
         }
+        onCommitted?()
+        // Определяем изменённые типы по originalBalance — applyBalance уже мог выровнять card.balance
+        for account in accounts {
+            guard abs(account.balance - account.originalBalance) > 0.001 else { continue }
+            switch account.kind {
+            case .card: changedCards = true
+            case .investment: changedInvestments = true
+            case .credit: changedCredits = true
+            }
+        }
+        // Уведомляем FinanceViewModel об изменениях через EventBus, чтобы список обновился
+        if changedCards { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
+        if changedInvestments { EventBus.shared.publish(FinanceEvent.investmentsUpdated) }
+        if changedCredits { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
     }
 
     // MARK: - Подтверждение выхода
@@ -684,8 +722,8 @@ struct AccountQuickAuditView: View {
                     VStack(spacing: AppSpacing.m) {
                         Button {
                             commitAllPendingChanges()
+                            pendingDismissAfterSave = true
                             showExitConfirmation = false
-                            dismiss()
                         } label: {
                             Text(qaL("finances.quick_audit.exit_save"))
                                 .font(Font.millioHeadline)
