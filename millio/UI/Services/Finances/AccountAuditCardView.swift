@@ -20,6 +20,44 @@ struct AuditableAccount: Identifiable {
     let typeLabel: String
     let typeIcon: String
     let currencyCode: String
+
+    // Стабильный ключ для сохранения порядка в UserDefaults
+    var stableKey: String {
+        let k: String
+        switch kind {
+        case .card: k = "card"
+        case .investment: k = "inv"
+        case .credit: k = "credit"
+        }
+        return "\(k)|\(displayName)|\(currencyCode)"
+    }
+}
+
+// MARK: - Форматирование ввода с разделителями тысяч
+
+func formatNumberInput(_ raw: String) -> String {
+    let noSpaces = raw.replacingOccurrences(of: " ", with: "")
+    let decSep = noSpaces.first(where: { $0 == "," || $0 == "." })
+
+    let parts: [Substring]
+    if let sep = decSep {
+        parts = noSpaces.split(separator: sep, maxSplits: 1, omittingEmptySubsequences: false)
+    } else {
+        parts = [Substring(noSpaces)]
+    }
+
+    let intDigits = (parts.first ?? "").filter { $0.isNumber }
+    var intFormatted = ""
+    for (i, char) in intDigits.reversed().enumerated() {
+        if i > 0 && i % 3 == 0 { intFormatted = " " + intFormatted }
+        intFormatted = String(char) + intFormatted
+    }
+
+    if parts.count > 1, let sep = decSep {
+        let decDigits = parts[1].filter { $0.isNumber }
+        return intFormatted + "\(sep)\(decDigits)"
+    }
+    return intFormatted
 }
 
 // MARK: - Хелперы форматирования (используются в обоих компонентах)
@@ -48,7 +86,8 @@ func auditFormattedBalance(_ value: Double, currency: String) -> String {
 func auditBalanceForEditing(_ value: Double) -> String {
     guard value != 0 else { return "" }
     let s = String(format: "%.2f", value)
-    return s.hasSuffix(".00") ? String(s.dropLast(3)) : s
+    let raw = s.hasSuffix(".00") ? String(s.dropLast(3)) : s
+    return formatNumberInput(raw)
 }
 
 // MARK: - Активная строка (центральная, с редактируемым балансом)
@@ -57,6 +96,13 @@ struct AccountAuditActiveRow: View {
     let account: AuditableAccount
     @Binding var balanceText: String
     var isFocused: FocusState<Bool>.Binding
+    var confirmFlash: Bool = false
+
+    private var borderColors: [Color] {
+        confirmFlash
+            ? [AppColors.positiveColor, Color(hex: "00E0B8")]
+            : account.accentColors.map { $0.opacity(0.55) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.l) {
@@ -89,7 +135,7 @@ struct AccountAuditActiveRow: View {
                     .lineLimit(1)
             }
 
-            // Баланс — всегда редактируемый
+            // Баланс — всегда редактируемый, с форматированием тысяч
             HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
                 Text(auditCurrencySymbol(account.currencyCode))
                     .font(Font.millioTitle)
@@ -102,6 +148,10 @@ struct AccountAuditActiveRow: View {
                     .tint(AppColors.brandPrimary)
                     .minimumScaleFactor(0.4)
                     .lineLimit(1)
+                    .onChange(of: balanceText) { _, new in
+                        let formatted = formatNumberInput(new)
+                        if formatted != new { balanceText = formatted }
+                    }
             }
         }
         .padding(AppSpacing.xl)
@@ -112,14 +162,15 @@ struct AccountAuditActiveRow: View {
                     RoundedRectangle(cornerRadius: AppSpacing.xxl)
                         .strokeBorder(
                             LinearGradient(
-                                colors: account.accentColors.map { $0.opacity(0.55) },
+                                colors: borderColors,
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
-                            lineWidth: 1.5
+                            lineWidth: confirmFlash ? 2.5 : 1.5
                         )
                 )
         )
+        .animation(.easeInOut(duration: 0.2), value: confirmFlash)
     }
 }
 

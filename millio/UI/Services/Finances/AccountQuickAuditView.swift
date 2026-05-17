@@ -3,6 +3,8 @@ import SwiftData
 
 private func qaL(_ key: String) -> String { FinancesL10n.tr(key) }
 
+private let orderDefaultsKey = "millio.audit.accountOrder"
+
 // MARK: - Оркестратор флоу быстрой актуализации балансов
 
 struct AccountQuickAuditView: View {
@@ -12,8 +14,17 @@ struct AccountQuickAuditView: View {
     @State private var accounts: [AuditableAccount] = []
     @State private var currentIndex = 0
     @State private var flowState: FlowState = .intro
+
+    // Редактирование баланса
     @State private var currentBalance = ""
     @FocusState private var fieldFocused: Bool
+    @State private var confirmFlash = false
+
+    // Dismiss с несохранёнными изменениями
+    @State private var showDismissAlert = false
+
+    // Настройка порядка
+    @State private var showReorderSheet = false
 
     enum FlowState: Equatable {
         case intro, audit, outro
@@ -37,7 +48,7 @@ struct AccountQuickAuditView: View {
         }
         .animation(AppAnimation.springGentle, value: flowState)
         .overlay(alignment: .topTrailing) {
-            Button { dismiss() } label: {
+            Button(action: handleDismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
@@ -46,7 +57,34 @@ struct AccountQuickAuditView: View {
             }
             .padding(AppSpacing.xl)
         }
+        .alert(Text(qaL("finances.quick_audit.unsaved_title")), isPresented: $showDismissAlert) {
+            Button(qaL("finances.quick_audit.unsaved_save")) {
+                saveCurrentIfNeeded()
+                dismiss()
+            }
+            Button(qaL("finances.quick_audit.unsaved_discard"), role: .destructive) {
+                dismiss()
+            }
+            Button(qaL("finances.quick_audit.unsaved_cancel"), role: .cancel) {}
+        } message: {
+            Text(qaL("finances.quick_audit.unsaved_message"))
+        }
         .onAppear { loadAccounts() }
+    }
+
+    // MARK: - Dismiss с проверкой несохранённых изменений
+
+    private func handleDismiss() {
+        guard flowState == .audit, !accounts.isEmpty else {
+            dismiss()
+            return
+        }
+        let rawValue = parsedBalance(currentBalance)
+        if let value = rawValue, abs(value - accounts[currentIndex].balance) > 0.001 {
+            showDismissAlert = true
+        } else {
+            dismiss()
+        }
     }
 
     // MARK: - Intro
@@ -86,11 +124,24 @@ struct AccountQuickAuditView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, AppSpacing.xl)
             } else {
-                startButton
+                VStack(spacing: AppSpacing.m) {
+                    startButton
+
+                    Button {
+                        showReorderSheet = true
+                    } label: {
+                        Label(qaL("finances.quick_audit.reorder"), systemImage: "line.3.horizontal")
+                            .font(Font.millioCallout)
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                }
             }
         }
         .padding(.bottom, AppSpacing.xxxl)
         .padding(.horizontal, AppSpacing.xl)
+        .sheet(isPresented: $showReorderSheet) {
+            reorderSheet
+        }
     }
 
     private var startButton: some View {
@@ -109,6 +160,58 @@ struct AccountQuickAuditView: View {
         }
     }
 
+    // MARK: - Reorder Sheet
+
+    private var reorderSheet: some View {
+        NavigationView {
+            List {
+                ForEach(accounts) { account in
+                    HStack(spacing: AppSpacing.m) {
+                        Image(systemName: account.iconName)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: account.accentColors,
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 32, height: 32)
+                            .background(
+                                Circle().fill(account.accentColors.first?.opacity(0.15) ?? Color.clear)
+                            )
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(account.displayName)
+                                .font(Font.millioBody)
+                            Text(account.typeLabel)
+                                .font(Font.millioCaption)
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+                        Spacer()
+                        Text(auditFormattedBalance(account.balance, currency: account.currencyCode))
+                            .font(Font.millioCaption)
+                            .foregroundStyle(AppColors.textTertiary)
+                    }
+                    .padding(.vertical, 2)
+                }
+                .onMove { from, to in
+                    accounts.move(fromOffsets: from, toOffset: to)
+                    saveAccountOrder()
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle(qaL("finances.quick_audit.reorder_title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(qaL("finances.quick_audit.done")) {
+                        showReorderSheet = false
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Audit
 
     private var auditView: some View {
@@ -119,7 +222,6 @@ struct AccountQuickAuditView: View {
 
             Spacer()
 
-            // 3-slot: предыдущий (peek) → активный → следующий (peek)
             VStack(spacing: AppSpacing.m) {
                 if currentIndex > 0 {
                     AccountAuditInactiveRow(account: accounts[currentIndex - 1])
@@ -130,7 +232,8 @@ struct AccountQuickAuditView: View {
                 AccountAuditActiveRow(
                     account: accounts[currentIndex],
                     balanceText: $currentBalance,
-                    isFocused: $fieldFocused
+                    isFocused: $fieldFocused,
+                    confirmFlash: confirmFlash
                 )
                 .padding(.horizontal, AppSpacing.xl)
                 .id(currentIndex)
@@ -268,12 +371,27 @@ struct AccountQuickAuditView: View {
     // MARK: - Логика
 
     private func confirmAndAdvance() {
-        let cleaned = currentBalance.replacingOccurrences(of: ",", with: ".")
-        if let value = Double(cleaned), value != accounts[currentIndex].balance {
+        saveCurrentIfNeeded()
+        UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.6)
+        withAnimation(.easeInOut(duration: 0.15)) { confirmFlash = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.easeInOut(duration: 0.15)) { confirmFlash = false }
+            moveToNext()
+        }
+    }
+
+    private func saveCurrentIfNeeded() {
+        guard !accounts.isEmpty else { return }
+        if let value = parsedBalance(currentBalance), abs(value - accounts[currentIndex].balance) > 0.001 {
             applyBalance(value, at: currentIndex)
         }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.6)
-        moveToNext()
+    }
+
+    private func parsedBalance(_ text: String) -> Double? {
+        let cleaned = text
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: ",", with: ".")
+        return Double(cleaned)
     }
 
     private func moveToNext() {
@@ -338,6 +456,14 @@ struct AccountQuickAuditView: View {
             }
         }
 
+        // Применяем сохранённый пользователем порядок
+        if let savedOrder = loadSavedOrder(), !savedOrder.isEmpty {
+            let orderMap = Dictionary(uniqueKeysWithValues: savedOrder.enumerated().map { ($1, $0) })
+            result.sort {
+                (orderMap[$0.stableKey] ?? Int.max) < (orderMap[$1.stableKey] ?? Int.max)
+            }
+        }
+
         accounts = result
     }
 
@@ -349,6 +475,22 @@ struct AccountQuickAuditView: View {
         }
         accounts[index].balance = value
         try? modelContext.save()
+    }
+
+    // MARK: - Порядок счетов (UserDefaults)
+
+    private func loadSavedOrder() -> [String]? {
+        guard let data = UserDefaults.standard.data(forKey: orderDefaultsKey),
+              let order = try? JSONDecoder().decode([String].self, from: data)
+        else { return nil }
+        return order
+    }
+
+    private func saveAccountOrder() {
+        let keys = accounts.map { $0.stableKey }
+        if let data = try? JSONEncoder().encode(keys) {
+            UserDefaults.standard.set(data, forKey: orderDefaultsKey)
+        }
     }
 }
 
