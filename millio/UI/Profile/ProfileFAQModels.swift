@@ -81,6 +81,24 @@ enum ProfileFAQContent {
                         "If you move to a new device, use Restore flow on first launch or from settings-related screens when available."
                     ],
                     note: nil
+                ),
+                ProfileFAQItem(
+                    id: "home-screen-widget",
+                    question: "Is there a home screen widget?",
+                    answerParagraphs: [
+                        "Yes. millio includes a free home screen widget showing live exchange rates.",
+                        "Add it via the iOS widget gallery: long-press on the home screen, tap +, and search for millio."
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: "custom-icons",
+                    question: "Can I change the app icon?",
+                    answerParagraphs: [
+                        "Yes. millio offers a selection of custom app icons.",
+                        "Open Profile > Appearance to choose your preferred look."
+                    ],
+                    note: nil
                 )
             ]
         ),
@@ -92,8 +110,8 @@ enum ProfileFAQContent {
                     id: "what-is-pro",
                     question: "What is included in PRO?",
                     answerParagraphs: [
-                        "PRO unlocks advanced features and removes free-tier limits for selected modules.",
-                        "You can review current PRO details on the subscription screen."
+                        "PRO includes: AI import from bank screenshots, Finance & Dynamics charts, unlimited cashback categories, and unlimited financial products.",
+                        "To subscribe or check your plan status, open Profile and tap the PRO card."
                     ],
                     note: nil
                 ),
@@ -150,6 +168,24 @@ enum ProfileFAQContent {
                         "При переходе на новое устройство используйте сценарий восстановления на старте или из соответствующих экранов настроек."
                     ],
                     note: nil
+                ),
+                ProfileFAQItem(
+                    id: "home-screen-widget",
+                    question: "Есть ли виджет на экран «Домой»?",
+                    answerParagraphs: [
+                        "Да. millio включает бесплатный виджет с живыми курсами валют для экрана «Домой».",
+                        "Добавьте через галерею виджетов iOS: удерживайте экран «Домой», нажмите +, найдите millio."
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: "custom-icons",
+                    question: "Можно ли сменить иконку приложения?",
+                    answerParagraphs: [
+                        "Да. millio предлагает несколько вариантов иконок на выбор.",
+                        "Откройте Профиль > Внешний вид и выберите подходящий стиль."
+                    ],
+                    note: nil
                 )
             ]
         ),
@@ -161,8 +197,8 @@ enum ProfileFAQContent {
                     id: "what-is-pro",
                     question: "Что входит в PRO?",
                     answerParagraphs: [
-                        "PRO открывает расширенные функции и снимает ограничения бесплатного тарифа в отдельных модулях.",
-                        "Актуальный список возможностей смотрите на экране подписки."
+                        "PRO включает: AI-импорт транзакций из скриншотов банка, графики Finances и Dynamics, неограниченные категории кэшбэка и финансовые продукты.",
+                        "Чтобы оформить подписку или проверить статус, откройте Профиль и нажмите карточку PRO."
                     ],
                     note: nil
                 ),
@@ -219,6 +255,24 @@ enum ProfileFAQContent {
                         "Beim Wechsel auf ein neues Gerät nutze den Wiederherstellungsvorgang beim ersten Start oder über die entsprechenden Einstellungen."
                     ],
                     note: nil
+                ),
+                ProfileFAQItem(
+                    id: "home-screen-widget",
+                    question: "Gibt es ein Home-Screen-Widget?",
+                    answerParagraphs: [
+                        "Ja. millio enthält ein kostenloses Widget mit Live-Wechselkursen für den Home-Screen.",
+                        "Füge es über die iOS-Widget-Galerie hinzu: Home-Screen gedrückt halten, + tippen, millio suchen."
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: "custom-icons",
+                    question: "Kann ich das App-Symbol ändern?",
+                    answerParagraphs: [
+                        "Ja. millio bietet mehrere App-Icons zur Auswahl.",
+                        "Öffne Profil > Darstellung und wähle deinen bevorzugten Stil."
+                    ],
+                    note: nil
                 )
             ]
         ),
@@ -230,8 +284,8 @@ enum ProfileFAQContent {
                     id: "what-is-pro",
                     question: "Was ist in PRO enthalten?",
                     answerParagraphs: [
-                        "PRO schaltet erweiterte Funktionen frei und hebt die Einschränkungen des kostenlosen Tarifs für ausgewählte Module auf.",
-                        "Die aktuellen PRO-Funktionen findest du auf dem Abonnement-Bildschirm."
+                        "PRO umfasst: KI-Import aus Bank-Screenshots, Finance- & Dynamics-Diagramme, unbegrenzte Cashback-Kategorien und unbegrenzte Finanzprodukte.",
+                        "Zum Abonnieren oder Prüfen deines Status öffne Profil und tippe auf die PRO-Karte."
                     ],
                     note: nil
                 ),
@@ -288,6 +342,24 @@ enum ProfileFAQContent {
                         "Si cambias de dispositivo, usa el flujo de restauración en el primer inicio o desde los ajustes correspondientes."
                     ],
                     note: nil
+                ),
+                ProfileFAQItem(
+                    id: "home-screen-widget",
+                    question: "¿Hay un widget para la pantalla de inicio?",
+                    answerParagraphs: [
+                        "Sí. millio incluye un widget gratuito con tipos de cambio en tiempo real para la pantalla de inicio.",
+                        "Añádelo desde la galería de widgets de iOS: mantén pulsada la pantalla de inicio, toca + y busca millio."
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: "custom-icons",
+                    question: "¿Puedo cambiar el icono de la app?",
+                    answerParagraphs: [
+                        "Sí. millio ofrece varios iconos de app para elegir.",
+                        "Abre Perfil > Apariencia y selecciona el estilo que prefieras."
+                    ],
+                    note: nil
                 )
             ]
         ),
@@ -299,8 +371,8 @@ enum ProfileFAQContent {
                     id: "what-is-pro",
                     question: "¿Qué incluye PRO?",
                     answerParagraphs: [
-                        "PRO desbloquea funciones avanzadas y elimina los límites del plan gratuito en los módulos seleccionados.",
-                        "Puedes consultar los detalles actuales de PRO en la pantalla de suscripción."
+                        "PRO incluye: importación con IA desde capturas de pantalla bancarias, gráficos Finances y Dynamics, categorías de cashback ilimitadas y productos financieros ilimitados.",
+                        "Para suscribirte o revisar tu plan, abre Perfil y toca la tarjeta PRO."
                     ],
                     note: nil
                 ),
@@ -350,26 +422,44 @@ enum ProfileFAQContent {
                     note: nil
                 ),
                 ProfileFAQItem(
-                    id: "backup-restore",
-                    question: "备份和恢复如何工作？",
+                    id: “backup-restore”,
+                    question: “备份和恢复如何工作？”,
                     answerParagraphs: [
-                        "打开“个人资料”>“设置”>“备份”，启用自动备份并查看备份状态。",
-                        "更换新设备时，可在首次启动时或在相关设置页面中使用恢复流程。"
+                        “打开”个人资料”>”设置”>”备份”，启用自动备份并查看备份状态。”,
+                        “更换新设备时，可在首次启动时或在相关设置页面中使用恢复流程。”
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: “home-screen-widget”,
+                    question: “有主屏幕小组件吗？”,
+                    answerParagraphs: [
+                        “有。millio 提供免费的实时汇率主屏幕小组件。”,
+                        “通过 iOS 小组件库添加：长按主屏幕，点击 +，搜索 millio。”
+                    ],
+                    note: nil
+                ),
+                ProfileFAQItem(
+                    id: “custom-icons”,
+                    question: “可以更换应用图标吗？”,
+                    answerParagraphs: [
+                        “可以。millio 提供多款应用图标供选择。”,
+                        “打开”个人资料”>”外观”，选择你喜欢的风格。”
                     ],
                     note: nil
                 )
             ]
         ),
         ProfileFAQSection(
-            id: "billing",
-            title: "订阅",
+            id: “billing”,
+            title: “订阅”,
             items: [
                 ProfileFAQItem(
-                    id: "what-is-pro",
-                    question: "PRO 包含什么内容？",
+                    id: “what-is-pro”,
+                    question: “PRO 包含什么内容？”,
                     answerParagraphs: [
-                        "PRO 解锁高级功能，并移除部分模块免费版的限制。",
-                        "你可以在订阅页面查看当前 PRO 权益。"
+                        “PRO 包含：AI 银行截图导入、Finances 与 Dynamics 图表、无限返现类别及无限金融产品。”,
+                        “如需订阅或查看计划状态，打开”个人资料”并点击 PRO 卡片。”
                     ],
                     note: nil
                 ),
