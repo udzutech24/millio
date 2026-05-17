@@ -1,8 +1,8 @@
 # Plan: Finance List — Stale Balance After Quick Audit
 
-**Статус:** РЕАЛИЗОВАН  
+**Статус:** РЕАЛИЗОВАН (v2 — полный фикс)  
 **Дата:** 2026-05-17  
-**Ветка:** `feature/finance-list-stale-balance`
+**Ветка:** `develop`
 
 ## Проблема
 
@@ -147,4 +147,5 @@ private var investmentByID: [String: Investment] = [:]
 ## Журнал
 
 - 2026-05-17: Research-фаза завершена. Определены два слоя root cause: мёртвые onChange-триггеры и non-@Published cardByID. Написан план.
-- 2026-05-17: Реализовано. cardByID/creditByID/investmentByID → @Published private(set). onChange(of: showQuickAuditCover) + onChange(of: _cardBalanceMonitor) → onDismiss:. Добавлено 3 unit-теста. Все тесты прошли (0 failures).
+- 2026-05-17: Реализовано (v1). cardByID/creditByID/investmentByID → @Published private(set). onChange(of: showQuickAuditCover) + onChange(of: _cardBalanceMonitor) → onDismiss:. Добавлено 3 unit-теста. Все тесты прошли (0 failures).
+- 2026-05-17: Баг сохранялся после v1. Найдены три дополнительных слоя: (1) @Query _cardBalanceMonitor удалён — он давал перерисовку через SwiftData-нотификации без onChange; (2) RootTabView открывал AQA без onCommitted и без onDismiss:; (3) AccountQuickAuditView не имел onCommitted (код не компилировался с FinancesView). Реализован v2: @Query _allCards + cardBalanceHash в FinancesMainTabView, onDismiss: + onCommitted в RootTabView, onCommitted/pendingDismissAfterSave/EventBus в AccountQuickAuditView. Все тесты прошли (0 failures).
