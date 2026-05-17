@@ -8,10 +8,10 @@ enum AccountSortMode: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .amountDescending: return "По сумме: больше → меньше"
-        case .amountAscending: return "По сумме: меньше → больше"
-        case .nameAscending: return "По имени: А → Я"
-        case .nameDescending: return "По имени: Я → А"
+        case .amountDescending: return FinancesL10n.tr("finances.settings.sort.amount_desc")
+        case .amountAscending:  return FinancesL10n.tr("finances.settings.sort.amount_asc")
+        case .nameAscending:    return FinancesL10n.tr("finances.settings.sort.name_asc")
+        case .nameDescending:   return FinancesL10n.tr("finances.settings.sort.name_desc")
         }
     }
 

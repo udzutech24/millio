@@ -197,7 +197,7 @@ struct FinancesSettingsSheet: View {
                         AccountSortPickerView(sortMode: $accountSortMode)
                     } label: {
                         settingsRow(
-                            title: "Сортировка счетов",
+                            title: financesLocalized("finances.settings.sort.title"),
                             subtitle: accountSortMode.title,
                             icon: "arrow.up.arrow.down"
                         )
@@ -337,7 +337,7 @@ private struct AccountSortPickerView: View {
             .padding(.horizontal, 16)
             .padding(.top, 16)
         }
-        .navigationTitle("Сортировка счетов")
+        .navigationTitle(financesLocalized("finances.settings.sort.title"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
