@@ -20,6 +20,7 @@ struct AuditableAccount: Identifiable {
     let typeLabel: String
     let typeIcon: String
     let currencyCode: String
+    let originalBalance: Double
 
     // Режим ввода количества (для рыночных инвестиций)
     // unitPrice != nil → balance хранит количество, amount = balance × unitPrice

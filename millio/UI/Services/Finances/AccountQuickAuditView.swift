@@ -5,6 +5,23 @@ private func qaL(_ key: String) -> String { FinancesL10n.tr(key) }
 
 private let orderDefaultsKey = "millio.audit.accountOrder"
 
+// MARK: - Изменение баланса за сессию
+
+private struct AuditChange: Identifiable {
+    let id = UUID()
+    let name: String
+    let currencyCode: String
+    let oldBalance: Double
+    let newBalance: Double
+    let unitPrice: Double?
+    let unitCurrencyCode: String?
+
+    var displayOld: Double { unitPrice.map { oldBalance * $0 } ?? oldBalance }
+    var displayNew: Double { unitPrice.map { newBalance * $0 } ?? newBalance }
+    var displayCurrency: String { unitCurrencyCode ?? currencyCode }
+    var delta: Double { displayNew - displayOld }
+}
+
 // MARK: - Оркестратор флоу быстрой актуализации балансов
 
 struct AccountQuickAuditView: View {
@@ -23,6 +40,10 @@ struct AccountQuickAuditView: View {
     // Настройка порядка
     @State private var showReorderSheet = false
     @State private var showReminderSheet = false
+
+    // Выход с подтверждением
+    @State private var showExitConfirmation = false
+    @State private var auditChanges: [AuditChange] = []
 
     enum FlowState: Equatable {
         case intro, audit, outro
@@ -45,6 +66,9 @@ struct AccountQuickAuditView: View {
             }
         }
         .animation(AppAnimation.springGentle, value: flowState)
+        .sheet(isPresented: $showExitConfirmation) {
+            exitConfirmationSheet
+        }
         .overlay(alignment: .topTrailing) {
             if flowState != .audit {
                 Button(action: handleDismiss) {
@@ -60,12 +84,17 @@ struct AccountQuickAuditView: View {
         .onAppear { loadAccounts() }
     }
 
-    // MARK: - Dismiss — сохраняем всё и выходим
+    // MARK: - Dismiss — показываем подтверждение если есть изменения
 
     private func handleDismiss() {
         if flowState == .audit {
             saveCurrentIfNeeded()
-            commitAllPendingChanges()
+            let changes = computeChanges()
+            if !changes.isEmpty {
+                auditChanges = changes
+                showExitConfirmation = true
+                return
+            }
         }
         dismiss()
     }
@@ -335,35 +364,41 @@ struct AccountQuickAuditView: View {
     // MARK: - Outro
 
     private var outroView: some View {
-        VStack(spacing: AppSpacing.xxl) {
-            Spacer()
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: AppSpacing.xxl) {
+                    ZStack {
+                        ConfettiView()
+                            .frame(width: 220, height: 220)
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 84))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [AppColors.positiveColor, Color(hex: "00E0B8")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    .padding(.top, AppSpacing.xxxl)
 
-            ZStack {
-                ConfettiView()
-                    .frame(width: 220, height: 220)
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 84))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [AppColors.positiveColor, Color(hex: "00E0B8")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    VStack(spacing: AppSpacing.s) {
+                        Text(qaL("finances.quick_audit.done_title"))
+                            .font(Font.millioTitle)
+                            .foregroundStyle(AppColors.textPrimary)
+                        Text(qaL("finances.quick_audit.done_description"))
+                            .font(Font.millioBody)
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+
+                    if !auditChanges.isEmpty {
+                        outroChangesSection
+                    }
+                }
+                .padding(.horizontal, AppSpacing.xl)
             }
 
-            VStack(spacing: AppSpacing.s) {
-                Text(qaL("finances.quick_audit.done_title"))
-                    .font(Font.millioTitle)
-                    .foregroundStyle(AppColors.textPrimary)
-                Text(qaL("finances.quick_audit.done_description"))
-                    .font(Font.millioBody)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-
-            Spacer()
-
-            Button { commitAllPendingChanges(); dismiss() } label: {
+            Button { dismiss() } label: {
                 Text(qaL("finances.quick_audit.done"))
                     .font(Font.millioHeadline)
                     .foregroundStyle(.black)
@@ -376,10 +411,56 @@ struct AccountQuickAuditView: View {
             }
             .padding(.horizontal, AppSpacing.xl)
             .padding(.bottom, AppSpacing.xxxl)
+            .padding(.top, AppSpacing.l)
         }
         .onAppear {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
+    }
+
+    private var outroChangesSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.m) {
+            Text(qaL("finances.quick_audit.changes_title"))
+                .font(Font.millioCaption)
+                .foregroundStyle(AppColors.textSecondary)
+                .padding(.horizontal, AppSpacing.xs)
+
+            VStack(spacing: AppSpacing.s) {
+                ForEach(auditChanges) { change in
+                    HStack(spacing: AppSpacing.m) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(change.name)
+                                .font(Font.millioCalloutSemibold)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .lineLimit(1)
+                            HStack(spacing: AppSpacing.xs) {
+                                Text(auditFormattedBalance(change.displayOld, currency: change.displayCurrency))
+                                    .font(Font.millioCaption)
+                                    .foregroundStyle(AppColors.textTertiary)
+                                Image(systemName: "arrow.right")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(AppColors.textTertiary)
+                                Text(auditFormattedBalance(change.displayNew, currency: change.displayCurrency))
+                                    .font(Font.millioCaption)
+                                    .foregroundStyle(AppColors.textSecondary)
+                            }
+                        }
+                        Spacer()
+                        let delta = change.delta
+                        Text((delta >= 0 ? "+" : "") + auditFormattedBalance(delta, currency: change.displayCurrency))
+                            .font(Font.millioCalloutSemibold)
+                            .foregroundStyle(delta >= 0 ? AppColors.positiveColor : Color(hex: "FF6482"))
+                    }
+                    .padding(.horizontal, AppSpacing.l)
+                    .padding(.vertical, AppSpacing.m)
+                    .background(
+                        RoundedRectangle(cornerRadius: AppSpacing.l)
+                            .fill(Color.white.opacity(0.06))
+                    )
+                }
+            }
+        }
+        .padding(.bottom, AppSpacing.l)
     }
 
     // MARK: - Логика
@@ -411,6 +492,8 @@ struct AccountQuickAuditView: View {
     private func moveToNext() {
         let nextIndex = currentIndex + 1
         if nextIndex >= accounts.count {
+            commitAllPendingChanges()
+            auditChanges = computeChanges()
             fieldFocused = false
             withAnimation(AppAnimation.springGentle) { flowState = .outro }
         } else {
@@ -435,7 +518,8 @@ struct AccountQuickAuditView: View {
                     accentColors: AppColors.cardIndexGradient,
                     typeLabel: qaL("finances.quick_audit.type_card"),
                     typeIcon: "creditcard.fill",
-                    currencyCode: card.currency
+                    currencyCode: card.currency,
+                    originalBalance: card.balance
                 ))
             }
         }
@@ -443,15 +527,17 @@ struct AccountQuickAuditView: View {
         if let investments = try? modelContext.fetch(FetchDescriptor<Investment>()) {
             for inv in investments {
                 let isQtyMode = inv.marketQuantity != nil && inv.lastKnownUnitPrice != nil
+                let invBalance = isQtyMode ? (inv.marketQuantity ?? 0) : inv.amount
                 result.append(AuditableAccount(
                     kind: .investment(inv),
-                    balance: isQtyMode ? (inv.marketQuantity ?? 0) : inv.amount,
+                    balance: invBalance,
                     displayName: inv.name,
                     iconName: inv.resolvedIconName,
                     accentColors: AppColors.investmentsGradient,
                     typeLabel: qaL("finances.quick_audit.type_investment"),
                     typeIcon: "chart.line.uptrend.xyaxis",
                     currencyCode: inv.currency,
+                    originalBalance: invBalance,
                     unitPrice: isQtyMode ? inv.lastKnownUnitPrice : nil,
                     unitCurrencyCode: isQtyMode ? (inv.marketCurrency ?? inv.currency) : nil
                 ))
@@ -468,7 +554,8 @@ struct AccountQuickAuditView: View {
                     accentColors: [Color(hex: "2B8CFF"), Color(hex: "005BFF")],
                     typeLabel: qaL("finances.quick_audit.type_credit"),
                     typeIcon: "creditcard.trianglebadge.exclamationmark.fill",
-                    currencyCode: credit.currency
+                    currencyCode: credit.currency,
+                    originalBalance: credit.remainingAmount
                 ))
             }
         }
@@ -532,6 +619,124 @@ struct AccountQuickAuditView: View {
             try modelContext.save()
         } catch {
             print("[QuickAudit] commitAll save error: \(error)")
+        }
+    }
+
+    // MARK: - Подтверждение выхода
+
+    private var exitConfirmationSheet: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                VStack(spacing: AppSpacing.xl) {
+                    VStack(spacing: AppSpacing.s) {
+                        Text(qaL("finances.quick_audit.exit_title"))
+                            .font(Font.millioTitle2)
+                            .foregroundStyle(AppColors.textPrimary)
+                        Text(qaL("finances.quick_audit.exit_subtitle"))
+                            .font(Font.millioBody)
+                            .foregroundStyle(AppColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.top, AppSpacing.xl)
+
+                    ScrollView {
+                        VStack(spacing: AppSpacing.s) {
+                            ForEach(auditChanges) { change in
+                                HStack(spacing: AppSpacing.m) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(change.name)
+                                            .font(Font.millioCalloutSemibold)
+                                            .foregroundStyle(AppColors.textPrimary)
+                                            .lineLimit(1)
+                                        HStack(spacing: AppSpacing.xs) {
+                                            Text(auditFormattedBalance(change.displayOld, currency: change.displayCurrency))
+                                                .font(Font.millioCaption)
+                                                .foregroundStyle(AppColors.textTertiary)
+                                            Image(systemName: "arrow.right")
+                                                .font(.system(size: 10))
+                                                .foregroundStyle(AppColors.textTertiary)
+                                            Text(auditFormattedBalance(change.displayNew, currency: change.displayCurrency))
+                                                .font(Font.millioCaption)
+                                                .foregroundStyle(AppColors.textSecondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    let delta = change.delta
+                                    Text((delta >= 0 ? "+" : "") + auditFormattedBalance(delta, currency: change.displayCurrency))
+                                        .font(Font.millioCalloutSemibold)
+                                        .foregroundStyle(delta >= 0 ? AppColors.positiveColor : Color(hex: "FF6482"))
+                                }
+                                .padding(.horizontal, AppSpacing.l)
+                                .padding(.vertical, AppSpacing.m)
+                                .background(
+                                    RoundedRectangle(cornerRadius: AppSpacing.l)
+                                        .fill(Color.white.opacity(0.06))
+                                )
+                            }
+                        }
+                        .padding(.horizontal, AppSpacing.xl)
+                    }
+
+                    Spacer()
+
+                    VStack(spacing: AppSpacing.m) {
+                        Button {
+                            commitAllPendingChanges()
+                            showExitConfirmation = false
+                            dismiss()
+                        } label: {
+                            Text(qaL("finances.quick_audit.exit_save"))
+                                .font(Font.millioHeadline)
+                                .foregroundStyle(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, AppSpacing.l)
+                                .background(
+                                    LinearGradient(colors: AppColors.financesGradient, startPoint: .leading, endPoint: .trailing)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.l))
+                        }
+
+                        Button {
+                            showExitConfirmation = false
+                            dismiss()
+                        } label: {
+                            Text(qaL("finances.quick_audit.exit_discard"))
+                                .font(Font.millioCalloutSemibold)
+                                .foregroundStyle(Color(hex: "FF6482"))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, AppSpacing.l)
+                                .background(
+                                    RoundedRectangle(cornerRadius: AppSpacing.l)
+                                        .fill(Color.white.opacity(0.06))
+                                )
+                        }
+                    }
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.bottom, AppSpacing.xxxl)
+                }
+            }
+            .navigationTitle("")
+            .navigationBarHidden(true)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - Вычисление изменений
+
+    private func computeChanges() -> [AuditChange] {
+        accounts.compactMap { account in
+            guard abs(account.balance - account.originalBalance) > 0.001 else { return nil }
+            return AuditChange(
+                name: account.displayName,
+                currencyCode: account.currencyCode,
+                oldBalance: account.originalBalance,
+                newBalance: account.balance,
+                unitPrice: account.unitPrice,
+                unitCurrencyCode: account.unitCurrencyCode
+            )
         }
     }
 
