@@ -1786,7 +1786,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 // that value was in effect (e.g. after a manual edit of balance that didn't create a
                 // balanceAdjustment transaction). Otherwise we erase history for earlier periods.
                 let liveStateEffectiveDate = max(lastTrackedCardChangeDate, card.updatedAt)
-                if date >= liveStateEffectiveDate {
+                // Допуск 1 с для sub-second race: updatedAt может опередить targetDate
+                // на несколько миллисекунд при одновременном сохранении и запросе.
+                if date.addingTimeInterval(1) >= liveStateEffectiveDate {
                     let actualCurrentValue: Double
                     if card.cardType == .credit, let limit = card.creditLimit {
                         actualCurrentValue = max(0, limit - card.balance)
@@ -1929,7 +1931,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         .map(\.transactionDate)
                         .max() ?? investment.createdAt
                     let liveStateEffectiveDate = max(lastTrackedInvestmentChangeDate, investment.updatedAt)
-                    if date >= liveStateEffectiveDate {
+                    // Допуск 1 с для sub-second race: updatedAt может опередить targetDate
+                    // на несколько миллисекунд при одновременном сохранении и запросе.
+                    if date.addingTimeInterval(1) >= liveStateEffectiveDate {
                         let deltaToActual = actualSignedAmount - investmentBalance
                         if abs(deltaToActual) > 0.01 {
                             investmentBalance += deltaToActual
