@@ -441,6 +441,12 @@ private struct FinanceAccountRow: View {
     let onEdit: () -> Void
     let onQuickEditAmount: () -> Void
 
+    // Читаем баланс из viewModel в body — @ObservedObject FinanceAccountRow сам перерисуется
+    // при objectWillChange, не завися от того, перерисует ли родитель FinanceGroupRow
+    private var resolvedAmount: Double {
+        viewModel.getAccountInfo(account: account)?.amount ?? amount
+    }
+
     private let contentLeadingInset: CGFloat = 28
     private let contentTrailingInset: CGFloat = 16
     
@@ -586,13 +592,13 @@ private struct FinanceAccountRow: View {
         amountFontSize: CGFloat,
         maximumFractionDigits: Int
     ) -> some View {
-        let amountColor = isDebtHighlighted ? AppColors.error : (amount >= 0 ? AppColors.textPrimary : AppColors.error)
+        let amountColor = isDebtHighlighted ? AppColors.error : (resolvedAmount >= 0 ? AppColors.textPrimary : AppColors.error)
         Button {
             onQuickEditAmount()
         } label: {
             VStack(alignment: .trailing, spacing: 2) {
                 financeAmountLabel(
-                    amountText: formatBalance(amount, isHidden: viewModel.state.isAmountHidden, maximumFractionDigits: maximumFractionDigits),
+                    amountText: formatBalance(resolvedAmount, isHidden: viewModel.state.isAmountHidden, maximumFractionDigits: maximumFractionDigits),
                     currencySymbol: MonetaCurrency(rawValue: currency)?.symbol ?? currency,
                     amountFontSize: amountFontSize,
                     amountColor: amountColor.opacity(0.92),

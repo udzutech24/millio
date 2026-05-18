@@ -60,6 +60,33 @@ platform :ios do
     )
   end
 
+  desc "Собрать и запустить на открытом симуляторе (Debug). Запуск: bundle exec fastlane run_sim"
+  lane :run_sim do |options|
+    scheme = options[:scheme] || "millio"
+    derived = "/tmp/millio-sim-derived"
+
+    # UDID первого booted симулятора
+    udid = sh("xcrun simctl list devices booted | grep -oE '[A-F0-9-]{36}' | head -1", log: false).strip
+    UI.user_error!("Нет запущенного симулятора. Открой Simulator.app.") if udid.empty?
+    UI.message("Симулятор: #{udid}")
+
+    sh("xcodebuild -project millio.xcodeproj -scheme #{scheme} -configuration Debug " \
+       "-destination 'id=#{udid}' -derivedDataPath #{derived} " \
+       "DEVELOPMENT_TEAM=RZ9K4783T9 " \
+       "build 2>&1 | xcbeautify || true")
+
+    app_path = Dir.glob("#{derived}/Build/Products/Debug-iphonesimulator/#{scheme}.app").first
+    UI.user_error!("Не найден .app после сборки") if app_path.nil?
+
+    # Встраиваем entitlements — без них CKContainer.default() падает на симуляторе
+    entitlements = File.expand_path("millio/millio.entitlements")
+    sh("codesign --force --sign - --entitlements '#{entitlements}' '#{app_path}'")
+
+    sh("xcrun simctl install #{udid} '#{app_path}'")
+    sh("xcrun simctl launch --console-pty #{udid} com.millio.app || xcrun simctl launch #{udid} com.millio.app")
+    UI.success("Запущено на симуляторе")
+  end
+
   desc "Генерирует сырые App Store скриншоты через Screenshot Mode + fastlane snapshot.
   После захвата: cd Маркетинг/screenshots-remotion && npm run render — финальные карточки.
   Запуск: bundle exec fastlane screenshots"

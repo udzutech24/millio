@@ -3171,4 +3171,126 @@ struct FinanceViewModelTests {
 
         #expect(changeCount > 0)
     }
+
+    // MARK: - Синхронизация балансов
+
+    @Test("updateAccountAmount обновляет getAccountInfo без дополнительного loadAccounts")
+    func testUpdateAccountAmountReflectsInGetAccountInfo() throws {
+        let modelContext = try createTestModelContext()
+        EventBus.shared.removeAllSubscribers()
+
+        let group = FinanceGroup(name: "Тест", colorHex: "#FFFFFF")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "Тестовая карта",
+            cardNumber: "0001",
+            bank: .sberbank,
+            cardType: .debit,
+            currency: "USD",
+            balance: 1_311_111.0
+        )
+        modelContext.insert(card)
+
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        let infoBefore = viewModel.getAccountInfo(account: account)
+        #expect(infoBefore?.amount == 1_311_111.0, "Исходный баланс должен быть 1 311 111")
+
+        viewModel.handle(.updateAccountAmount(account, 13_111.0))
+
+        let infoAfter = viewModel.getAccountInfo(account: account)
+        #expect(infoAfter?.amount == 13_111.0, "После updateAccountAmount getAccountInfo должен вернуть новый баланс без дополнительного loadAccounts")
+    }
+
+    @Test("EventBus cardsUpdated вызывает loadAccounts и обновляет getAccountInfo")
+    func testEventBusCardsUpdatedTriggersLoadAccountsAndUpdatesInfo() throws {
+        let modelContext = try createTestModelContext()
+        EventBus.shared.removeAllSubscribers()
+
+        let group = FinanceGroup(name: "Тест", colorHex: "#FFFFFF")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "Карта EventBus",
+            cardNumber: "0002",
+            bank: .tinkoff,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 500.0
+        )
+        modelContext.insert(card)
+
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: false
+        )
+
+        let infoBefore = viewModel.getAccountInfo(account: account)
+        #expect(infoBefore?.amount == 500.0)
+
+        // Мутируем баланс напрямую (имитация внешнего сохранения, например из AQA)
+        card.balance = 999.0
+        try modelContext.save()
+        EventBus.shared.publish(FinanceEvent.cardsUpdated)
+
+        let infoAfter = viewModel.getAccountInfo(account: account)
+        #expect(infoAfter?.amount == 999.0, "После EventBus.cardsUpdated getAccountInfo должен вернуть новый баланс")
+    }
+
+    @Test("Прямое изменение balance через SwiftData и loadAccounts синхронизирует список (путь AQA)")
+    func testDirectSaveAndLoadAccountsSyncsBalance() throws {
+        let modelContext = try createTestModelContext()
+        EventBus.shared.removeAllSubscribers()
+
+        let group = FinanceGroup(name: "Аудит", colorHex: "#FFFFFF")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "AQA Карта",
+            cardNumber: "0003",
+            bank: .vtb,
+            cardType: .debit,
+            currency: "USD",
+            balance: 10_000.0
+        )
+        modelContext.insert(card)
+
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        // Имитируем applyBalance из AccountQuickAuditView
+        card.balance = 1_234.0
+        try modelContext.save()
+        // AQA публикует событие — ViewModel должен перечитать
+        EventBus.shared.publish(FinanceEvent.cardsUpdated)
+
+        let info = viewModel.getAccountInfo(account: account)
+        #expect(info?.amount == 1_234.0, "После AQA-стиля сохранения и EventBus список должен показывать новый баланс")
+    }
 }

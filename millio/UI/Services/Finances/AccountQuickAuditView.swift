@@ -69,6 +69,15 @@ struct AccountQuickAuditView: View {
             }
         }
         .animation(AppAnimation.springGentle, value: flowState)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if flowState == .audit {
+                confirmButton
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.top, AppSpacing.s)
+                    .padding(.bottom, AppSpacing.m)
+                    .background(Color.black.opacity(0.85))
+            }
+        }
         .sheet(isPresented: $showExitConfirmation, onDismiss: {
             guard pendingDismissAfterSave else { return }
             pendingDismissAfterSave = false
@@ -250,54 +259,44 @@ struct AccountQuickAuditView: View {
     // MARK: - Audit
 
     private var auditView: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                progressHeader
-                    .padding(.horizontal, AppSpacing.xl)
-                    .padding(.top, AppSpacing.xxl)
+        VStack(spacing: 0) {
+            progressHeader
+                .padding(.horizontal, AppSpacing.xl)
+                .padding(.top, AppSpacing.xxl)
 
-                Spacer()
+            Spacer()
 
-                VStack(spacing: AppSpacing.m) {
-                    if currentIndex > 0 {
-                        AccountAuditInactiveRow(account: accounts[currentIndex - 1])
-                            .padding(.horizontal, AppSpacing.xl)
-                            .transition(.opacity)
-                    }
-
-                    AccountAuditActiveRow(
-                        account: accounts[currentIndex],
-                        balanceText: $currentBalance,
-                        isFocused: $fieldFocused,
-                        confirmFlash: confirmFlash
-                    )
-                    .padding(.horizontal, AppSpacing.xl)
-                    .id(currentIndex)
-                    .transition(
-                        .asymmetric(
-                            insertion: .move(edge: .bottom).combined(with: .opacity),
-                            removal: .move(edge: .top).combined(with: .opacity)
-                        )
-                    )
-
-                    if currentIndex < accounts.count - 1 {
-                        AccountAuditInactiveRow(account: accounts[currentIndex + 1])
-                            .padding(.horizontal, AppSpacing.xl)
-                            .transition(.opacity)
-                    }
-                }
-                .animation(AppAnimation.springGentle, value: currentIndex)
-
-                Spacer()
-            }
-            .toolbar(.hidden, for: .navigationBar)
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    confirmButton
+            VStack(spacing: AppSpacing.m) {
+                if currentIndex > 0 {
+                    AccountAuditInactiveRow(account: accounts[currentIndex - 1])
                         .padding(.horizontal, AppSpacing.xl)
-                        .padding(.vertical, AppSpacing.xs)
+                        .transition(.opacity)
+                }
+
+                AccountAuditActiveRow(
+                    account: accounts[currentIndex],
+                    balanceText: $currentBalance,
+                    isFocused: $fieldFocused,
+                    confirmFlash: confirmFlash
+                )
+                .padding(.horizontal, AppSpacing.xl)
+                .id(currentIndex)
+                .transition(
+                    .asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    )
+                )
+
+                if currentIndex < accounts.count - 1 {
+                    AccountAuditInactiveRow(account: accounts[currentIndex + 1])
+                        .padding(.horizontal, AppSpacing.xl)
+                        .transition(.opacity)
                 }
             }
+            .animation(AppAnimation.springGentle, value: currentIndex)
+
+            Spacer()
         }
         .onAppear {
             currentBalance = auditBalanceForEditing(accounts[currentIndex].balance)
@@ -360,7 +359,7 @@ struct AccountQuickAuditView: View {
     private var confirmButton: some View {
         Button(action: confirmAndAdvance) {
             HStack(spacing: AppSpacing.s) {
-                Text(qaL("finances.quick_audit.confirm"))
+                Text(qaL("finances.quick_audit.next"))
                 Image(systemName: "arrow.right")
             }
             .font(Font.millioHeadline)
@@ -368,7 +367,11 @@ struct AccountQuickAuditView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, AppSpacing.l)
             .background(
-                LinearGradient(colors: AppColors.financesGradient, startPoint: .leading, endPoint: .trailing)
+                LinearGradient(
+                    colors: [AppColors.positiveColor, Color(hex: "00E0B8")],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
             )
             .clipShape(RoundedRectangle(cornerRadius: AppSpacing.l))
         }
@@ -606,6 +609,13 @@ struct AccountQuickAuditView: View {
         accounts[index].balance = value
         do {
             try modelContext.save()
+            // Сразу уведомляем FinanceViewModel, не ждём onChange(@Query) —
+            // SwiftData property-change нотификации ненадёжны в некоторых версиях iOS
+            switch accounts[index].kind {
+            case .card: EventBus.shared.publish(FinanceEvent.cardsUpdated)
+            case .investment: EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+            case .credit: EventBus.shared.publish(FinanceEvent.creditsUpdated)
+            }
         } catch {
             print("[QuickAudit] modelContext.save error: \(error)")
         }

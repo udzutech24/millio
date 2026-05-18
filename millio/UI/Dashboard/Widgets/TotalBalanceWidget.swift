@@ -15,6 +15,10 @@ struct TotalBalanceWidget: View {
     var onSparklineTap: (() -> Void)? = nil
     var onDaysChipTap: (() -> Void)? = nil
 
+    @State private var displayedBalance: Double = 0
+    @State private var hasCountedUp = false
+    @State private var countUpTimer: Timer?
+
     private var formattedBalance: String {
         if isAmountHidden {
             let digits = Int(totalBalance.rounded())
@@ -25,7 +29,8 @@ struct TotalBalanceWidget: View {
         formatter.maximumFractionDigits = 0
         formatter.groupingSeparator = " "
         formatter.usesGroupingSeparator = true
-        return formatter.string(from: NSNumber(value: totalBalance)) ?? "—"
+        let valueToDisplay = displayedBalance > 0 ? displayedBalance : totalBalance
+        return formatter.string(from: NSNumber(value: valueToDisplay)) ?? "—"
     }
 
     private var currencySymbol: String {
@@ -112,6 +117,48 @@ struct TotalBalanceWidget: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
         .background(cardBackground)
+        .onAppear {
+            guard !hasCountedUp else { return }
+            if isAmountHidden || totalBalance <= 0 {
+                displayedBalance = totalBalance
+                return
+            }
+            hasCountedUp = true
+            countUp(to: totalBalance)
+        }
+        .onDisappear {
+            countUpTimer?.invalidate()
+            countUpTimer = nil
+        }
+        .onChange(of: totalBalance) { _, newValue in
+            if hasCountedUp {
+                displayedBalance = newValue
+            } else if newValue > 0 && !isAmountHidden {
+                hasCountedUp = true
+                countUp(to: newValue)
+            } else {
+                displayedBalance = newValue
+            }
+        }
+    }
+
+    private func countUp(to target: Double) {
+        countUpTimer?.invalidate()
+        let duration: TimeInterval = 0.65
+        let interval: TimeInterval = 1.0 / 60.0
+        var elapsed: TimeInterval = 0
+        countUpTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { timer in
+            elapsed += interval
+            if elapsed >= duration {
+                displayedBalance = target
+                timer.invalidate()
+                countUpTimer = nil
+            } else {
+                let t = elapsed / duration
+                let eased = 1.0 - pow(1.0 - t, 3.0)
+                displayedBalance = target * eased
+            }
+        }
     }
 
     // MARK: - Delta chip

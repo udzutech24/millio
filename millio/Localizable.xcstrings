@@ -43935,6 +43935,75 @@
         }
       }
     },
+    "finances.archive.balance_warning.confirm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive Anyway"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Всё равно архивировать"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍然归档"
+          }
+        }
+      }
+    },
+    "finances.archive.balance_warning.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Balance is %@. It won't be deleted — you can restore the account later."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Остаток на счёте: %@. Данные не удалятся — счёт можно восстановить."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "账户余额为 %@。数据不会删除——可随时恢复账户。"
+          }
+        }
+      }
+    },
+    "finances.archive.balance_warning.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non-zero balance"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На счёте есть остаток"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "账户余额不为零"
+          }
+        }
+      }
+    },
     "finances.audit.accessibility.select_date" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -45763,75 +45832,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "返回"
-          }
-        }
-      }
-    },
-    "finances.archive.balance_warning.confirm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Archive Anyway"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Всё равно архивировать"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "仍然归档"
-          }
-        }
-      }
-    },
-    "finances.archive.balance_warning.message" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Balance is %@. It won't be deleted — you can restore the account later."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Остаток на счёте: %@. Данные не удалятся — счёт можно восстановить."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "账户余额为 %@。数据不会删除——可随时恢复账户。"
-          }
-        }
-      }
-    },
-    "finances.archive.balance_warning.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Non-zero balance"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "На счёте есть остаток"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "账户余额不为零"
           }
         }
       }
@@ -60355,6 +60355,53 @@
         }
       }
     },
+    "finances.quick_audit.changes_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Was sich geändert hat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What changed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qué cambió"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce qui a changé"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Что изменилось"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne değişti"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "变化汇总"
+          }
+        }
+      }
+    },
     "finances.quick_audit.confirm" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -60398,6 +60445,53 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正确"
+          }
+        }
+      }
+    },
+    "finances.quick_audit.next" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weiter"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siguiente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suivant"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Далее"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İleri"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一步"
           }
         }
       }
@@ -60637,66 +60731,6 @@
         }
       }
     },
-    "finances.quick_audit.changes_title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Was sich geändert hat" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "What changed" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Qué cambió" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ce qui a changé" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Что изменилось" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Ne değişti" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "变化汇总" } }
-      }
-    },
-    "finances.quick_audit.exit_discard" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nicht speichern" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Don't save" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "No guardar" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ne pas enregistrer" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не сохранять" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Kaydetme" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "不保存" } }
-      }
-    },
-    "finances.quick_audit.exit_save" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Änderungen speichern" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save changes" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardar cambios" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Enregistrer les modifications" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранить изменения" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Değişiklikleri kaydet" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "保存更改" } }
-      }
-    },
-    "finances.quick_audit.exit_subtitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Möchten Sie die aktualisierten Kontostände speichern?" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Do you want to save the updated balances?" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "¿Desea guardar los saldos actualizados?" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Voulez-vous enregistrer les soldes mis à jour ?" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Вы обновили несколько счетов. Сохранить изменения?" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Güncellenen bakiyeleri kaydetmek ister misiniz?" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "是否保存已更新的余额？" } }
-      }
-    },
-    "finances.quick_audit.exit_title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Änderungen speichern?" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save changes?" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "¿Guardar cambios?" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Enregistrer les modifications ?" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранить изменения?" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Değişiklikler kaydedilsin mi?" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "保存更改？" } }
-      }
-    },
     "finances.quick_audit.edit" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -60834,6 +60868,194 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "添加账户以使用快速检查"
+          }
+        }
+      }
+    },
+    "finances.quick_audit.exit_discard" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht speichern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Don't save"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No guardar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne pas enregistrer"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не сохранять"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaydetme"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不保存"
+          }
+        }
+      }
+    },
+    "finances.quick_audit.exit_save" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen speichern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save changes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar cambios"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer les modifications"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранить изменения"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Değişiklikleri kaydet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存更改"
+          }
+        }
+      }
+    },
+    "finances.quick_audit.exit_subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Möchten Sie die aktualisierten Kontostände speichern?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Do you want to save the updated balances?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Desea guardar los saldos actualizados?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voulez-vous enregistrer les soldes mis à jour ?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы обновили несколько счетов. Сохранить изменения?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Güncellenen bakiyeleri kaydetmek ister misiniz?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "是否保存已更新的余额？"
+          }
+        }
+      }
+    },
+    "finances.quick_audit.exit_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen speichern?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save changes?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Guardar cambios?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer les modifications ?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранить изменения?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Değişiklikler kaydedilsin mi?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存更改？"
           }
         }
       }
@@ -88627,9 +88849,6 @@
           }
         }
       }
-    },
-    "Сортировка счетов" : {
-
     },
     "Сохранить" : {
       "comment" : "A button that saves user settings.",

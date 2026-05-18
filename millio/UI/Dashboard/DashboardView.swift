@@ -38,6 +38,7 @@ struct DashboardView: View {
     @State private var activeWidgets: [DashboardWidgetID] = DashboardWidgetStorage.load()
     @State private var isEditing = false
     @State private var showAddWidget = false
+    @State private var appeared = false
 
     private var inactiveWidgets: [DashboardWidgetID] {
         DashboardWidgetID.allCases.filter { !activeWidgets.contains($0) }
@@ -89,23 +90,31 @@ struct DashboardView: View {
                 topActionButtons
                     .padding(.top, topInset + 18)
                     .padding(.horizontal, 14)
+                    .revealOnAppear(appeared: appeared, index: 0)
 
                 miniAppsSection
                     .padding(.top, 8)
+                    .revealOnAppear(appeared: appeared, index: 1)
 
                 if activeWidgets.isEmpty {
                     emptyPlaceholder
+                        .revealOnAppear(appeared: appeared, index: 2)
                 } else {
                     widgetsSection
                 }
 
                 dashboardSettingsButton
                     .padding(.top, 12)
+                    .revealOnAppear(appeared: appeared, index: 2 + activeWidgets.count)
 
                 Spacer(minLength: 88)
             }
         }
         .ignoresSafeArea(edges: .top)
+        .onAppear {
+            guard !appeared else { return }
+            appeared = true
+        }
     }
 
     // MARK: - Top Action Buttons
@@ -152,8 +161,9 @@ struct DashboardView: View {
 
     private var widgetsSection: some View {
         VStack(spacing: 12) {
-            ForEach(activeWidgets) { widget in
+            ForEach(Array(activeWidgets.enumerated()), id: \.element) { index, widget in
                 widgetView(widget)
+                    .revealOnAppear(appeared: appeared, index: index + 2)
             }
         }
         .padding(.horizontal, 18)
@@ -508,5 +518,19 @@ private struct AddWidgetSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Reveal animation helper
+
+private extension View {
+    func revealOnAppear(appeared: Bool, index: Int) -> some View {
+        self
+            .opacity(appeared ? 1.0 : 0.0)
+            .offset(y: appeared ? 0 : 22)
+            .animation(
+                .spring(response: 0.52, dampingFraction: 0.82).delay(Double(index) * 0.09),
+                value: appeared
+            )
     }
 }

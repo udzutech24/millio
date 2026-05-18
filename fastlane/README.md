@@ -23,6 +23,14 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 Build and upload the app to TestFlight
 
+### ios run_sim
+
+```sh
+[bundle exec] fastlane ios run_sim
+```
+
+Собрать и запустить на открытом симуляторе (Debug). Запуск: bundle exec fastlane run_sim
+
 ### ios screenshots
 
 ```sh
