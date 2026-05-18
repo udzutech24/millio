@@ -252,6 +252,7 @@ enum FinanceAction {
     case showQuickEditAccountSheet(FinanceAccount)
     case hideQuickEditAccountSheet
     case updateAccountAmount(FinanceAccount, Double)
+    case updateAccountAmountWithBase(FinanceAccount, Double, Double)
     case updateCreditCardQuickFields(account: FinanceAccount, creditLimit: Double, debt: Double)
     case executeInvestmentOrder(
         account: FinanceAccount,
@@ -660,6 +661,8 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .updateAccountAmount(let account, let newAmount):
             updateAccountAmount(account: account, newAmount: newAmount)
+        case .updateAccountAmountWithBase(let account, let newAmount, let displayedOldBalance):
+            updateAccountAmount(account: account, newAmount: newAmount, displayedOldBalance: displayedOldBalance)
         case .updateCreditCardQuickFields(let account, let creditLimit, let debt):
             updateCreditCardQuickFields(account: account, creditLimit: creditLimit, debt: debt)
 
@@ -1414,7 +1417,7 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
     
-    private func updateAccountAmount(account: FinanceAccount, newAmount: Double) {
+    private func updateAccountAmount(account: FinanceAccount, newAmount: Double, displayedOldBalance: Double? = nil) {
         // Находим группу, к которой принадлежит счет
         let accountGroup = state.groups.first { group in
             group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
@@ -1426,7 +1429,9 @@ final class FinanceViewModel: ViewModelProtocol {
                 // Сохраняем старое значение для создания транзакции
                 let oldBalance = card.balance
                 if !card.hasInitialBalance {
-                    card.initialBalance = card.balance
+                    // Для дебетовых карт с displayedOldBalance якорим историю по отображаемому балансу,
+                    // а не по card.balance — иначе дельта-транзакция будет посчитана неверно.
+                    card.initialBalance = (card.cardType != .credit ? displayedOldBalance : nil) ?? card.balance
                     card.hasInitialBalance = true
                 }
                 let oldAmount: Double
@@ -1434,8 +1439,9 @@ final class FinanceViewModel: ViewModelProtocol {
                     // Для кредитных карт старое значение - это задолженность
                     oldAmount = max(0, limit - oldBalance)
                 } else {
-                    // Для дебетовых карт старое значение - это баланс
-                    oldAmount = oldBalance
+                    // Для дебетовых карт: используем отображаемый баланс как базу (если задан),
+                    // чтобы корректирующая транзакция совпадала с тем, что видел пользователь.
+                    oldAmount = displayedOldBalance ?? oldBalance
                 }
                 
                 // Для кредитных карт меняем задолженность (т.е. меняем balance так, чтобы debt = newAmount)
@@ -1566,9 +1572,10 @@ final class FinanceViewModel: ViewModelProtocol {
         case .investment:
             if let investment = investmentByID[account.accountID] {
                 // Сохраняем старое значение для создания транзакции
-                let oldAmount = investment.amount
+                let oldAmount = displayedOldBalance ?? investment.amount
                 if !investment.hasInitialAmount {
-                    investment.initialAmount = investment.amount
+                    // Якорим историю по отображаемому балансу, если он задан
+                    investment.initialAmount = displayedOldBalance ?? investment.amount
                     investment.hasInitialAmount = true
                 }
 

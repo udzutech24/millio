@@ -211,6 +211,7 @@ private struct FinanceDynamicsContentView: View {
     @State private var inlineAmountText: String = ""
     @State private var inlineCreditLimitText: String = ""
     @State private var inlineCreditDebtText: String = ""
+    @State private var inlineAccountEditStartBalance: Double = 0
     @State private var showOverviewExpandedChart: Bool = false
     @State private var selectedOverviewGranularity: FinanceOverviewGranularity = .month
     @State private var selectedOverviewPeriods: [FinanceOverviewGranularity: Date] = [:]
@@ -2426,8 +2427,13 @@ private struct FinanceDynamicsContentView: View {
             inlineCreditLimitText = rawNumberString(card.creditLimit ?? 0, maxFractionDigits: 2)
             let debt = max(0, (card.creditLimit ?? 0) - card.balance)
             inlineCreditDebtText = rawNumberString(debt, maxFractionDigits: 2)
-        } else if let info = financeViewModel.getAccountInfo(account: account) {
-            inlineAmountText = rawNumberString(info.amount, maxFractionDigits: 2)
+        } else {
+            // Используем отображаемый баланс (currentBalance) как начальное значение поля,
+            // чтобы поле совпадало с тем, что видит пользователь. currentBalance учитывает
+            // снэпшоты аудита и транзакционную историю, в отличие от info.amount / card.balance.
+            let displayed = viewModel.state.currentBalance
+            inlineAccountEditStartBalance = displayed
+            inlineAmountText = rawNumberString(displayed, maxFractionDigits: 2)
         }
         isInlineAccountEdit = true
     }
@@ -2440,7 +2446,7 @@ private struct FinanceDynamicsContentView: View {
             financeViewModel.handle(.updateCreditCardQuickFields(account: account, creditLimit: limit, debt: debt))
         } else {
             let amount = AmountInputFormatter.parse(inlineAmountText) ?? 0
-            financeViewModel.handle(.updateAccountAmount(account, amount))
+            financeViewModel.handle(.updateAccountAmountWithBase(account, amount, inlineAccountEditStartBalance))
         }
         viewModel.handle(.loadData)
         isInlineAccountEdit = false
