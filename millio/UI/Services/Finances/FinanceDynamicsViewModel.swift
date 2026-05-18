@@ -532,18 +532,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         // Создаем словари для быстрого поиска (O(1) вместо O(n))
         rebuildCaches()
-
-        // Provisional: при режиме одного счёта сразу отражаем актуальный баланс из кэша,
-        // чтобы UI не показывал старое значение пока асинхронный расчёт ещё не завершён.
-        // Работает только когда displayCurrency == accountCurrency (нет конвертации).
-        applyProvisionalCurrentBalance()
-
+        
         // Загружаем транзакции Cashflow для расчета динамики балансов
         loadCashflowTransactions()
-
+        
         // Загружаем доступные валюты
         loadAvailableCurrencies()
-
+        
         // Обновляем данные графика
         updateChartData()
         
@@ -644,35 +639,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         dailyAuditSnapshotCache.removeAll()
     }
     
-    /// Немедленно обновляет currentBalance из кэшей без асинхронного расчёта.
-    /// Используется только в режиме одного счёта, когда валюта счёта совпадает с displayCurrency.
-    /// Убирает визуальное несоответствие пока фоновый calculateBalanceAtDate ещё считает.
-    private func applyProvisionalCurrentBalance() {
-        guard case .singleAccount(let accountID) = state.dynamicsMode else { return }
-        let allAccounts = getAccountsForSelectedGroups()
-        guard let account = allAccounts.first(where: { $0.accountUniqueID == accountID }) else { return }
-        let nativeAmount: Double
-        let nativeCurrency: String
-        switch account.accountType {
-        case .investment:
-            guard let inv = investmentsCache[account.accountID] else { return }
-            nativeAmount = inv.amount
-            nativeCurrency = resolvedInvestmentCurrency(inv)
-        case .card:
-            guard let card = cardsCache[account.accountID] else { return }
-            nativeAmount = card.balance
-            nativeCurrency = card.currency
-        case .credit:
-            guard let credit = creditsCache[account.accountID] else { return }
-            nativeAmount = credit.remainingAmount
-            nativeCurrency = credit.currency
-        }
-        let displayCurrency = normalizedConversionCurrency(state.displayCurrency)
-        let accountCurrency = normalizedConversionCurrency(nativeCurrency)
-        guard displayCurrency == accountCurrency else { return }
-        state.currentBalance = nativeAmount
-    }
-
     func loadCashflowTransactions() {
         let descriptor = FetchDescriptor<CashflowTransaction>(
             sortBy: [SortDescriptor(\.transactionDate, order: .forward)]
@@ -848,12 +814,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         if Task.isCancelled { return }
         if selectedDate != state.selectedDate { return }
         state.currentBalance = currentBalance
-        // Для режима «сегодня» в одном счёте: переприменяем live-значение из кэша,
-        // чтобы конвертация/delta не откатили результат provisional-обновления.
-        if selectedDate == nil {
-            applyProvisionalCurrentBalance()
-        }
-
+        
         // Рассчитываем баланс на начало периода
         let startBalance = await calculateBalanceAtDate(
             accounts: accounts,
@@ -1986,11 +1947,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 }
             }
 
-            // Снапшот аудита — инструмент исторической сверки. Для сегодняшней даты
-            // приоритет за живым Investment.amount / card.balance, иначе устаревший
-            // снапшот перезапишет только что внесённый пользователем баланс.
-            let isToday = Calendar.current.isDateInToday(date)
-            if !isToday, let snapshotValue = snapshotValue(for: account, in: daySnapshot) {
+            if let snapshotValue = snapshotValue(for: account, in: daySnapshot) {
                 accountBalance = snapshotValue.value
                 accountCurrency = normalizedAuditCurrency(
                     snapshotValue.currencyCode,
