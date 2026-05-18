@@ -224,8 +224,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     let financeViewModel: FinanceViewModel
     let currencyService: CurrencyRateServiceProtocol
     private let historicalRateStore: HistoricalRateStore
-    private let auditStore: FinanceBalanceAuditStoreProtocol
-    
     let defaults = UserDefaults.standard
     private var eventSubscriptionID: UUID?
     private var selectionUpdateTask: Task<Void, Never>?
@@ -241,7 +239,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     var transactionsByInvestmentCache: [String: [CashflowTransaction]] = [:]
     var initialBalancesCache: [String: Double] = [:]
     var balanceCache: [String: Double] = [:] // Кэш для calculateBalanceAtDate: "accountID_date" -> balance
-    var dailyAuditSnapshotCache: [String: [String: FinanceBalanceSnapshotValue]] = [:]
     
     init(
         modelContext: ModelContext,
@@ -250,14 +247,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         initialGroupCurrency: String? = nil,
         initialAccountID: String? = nil,
         initialAccountCurrency: String? = nil,
-        currencyService: CurrencyRateServiceProtocol,
-        auditStore: FinanceBalanceAuditStoreProtocol = FinanceBalanceAuditStore()
+        currencyService: CurrencyRateServiceProtocol
     ) {
         self.modelContext = modelContext
         self.financeViewModel = financeViewModel
         self.currencyService = currencyService
         self.historicalRateStore = HistoricalRateStore(modelContext: modelContext, currencyService: currencyService)
-        self.auditStore = auditStore
         
         // Если передан initialAccountID, устанавливаем его как выбранный счет и включаем режим одного счета
         if let accountID = initialAccountID {
@@ -636,7 +631,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         transactionsByCardCache.removeAll()
         transactionsByCreditCache.removeAll()
         transactionsByInvestmentCache.removeAll()
-        dailyAuditSnapshotCache.removeAll()
     }
     
     func loadCashflowTransactions() {
@@ -1658,7 +1652,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         
         var totalBalance: Double = 0.0
-        let daySnapshot = snapshotValues(for: date)
         
         for account in accounts {
             var accountBalance: Double = 0.0
@@ -1947,14 +1940,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 }
             }
 
-            if let snapshotValue = snapshotValue(for: account, in: daySnapshot) {
-                accountBalance = snapshotValue.value
-                accountCurrency = normalizedAuditCurrency(
-                    snapshotValue.currencyCode,
-                    fallback: accountCurrency
-                )
-            }
-            
             if shouldInclude {
                 // Конвертируем в валюту отображения
                 let converted = await convertAmount(
@@ -2493,33 +2478,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return false
     }
 
-    private func snapshotValues(for date: Date) -> [String: FinanceBalanceSnapshotValue] {
-        let dayKey = FinanceBalanceDayKey(date: date).rawValue
-        if let cached = dailyAuditSnapshotCache[dayKey] {
-            return cached
-        }
-
-        let snapshot = auditStore.daySnapshot(for: FinanceBalanceDayKey(date: date))
-        dailyAuditSnapshotCache[dayKey] = snapshot
-        return snapshot
-    }
-
-    private func snapshotValue(
-        for account: FinanceAccount,
-        in daySnapshot: [String: FinanceBalanceSnapshotValue]
-    ) -> FinanceBalanceSnapshotValue? {
-        daySnapshot[accountKey(for: account)]
-    }
-
-    private func accountKey(for account: FinanceAccount) -> String {
-        "\(account.accountTypeRaw):\(account.accountID)"
-    }
-
-    private func normalizedAuditCurrency(_ code: String, fallback: String) -> String {
-        let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        return normalized.isEmpty ? fallback : normalized
-    }
-    
     /// Получить список счетов для выбранных групп
     func getAccountsForSelectedGroups() -> [FinanceAccount] {
         let groupsToShow = state.selectedGroupIDs.isEmpty

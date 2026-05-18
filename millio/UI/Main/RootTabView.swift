@@ -405,21 +405,10 @@ struct FinancesSettingsSheetWrapper: View {
     @ObservedObject var viewModel: FinanceViewModel
     let modelContext: ModelContext
     @Environment(\.dismiss) private var dismiss
-    @State private var showBalanceAudit = false
     @State private var showMassTickerImport = false
-    @State private var showQuickAudit = false
-
-    private var isDailyAuditAvailable: Bool {
-#if DEBUG
-        true
-#else
-        false
-#endif
-    }
 
     var body: some View {
         FinancesSettingsSheet(
-            isDailyAuditAvailable: isDailyAuditAvailable,
             accountSortMode: Binding(
                 get: { viewModel.state.accountSortMode },
                 set: { viewModel.handle(.setAccountSortMode($0)) }
@@ -428,35 +417,11 @@ struct FinancesSettingsSheetWrapper: View {
                 dismiss()
                 viewModel.handle(.showSavingsGoalSheet)
             },
-            onOpenDailyAudit: {
-                guard isDailyAuditAvailable else { return }
-                dismiss()
-                showBalanceAudit = true
-            },
             onOpenMassTickerImport: {
                 dismiss()
                 showMassTickerImport = true
-            },
-            onOpenQuickAudit: {
-                dismiss()
-                showQuickAudit = true
             }
         )
-        .fullScreenCover(isPresented: $showQuickAudit, onDismiss: {
-            viewModel.handle(.loadAccounts)
-        }) {
-            AccountQuickAuditView {
-                viewModel.handle(.loadAccounts)
-            }
-        }
-        .sheet(isPresented: $showBalanceAudit) {
-            if isDailyAuditAvailable {
-                FinanceBalanceAuditSheet(
-                    financeViewModel: viewModel,
-                    modelContext: modelContext
-                )
-            }
-        }
         .sheet(isPresented: $showMassTickerImport) {
             StockBulkImportSheet(
                 financeViewModel: viewModel,

@@ -158,12 +158,9 @@ private struct FinancesContentViewInternal: View {
 
 struct FinancesSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
-    let isDailyAuditAvailable: Bool
     @Binding var accountSortMode: AccountSortMode
     let onOpenSavingsGoal: () -> Void
-    let onOpenDailyAudit: () -> Void
     let onOpenMassTickerImport: () -> Void
-    let onOpenQuickAudit: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -200,30 +197,6 @@ struct FinancesSettingsSheet: View {
                             title: financesLocalized("finances.settings.sort.title"),
                             subtitle: accountSortMode.title,
                             icon: "arrow.up.arrow.down"
-                        )
-                    }
-                    .buttonStyle(.plain)
-
-                    if isDailyAuditAvailable {
-                        Button {
-                            onOpenDailyAudit()
-                        } label: {
-                            settingsRow(
-                                title: financesLocalized("finances.settings.daily_audit.title"),
-                                subtitle: financesLocalized("finances.settings.daily_audit.subtitle"),
-                                icon: "list.clipboard"
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    Button {
-                        onOpenQuickAudit()
-                    } label: {
-                        settingsRow(
-                            title: financesLocalized("finances.settings.quick_audit.title"),
-                            subtitle: financesLocalized("finances.settings.quick_audit.subtitle"),
-                            icon: "arrow.triangle.2.circlepath"
                         )
                     }
                     .buttonStyle(.plain)
@@ -363,19 +336,9 @@ struct FinancesMainTabView: View {
     @State private var draggedGroupID: String?
     @State private var isEmptyIntroHidden: Bool = FinancesEmptyStateIntroPrefs().isHidden()
     @State private var showFinanceSettingsSheet = false
-    @State private var showBalanceAuditSheetFromSettings = false
     @State private var showMassTickerImportSheet = false
-    @State private var showQuickAuditCover = false
     // Наблюдает за изменениями балансов через SwiftData — гарантирует перерисовку при изменении balance/amount
     @Query private var _allCards: [Card]
-
-    private var isDailyAuditDebugOnlyEnabled: Bool {
-#if DEBUG
-        true
-#else
-        false
-#endif
-    }
 
     // Хэш суммы балансов всех карт — меняется при любом изменении balance,
     // что гарантирует onChange-срабатывание через SwiftData-нотификацию
@@ -390,7 +353,6 @@ struct FinancesMainTabView: View {
             .modifier(SheetsModifier(viewModel: viewModel))
             .sheet(isPresented: $showFinanceSettingsSheet) {
                 FinancesSettingsSheet(
-                    isDailyAuditAvailable: isDailyAuditDebugOnlyEnabled,
                     accountSortMode: Binding(
                         get: { viewModel.state.accountSortMode },
                         set: { viewModel.handle(.setAccountSortMode($0)) }
@@ -399,28 +361,11 @@ struct FinancesMainTabView: View {
                         showFinanceSettingsSheet = false
                         viewModel.handle(.showSavingsGoalSheet)
                     },
-                    onOpenDailyAudit: {
-                        guard isDailyAuditDebugOnlyEnabled else { return }
-                        showFinanceSettingsSheet = false
-                        showBalanceAuditSheetFromSettings = true
-                    },
                     onOpenMassTickerImport: {
                         showFinanceSettingsSheet = false
                         showMassTickerImportSheet = true
-                    },
-                    onOpenQuickAudit: {
-                        showFinanceSettingsSheet = false
-                        showQuickAuditCover = true
                     }
                 )
-            }
-            .sheet(isPresented: $showBalanceAuditSheetFromSettings) {
-                if isDailyAuditDebugOnlyEnabled {
-                    FinanceBalanceAuditSheet(
-                        financeViewModel: viewModel,
-                        modelContext: modelContext
-                    )
-                }
             }
             .sheet(isPresented: $showMassTickerImportSheet) {
                 StockBulkImportSheet(
@@ -428,13 +373,6 @@ struct FinancesMainTabView: View {
                     modelContext: modelContext,
                     marketDataClient: viewModel.marketDataClient
                 )
-            }
-            .fullScreenCover(isPresented: $showQuickAuditCover, onDismiss: {
-                viewModel.handle(.loadAccounts)
-            }) {
-                AccountQuickAuditView {
-                    viewModel.handle(.loadAccounts)
-                }
             }
             .onAppear {
                 isEmptyIntroHidden = FinancesEmptyStateIntroPrefs().isHidden()
