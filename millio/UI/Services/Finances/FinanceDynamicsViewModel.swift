@@ -848,7 +848,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         if Task.isCancelled { return }
         if selectedDate != state.selectedDate { return }
         state.currentBalance = currentBalance
-        
+        // Для режима «сегодня» в одном счёте: переприменяем live-значение из кэша,
+        // чтобы конвертация/delta не откатили результат provisional-обновления.
+        if selectedDate == nil {
+            applyProvisionalCurrentBalance()
+        }
+
         // Рассчитываем баланс на начало периода
         let startBalance = await calculateBalanceAtDate(
             accounts: accounts,
@@ -1981,7 +1986,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 }
             }
 
-            if let snapshotValue = snapshotValue(for: account, in: daySnapshot) {
+            // Снапшот аудита — инструмент исторической сверки. Для сегодняшней даты
+            // приоритет за живым Investment.amount / card.balance, иначе устаревший
+            // снапшот перезапишет только что внесённый пользователем баланс.
+            let isToday = Calendar.current.isDateInToday(date)
+            if !isToday, let snapshotValue = snapshotValue(for: account, in: daySnapshot) {
                 accountBalance = snapshotValue.value
                 accountCurrency = normalizedAuditCurrency(
                     snapshotValue.currencyCode,
