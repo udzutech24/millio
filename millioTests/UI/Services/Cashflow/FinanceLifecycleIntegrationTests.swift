@@ -327,4 +327,132 @@ struct FinanceLifecycleIntegrationTests {
         try await harness.assertCardState(cardID: sharedID, balance: 900)
         try await harness.assertFreshViewModels(cardBalances: [sharedID: 900], transactionCount: 0)
     }
+
+    // MARK: - Единый источник правды: баланс счёта
+
+    @Test("Редактирование суммы расхода применяет дельту ровно один раз — не двоит и не теряет")
+    func editExpenseAppliesBalanceDeltaExactlyOnce() async throws {
+        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 5, day: 1, hour: 10)) ?? Date()
+        let harness = try FinanceLifecycleHarness(now: now)
+
+        let card = try await harness.createLinkedDebitCard(balance: 1_000)
+        let expense = try await harness.persistExpense(cardID: card.cardUniqueID, amount: 200, affectsBalance: true)
+        // 1000 - 200 = 800
+        try await harness.assertCardState(cardID: card.cardUniqueID, balance: 800)
+
+        // Редактируем: сумма 200 → 300. Ожидаем 800 + 200 - 300 = 700.
+        let updated = CashflowTransaction(
+            transactionType: .expense,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: now,
+            cardID: card.cardUniqueID,
+            expenseCategory: .groceries,
+            affectsCardBalance: true
+        )
+        _ = try await harness.replaceTransaction(expense, with: updated)
+        try await harness.assertCardState(cardID: card.cardUniqueID, balance: 700)
+        try await harness.assertFreshViewModels(cardBalances: [card.cardUniqueID: 700], transactionCount: 1)
+    }
+
+    @Test("Смена affectsBalance при редактировании расхода корректно откатывает и не применяет эффект")
+    func editExpenseToggleOffBalanceEffectReverts() async throws {
+        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 5, day: 1, hour: 11)) ?? Date()
+        let harness = try FinanceLifecycleHarness(now: now)
+
+        let card = try await harness.createLinkedDebitCard(balance: 1_000)
+        let expense = try await harness.persistExpense(cardID: card.cardUniqueID, amount: 400, affectsBalance: true)
+        // 1000 - 400 = 600
+        try await harness.assertCardState(cardID: card.cardUniqueID, balance: 600)
+
+        // Редактируем: affectsBalance=true → false. Расход должен стать history-only, баланс вернуться к 1000.
+        let historyOnly = CashflowTransaction(
+            transactionType: .expense,
+            amount: 400,
+            currency: "RUB",
+            transactionDate: now,
+            cardID: card.cardUniqueID,
+            expenseCategory: .groceries,
+            affectsCardBalance: false
+        )
+        _ = try await harness.replaceTransaction(expense, with: historyOnly)
+        try await harness.assertCardState(cardID: card.cardUniqueID, balance: 1_000)
+        try await harness.assertFreshViewModels(cardBalances: [card.cardUniqueID: 1_000], transactionCount: 1)
+    }
+
+    @Test("Кредитная карта: долг и доступный лимит согласованы во Finances и Cashflow при смешанных обновлениях")
+    func creditCardDebtIsConsistentAcrossModulesAfterMixedUpdates() async throws {
+        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 5, day: 1, hour: 12)) ?? Date()
+        let harness = try FinanceLifecycleHarness(now: now)
+
+        // limit=10_000, initial balance=8_000 → debt=2_000
+        let card = try await harness.createLinkedCreditCard(balance: 8_000, creditLimit: 10_000)
+        try await harness.assertCreditCardPresentation(cardID: card.cardUniqueID, availableAmount: 8_000, debtAmount: 2_000)
+
+        // Quick edit: долг → 4_000 → balance=6_000
+        try await harness.quickEditCreditCard(cardID: card.cardUniqueID, creditLimit: 10_000, debt: 4_000)
+        try await harness.assertCreditCardPresentation(cardID: card.cardUniqueID, availableAmount: 6_000, debtAmount: 4_000)
+
+        // Добавляем расход 1_000 → balance=5_000, debt=5_000
+        let expense = try await harness.persistExpense(cardID: card.cardUniqueID, amount: 1_000, affectsBalance: true)
+        try await harness.assertCreditCardPresentation(cardID: card.cardUniqueID, availableAmount: 5_000, debtAmount: 5_000)
+
+        // Удаляем расход → возврат к balance=6_000, debt=4_000
+        try await harness.deleteTransaction(expense, recalculate: true)
+        try await harness.assertCreditCardPresentation(cardID: card.cardUniqueID, availableAmount: 6_000, debtAmount: 4_000)
+    }
+
+    @Test("Архивация счёта убирает карту из доступных в обоих VM и выставляет archivedAt в store")
+    func archivingAccountRemovesCardFromBothViewModelsAndSetsArchivedAt() async throws {
+        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 5, day: 1, hour: 13)) ?? Date()
+        let harness = try FinanceLifecycleHarness(now: now)
+
+        let card = try await harness.createLinkedDebitCard(balance: 500)
+        let cardID = card.cardUniqueID
+
+        let accountLink = try harness.requireFinanceAccount(for: cardID)
+
+        // До архивации карта видна в обоих VM
+        #expect(harness.financeViewModel.state.availableCards.contains { $0.cardUniqueID == cardID })
+        #expect(harness.cashflowViewModel.state.availableCards.contains { $0.cardUniqueID == cardID })
+
+        harness.financeViewModel.handle(.removeAccountFromGroup(accountLink))
+        try await harness.reloadAll()
+
+        // После архивации карта исчезает из обоих VM
+        #expect(!harness.financeViewModel.state.availableCards.contains { $0.cardUniqueID == cardID })
+        #expect(!harness.cashflowViewModel.state.availableCards.contains { $0.cardUniqueID == cardID })
+
+        // Карта остаётся в store, но с archivedAt
+        let allCards = (try? harness.modelContext.fetch(FetchDescriptor<Card>())) ?? []
+        let storedCard = allCards.first { $0.cardUniqueID == cardID }
+        #expect(storedCard != nil)
+        #expect(storedCard?.archivedAt != nil)
+
+        // FinanceAccount удалена из store
+        let links = (try? harness.modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
+        #expect(!links.contains { $0.accountID == cardID })
+    }
+
+    @Test("Quick edit и транзакционный путь дают одинаковый итоговый баланс после реоткрытия VM")
+    func quickEditAndTransactionPathConvergeOnSameBalance() async throws {
+        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 5, day: 1, hour: 14)) ?? Date()
+        let harness = try FinanceLifecycleHarness(now: now)
+
+        let card = try await harness.createLinkedDebitCard(balance: 1_000)
+
+        // Путь 1: quick edit до 1_500, затем расход 200 → 1_300
+        try await harness.quickEditCardBalance(cardID: card.cardUniqueID, to: 1_500)
+        harness.assertTransactionCount(1) // корректировка баланса = транзакция
+
+        let expense = try await harness.persistExpense(cardID: card.cardUniqueID, amount: 200, affectsBalance: true)
+        try await harness.assertCardState(cardID: card.cardUniqueID, balance: 1_300)
+
+        // Удаляем расход → возврат к 1_500
+        try await harness.deleteTransaction(expense, recalculate: true)
+        try await harness.assertCardState(cardID: card.cardUniqueID, balance: 1_500)
+
+        // Fresh VM должна видеть тот же баланс
+        try await harness.assertFreshViewModels(cardBalances: [card.cardUniqueID: 1_500], transactionCount: 1)
+    }
 }
