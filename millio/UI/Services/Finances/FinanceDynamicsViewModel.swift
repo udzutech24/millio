@@ -799,23 +799,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             targetDate = endDate
         }
 
-        // Для single non-market investment без выбранной точки: используем live amount напрямую,
-        // чтобы заголовок не расходился с live-значением в списке и в форме редактирования.
-        // Replay нужен только для исторических точек (selectedDate != nil) и рыночных активов.
-        if selectedDate == nil,
-           accounts.count == 1,
-           let account = accounts.first,
-           account.accountType == .investment,
-           let investment = investmentsCache[account.accountID],
-           !investment.isMarketPriced,
-           investment.includeInTotal {
-            let sign = investment.investmentType == .positive ? 1.0 : -1.0
-            let liveAmount = sign * investment.amount
-            let accountCurrency = resolvedInvestmentCurrency(investment)
-            let currentBalance = await convertAmount(value: liveAmount, from: accountCurrency, to: state.displayCurrency, at: targetDate)
+        // Для single account без выбранной точки: используем live balance напрямую для всех типов,
+        // кроме market-priced investments (stocks/crypto) — они идут через replay с рыночными ценами.
+        if selectedDate == nil, accounts.count == 1, let account = accounts.first,
+           let liveBalance = await liveConvertedBalance(
+               for: account, displayCurrency: state.displayCurrency, at: targetDate
+           ) {
             if Task.isCancelled { return }
             if selectedDate != state.selectedDate { return }
-            state.currentBalance = currentBalance
+            state.currentBalance = liveBalance
             let startBalance = await calculateBalanceAtDate(
                 accounts: accounts,
                 date: startDate,
@@ -825,8 +817,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             )
             if Task.isCancelled { return }
             if selectedDate != state.selectedDate { return }
-            let rawDelta = currentBalance - startBalance
-            let delta = adjustDeltaForSingleAccountIfNeeded(delta: rawDelta, accounts: accounts, useNetTotals: useNetTotals)
+            let rawDelta = liveBalance - startBalance
+            let delta = adjustDeltaForSingleAccountIfNeeded(
+                delta: rawDelta, accounts: accounts, useNetTotals: useNetTotals
+            )
             state.periodDelta = (delta, calculateDeltaPercent(delta: delta, startBalance: startBalance))
             return
         }
@@ -1141,8 +1135,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         )
                         
                         let startBalance = await startBalanceTask
-                        let endBalance = await endBalanceTask
-                
+                        var endBalance = await endBalanceTask
+                        // В single-account current view endpoint совпадает с live balance
+                        if accounts.count == 1, self.state.selectedDate == nil,
+                           let liveBalance = await self.liveConvertedBalance(
+                               for: account, displayCurrency: self.state.displayCurrency, at: endDate
+                           ) {
+                            endBalance = liveBalance
+                        }
+
                         let isCreditCard: Bool
                         let isCredit: Bool
                         if account.accountType == .card {
@@ -1227,41 +1228,53 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         switch state.dynamicsMode {
         case .aggregated:
             // Все счета в одну линию
+            let liveEndBalanceAggr: Double? = accounts.count == 1 && state.selectedDate == nil
+                ? await liveConvertedBalance(for: accounts[0], displayCurrency: state.displayCurrency, at: period.end)
+                : nil
             let chartData = await buildTimeSeriesData(
                 accounts: accounts,
                 startDate: period.start,
                 endDate: period.end,
                 label: L("finances.dynamics.chart.total_label"),
-                debtAsNegative: useNetTotals
+                debtAsNegative: useNetTotals,
+                liveEndBalance: liveEndBalanceAggr
             )
             guard isCurrentChartUpdateRevision(revision) else { return }
             state.chartData = chartData
-            
+
         case .byAccounts:
             // Каждый счет - отдельная линия
             var allDataPoints: [ChartDataPoint] = []
             for account in accounts {
+                let liveEndBalancePerAccount: Double? = accounts.count == 1 && state.selectedDate == nil
+                    ? await liveConvertedBalance(for: account, displayCurrency: state.displayCurrency, at: period.end)
+                    : nil
                 let accountData = await buildTimeSeriesData(
                     accounts: [account],
                     startDate: period.start,
                     endDate: period.end,
                     label: getAccountInfoForDynamics(account: account)?.name ?? L("finances.dynamics.chart.account_fallback"),
-                    debtAsNegative: false
+                    debtAsNegative: false,
+                    liveEndBalance: liveEndBalancePerAccount
                 )
                 allDataPoints.append(contentsOf: accountData)
             }
             guard isCurrentChartUpdateRevision(revision) else { return }
             state.chartData = allDataPoints
-            
+
         case .singleAccount(let accountID):
             // Один выбранный счет
             if let account = accounts.first(where: { $0.accountUniqueID == accountID }) {
+                let liveEndBalanceSingle: Double? = state.selectedDate == nil
+                    ? await liveConvertedBalance(for: account, displayCurrency: state.displayCurrency, at: period.end)
+                    : nil
                 let chartData = await buildTimeSeriesData(
                     accounts: [account],
                     startDate: period.start,
                     endDate: period.end,
                     label: getAccountInfoForDynamics(account: account)?.name ?? L("finances.dynamics.chart.account_fallback"),
-                    debtAsNegative: false
+                    debtAsNegative: false,
+                    liveEndBalance: liveEndBalanceSingle
                 )
                 guard isCurrentChartUpdateRevision(revision) else { return }
                 state.chartData = chartData
@@ -1278,7 +1291,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         startDate: Date,
         endDate: Date,
         label: String,
-        debtAsNegative: Bool = false
+        debtAsNegative: Bool = false,
+        liveEndBalance: Double? = nil
     ) async -> [ChartDataPoint] {
         var dataPoints: [ChartDataPoint] = []
         let calendar = Calendar.current
@@ -1546,7 +1560,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         for (day, balance) in eventBalances {
             allBalances[day] = balance
         }
-        
+        // Non-market single-account: endpoint графика совпадает с live balance
+        if let liveEndBalance {
+            allBalances[endDate] = liveEndBalance
+        }
+
         // Преобразуем в массив ChartDataPoint, сортируя по дате
         for (date, balance) in allBalances.sorted(by: { $0.key < $1.key }) {
             dataPoints.append(ChartDataPoint(
@@ -2261,6 +2279,24 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         
         return nil
+    }
+
+    /// Живой баланс счёта, конвертированный в displayCurrency.
+    /// Для market-priced investments (stocks/crypto) возвращает nil — нужен replay с рыночными ценами.
+    private func liveConvertedBalance(
+        for account: FinanceAccount,
+        displayCurrency: String,
+        at date: Date
+    ) async -> Double? {
+        let isMarketPriced = account.accountType == .investment
+            && (investmentsCache[account.accountID]?.isMarketPriced == true)
+        guard !isMarketPriced, let info = getAccountInfoForDynamics(account: account) else { return nil }
+        var amount = info.amount
+        if account.accountType == .investment,
+           investmentsCache[account.accountID]?.investmentType == .negative {
+            amount = -amount
+        }
+        return await convertAmount(value: amount, from: info.currency, to: displayCurrency, at: date)
     }
 
     private func resolvedCard(for id: String) -> Card? {

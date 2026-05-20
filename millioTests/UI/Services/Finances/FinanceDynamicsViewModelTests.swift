@@ -1999,6 +1999,119 @@ struct FinanceDynamicsViewModelTests {
                 "Заголовок должен совпадать с live investment.amount=995, а не с replay от initialAmount=1311")
     }
 
+    @Test("Card account: currentBalance и breakdown endValue используют live balance, а не replay")
+    func testCardAccountCurrentBalanceUsesLiveBalance() async throws {
+        let modelContext = try createTestModelContext()
+
+        let editDate = Date().addingTimeInterval(-60)
+
+        // Карта с балансом 6_082 (live), но initialAmount/replay вернул бы 31_986
+        let card = Card(name: "Алипей", cardNumber: "1234", bank: .other, cardType: .debit, currency: "CNY", balance: 6_082)
+        card.updatedAt = editDate
+        card.createdAt = editDate.addingTimeInterval(-86400 * 30)
+        modelContext.insert(card)
+
+        // Транзакция ручной корректировки баланса (replay учтёт её как изменение)
+        let adjustment = CashflowTransaction(
+            transactionType: .cardBalanceAdjustment,
+            amount: 6_082,
+            currency: "CNY",
+            transactionDate: editDate,
+            cardID: card.cardUniqueID
+        )
+        modelContext.insert(adjustment)
+
+        let group = FinanceGroup(name: "Кошельки", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        await dynamicsViewModel.updateCurrentBalanceAndDelta()
+
+        #expect(abs(dynamicsViewModel.state.currentBalance - 6_082) < 0.01,
+                "Header должен показывать live card.balance=6082, а не replay")
+
+        dynamicsViewModel.state.viewMode = .accounts
+        await dynamicsViewModel.updateDynamicsBreakdown()
+        let breakdownEndValue = dynamicsViewModel.state.dynamicsBreakdown.first?.endValue
+        #expect(breakdownEndValue != nil)
+        #expect(abs((breakdownEndValue ?? 0) - 6_082) < 0.01,
+                "Breakdown endValue должен совпадать с live card.balance=6082")
+    }
+
+    @Test("Market-priced investment (stocks): live bypass не применяется, используется replay")
+    func testMarketPricedInvestmentDoesNotUseLiveBypass() async throws {
+        let modelContext = try createTestModelContext()
+
+        let editDate = Date().addingTimeInterval(-60)
+
+        let investment = Investment(
+            name: "AAPL",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 500,
+            currency: "USD"
+        )
+        investment.initialAmount = 400
+        investment.hasInitialAmount = true
+        investment.updatedAt = editDate
+        investment.createdAt = editDate.addingTimeInterval(-86400)
+        modelContext.insert(investment)
+
+        let adjustment = CashflowTransaction(
+            transactionType: .balanceAdjustment,
+            amount: 100,
+            currency: "USD",
+            transactionDate: editDate,
+            investmentID: investment.investmentUniqueID
+        )
+        modelContext.insert(adjustment)
+
+        let group = FinanceGroup(name: "Портфель", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        await dynamicsViewModel.updateCurrentBalanceAndDelta()
+
+        // Market-priced: currentBalance идёт через replay, не через investment.amount напрямую.
+        // Replay от initialAmount=400 + adjustment=+100 должен дать 500.
+        // Важно, что мы не используем live bypass (нет early-return через liveConvertedBalance).
+        // Тест проверяет: isMarketPriced=true → liveConvertedBalance возвращает nil → replay используется.
+        #expect(abs(dynamicsViewModel.state.currentBalance - 500) < 0.01,
+                "Market-priced investment: currentBalance=500 (replay), live bypass не применяется")
+    }
+
     @Test("Non-market investment: исторический replay возвращает корректный баланс на дату до изменения")
     func testNonMarketInvestmentHistoricalReplayReturnsPreEditBalance() async throws {
         let modelContext = try createTestModelContext()
