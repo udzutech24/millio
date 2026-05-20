@@ -689,6 +689,7 @@ final class FinanceViewModel: ViewModelProtocol {
             state.selectedGroupForDynamics = nil
             
         case .showAccountDynamics(let account):
+            loadAccounts()
             state.selectedAccountForDynamics = account
             state.showAccountDynamics = true
             

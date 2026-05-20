@@ -17,6 +17,8 @@ xcodebuild test \
   -enableCodeCoverage YES \
   -resultBundlePath "$RESULT_BUNDLE_PATH"
 
+rm -rf ~/Library/Developer/XCTestDevices/*/
+
 REPORT="$(xcrun xccov view --report "$RESULT_BUNDLE_PATH")"
 echo "$REPORT"
 

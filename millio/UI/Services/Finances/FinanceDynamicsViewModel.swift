@@ -260,6 +260,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             state.isSingleAccountMode = true
             state.isSingleGroupMode = true // В режиме одного счета также скрываем фильтры групп
             state.dynamicsMode = .singleAccount(accountID)
+            state.viewMode = .accounts
         } else if let groupID = initialGroupID {
             // Если передан initialGroupID, устанавливаем его как выбранную группу и включаем режим одной группы
             state.selectedGroupIDs = [groupID]
@@ -687,17 +688,30 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         state.currencyConversionWarning = nil
         let revision = nextChartUpdateRevision()
         scheduleBackgroundTask { viewModel in
+            let prioritizeLiveSingleAccountState = viewModel.shouldPrioritizeLiveSingleAccountState
+            if prioritizeLiveSingleAccountState {
+                guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
+                await viewModel.updateCurrentBalanceAndDelta()
+                guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
+                await viewModel.updateDynamicsBreakdown()
+            }
             guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
             await viewModel.prefetchHistoricalRatesForCurrentSelection()
             guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
             await viewModel.updateChartDataAsync(expectedRevision: revision)
-            guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
-            await viewModel.updateCurrentBalanceAndDelta()
-            guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
-            await viewModel.updateDynamicsBreakdown()
+            if !prioritizeLiveSingleAccountState {
+                guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
+                await viewModel.updateCurrentBalanceAndDelta()
+                guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
+                await viewModel.updateDynamicsBreakdown()
+            }
             guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
             await viewModel.updateCurrencyBreakdown()
         }
+    }
+
+    private var shouldPrioritizeLiveSingleAccountState: Bool {
+        state.isSingleAccountMode && state.selectedDate == nil
     }
     
     /// Получить даты периода
@@ -2281,6 +2295,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return nil
     }
 
+    /// Актуальная информация для current-mode UI.
+    /// Главный список и quick edit читают данные из FinanceViewModel, поэтому detail-экран
+    /// использует тот же источник для live endpoint, а локальные dynamics-кэши оставляет
+    /// для исторического replay и независимой загрузки графика.
+    func getLiveAccountInfoForDynamics(account: FinanceAccount) -> (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)? {
+        financeViewModel.getAccountInfo(account: account) ?? getAccountInfoForDynamics(account: account)
+    }
+
     /// Живой баланс счёта, конвертированный в displayCurrency.
     /// Для market-priced investments (stocks/crypto) возвращает nil — нужен replay с рыночными ценами.
     private func liveConvertedBalance(
@@ -2290,7 +2312,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     ) async -> Double? {
         let isMarketPriced = account.accountType == .investment
             && (investmentsCache[account.accountID]?.isMarketPriced == true)
-        guard !isMarketPriced, let info = getAccountInfoForDynamics(account: account) else { return nil }
+        guard !isMarketPriced, let info = getLiveAccountInfoForDynamics(account: account) else { return nil }
         var amount = info.amount
         if account.accountType == .investment,
            investmentsCache[account.accountID]?.investmentType == .negative {

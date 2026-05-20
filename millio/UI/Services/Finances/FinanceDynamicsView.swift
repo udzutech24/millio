@@ -2426,7 +2426,7 @@ private struct FinanceDynamicsContentView: View {
             inlineCreditLimitText = rawNumberString(card.creditLimit ?? 0, maxFractionDigits: 2)
             let debt = max(0, (card.creditLimit ?? 0) - card.balance)
             inlineCreditDebtText = rawNumberString(debt, maxFractionDigits: 2)
-        } else if let info = financeViewModel.getAccountInfo(account: account) {
+        } else if let info = viewModel.getLiveAccountInfoForDynamics(account: account) {
             inlineAmountText = rawNumberString(info.amount, maxFractionDigits: 2)
         }
         isInlineAccountEdit = true
