@@ -785,7 +785,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         state.periodEndDate = endDate
 
         let useNetTotals = shouldUseNetTotals()
-        
+
         // Рассчитываем текущий баланс
         let targetDate: Date
         if let selectedDate {
@@ -798,6 +798,39 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         } else {
             targetDate = endDate
         }
+
+        // Для single non-market investment без выбранной точки: используем live amount напрямую,
+        // чтобы заголовок не расходился с live-значением в списке и в форме редактирования.
+        // Replay нужен только для исторических точек (selectedDate != nil) и рыночных активов.
+        if selectedDate == nil,
+           accounts.count == 1,
+           let account = accounts.first,
+           account.accountType == .investment,
+           let investment = investmentsCache[account.accountID],
+           !investment.isMarketPriced,
+           investment.includeInTotal {
+            let sign = investment.investmentType == .positive ? 1.0 : -1.0
+            let liveAmount = sign * investment.amount
+            let accountCurrency = resolvedInvestmentCurrency(investment)
+            let currentBalance = await convertAmount(value: liveAmount, from: accountCurrency, to: state.displayCurrency, at: targetDate)
+            if Task.isCancelled { return }
+            if selectedDate != state.selectedDate { return }
+            state.currentBalance = currentBalance
+            let startBalance = await calculateBalanceAtDate(
+                accounts: accounts,
+                date: startDate,
+                accountCardIDs: Set(),
+                debtAsNegative: useNetTotals,
+                includeInitialBeforeCreation: false
+            )
+            if Task.isCancelled { return }
+            if selectedDate != state.selectedDate { return }
+            let rawDelta = currentBalance - startBalance
+            let delta = adjustDeltaForSingleAccountIfNeeded(delta: rawDelta, accounts: accounts, useNetTotals: useNetTotals)
+            state.periodDelta = (delta, calculateDeltaPercent(delta: delta, startBalance: startBalance))
+            return
+        }
+
         let currentBalance = await calculateBalanceAtDate(
             accounts: accounts,
             date: targetDate,
@@ -808,7 +841,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         if Task.isCancelled { return }
         if selectedDate != state.selectedDate { return }
         state.currentBalance = currentBalance
-        
+
         // Рассчитываем баланс на начало периода
         let startBalance = await calculateBalanceAtDate(
             accounts: accounts,
@@ -821,7 +854,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         )
         if Task.isCancelled { return }
         if selectedDate != state.selectedDate { return }
-        
+
         // Рассчитываем дельту
         let rawDelta = state.currentBalance - startBalance
         let delta = adjustDeltaForSingleAccountIfNeeded(

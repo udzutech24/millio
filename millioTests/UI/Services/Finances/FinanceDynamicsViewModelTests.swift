@@ -1940,4 +1940,135 @@ struct FinanceDynamicsViewModelTests {
         await dynamicsViewModel.updateDynamicsBreakdown()
         #expect(dynamicsViewModel.state.dynamicsBreakdown.map(\.name) == ["Gamma", "Beta", "Alpha"])
     }
+
+    // MARK: - Live amount regression: заголовок vs форма редактирования
+
+    @Test("Single non-market investment: currentBalance совпадает с live amount после ручного изменения")
+    func testNonMarketInvestmentCurrentBalanceUsesLiveAmount() async throws {
+        let modelContext = try createTestModelContext()
+
+        let editDate = Date().addingTimeInterval(-60)
+
+        let investment = Investment(
+            name: "Фридом $ Вклад",
+            investmentType: .positive,
+            category: .other,
+            amount: 995,
+            currency: "USD"
+        )
+        investment.initialAmount = 1311
+        investment.hasInitialAmount = true
+        investment.isDeposit = true
+        investment.updatedAt = editDate
+        investment.createdAt = editDate.addingTimeInterval(-86400)
+        modelContext.insert(investment)
+
+        let transaction = CashflowTransaction(
+            transactionType: .balanceAdjustment,
+            amount: -316,
+            currency: "USD",
+            transactionDate: editDate,
+            investmentID: investment.investmentUniqueID,
+            note: "Ручное изменение стоимости актива"
+        )
+        modelContext.insert(transaction)
+
+        let group = FinanceGroup(name: "Вклады", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        await dynamicsViewModel.updateCurrentBalanceAndDelta()
+
+        #expect(abs(dynamicsViewModel.state.currentBalance - 995) < 0.01,
+                "Заголовок должен совпадать с live investment.amount=995, а не с replay от initialAmount=1311")
+    }
+
+    @Test("Non-market investment: исторический replay возвращает корректный баланс на дату до изменения")
+    func testNonMarketInvestmentHistoricalReplayReturnsPreEditBalance() async throws {
+        let modelContext = try createTestModelContext()
+
+        let editDate = Date().addingTimeInterval(-3600)
+        let beforeEdit = editDate.addingTimeInterval(-60)
+
+        let investment = Investment(
+            name: "Фридом $ Вклад",
+            investmentType: .positive,
+            category: .other,
+            amount: 995,
+            currency: "USD"
+        )
+        investment.initialAmount = 1311
+        investment.hasInitialAmount = true
+        investment.isDeposit = true
+        investment.updatedAt = editDate
+        investment.createdAt = editDate.addingTimeInterval(-86400)
+        modelContext.insert(investment)
+
+        let transaction = CashflowTransaction(
+            transactionType: .balanceAdjustment,
+            amount: -316,
+            currency: "USD",
+            transactionDate: editDate,
+            investmentID: investment.investmentUniqueID,
+            note: "Ручное изменение стоимости актива"
+        )
+        modelContext.insert(transaction)
+
+        let group = FinanceGroup(name: "Вклады", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+
+        let balanceBeforeEdit = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: beforeEdit,
+            accountCardIDs: Set(),
+            debtAsNegative: false,
+            includeInitialBeforeCreation: false
+        )
+        let balanceAfterEdit = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: Date(),
+            accountCardIDs: Set(),
+            debtAsNegative: false,
+            includeInitialBeforeCreation: false
+        )
+
+        #expect(abs(balanceBeforeEdit - 1311) < 0.01,
+                "До изменения replay должен вернуть 1311 (initialAmount)")
+        #expect(abs(balanceAfterEdit - 995) < 0.01,
+                "После изменения replay должен вернуть 995 (с учётом balanceAdjustment и reconciliation)")
+    }
 }
