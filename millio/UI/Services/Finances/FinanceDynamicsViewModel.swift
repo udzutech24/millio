@@ -949,8 +949,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     func updateCurrencyBreakdown() async {
         let accounts = getAccountsForCalculation()
         let displayCurrency = state.displayCurrency
+        let endDate = getPeriodDates().end
 
-        // Собираем суммы по валютам в нативной валюте
+        // Собираем нетто-суммы по валютам: активы плюсом, кредиты минусом.
+        // Кредиты уменьшают экспозицию в своей валюте — итого = чистое богатство в разрезе валют.
         var nativeTotals: [String: Double] = [:]
         for account in accounts {
             switch account.accountType {
@@ -960,7 +962,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 }
             case .credit:
                 if let credit = creditsCache[account.accountID] {
-                    // кредиты как отрицательный вклад
                     nativeTotals[credit.currency, default: 0] -= credit.remainingAmount
                 }
             case .investment:
@@ -970,10 +971,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
         }
 
-        // Конвертируем каждую валюту в валюту отображения
+        // Конвертируем по курсу на endDate — тот же источник что и Distribution
         var converted: [(currency: String, value: Double)] = []
         for (currency, nativeValue) in nativeTotals {
-            let value = await convertAmount(value: nativeValue, from: currency, to: displayCurrency)
+            let value = await convertAmount(value: nativeValue, from: currency, to: displayCurrency, at: endDate)
             converted.append((currency: currency, value: value))
         }
 
