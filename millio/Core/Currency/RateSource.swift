@@ -59,6 +59,7 @@ enum RateSource: String, CaseIterable, Identifiable {
     case erapi
     case frankfurter
     case cbr
+    case custom
 
     var id: String { rawValue }
 
@@ -80,6 +81,8 @@ enum RateSource: String, CaseIterable, Identifiable {
             return URL(string: "https://api.frankfurter.app/latest?from=USD")
         case .cbr:
             return URL(string: "https://www.cbr.ru/scripts/XML_daily.asp")
+        case .custom:
+            return nil
         }
     }
 
@@ -101,6 +104,10 @@ enum RateSource: String, CaseIterable, Identifiable {
             return RateSourceCapability(scope: .rubOfficialDaily, baseCurrency: .rub,
                 requiresAPIKey: false, supportsMatrixFetch: true, supportsHistorical: true,
                 freshnessLabel: .daily, legalLabel: .official)
+        case .custom:
+            return RateSourceCapability(scope: .globalFiatDaily, baseCurrency: .usd,
+                requiresAPIKey: false, supportsMatrixFetch: false, supportsHistorical: false,
+                freshnessLabel: .realtime, legalLabel: .market)
         }
     }
 }

@@ -199,6 +199,10 @@ actor RateRepository: RateRepositoryProtocol {
             // CBR использует CBRLatestRateProvider, не RateRepository.
             // Этот путь не должен вызываться — CurrencyRateService обходит RateRepository для .cbr.
             throw URLError(.unsupportedURL)
+
+        case .custom:
+            // Custom-курсы не имеют сетевого источника — RateRepository не используется.
+            throw URLError(.unsupportedURL)
         }
 
         rates["USD"] = 1.0

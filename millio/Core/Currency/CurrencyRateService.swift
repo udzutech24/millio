@@ -73,11 +73,19 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         self.cbrLatestProvider = cbrLatestProvider
         // Синхронный прогрев из UserDefaults — конвертация и виджет работают мгновенно без сети.
         // Не используем async/actor чтобы избежать race condition с первым обращением к getRate().
-        let udKey = "rate_repo_rates_\(rateSource.rawValue)"
-        let udFetchedKey = "rate_repo_fetched_at_\(rateSource.rawValue)"
-        if let saved = UserDefaults.standard.dictionary(forKey: udKey) as? [String: Double], !saved.isEmpty {
-            cachedRates = saved
-            lastUpdateTS = UserDefaults.standard.double(forKey: udFetchedKey)
+        if rateSource == .custom {
+            let customRates = CustomRateStore.shared.toUSDBase(currentPrimary: SettingsManager.shared.primaryCurrencyCode)
+            if !customRates.isEmpty {
+                cachedRates.merge(customRates) { _, new in new }
+                lastUpdateTS = Date().timeIntervalSince1970
+            }
+        } else {
+            let udKey = "rate_repo_rates_\(rateSource.rawValue)"
+            let udFetchedKey = "rate_repo_fetched_at_\(rateSource.rawValue)"
+            if let saved = UserDefaults.standard.dictionary(forKey: udKey) as? [String: Double], !saved.isEmpty {
+                cachedRates = saved
+                lastUpdateTS = UserDefaults.standard.double(forKey: udFetchedKey)
+            }
         }
     }
     
@@ -114,6 +122,18 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         // CBR покрывает только RUB-пары. Для прочих пар прозрачно роутим на globalFiat.
         if rateSource.capability.scope == .rubOfficialDaily, !pairInvolvesRUB(f, t) {
             AppLogger.log(.info, category: "CurrencyRateService", "CBR: pair \(f)→\(t) not RUB-involved, routing to globalFiat fallback")
+            return await globalFiatFallbackService().getRate(from: f, to: t)
+        }
+
+        // Custom: кэш уже заполнен вручную введёнными курсами — обновление из сети не нужно.
+        // Пары, отсутствующие в custom-таблице, прозрачно делегируем globalFiat-источнику.
+        if rateSource == .custom {
+            let rateFromUSD = f == "USD" ? 1.0 : cachedRates[f]
+            let rateToUSD   = t == "USD" ? 1.0 : cachedRates[t]
+            if let rFrom = rateFromUSD, let rTo = rateToUSD, rFrom > 0, rTo > 0 {
+                return rTo / rFrom
+            }
+            AppLogger.log(.info, category: "CurrencyRateService", "Custom: pair \(f)→\(t) not in custom table, routing to globalFiat fallback")
             return await globalFiatFallbackService().getRate(from: f, to: t)
         }
 
@@ -217,11 +237,21 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         refreshTask = nil
         cachedRates = ["USD": 1.0]
         lastUpdateTS = 0
+        if source == .custom {
+            let customRates = CustomRateStore.shared.toUSDBase(currentPrimary: SettingsManager.shared.primaryCurrencyCode)
+            if !customRates.isEmpty {
+                cachedRates.merge(customRates) { _, new in new }
+                lastUpdateTS = Date().timeIntervalSince1970
+            }
+        }
         NotificationCenter.default.post(name: .currencyRateSourceDidChange, object: nil)
     }
 
     /// Обновить курсы из выбранного источника.
     private func refreshRates(force: Bool = false) async {
+        // Custom-курсы — только ручной ввод, сетевого обновления нет.
+        guard rateSource != .custom else { return }
+
         let now = Date().timeIntervalSince1970
         let needsUpdate = force || cachedRates.count <= 1 || (now - lastUpdateTS) > cacheTimeout
         guard needsUpdate else { return }
