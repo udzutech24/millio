@@ -730,6 +730,7 @@ final class DataResetService: DataResetServiceProtocol {
         }
 
         settingsManager.resetToDefaults()
+        RateSourcePreferenceStore.shared.reset()
 
         clearPinCode()
         disableDailyReminder()

@@ -30,16 +30,19 @@ protocol CurrencyRateServiceProtocol {
 /// Соответствует принципам Offline-First: кэширует курсы и работает без интернета
 @MainActor
 final class CurrencyRateService: CurrencyRateServiceProtocol {
-    static let shared = CurrencyRateService(rateSource: .millio, rateRepository: RateRepository.shared)
-    
+    static let shared = CurrencyRateService(
+        rateSource: RateSourcePreferenceStore.shared.preferred,
+        rateRepository: RateRepository.shared
+    )
+
     /// Источник курсов для данного экземпляра сервиса.
-    /// Глобально для приложения используется `.erapi`.
     private(set) var rateSource: RateSource
+    var store: RateSourcePreferenceStore
     private let rateRepository: RateRepositoryProtocol
     private let historicalLoader: HTTPDataLoading
     private let frankfurterHistoricalProvider: HistoricalRateProvider
     private let rubHistoricalFallbackProvider: HistoricalRateProvider?
-    
+
     /// Провайдер цены крипто-валюты в USD (инжектируется извне, Core не зависит от MarketAPIClient).
     /// Принимает код валюты ("BTC"), возвращает цену в USD (например, 100000.0).
     var cryptoPriceProviderUSD: (@Sendable (String) async -> Double?)? = nil
@@ -48,15 +51,19 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     private var lastUpdateTS: Double = 0
     private let cacheTimeout: TimeInterval = 12 * 3600 // 12 часов
     private var refreshTask: Task<Void, Never>?
+    /// Инкрементируется при смене источника — защищает кэш от in-flight запросов старого источника.
+    private var cacheGeneration: Int = 0
     
     init(
-        rateSource: RateSource = .erapi,
+        rateSource: RateSource = .millio,
+        store: RateSourcePreferenceStore = .shared,
         rateRepository: RateRepositoryProtocol = RateRepository.shared,
         historicalLoader: HTTPDataLoading = URLSession.shared,
         frankfurterHistoricalProvider: HistoricalRateProvider = FrankfurterHistoricalRateProvider(),
         rubHistoricalFallbackProvider: HistoricalRateProvider? = CBRHistoricalRateProvider()
     ) {
         self.rateSource = rateSource
+        self.store = store
         self.rateRepository = rateRepository
         self.historicalLoader = historicalLoader
         self.frankfurterHistoricalProvider = frankfurterHistoricalProvider
@@ -175,11 +182,25 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         frankfurterHistoricalProvider.resetTransientCache()
         rubHistoricalFallbackProvider?.resetTransientCache()
     }
-    
+
+    /// Строит цепочку fallback-источников: preferred первым, остальные в порядке allCases.
+    func buildFallbackChain() -> [RateSource] {
+        [rateSource] + RateSource.allCases.filter { $0 != rateSource }
+    }
+
+    /// Меняет глобальный источник, сбрасывает кэш и уведомляет подписчиков.
+    /// Единственная точка записи store.preferred.
+    func setRateSource(_ source: RateSource) {
+        rateSource = source
+        store.preferred = source
+        cacheGeneration += 1
+        refreshTask = nil
+        cachedRates = ["USD": 1.0]
+        lastUpdateTS = 0
+        NotificationCenter.default.post(name: .currencyRateSourceDidChange, object: nil)
+    }
+
     /// Обновить курсы из выбранного источника.
-    /// Цепочка fallback: millio → erapi → frankfurter → stale-кэш (без сети).
-    /// Последовательность фиксирована и не зависит от rateSource, чтобы гарантировать
-    /// доступность конвертера в любой сетевой среде (в т.ч. при блокировках, например GFW).
     private func refreshRates(force: Bool = false) async {
         let now = Date().timeIntervalSince1970
         let needsUpdate = force || cachedRates.count <= 1 || (now - lastUpdateTS) > cacheTimeout
@@ -192,11 +213,13 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
             return
         }
 
+        let generation = cacheGeneration
         let task = Task {
-            let chain: [RateSource] = [.millio, .erapi, .frankfurter]
+            let chain = self.buildFallbackChain()
             for (index, source) in chain.enumerated() {
                 do {
                     let snapshot = try await self.rateRepository.getLatestRates(source: source, forceRefresh: true, allowStaleOnError: false)
+                    guard self.cacheGeneration == generation else { return }
                     if !snapshot.rates.isEmpty {
                         self.cachedRates = snapshot.rates
                         self.lastUpdateTS = snapshot.updatedAt
@@ -208,6 +231,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
                 }
             }
 
+            guard self.cacheGeneration == generation else { return }
             // Все источники недоступны — используем последний известный кэш без сетевых запросов.
             // Это сохраняет работоспособность конвертера при полной блокировке сети (например, GFW).
             let fetchTime = Date().timeIntervalSince1970

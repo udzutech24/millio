@@ -31,6 +31,7 @@ final class CashflowViewModel: ViewModelProtocol {
     
     private var eventSubscriptionID: UUID?
     private var restoreReloadTask: Task<Void, Never>?
+    private var rateSourceObserver: NSObjectProtocol?
 
     // MARK: - Services
     let historyService: CashflowHistoryService
@@ -169,6 +170,17 @@ final class CashflowViewModel: ViewModelProtocol {
         loadBudgetPlanForCurrentPeriod()
         loadAvailableCurrencies()
         subscribeToFinanceEvents()
+        rateSourceObserver = NotificationCenter.default.addObserver(
+            forName: .currencyRateSourceDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await CurrencyRateService.shared.forceRefreshRates()
+                self.updateChartData()
+            }
+        }
     }
 
     deinit {
@@ -177,6 +189,9 @@ final class CashflowViewModel: ViewModelProtocol {
             Task { @MainActor in
                 EventBus.shared.unsubscribe(id)
             }
+        }
+        if let observer = rateSourceObserver {
+            NotificationCenter.default.removeObserver(observer)
         }
     }
     

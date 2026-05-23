@@ -292,6 +292,7 @@ final class FinanceViewModel: ViewModelProtocol {
     private let defaults = UserDefaults.standard
     private var ungroupedGroupName: String { FinanceSystemGroups.ungroupedName }
     private var financeEventsSubscriptionID: UUID?
+    private var rateSourceObserver: NSObjectProtocol?
     private var backgroundTasks: [UUID: Task<Void, Never>] = [:]
 
     /// Быстрые словари для поиска счетов по ID (O(1) вместо O(n))
@@ -484,6 +485,15 @@ final class FinanceViewModel: ViewModelProtocol {
         state.isAmountHidden = storedAmountHidden
         state.accountSortMode = storedAccountSortMode
         subscribeToFinanceEvents()
+        rateSourceObserver = NotificationCenter.default.addObserver(
+            forName: .currencyRateSourceDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.refreshRates()
+            }
+        }
         if !skipInitialLoad {
             FinanceSystemGroups.normalizeUngroupedGroupName(in: modelContext)
             loadGroups()
@@ -499,6 +509,9 @@ final class FinanceViewModel: ViewModelProtocol {
             cancelBackgroundTasks()
             if let subscriptionID = financeEventsSubscriptionID {
                 EventBus.shared.unsubscribe(subscriptionID)
+            }
+            if let observer = rateSourceObserver {
+                NotificationCenter.default.removeObserver(observer)
             }
         }
     }

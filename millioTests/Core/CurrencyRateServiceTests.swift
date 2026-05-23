@@ -19,11 +19,15 @@ final class MockRateRepository: RateRepositoryProtocol, @unchecked Sendable {
     var callCount: Int = 0
     /// Предзаполненный stale-кэш, возвращаемый через peekCachedSnapshot (только если shouldFail = true).
     var stubbedStaleRates: [String: Double] = [:]
+    var delayNanoseconds: UInt64 = 0
 
     nonisolated func getLatestRates(source: RateSource, forceRefresh: Bool, allowStaleOnError: Bool) async throws -> RateSnapshot {
         await MainActor.run {
             callCount += 1
         }
+
+        let delay = await MainActor.run { delayNanoseconds }
+        if delay > 0 { try? await Task.sleep(nanoseconds: delay) }
 
         let shouldFailValue = await MainActor.run { shouldFail }
         if shouldFailValue {
@@ -393,5 +397,99 @@ struct CurrencyRateServiceTests {
         #expect(rubToUsd != nil)
         #expect(abs((rubToUsd ?? 0) - (1.0 / 90.0)) < 0.0001)
         #expect(loader.requestedURLs.allSatisfy { $0.host == "www.cbr.ru" })
+    }
+
+    // MARK: - Phase 1a: buildFallbackChain
+
+    @Test("buildFallbackChain: millio первым, без дубликатов")
+    func testBuildFallbackChainMillioFirst() {
+        let repo = MockRateRepository()
+        let svc = CurrencyRateService(rateSource: .millio, rateRepository: repo)
+        let chain = svc.buildFallbackChain()
+        #expect(chain.first == .millio)
+        #expect(chain.count == RateSource.allCases.count)
+        #expect(Set(chain) == Set(RateSource.allCases))
+    }
+
+    @Test("buildFallbackChain: erapi первым, erapi не дублируется в хвосте")
+    func testBuildFallbackChainErapiFirst() {
+        let repo = MockRateRepository()
+        let svc = CurrencyRateService(rateSource: .erapi, rateRepository: repo)
+        let chain = svc.buildFallbackChain()
+        #expect(chain.first == .erapi)
+        #expect(chain.count == RateSource.allCases.count)
+        #expect(!chain.dropFirst().contains(.erapi))
+    }
+
+    @Test("buildFallbackChain: frankfurter первым")
+    func testBuildFallbackChainFrankfurterFirst() {
+        let repo = MockRateRepository()
+        let svc = CurrencyRateService(rateSource: .frankfurter, rateRepository: repo)
+        let chain = svc.buildFallbackChain()
+        #expect(chain.first == .frankfurter)
+        #expect(chain.count == RateSource.allCases.count)
+    }
+
+    // MARK: - Phase 1a: setRateSource
+
+    @Test("setRateSource: обновляет rateSource и store.preferred")
+    func testSetRateSourceUpdatesState() {
+        let repo = MockRateRepository()
+        let defaults = UserDefaults(suiteName: "test.set-rate-source")!
+        defaults.removePersistentDomain(forName: "test.set-rate-source")
+        defer { defaults.removePersistentDomain(forName: "test.set-rate-source") }
+
+        let store = RateSourcePreferenceStore(defaults: defaults)
+        let svc = CurrencyRateService(rateSource: .millio, store: store, rateRepository: repo)
+        svc.setRateSource(.frankfurter)
+
+        #expect(svc.rateSource == .frankfurter)
+        #expect(store.preferred == .frankfurter)
+    }
+
+    @Test("setRateSource: сбрасывает кэш (EUR недоступен синхронно после смены)")
+    func testSetRateSourceResetsCache() async {
+        let repo = MockRateRepository()
+        repo.rates = ["USD": 1.0, "EUR": 0.92]
+        let svc = CurrencyRateService(rateSource: .millio, rateRepository: repo)
+        _ = await svc.getRate(from: "USD", to: "EUR")
+        svc.setRateSource(.erapi)
+        #expect(svc.getCachedRate(from: "USD", to: "EUR") == nil)
+    }
+
+    @Test("setRateSource: отправляет уведомление currencyRateSourceDidChange")
+    func testSetRateSourcePostsNotification() async {
+        let repo = MockRateRepository()
+        let svc = CurrencyRateService(rateSource: .millio, rateRepository: repo)
+
+        var received = false
+        let observer = NotificationCenter.default.addObserver(
+            forName: .currencyRateSourceDidChange,
+            object: nil,
+            queue: .main
+        ) { _ in received = true }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        svc.setRateSource(.erapi)
+        // Уведомление синхронно через NotificationCenter.default.post
+        #expect(received)
+    }
+
+    @Test("generation-guard: in-flight refresh старого источника не перезаписывает кэш")
+    func testGenerationGuardPreventsStaleWrite() async {
+        let repo = MockRateRepository()
+        repo.rates = ["USD": 1.0, "EUR": 0.92]
+        repo.delayNanoseconds = 300_000_000 // 300ms
+
+        let svc = CurrencyRateService(rateSource: .millio, rateRepository: repo)
+
+        let refreshTask = Task { await svc.forceRefreshRates() }
+        // Ждём 50ms, затем меняем источник (generation += 1)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        svc.setRateSource(.erapi)
+        await refreshTask.value
+
+        // Кэш сброшен setRateSource; старый in-flight не должен был записать EUR
+        #expect(svc.getCachedRate(from: "USD", to: "EUR") == nil)
     }
 }

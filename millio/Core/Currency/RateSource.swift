@@ -7,6 +7,10 @@
 
 import Foundation
 
+extension Notification.Name {
+    static let currencyRateSourceDidChange = Notification.Name("currencyRateSourceDidChange")
+}
+
 /// Источник курсов валют
 enum RateSource: String, CaseIterable, Identifiable {
     case millio
