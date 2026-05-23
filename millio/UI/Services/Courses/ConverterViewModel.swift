@@ -79,6 +79,8 @@ final class ConverterViewModel: ViewModelProtocol {
     
     // Persisted settings (using UserDefaults instead of @AppStorage for MVVM compliance)
     private let defaults = UserDefaults.standard
+    // var нужен — struct, сеттеры converterOverride и preferred мутируют локальную копию defaults
+    private var store = RateSourcePreferenceStore.shared
     private let rateRepository: RateRepositoryProtocol
     
     private var selectedCodesRaw: String {
@@ -119,11 +121,29 @@ final class ConverterViewModel: ViewModelProtocol {
     }
     
     private var storedRateSource: String {
-        get { defaults.string(forKey: "conv_rate_source") ?? "millio" }
-        set {
-            defaults.set(newValue, forKey: "conv_rate_source")
-            CurrencyWidgetSyncService.setString(newValue, forKey: CurrencyWidgetShared.Keys.rateSource)
+        get {
+            // converterOverride = nil означает «следовать глобальному preferred»
+            store.converterOverride?.rawValue ?? store.preferred.rawValue
         }
+        set {
+            let source = RateSource(rawValue: newValue) ?? store.preferred
+            if source == store.preferred {
+                // override совпадает с глобальным — override не нужен
+                store.converterOverride = nil
+            } else {
+                store.converterOverride = source
+            }
+            // Виджет-синк источника убран — теперь только в RateSourcePickerViewModel.selectSource
+        }
+    }
+
+    /// Метка источника для UI конвертера:
+    /// «По умолчанию (Millio)» если override не задан, иначе — название источника.
+    var rateSourceDisplayLabel: String {
+        if store.converterOverride == nil {
+            return ConverterL10n.rateSourceDefaultLabel(preferred: store.preferred)
+        }
+        return state.rateSource.title
     }
     
     private var storedShowOfflineBadge: Bool {
@@ -357,7 +377,7 @@ final class ConverterViewModel: ViewModelProtocol {
         case .setRateSource(let source):
             state.rateSource = source
             storedRateSource = source.rawValue
-            mirrorToICloud(key: "conv_rate_source", value: source.rawValue)
+            // conv_rate_source больше не зеркалится в iCloud — это локальный override конвертера
             let cachedRates = storedCachedRates
             if cachedRates.count > 1 {
                 state.allRates = cachedRates
@@ -1089,7 +1109,7 @@ final class ConverterViewModel: ViewModelProtocol {
         )
         CurrencyWidgetSyncService.setString(state.activeCode, forKey: CurrencyWidgetShared.Keys.activeCode)
         CurrencyWidgetSyncService.setString(state.inputText, forKey: CurrencyWidgetShared.Keys.inputText)
-        CurrencyWidgetSyncService.setString(state.rateSource.rawValue, forKey: CurrencyWidgetShared.Keys.rateSource)
+        // rateSource не синкается здесь — виджет получает его через bootstrapFromStandardDefaults (preferred_rate_source)
         CurrencyWidgetSyncService.setRates(state.allRates, forSource: state.rateSource.rawValue)
         
         if storedLastRatesTS > 0 {

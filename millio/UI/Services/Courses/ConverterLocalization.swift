@@ -123,6 +123,13 @@ enum ConverterL10n {
         )
     }
 
+    /// Метка когда конвертер следует глобальному preferred: «По умолчанию (Millio)»
+    static func rateSourceDefaultLabel(preferred: RateSource, locale: Locale = AppLocalization.currentAppLocale) -> String {
+        let title = rateSourceTitle(preferred, locale: locale)
+        let format = tr("converter.rate_source.default_label", locale: locale, fallback: "Default (%@)")
+        return String(format: format, locale: locale, title)
+    }
+
     static func shareNote(_ note: String) -> String {
         formatted("converter.share.note_format", fallback: "Note: %@", note)
     }

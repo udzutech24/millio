@@ -12,7 +12,8 @@ import WidgetKit
 
 @MainActor
 enum CurrencyWidgetSyncService {
-    private static let knownRateSources = ["erapi", "frankfurter"]
+    // Автоматически включает новые источники (cbr и т.д.) при добавлении кейсов в RateSource
+    private static let knownRateSources = RateSource.allCases.map(\.rawValue)
     private static var lastReloadAt: Date = .distantPast
     private static let minimumReloadInterval: TimeInterval = 1
 
@@ -26,7 +27,8 @@ enum CurrencyWidgetSyncService {
         set(defaults.object(forKey: CurrencyWidgetShared.Keys.selectedCodes), forKey: CurrencyWidgetShared.Keys.selectedCodes, in: sharedDefaults)
         set(defaults.object(forKey: CurrencyWidgetShared.Keys.activeCode), forKey: CurrencyWidgetShared.Keys.activeCode, in: sharedDefaults)
         set(defaults.object(forKey: CurrencyWidgetShared.Keys.inputText), forKey: CurrencyWidgetShared.Keys.inputText, in: sharedDefaults)
-        set(defaults.object(forKey: CurrencyWidgetShared.Keys.rateSource), forKey: CurrencyWidgetShared.Keys.rateSource, in: sharedDefaults)
+        // Виджет читает глобальный preferred_rate_source, а не локальный conv_rate_source конвертера
+        set(defaults.object(forKey: "preferred_rate_source"), forKey: CurrencyWidgetShared.Keys.rateSource, in: sharedDefaults)
         set(defaults.object(forKey: CurrencyWidgetShared.Keys.primaryCurrencyCode), forKey: CurrencyWidgetShared.Keys.primaryCurrencyCode, in: sharedDefaults)
 
         for source in knownRateSources {
