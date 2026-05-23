@@ -319,7 +319,7 @@ struct ConverterView: View {
                                                 .font(.system(size: 16, weight: .medium))
                                                 .foregroundStyle(AppColors.textPrimary)
                                             Spacer()
-                                            Text(viewModel.state.rateSource.title)
+                                            Text(viewModel.rateSourceDisplayLabel)
                                                 .font(.system(size: 14, weight: .regular))
                                                 .foregroundStyle(AppColors.textTertiary)
                                             Image(systemName: isRateSourceExpanded ? "chevron.up" : "chevron.down")
