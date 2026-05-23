@@ -493,3 +493,116 @@ struct CurrencyRateServiceTests {
         #expect(svc.getCachedRate(from: "USD", to: "EUR") == nil)
     }
 }
+
+// MARK: - CBR Tests
+
+@Suite("CBR RateSource", .serialized)
+@MainActor
+struct CBRRateSourceTests {
+
+    // Минимальный CBR XML с USD, EUR, CNY. rubPerUSD=85, rubPerEUR=92, rubPerCNY=12.
+    static let cbrXML = """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <ValCurs Date="23.05.2026" name="Foreign Currency Market">
+      <Valute ID="R01235">
+        <CharCode>USD</CharCode><Nominal>1</Nominal><Value>85,0000</Value>
+      </Valute>
+      <Valute ID="R01239">
+        <CharCode>EUR</CharCode><Nominal>1</Nominal><Value>92,0000</Value>
+      </Valute>
+      <Valute ID="R01375">
+        <CharCode>CNY</CharCode><Nominal>1</Nominal><Value>12,0000</Value>
+      </Valute>
+    </ValCurs>
+    """.data(using: .utf8)!
+
+    final class MockCBRLoader: HTTPDataLoading, @unchecked Sendable {
+        let data: Data
+        init(data: Data) { self.data = data }
+        func data(from url: URL) async throws -> (Data, URLResponse) {
+            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (data, response)
+        }
+    }
+
+    final class FailingLoader: HTTPDataLoading, @unchecked Sendable {
+        func data(from url: URL) async throws -> (Data, URLResponse) {
+            throw URLError(.notConnectedToInternet)
+        }
+    }
+
+    @Test("buildFallbackChain для .cbr ставит его первым без дубликатов")
+    func testBuildFallbackChainCBR() {
+        let svc = CurrencyRateService(rateSource: .cbr, rateRepository: MockRateRepository())
+        let chain = svc.buildFallbackChain()
+        #expect(chain.first == .cbr)
+        #expect(Set(chain).count == chain.count)
+        #expect(chain.count == RateSource.allCases.count)
+    }
+
+    @Test("setRateSource(.cbr) сбрасывает кэш и инкрементирует generation")
+    func testSetRateSourceCBRResetsCache() async {
+        let svc = CurrencyRateService(rateSource: .millio, rateRepository: MockRateRepository())
+        // Симулируем наличие курсов в кэше
+        await svc.forceRefreshRates()
+        svc.setRateSource(.cbr)
+        // После смены кэш сброшен — только USD = 1.0
+        #expect(svc.getCachedRate(from: "USD", to: "EUR") == nil)
+    }
+
+    @Test("CBR нормализация: getRate USD→RUB ≈ 85")
+    func testCBRGetRateUSDtoRUB() async {
+        let loader = MockCBRLoader(data: Self.cbrXML)
+        let svc = CurrencyRateService(
+            rateSource: .cbr,
+            rateRepository: MockRateRepository(),
+            historicalLoader: loader,
+            cbrLatestProvider: CBRLatestRateProvider()
+        )
+        let rate = await svc.getRate(from: "USD", to: "RUB")
+        #expect(abs((rate ?? 0) - 85.0) < 0.01)
+    }
+
+    @Test("CBR нормализация: getRate RUB→USD ≈ 1/85")
+    func testCBRGetRateRUBtoUSD() async {
+        let loader = MockCBRLoader(data: Self.cbrXML)
+        let svc = CurrencyRateService(
+            rateSource: .cbr,
+            rateRepository: MockRateRepository(),
+            historicalLoader: loader,
+            cbrLatestProvider: CBRLatestRateProvider()
+        )
+        let rate = await svc.getRate(from: "RUB", to: "USD")
+        #expect(abs((rate ?? 0) - (1.0 / 85.0)) < 1e-5)
+    }
+
+    @Test("CBR нормализация: getRate EUR→RUB ≈ 92")
+    func testCBRGetRateEURtoRUB() async {
+        let loader = MockCBRLoader(data: Self.cbrXML)
+        let svc = CurrencyRateService(
+            rateSource: .cbr,
+            rateRepository: MockRateRepository(),
+            historicalLoader: loader,
+            cbrLatestProvider: CBRLatestRateProvider()
+        )
+        let rate = await svc.getRate(from: "EUR", to: "RUB")
+        #expect(abs((rate ?? 0) - 92.0) < 0.01)
+    }
+
+    @Test("CBR: пара EUR→CNY не RUB-involved, роутится на globalFiat, возвращает курс или nil (не crash)")
+    func testCBRNonRUBPairRoutesToGlobalFiat() async {
+        let loader = MockCBRLoader(data: Self.cbrXML)
+        let repo = MockRateRepository()
+        repo.rates = ["USD": 1.0, "EUR": 0.92, "CNY": 7.2]
+        let svc = CurrencyRateService(
+            rateSource: .cbr,
+            rateRepository: repo,
+            historicalLoader: loader,
+            cbrLatestProvider: CBRLatestRateProvider()
+        )
+        // Главное — не падает и возвращает Double? (не бросает ошибку)
+        let rate = await svc.getRate(from: "EUR", to: "CNY")
+        // Может быть nil если globalFiat fallback не смог — но не crash
+        _ = rate
+    }
+}

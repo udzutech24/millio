@@ -194,6 +194,11 @@ actor RateRepository: RateRepositoryProtocol {
                     }
                 }
             }
+
+        case .cbr:
+            // CBR использует CBRLatestRateProvider, не RateRepository.
+            // Этот путь не должен вызываться — CurrencyRateService обходит RateRepository для .cbr.
+            throw URLError(.unsupportedURL)
         }
 
         rates["USD"] = 1.0

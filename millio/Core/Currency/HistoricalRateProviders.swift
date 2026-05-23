@@ -222,6 +222,42 @@ final class CBRHistoricalRateProvider: HistoricalRateProvider {
     }
 }
 
+// MARK: - CBR Latest Rate Provider
+
+/// Провайдер актуального курса ЦБ РФ (сегодняшний XML_daily.asp).
+/// Нормализует все курсы к USD-base: cachedRates[code] = rubPerUSD / (rubPerCode).
+/// Если USD отсутствует в XML — возвращает ошибку; RUB-routing в CurrencyRateService
+/// должен использовать globalFiat fallback в этом случае.
+final class CBRLatestRateProvider: Sendable {
+    /// Загружает XML_daily.asp и возвращает словарь USD-нормализованных курсов.
+    /// Ключ "USD" = 1.0, ключ "RUB" = rubPerUSD.
+    func fetchRates(loader: HTTPDataLoading = URLSession.shared) async throws -> [String: Double] {
+        guard let url = URL(string: "https://www.cbr.ru/scripts/XML_daily.asp") else {
+            throw URLError(.badURL)
+        }
+        let (data, response) = try await loader.data(from: url)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        let parser = CBRDailyRatesParser()
+        let payload = try parser.parse(data: data)
+        return Self.normalizeToUSD(rubPerCurrency: payload.rubPerCurrency)
+    }
+
+    /// Нормализация: rubPerCurrency → USD-base словарь.
+    /// rubPerUSD = значение из CBR (RUB за 1 USD).
+    /// Для каждой валюты X: cachedRates[X] = rubPerUSD / rubPerX
+    ///   (т.е. "сколько X в 1 USD").
+    static func normalizeToUSD(rubPerCurrency: [String: Double]) -> [String: Double] {
+        guard let rubPerUSD = rubPerCurrency["USD"], rubPerUSD > 0 else { return [:] }
+        var result: [String: Double] = ["USD": 1.0, "RUB": rubPerUSD]
+        for (code, rubPer) in rubPerCurrency where rubPer > 0 && code != "USD" && code != "RUB" {
+            result[code] = rubPerUSD / rubPer
+        }
+        return result
+    }
+}
+
 private struct CBRDailyRatesPayload {
     let date: Date
     let rubPerCurrency: [String: Double]

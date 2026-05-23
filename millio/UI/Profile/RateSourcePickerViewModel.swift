@@ -53,10 +53,12 @@ final class RateSourcePickerViewModel: ObservableObject {
         primaryCurrencyCode: String,
         favoriteCurrencyCodes: [String]
     ) -> [RateSource] {
-        // Phase 2a: добавить case .cbr с фильтрацией по rubInProfile
-        // let rubInProfile = primaryCurrencyCode == "RUB" || favoriteCurrencyCodes.contains("RUB")
-        // if source == .cbr { return rubInProfile }
-        return RateSource.allCases
+        let rubInProfile = primaryCurrencyCode.uppercased() == "RUB"
+            || favoriteCurrencyCodes.contains { $0.uppercased() == "RUB" }
+        return RateSource.allCases.filter { source in
+            if source == .cbr { return rubInProfile }
+            return true
+        }
     }
 
     func visibleSources() -> [RateSource] {

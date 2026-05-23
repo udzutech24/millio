@@ -42,6 +42,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     private let historicalLoader: HTTPDataLoading
     private let frankfurterHistoricalProvider: HistoricalRateProvider
     private let rubHistoricalFallbackProvider: HistoricalRateProvider?
+    private let cbrLatestProvider: CBRLatestRateProvider
 
     /// Провайдер цены крипто-валюты в USD (инжектируется извне, Core не зависит от MarketAPIClient).
     /// Принимает код валюты ("BTC"), возвращает цену в USD (например, 100000.0).
@@ -60,7 +61,8 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         rateRepository: RateRepositoryProtocol = RateRepository.shared,
         historicalLoader: HTTPDataLoading = URLSession.shared,
         frankfurterHistoricalProvider: HistoricalRateProvider = FrankfurterHistoricalRateProvider(),
-        rubHistoricalFallbackProvider: HistoricalRateProvider? = CBRHistoricalRateProvider()
+        rubHistoricalFallbackProvider: HistoricalRateProvider? = CBRHistoricalRateProvider(),
+        cbrLatestProvider: CBRLatestRateProvider = CBRLatestRateProvider()
     ) {
         self.rateSource = rateSource
         self.store = store
@@ -68,6 +70,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         self.historicalLoader = historicalLoader
         self.frankfurterHistoricalProvider = frankfurterHistoricalProvider
         self.rubHistoricalFallbackProvider = rubHistoricalFallbackProvider
+        self.cbrLatestProvider = cbrLatestProvider
         // Синхронный прогрев из UserDefaults — конвертация и виджет работают мгновенно без сети.
         // Не используем async/actor чтобы избежать race condition с первым обращением к getRate().
         let udKey = "rate_repo_rates_\(rateSource.rawValue)"
@@ -90,17 +93,34 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         return rTo / rFrom
     }
 
+    /// Возвращает true если хотя бы один из кодов — RUB.
+    private func pairInvolvesRUB(_ f: String, _ t: String) -> Bool {
+        f == "RUB" || t == "RUB"
+    }
+
+    /// Первый источник из цепочки с globalFiatDaily capability.
+    private func globalFiatFallbackService() -> CurrencyRateService {
+        let fallback = buildFallbackChain().first { $0.capability.scope == .globalFiatDaily } ?? .millio
+        return CurrencyRateService(rateSource: fallback, rateRepository: rateRepository, historicalLoader: historicalLoader)
+    }
+
     /// Получить курс конвертации: сколько единиц 'to' за 1 единицу 'from'
     func getRate(from: String, to: String) async -> Double? {
         let f = from.uppercased()
         let t = to.uppercased()
-        
+
         if f == t { return 1.0 }
-        
+
+        // CBR покрывает только RUB-пары. Для прочих пар прозрачно роутим на globalFiat.
+        if rateSource.capability.scope == .rubOfficialDaily, !pairInvolvesRUB(f, t) {
+            AppLogger.log(.info, category: "CurrencyRateService", "CBR: pair \(f)→\(t) not RUB-involved, routing to globalFiat fallback")
+            return await globalFiatFallbackService().getRate(from: f, to: t)
+        }
+
         // Проверяем кэш и обновляем при необходимости
         let now = Date().timeIntervalSince1970
         let needsUpdate = cachedRates.count <= 1 || (now - lastUpdateTS) > cacheTimeout
-        
+
         if needsUpdate {
             await refreshRates()
         }
@@ -215,6 +235,31 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
 
         let generation = cacheGeneration
         let task = Task {
+            // CBR имеет собственный XML-провайдер, не использует RateRepository.
+            if self.rateSource.capability.scope == .rubOfficialDaily {
+                do {
+                    let rates = try await self.cbrLatestProvider.fetchRates(loader: self.historicalLoader)
+                    guard self.cacheGeneration == generation else { return }
+                    if !rates.isEmpty {
+                        self.cachedRates = rates
+                        self.lastUpdateTS = Date().timeIntervalSince1970
+                        UserDefaults.standard.set(rates, forKey: "rate_repo_rates_\(self.rateSource.rawValue)")
+                        UserDefaults.standard.set(self.lastUpdateTS, forKey: "rate_repo_fetched_at_\(self.rateSource.rawValue)")
+                    }
+                    return
+                } catch {
+                    AppLogger.log(.warning, category: "CurrencyRateService", "CBR latest rates failed: \(error.localizedDescription)")
+                }
+                // Если CBR недоступен — используем stale кэш из UserDefaults (offline-first).
+                guard self.cacheGeneration == generation else { return }
+                let udKey = "rate_repo_rates_\(self.rateSource.rawValue)"
+                if let saved = UserDefaults.standard.dictionary(forKey: udKey) as? [String: Double], !saved.isEmpty {
+                    self.cachedRates = saved
+                    self.lastUpdateTS = UserDefaults.standard.double(forKey: "rate_repo_fetched_at_\(self.rateSource.rawValue)")
+                }
+                return
+            }
+
             let chain = self.buildFallbackChain()
             for (index, source) in chain.enumerated() {
                 do {
