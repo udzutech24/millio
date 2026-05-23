@@ -474,6 +474,18 @@ struct ProfileView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("profile.primaryCurrencyLink")
 
+        case .rateSource:
+            NavigationLink {
+                RateSourcePickerView()
+            } label: {
+                settingsRow(item: .rateSource, title: "profile.rate_source") {
+                    rowValueText(RateSourcePreferenceStore.shared.preferred.title, accent: true)
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.rateSourceLink")
+
         case .backup:
             NavigationLink {
                 BackupManagementView(router: router)

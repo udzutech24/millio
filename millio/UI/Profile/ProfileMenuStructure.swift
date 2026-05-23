@@ -76,6 +76,7 @@ enum ProfileMenuSectionID: String, Identifiable {
 enum ProfileMenuItemID: String, Identifiable {
     case language
     case primaryCurrency
+    case rateSource
     case backup
     case security
     case dailyReminders
@@ -103,6 +104,8 @@ enum ProfileMenuItemID: String, Identifiable {
             return "globe"
         case .primaryCurrency:
             return "dollarsign"
+        case .rateSource:
+            return "arrow.triangle.2.circlepath"
         case .backup:
             return "arrow.clockwise.icloud"
         case .security:
@@ -146,6 +149,8 @@ enum ProfileMenuItemID: String, Identifiable {
             return .blue
         case .primaryCurrency:
             return .green
+        case .rateSource:
+            return .teal
         case .backup:
             return .cyan
         case .security:
@@ -211,7 +216,8 @@ enum ProfileMenuStructure {
                 id: .general,
                 items: [
                     .language,
-                    .primaryCurrency
+                    .primaryCurrency,
+                    .rateSource
                 ]
             ),
             ProfileMenuSection(

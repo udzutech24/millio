@@ -334,7 +334,10 @@ struct ConverterView: View {
                                     if isRateSourceExpanded {
                                         FinancesRowDivider(leadingPadding: 16)
                                         VStack(spacing: 0) {
-                                            ForEach(Array(RateSource.allCases.enumerated()), id: \.element.id) { index, src in
+                                            ForEach(Array(RateSourcePickerViewModel.visibleSources(
+                                        primaryCurrencyCode: SettingsManager.shared.primaryCurrencyCode,
+                                        favoriteCurrencyCodes: SettingsManager.shared.favoriteCurrencyCodes
+                                    ).enumerated()), id: \.element.id) { index, src in
                                                 Button {
                                                     viewModel.handle(.setRateSource(src))
                                                     withAnimation(.easeInOut(duration: 0.2)) {
