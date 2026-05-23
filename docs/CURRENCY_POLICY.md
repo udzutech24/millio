@@ -77,7 +77,7 @@
 - **Non-RUB-pair routing:** When `.cbr` is the preferred source but the requested pair does not involve RUB (e.g. EUR→CNY), `CurrencyRateService` transparently creates a temporary `globalFiat` service instance and delegates the call. No error is surfaced to the caller.
 - **USD-base normalization:** `CBRLatestRateProvider.normalizeToUSD(rubPerCurrency:)` converts CBR's `rubPerX` values to a USD-base dict (`cachedRates["X"] = rubPerUSD / rubPerX`). Missing USD in the XML → returns `[:]` → error thrown → fallback chain kicks in.
 - **`refreshRates()` for `.cbr`:** bypasses `RateRepository` and calls `cbrLatestProvider.fetchRates()` directly, then persists the result to `UserDefaults` under the same per-source keys used by the repository.
-- **Picker visibility:** `RateSourcePickerViewModel.visibleSources()` includes `.cbr` only when `primaryCurrencyCode == "RUB"` or `favoriteCurrencyCodes` contains `"RUB"`.
+- **Picker visibility:** `RateSourcePickerViewModel.visibleSources()` includes `.cbr` when **at least one** of the following is true: `primaryCurrencyCode == "RUB"`, `favoriteCurrencyCodes` contains `"RUB"`, or the resolved app locale language code is `"ru"` (covers both explicit Russian and system=Russian). In all other cases `.cbr` is hidden.
 
 ## Historical Rates Policy
 

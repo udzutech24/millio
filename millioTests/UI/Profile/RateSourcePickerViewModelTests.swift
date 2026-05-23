@@ -40,17 +40,28 @@ struct RateSourcePickerViewModelTests {
 
     // MARK: - visibleSources
 
-    @Test("visibleSources без RUB не включает .cbr (резерв Phase 2a)")
-    func testVisibleSourcesWithoutRUB() {
+    @Test("visibleSources без RUB и не-русский язык — .cbr скрыт")
+    func testVisibleSourcesWithoutRUBNonRussian() {
         let sources = RateSourcePickerViewModel.visibleSources(
             primaryCurrencyCode: "USD",
-            favoriteCurrencyCodes: ["EUR", "GBP"]
+            favoriteCurrencyCodes: ["EUR", "GBP"],
+            appLocale: Locale(identifier: "en")
         )
-        // Phase 1b: все 3 источника видимы (cbr не добавлен до Phase 2a)
-        #expect(sources.count == RateSource.allCases.count)
+        #expect(!sources.contains(.cbr))
         #expect(sources.contains(.millio))
         #expect(sources.contains(.erapi))
         #expect(sources.contains(.frankfurter))
+    }
+
+    @Test("visibleSources без RUB но русский язык — .cbr виден")
+    func testVisibleSourcesWithoutRUBRussianLocale() {
+        let sources = RateSourcePickerViewModel.visibleSources(
+            primaryCurrencyCode: "USD",
+            favoriteCurrencyCodes: ["EUR", "GBP"],
+            appLocale: Locale(identifier: "ru")
+        )
+        #expect(sources.contains(.cbr))
+        #expect(sources.count == RateSource.allCases.count)
     }
 
     @Test("visibleSources с RUB в primary — все источники видимы (Phase 2a добавит .cbr)")

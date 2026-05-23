@@ -51,12 +51,14 @@ final class RateSourcePickerViewModel: ObservableObject {
 
     static func visibleSources(
         primaryCurrencyCode: String,
-        favoriteCurrencyCodes: [String]
+        favoriteCurrencyCodes: [String],
+        appLocale: Locale = AppLocalization.currentAppLocale
     ) -> [RateSource] {
         let rubInProfile = primaryCurrencyCode.uppercased() == "RUB"
             || favoriteCurrencyCodes.contains { $0.uppercased() == "RUB" }
+        let isRussianLocale = appLocale.language.languageCode?.identifier == "ru"
         return RateSource.allCases.filter { source in
-            if source == .cbr { return rubInProfile }
+            if source == .cbr { return rubInProfile || isRussianLocale }
             return true
         }
     }
