@@ -110,8 +110,10 @@ final class RateSourcePickerViewModel: ObservableObject {
 
         let codes = ["USD", "EUR", "GBP", "JPY", "CNY"]
             .filter { $0 != primaryCode.uppercased() }
+        // Показываем «обменный» формат: сколько единиц primaryCode за 1 единицу иностранной валюты.
+        // Например при primary=RUB: USD → 70.92, а не 0.0141.
         let rates = codes.prefix(4).compactMap { code -> (code: String, rate: Double)? in
-            guard let rate = service.getCachedRate(from: primaryCode, to: code) else { return nil }
+            guard let rate = service.getCachedRate(from: code, to: primaryCode) else { return nil }
             return (code: code, rate: rate)
         }
 
