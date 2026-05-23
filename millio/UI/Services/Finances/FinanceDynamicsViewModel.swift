@@ -951,27 +951,38 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let displayCurrency = state.displayCurrency
         let endDate = getPeriodDates().end
 
-        // Собираем нетто-суммы по валютам: активы плюсом, кредиты минусом.
-        // Кредиты уменьшают экспозицию в своей валюте — итого = чистое богатство в разрезе валют.
+        // Используем FinanceNetWorthSignedAmount — единая логика знаков для net worth:
+        // учитывает includeInTotal, archivedAt, кредитные карты (долг = limit - balance),
+        // investmentType == .negative. Не дублируем эту логику вручную.
         var nativeTotals: [String: Double] = [:]
         for account in accounts {
+            guard let signed = FinanceNetWorthSignedAmount.signedValue(
+                for: account,
+                cardsByID: cardsCache,
+                creditsByID: creditsCache,
+                investmentsByID: investmentsCache
+            ) else { continue }
+
+            let currency: String
             switch account.accountType {
             case .card:
-                if let card = cardsCache[account.accountID] {
-                    nativeTotals[card.currency, default: 0] += card.balance
-                }
+                guard let card = cardsCache[account.accountID] else { continue }
+                currency = card.currency
             case .credit:
-                if let credit = creditsCache[account.accountID] {
-                    nativeTotals[credit.currency, default: 0] -= credit.remainingAmount
-                }
+                guard let credit = creditsCache[account.accountID] else { continue }
+                currency = credit.currency
             case .investment:
-                if let inv = investmentsCache[account.accountID] {
-                    nativeTotals[inv.currency, default: 0] += inv.amount
-                }
+                guard let inv = investmentsCache[account.accountID] else { continue }
+                currency = inv.currency
             }
+            nativeTotals[currency, default: 0] += signed
         }
 
-        // Конвертируем по курсу на endDate — тот же источник что и Distribution
+        // Для сегодняшней даты CurrencyRateService.getHistoricalRate деградирует
+        // в getRate() → cachedRates. Форсируем обновление чтобы курс был актуальным.
+        // Для исторических периодов (at: endDate != today) Frankfurter отработает штатно.
+        await currencyService.forceRefreshRates()
+
         var converted: [(currency: String, value: Double)] = []
         for (currency, nativeValue) in nativeTotals {
             let value = await convertAmount(value: nativeValue, from: currency, to: displayCurrency, at: endDate)
