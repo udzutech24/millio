@@ -56,8 +56,8 @@ final class RateSourceCapabilityTests: XCTestCase {
     }
 
     func testAllCasesHaveCapability() {
-        // Гарантия: у всех 4 кейсов capability определён (не crashит).
-        XCTAssertEqual(RateSource.allCases.count, 4)
+        // Гарантия: у всех 5 кейсов capability определён (не crashит).
+        XCTAssertEqual(RateSource.allCases.count, 5)
         for source in RateSource.allCases {
             _ = source.capability
         }

@@ -38,7 +38,31 @@ enum CurrencyWidgetSyncService {
             set(defaults.object(forKey: timestampKey), forKey: timestampKey, in: sharedDefaults)
         }
 
+        // Custom-курсы: конвертируем в USD-base и кладём под ключ conv_cached_rates_custom
+        let customStore = CustomRateStore(defaults: defaults)
+        if customStore.isConfigured {
+            let primary = defaults.string(forKey: CurrencyWidgetShared.Keys.primaryCurrencyCode) ?? "RUB"
+            let usdBase = customStore.toUSDBase(currentPrimary: primary)
+            let customRatesKey = CurrencyWidgetShared.Keys.cachedRates(for: RateSource.custom.rawValue)
+            set(usdBase.isEmpty ? nil : usdBase, forKey: customRatesKey, in: sharedDefaults)
+        }
+
         reloadWidgetTimelines(force: true)
+    }
+
+    /// Синхронизирует custom-курсы в App Group после редактирования пользователем.
+    static func syncCustomRates() {
+        guard let sharedDefaults else { return }
+        let store = CustomRateStore.shared
+        let customRatesKey = CurrencyWidgetShared.Keys.cachedRates(for: RateSource.custom.rawValue)
+        if store.isConfigured {
+            let primary = SettingsManager.shared.primaryCurrencyCode
+            let usdBase = store.toUSDBase(currentPrimary: primary)
+            set(usdBase.isEmpty ? nil : usdBase, forKey: customRatesKey, in: sharedDefaults)
+        } else {
+            set(nil, forKey: customRatesKey, in: sharedDefaults)
+        }
+        reloadWidgetTimelines()
     }
 
     static func setString(_ value: String, forKey key: String) {

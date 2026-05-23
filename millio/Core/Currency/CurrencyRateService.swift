@@ -106,9 +106,9 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         f == "RUB" || t == "RUB"
     }
 
-    /// Первый источник из цепочки с globalFiatDaily capability.
+    /// Первый источник из цепочки (кроме текущего) с globalFiatDaily capability.
     private func globalFiatFallbackService() -> CurrencyRateService {
-        let fallback = buildFallbackChain().first { $0.capability.scope == .globalFiatDaily } ?? .millio
+        let fallback = buildFallbackChain().dropFirst().first { $0.capability.scope == .globalFiatDaily } ?? .millio
         return CurrencyRateService(rateSource: fallback, rateRepository: rateRepository, historicalLoader: historicalLoader)
     }
 
