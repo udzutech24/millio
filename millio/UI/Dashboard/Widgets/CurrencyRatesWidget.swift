@@ -53,6 +53,9 @@ struct CurrencyRatesWidget: View {
         }
         .buttonStyle(.plain)
         .task { await loadRates() }
+        .onReceive(NotificationCenter.default.publisher(for: .currencyRateSourceDidChange)) { _ in
+            Task { await loadRates() }
+        }
     }
 
     // MARK: - Header

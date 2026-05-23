@@ -115,18 +115,32 @@ final class InvestmentViewModel: ViewModelProtocol {
     @Published var state = InvestmentState()
     
     let modelContext: ModelContext
-    
+
     private let defaults = UserDefaults.standard
-    
+    private var rateSourceObserver: NSObjectProtocol?
+
     private var storedDisplayCurrency: String {
         get { defaults.string(forKey: "investment_display_currency") ?? SettingsManager.shared.primaryCurrencyCode }
         set { defaults.set(newValue, forKey: "investment_display_currency") }
     }
-    
+
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
         state.displayCurrency = storedDisplayCurrency
         loadInvestments()
+        rateSourceObserver = NotificationCenter.default.addObserver(
+            forName: .currencyRateSourceDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.refreshRates() }
+        }
+    }
+
+    deinit {
+        if let observer = rateSourceObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
     
     func handle(_ action: InvestmentAction) {
