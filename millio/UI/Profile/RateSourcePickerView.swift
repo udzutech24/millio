@@ -65,6 +65,9 @@ struct RateSourcePickerView: View {
                     staleDataBadge
                 }
             }
+            if source == .cbr {
+                cbrDisclaimerRow
+            }
         }
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -95,6 +98,7 @@ struct RateSourcePickerView: View {
                     .font(Font.millioCaptionRegular)
                     .foregroundStyle(AppColors.textSecondary)
                     .multilineTextAlignment(.leading)
+                legalLabelBadge(source.capability.legalLabel)
             }
             Spacer()
             if let updatedAt = preview?.updatedAt, loadState == .loaded {
@@ -177,5 +181,38 @@ struct RateSourcePickerView: View {
             .foregroundStyle(.orange)
             .padding(.horizontal, AppSpacing.l)
             .padding(.bottom, AppSpacing.s)
+    }
+
+    private func legalLabelBadge(_ label: RateSourceCapability.LegalLabel) -> some View {
+        let (text, color): (String, Color) = {
+            switch label {
+            case .official:
+                return (L("rate_source.legal_label.official", defaultValue: "Official"), AppColors.brandPrimary.opacity(0.85))
+            case .reference:
+                return (L("rate_source.legal_label.reference", defaultValue: "Reference"), Color.white.opacity(0.35))
+            case .aggregator:
+                return (L("rate_source.legal_label.aggregator", defaultValue: "Aggregator"), Color.white.opacity(0.30))
+            case .market:
+                return (L("rate_source.legal_label.market", defaultValue: "Market"), Color.orange.opacity(0.75))
+            }
+        }()
+        return Text(text)
+            .font(Font.millioMicro)
+            .foregroundStyle(label == .official ? AppColors.brandPrimary : AppColors.textSecondary)
+            .padding(.horizontal, AppSpacing.s)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.18), in: Capsule())
+            .overlay(Capsule().strokeBorder(color.opacity(0.35), lineWidth: 0.5))
+    }
+
+    private var cbrDisclaimerRow: some View {
+        Text(L("rate_source_picker.cbr_disclaimer",
+               defaultValue: "Official CBR rate, not a bank buy/sell rate"))
+            .font(Font.millioCaption2)
+            .foregroundStyle(AppColors.textSecondary)
+            .multilineTextAlignment(.leading)
+            .padding(.horizontal, AppSpacing.l)
+            .padding(.bottom, AppSpacing.m)
+            .padding(.top, AppSpacing.xs)
     }
 }

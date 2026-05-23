@@ -70,6 +70,15 @@
 - Tapping a card calls `selectSource(_:)` immediately — no «Save» button.
 - `selectSource(_:)` calls `CurrencyRateService.shared.setRateSource` and syncs the widget via `CurrencyWidgetSyncService`; it does **not** write `store.preferred` directly.
 
+## CBR Routing
+
+- `.cbr` has `capability.scope == .rubOfficialDaily` — optimized for RUB-involved pairs.
+- **RUB-pair routing:** `CurrencyRateService.getRate(from:to:)` detects that the active source is `.cbr` and at least one of `from`/`to` is `"RUB"`. In this case, the snapshot from `CBRLatestRateProvider` is used directly.
+- **Non-RUB-pair routing:** When `.cbr` is the preferred source but the requested pair does not involve RUB (e.g. EUR→CNY), `CurrencyRateService` transparently creates a temporary `globalFiat` service instance and delegates the call. No error is surfaced to the caller.
+- **USD-base normalization:** `CBRLatestRateProvider.normalizeToUSD(rubPerCurrency:)` converts CBR's `rubPerX` values to a USD-base dict (`cachedRates["X"] = rubPerUSD / rubPerX`). Missing USD in the XML → returns `[:]` → error thrown → fallback chain kicks in.
+- **`refreshRates()` for `.cbr`:** bypasses `RateRepository` and calls `cbrLatestProvider.fetchRates()` directly, then persists the result to `UserDefaults` under the same per-source keys used by the repository.
+- **Picker visibility:** `RateSourcePickerViewModel.visibleSources()` includes `.cbr` only when `primaryCurrencyCode == "RUB"` or `favoriteCurrencyCodes` contains `"RUB"`.
+
 ## Historical Rates Policy
 
 - Historical `exact` rates are resolved via provider chain:

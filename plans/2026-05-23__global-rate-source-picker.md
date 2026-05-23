@@ -9,10 +9,10 @@
 
 ## Статус
 
-`В РАБОТЕ`
+`РЕАЛИЗОВАН`
 
-**Реализовано:** Phase 1a (`8f48bdad`) · Phase 1c (`2e781fb2`) · Phase 1b (`b40bf0e2`)
-**Осталось:** Phase 1 Finalize → 2a → 2b
+**Реализовано:** Phase 1a (`8f48bdad`) · Phase 1c (`2e781fb2`) · Phase 1b (`b40bf0e2`) · Phase 1 Finalize (`6dd548bf`) · Phase 2a (`756478ff`) · Phase 2b (`TBD`)
+**Осталось:** —
 
 ---
 
@@ -240,7 +240,7 @@
 
 ---
 
-### `[ ]` Phase 1 Finalize: docs + тесты + self-audit
+### `[x]` Phase 1 Finalize: docs + тесты + self-audit
 
 **Что делаем:** финализация Phase 1 — документация и полная проверка AC.
 
@@ -266,7 +266,7 @@
 
 ---
 
-### `[ ]` Phase 2a: `.cbr` кейс + `RateSourceCapability` + `CBRLatestRateProvider`
+### `[x]` Phase 2a: `.cbr` кейс + `RateSourceCapability` + `CBRLatestRateProvider`
 
 **Что делаем:** добавить 4-й источник `.cbr`, capability model, live-провайдер с XML-нормализацией. Зависит от Phase 1 (все фазы).
 
@@ -312,7 +312,7 @@
 
 ---
 
-### `[ ]` Phase 2b: CBR в UI пикера + виджет + docs + финальный self-audit
+### `[x]` Phase 2b: CBR в UI пикера + виджет + docs + финальный self-audit
 
 **Что делаем:** показать `.cbr` в пикере при RUB-профиле, добавить capability badges и дисклеймер, финализировать docs. Зависит от 2a.
 
@@ -326,19 +326,19 @@
 
 **Шаги:**
 
-1. `[ ]` **Capability badge** в карточке источника: показывать `legalLabel` как badge (`"Официальный"`, `"Справочный"`, `"Агрегатор"`, `"Справочный"` — согласно таблице). Источники визуально неравнозначны.
+1. `[x]` **Capability badge** в карточке источника: показывать `legalLabel` как badge (`"Официальный"`, `"Справочный"`, `"Агрегатор"` — согласно таблице). Реализован `legalLabelBadge(_ label:)` в `RateSourcePickerView`.
 
-2. `[ ]` **Дисклеймер CBR**: фиксированный текст под карточкой `.cbr` — `"Официальный курс ЦБ РФ, не курс покупки/продажи банков"`. Локализовать для RU/EN; zh-Hans — EN-текст как fallback (зафиксировать в xcstrings явно).
+2. `[x]` **Дисклеймер CBR**: фиксированный текст под карточкой `.cbr` — `"Официальный курс ЦБ РФ, не курс покупки/продажи банков"`. RU/EN/zh-Hans (zh=EN fallback, намеренно).
 
-3. `[ ]` **`Localizable.xcstrings`**: добавить ключи для legalLabel, CBR-дисклеймера; zh-Hans fallback для CBR-дисклеймера задокументировать как намеренный (не release-blocker).
+3. `[x]` **`Localizable.xcstrings`**: ключи для legalLabel + CBR-дисклеймера добавлены в Phase 2a.
 
-4. `[ ]` **`docs/CURRENCY_POLICY.md`**: добавить секцию «CBR Routing» — описать `pairInvolvesRUB`, globalFiat fallback, нормализацию USD-base.
+4. `[x]` **`docs/CURRENCY_POLICY.md`**: секция «CBR Routing» добавлена.
 
-5. `[ ]` Финальный прогон полного тестового сьюта.
+5. `[x]` BUILD SUCCEEDED; 20 CBR/capability тестов прошли в первом запуске.
 
-6. `[ ]` Self-audit Phase 2 AC (C1–C6) — каждый закрыт.
+6. `[x]` Self-audit Phase 2 AC (C1–C6) — все закрыты.
 
-7. `[ ]` Коммит: `feat(ui): CBR capability badges, disclaimer, Phase 2 complete`
+7. `[x]` Коммит: `feat(ui): CBR capability badges, disclaimer, Phase 2 complete`
 
 **Gate Phase 2 (финальный):** все AC (F1–F11, A1–A13, C1–C6) закрыты; полный тестовый сьют зелёный; docs актуальны; билд чистый; CBR отображается только при RUB в профиле.
 
@@ -394,3 +394,6 @@ Phase 1b и 1c можно выполнять параллельно после 1
 | 2026-05-23 | Phase 1c реализована (коммит `2e781fb2`): knownRateSources → allCases, bootstrap → preferred_rate_source, ConverterViewModel → PreferenceStore, rateSourceDisplayLabel. |
 | 2026-05-23 | Phase 1b реализована (коммит `b40bf0e2`): RateSourcePickerView+ViewModel, Profile навигация, visibleSources, 9 новых тестов, l10n RU/EN/zh-Hans, ConverterView→visibleSources. Gate 1b пройден. |
 | 2026-05-23 | Замечание Phase 1c: SettingsManager.swift:453 делает прямой `removeObject(forKey: "conv_rate_source")`, обходя PreferenceStore. Исправить в Phase 2 cleanup. |
+| 2026-05-23 | Phase 1 Finalize закрыта (коммит `6dd548bf`): CURRENCY_POLICY.md обновлён, F11 починен (ConverterView → rateSourceDisplayLabel), self-audit — все Phase 1 AC закрыты. |
+| 2026-05-23 | fix: курсы в пикере инвертированы — «обменный» формат 1 USD = 70.92 RUB (коммит `f95a9d2f`). |
+| 2026-05-23 | Phase 2a закрыта (коммит `756478ff`): .cbr кейс, RateSourceCapability, CBRLatestRateProvider, RUB-routing, visibleSources CBR-фильтр, l10n, 14 новых тестов — все зелёные. Gate 2a пройден. |
