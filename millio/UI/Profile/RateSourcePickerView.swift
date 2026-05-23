@@ -39,6 +39,14 @@ struct RateSourcePickerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .task { await viewModel.loadPreviews() }
+        .sheet(isPresented: $viewModel.showCustomEditor) {
+            CustomRateEditorView(onSave: {
+                viewModel.refreshCustomPreview()
+                if CustomRateStore.shared.isConfigured {
+                    viewModel.selectSource(.custom)
+                }
+            })
+        }
     }
 
     // MARK: - Source Card
@@ -52,7 +60,14 @@ struct RateSourcePickerView: View {
         VStack(alignment: .leading, spacing: 0) {
             cardHeader(source: source, isSelected: isSelected, preview: preview, loadState: loadState)
 
-            if loadState == .loading {
+            if source == .custom {
+                if !viewModel.isCustomConfigured {
+                    customNotConfiguredHint
+                } else if let preview, !preview.rates.isEmpty {
+                    FinancesRowDivider(leadingPadding: AppSpacing.l)
+                    ratesTable(preview: preview, loadState: loadState)
+                }
+            } else if loadState == .loading {
                 cardSkeleton
             } else if loadState == .failed {
                 unavailableRow
@@ -101,7 +116,18 @@ struct RateSourcePickerView: View {
                 legalLabelBadge(source.capability.legalLabel)
             }
             Spacer()
-            if let updatedAt = preview?.updatedAt, loadState == .loaded {
+            if source == .custom {
+                Button {
+                    viewModel.showCustomEditor = true
+                } label: {
+                    Text(L("rate_source_picker.custom_edit", defaultValue: "Редактировать"))
+                        .font(Font.millioCaptionRegular)
+                        .foregroundStyle(AppColors.brandPrimary)
+                        .padding(.horizontal, AppSpacing.m)
+                        .padding(.vertical, AppSpacing.xs)
+                        .background(AppColors.brandPrimary.opacity(0.12), in: Capsule())
+                }
+            } else if let updatedAt = preview?.updatedAt, loadState == .loaded {
                 Text(updatedAt, style: .relative)
                     .font(Font.millioMicro)
                     .foregroundStyle(AppColors.textSecondary)
@@ -165,6 +191,15 @@ struct RateSourcePickerView: View {
             }
         }
         .padding(.vertical, AppSpacing.m)
+    }
+
+    private var customNotConfiguredHint: some View {
+        Text(L("rate_source_picker.custom_hint", defaultValue: "Нажмите «Редактировать», чтобы задать курсы"))
+            .font(Font.millioCalloutRegular)
+            .foregroundStyle(AppColors.textSecondary)
+            .multilineTextAlignment(.leading)
+            .padding(.horizontal, AppSpacing.l)
+            .padding(.vertical, AppSpacing.m)
     }
 
     private var unavailableRow: some View {

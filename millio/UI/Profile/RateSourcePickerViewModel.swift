@@ -25,6 +25,9 @@ final class RateSourcePickerViewModel: ObservableObject {
     @Published var previews: [RateSource: RatePreview] = [:]
     @Published var loadingStates: [RateSource: LoadState] = [:]
     @Published var selectedSource: RateSource
+    @Published var showCustomEditor: Bool = false
+
+    var isCustomConfigured: Bool { CustomRateStore.shared.isConfigured }
 
     let store: RateSourcePreferenceStore
     private let primaryCurrencyCode: String
@@ -76,11 +79,19 @@ final class RateSourcePickerViewModel: ObservableObject {
         let sources = visibleSources()
         for source in sources { loadingStates[source] = .loading }
 
+        // Custom-превью строится синхронно из CustomRateStore — без сетевого запроса
+        if sources.contains(.custom) {
+            let customPreview = buildCustomPreview()
+            previews[.custom] = customPreview
+            loadingStates[.custom] = .loaded
+        }
+
         let loader = previewLoader
         let primary = primaryCurrencyCode
+        let networkSources = sources.filter { $0 != .custom }
 
         await withTaskGroup(of: (RateSource, Result<RatePreview, Error>).self) { group in
-            for source in sources {
+            for source in networkSources {
                 group.addTask { await loader(source, primary) }
             }
             for await (source, result) in group {
@@ -95,9 +106,37 @@ final class RateSourcePickerViewModel: ObservableObject {
         }
     }
 
+    func refreshCustomPreview() {
+        previews[.custom] = buildCustomPreview()
+        loadingStates[.custom] = .loaded
+    }
+
+    private func buildCustomPreview() -> RatePreview {
+        let store = CustomRateStore.shared
+        guard store.isConfigured else {
+            return RatePreview(rates: [], updatedAt: nil, isStale: false)
+        }
+        let usdBase = store.toUSDBase(currentPrimary: primaryCurrencyCode)
+        let primary = primaryCurrencyCode.uppercased()
+        let codes = ["USD", "EUR", "GBP", "CNY"].filter { $0 != primary }
+        let rates = codes.prefix(4).compactMap { code -> (code: String, rate: Double)? in
+            // Конвертируем из USD-base в "сколько primary за 1 code"
+            guard let codeUSD = usdBase[code] ?? (code == "USD" ? 1.0 : nil),
+                  let primaryUSD = usdBase[primary] ?? (primary == "USD" ? 1.0 : nil),
+                  primaryUSD > 0 else { return nil }
+            let rate = codeUSD / primaryUSD
+            return (code: code, rate: rate)
+        }
+        return RatePreview(rates: Array(rates), updatedAt: nil, isStale: false)
+    }
+
     // MARK: - Select
 
     func selectSource(_ source: RateSource) {
+        if source == .custom, !isCustomConfigured {
+            showCustomEditor = true
+            return
+        }
         selectedSource = source
         CurrencyRateService.shared.setRateSource(source)
         CurrencyWidgetSyncService.setString(source.rawValue, forKey: CurrencyWidgetShared.Keys.rateSource)
