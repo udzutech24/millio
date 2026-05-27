@@ -120,11 +120,12 @@ final class RateSourcePickerViewModel: ObservableObject {
         let primary = primaryCurrencyCode.uppercased()
         let codes = ["USD", "EUR", "GBP", "CNY"].filter { $0 != primary }
         let rates = codes.prefix(4).compactMap { code -> (code: String, rate: Double)? in
-            // Конвертируем из USD-base в "сколько primary за 1 code"
-            guard let codeUSD = usdBase[code] ?? (code == "USD" ? 1.0 : nil),
-                  let primaryUSD = usdBase[primary] ?? (primary == "USD" ? 1.0 : nil),
-                  primaryUSD > 0 else { return nil }
-            let rate = codeUSD / primaryUSD
+            // usdBase[X] = «сколько X за 1 USD» (формат er-api)
+            // "сколько primary за 1 code" = usdBase[primary] / usdBase[code]
+            guard let codePerUSD = usdBase[code] ?? (code == "USD" ? 1.0 : nil),
+                  let primaryPerUSD = usdBase[primary] ?? (primary == "USD" ? 1.0 : nil),
+                  codePerUSD > 0 else { return nil }
+            let rate = primaryPerUSD / codePerUSD
             return (code: code, rate: rate)
         }
         return RatePreview(rates: Array(rates), updatedAt: nil, isStale: false)

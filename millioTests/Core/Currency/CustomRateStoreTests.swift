@@ -49,30 +49,30 @@ final class CustomRateStoreTests: XCTestCase {
     // MARK: - toUSDBase: primary = RUB
 
     func test_toUSDBase_primaryRUB_usdRate() {
-        // 1 USD = 71.2 RUB → cachedRates["RUB"] = 1/71.2 ≈ 0.01404
+        // 1 USD = 71.2 RUB → cachedRates["RUB"] = 71.2 (71.2 RUB за 1 USD, формат er-api)
         store.rates = ["USD": 71.2]
         let result = store.toUSDBase(currentPrimary: "RUB")
-        XCTAssertEqual(result["RUB"] ?? 0, 1.0 / 71.2, accuracy: 1e-9)
+        XCTAssertEqual(result["RUB"] ?? 0, 71.2, accuracy: 1e-9)
         // USD в USD-base не хранится (он всегда 1.0 в CurrencyRateService)
         XCTAssertNil(result["USD"])
     }
 
     func test_toUSDBase_primaryRUB_eurRate() {
         // 1 USD = 71.2 RUB, 1 EUR = 80.5 RUB
-        // cachedRates["EUR"] = 80.5/71.2 ≈ 1.1306 (USD за 1 EUR)
+        // cachedRates["EUR"] = 71.2/80.5 (EUR за 1 USD, формат er-api)
         store.rates = ["USD": 71.2, "EUR": 80.5]
         let result = store.toUSDBase(currentPrimary: "RUB")
-        let expected = 80.5 / 71.2
+        let expected = 71.2 / 80.5
         XCTAssertEqual(result["EUR"] ?? 0, expected, accuracy: 1e-9)
-        XCTAssertEqual(result["RUB"] ?? 0, 1.0 / 71.2, accuracy: 1e-9)
+        XCTAssertEqual(result["RUB"] ?? 0, 71.2, accuracy: 1e-9)
     }
 
     func test_toUSDBase_primaryRUB_cnyRate() {
         // 1 USD = 71.2 RUB, 1 CNY = 9.8 RUB
-        // cachedRates["CNY"] = 9.8/71.2
+        // cachedRates["CNY"] = 71.2/9.8 (CNY за 1 USD, формат er-api)
         store.rates = ["USD": 71.2, "EUR": 80.5, "CNY": 9.8]
         let result = store.toUSDBase(currentPrimary: "RUB")
-        XCTAssertEqual(result["CNY"] ?? 0, 9.8 / 71.2, accuracy: 1e-9)
+        XCTAssertEqual(result["CNY"] ?? 0, 71.2 / 9.8, accuracy: 1e-9)
     }
 
     func test_toUSDBase_primaryRUB_missingUSD_returnsEmpty() {
@@ -84,12 +84,12 @@ final class CustomRateStoreTests: XCTestCase {
     // MARK: - toUSDBase: primary = USD
 
     func test_toUSDBase_primaryUSD_eurRate() {
-        // 1 EUR = 1.13 USD → cachedRates["EUR"] = 1.13/1.0 = 1.13
+        // primary=USD, 1 EUR = 1.13 USD → cachedRates["EUR"] = 1/1.13 (EUR за 1 USD, формат er-api)
         store.rates = ["EUR": 1.13, "CNY": 0.138]
         store.primaryForRates = "USD"
         let result = store.toUSDBase(currentPrimary: "USD")
-        XCTAssertEqual(result["EUR"] ?? 0, 1.13, accuracy: 1e-9)
-        XCTAssertEqual(result["CNY"] ?? 0, 0.138, accuracy: 1e-9)
+        XCTAssertEqual(result["EUR"] ?? 0, 1.0 / 1.13, accuracy: 1e-9)
+        XCTAssertEqual(result["CNY"] ?? 0, 1.0 / 0.138, accuracy: 1e-9)
     }
 
     func test_toUSDBase_primaryUSD_usdEntry_equalsOne() {
@@ -97,7 +97,7 @@ final class CustomRateStoreTests: XCTestCase {
         store.rates = ["USD": 1.0, "EUR": 1.13]
         store.primaryForRates = "USD"
         let result = store.toUSDBase(currentPrimary: "USD")
-        XCTAssertEqual(result["EUR"] ?? 0, 1.13, accuracy: 1e-9)
+        XCTAssertEqual(result["EUR"] ?? 0, 1.0 / 1.13, accuracy: 1e-9)
     }
 
     // MARK: - Case sensitivity

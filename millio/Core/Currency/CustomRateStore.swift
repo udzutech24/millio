@@ -46,7 +46,9 @@ struct CustomRateStore {
     // MARK: - USD-base conversion
 
     /// Конвертирует пользовательские курсы в USD-base для CurrencyRateService.cachedRates.
-    /// cachedRates[X] = «сколько USD за 1 X». USD в результат не включается — сервис всегда держит его как 1.0.
+    /// Формат совпадает с er-api: cachedRates[X] = «сколько X за 1 USD».
+    /// Например, cachedRates["RUB"]=72 означает 1 USD = 72 RUB.
+    /// USD в результат не включается — сервис всегда держит его как 1.0.
     func toUSDBase(currentPrimary: String) -> [String: Double] {
         // Нормализуем ключи к uppercase при чтении
         let r = rates.reduce(into: [String: Double]()) { $0[$1.key.uppercased()] = $1.value }
@@ -68,12 +70,13 @@ struct CustomRateStore {
             guard xPerForeign > 0 else { continue }
             // USD не сохраняем — CurrencyRateService обрабатывает его как 1.0 implicitly
             guard code != "USD" else { continue }
-            // cachedRates[code] = xPerForeign / usdInPrimary  (USD за 1 code)
-            result[code] = xPerForeign / usdInPrimary
+            // cachedRates[code] = «сколько code за 1 USD» = usdInPrimary / xPerForeign
+            // (xPerForeign = primary/code; usdInPrimary = primary/USD → результат = code/USD)
+            result[code] = usdInPrimary / xPerForeign
         }
-        // PRIMARY в USD-base: cachedRates[primary] = 1/usdInPrimary
+        // PRIMARY в USD-base: cachedRates[primary] = usdInPrimary (primary за 1 USD)
         if primary != "USD" {
-            result[primary] = 1.0 / usdInPrimary
+            result[primary] = usdInPrimary
         }
         return result
     }
