@@ -158,9 +158,14 @@ private struct FinancesContentViewInternal: View {
 
 struct FinancesSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject var viewModel: FinanceViewModel
     @Binding var accountSortMode: AccountSortMode
     let onOpenSavingsGoal: () -> Void
     let onOpenMassTickerImport: () -> Void
+
+    private var archivedAccounts: [ArchivedFinanceAccountRow] {
+        viewModel.archivedAccountRows()
+    }
 
     var body: some View {
         NavigationStack {
@@ -189,6 +194,21 @@ struct FinancesSettingsSheet: View {
                         )
                     }
                     .buttonStyle(.plain)
+
+                    if !archivedAccounts.isEmpty {
+                        NavigationLink {
+                            ArchivedFinanceAccountsView(
+                                viewModel: viewModel
+                            )
+                        } label: {
+                            settingsRow(
+                                title: financesLocalized("finances.settings.archived_accounts.title"),
+                                subtitle: financesLocalized("finances.settings.archived_accounts.subtitle"),
+                                icon: "archivebox.fill"
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
 
                     NavigationLink {
                         AccountSortPickerView(sortMode: $accountSortMode)
@@ -257,6 +277,108 @@ struct FinancesSettingsSheet: View {
                         .stroke(Color.white.opacity(0.15), lineWidth: 0.8)
                 )
         )
+    }
+}
+
+private struct ArchivedFinanceAccountsView: View {
+    @ObservedObject var viewModel: FinanceViewModel
+
+    private var accounts: [ArchivedFinanceAccountRow] {
+        viewModel.archivedAccountRows()
+    }
+
+    var body: some View {
+        ZStack {
+            GradientBackground()
+
+            ScrollView {
+                VStack(spacing: 10) {
+                    Text(financesLocalized("finances.settings.archived_accounts.notice"))
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                        .padding(.bottom, 4)
+
+                    ForEach(accounts) { account in
+                        archivedAccountRow(account)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 24)
+            }
+        }
+        .navigationTitle(financesLocalized("finances.settings.archived_accounts.title"))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func archivedAccountRow(_ account: ArchivedFinanceAccountRow) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: account.icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(width: 34, height: 34)
+                .background(Color.white.opacity(0.08))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(account.name)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+
+                Text(archivedSubtitle(for: account))
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 7) {
+                Text(amountText(for: account))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+
+                Button {
+                    viewModel.restoreArchivedAccount(account)
+                } label: {
+                    Text(financesLocalized("finances.settings.archived_accounts.restore"))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.15), lineWidth: 0.8)
+                )
+        )
+    }
+
+    private func archivedSubtitle(for account: ArchivedFinanceAccountRow) -> String {
+        let date = account.archivedAt.formatted(date: .abbreviated, time: .omitted)
+        if let groupName = account.groupName, !groupName.isEmpty {
+            return FinancesL10n.format("finances.settings.archived_accounts.subtitle_with_group", groupName, date)
+        }
+        return FinancesL10n.format("finances.settings.archived_accounts.subtitle_without_group", date)
+    }
+
+    private func amountText(for account: ArchivedFinanceAccountRow) -> String {
+        let symbol = MonetaCurrency(rawValue: account.currency)?.symbol ?? account.currency
+        return FinanceAmountText.withCurrency(value: account.amount, currencySymbol: symbol, isHidden: false)
     }
 }
 
@@ -353,6 +475,7 @@ struct FinancesMainTabView: View {
             .modifier(SheetsModifier(viewModel: viewModel))
             .sheet(isPresented: $showFinanceSettingsSheet) {
                 FinancesSettingsSheet(
+                    viewModel: viewModel,
                     accountSortMode: Binding(
                         get: { viewModel.state.accountSortMode },
                         set: { viewModel.handle(.setAccountSortMode($0)) }

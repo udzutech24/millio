@@ -588,7 +588,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return (try? modelContext.fetch(descriptor)) ?? []
     }
 
-    private func fallbackAccountsForCalculation() -> [FinanceAccount] {
+    private func fallbackAccountsForCalculation(includeArchivedForHistory: Bool = false) -> [FinanceAccount] {
         let groupsByID = Dictionary(uniqueKeysWithValues: state.groups.map { ($0.groupUniqueID, $0) })
         let selectedGroupIDs = state.selectedGroupIDs
         let selectedAccountIDs = state.selectedAccountIDs
@@ -608,7 +608,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             return true
         }
 
-        if state.showArchivedAccounts {
+        if includeArchivedForHistory || state.showArchivedAccounts {
             return accounts
         }
 
@@ -793,7 +793,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private func updateCurrentBalanceAndDelta(for selectedDate: Date?) async {
         if Task.isCancelled { return }
 
-        let accounts = getAccountsForCalculation()
+        let accounts = getAccountsForCalculation(includeArchivedForHistory: true)
         let (startDate, endDate) = resolvedPeriodDates(for: accounts)
         state.periodStartDate = startDate
         state.periodEndDate = endDate
@@ -874,7 +874,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     /// Получить счета для расчета (в зависимости от фильтров)
-    func getAccountsForCalculation() -> [FinanceAccount] {
+    func getAccountsForCalculation(includeArchivedForHistory: Bool = false) -> [FinanceAccount] {
         let groupsToShow = state.selectedGroupIDs.isEmpty
             ? state.groups
             : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
@@ -929,7 +929,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         
         let visibleAccounts: [FinanceAccount]
-        if state.showArchivedAccounts {
+        if includeArchivedForHistory || state.showArchivedAccounts {
             visibleAccounts = uniqueAccounts
         } else {
             visibleAccounts = uniqueAccounts.filter { !isAccountArchived($0) }
@@ -942,7 +942,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         // SwiftData relationships can be stale right after inserts/updates in tests and some
         // freshly-saved flows. Falling back to a direct account fetch keeps dynamics deterministic
         // instead of silently producing an empty chart.
-        return fallbackAccountsForCalculation()
+        return fallbackAccountsForCalculation(includeArchivedForHistory: includeArchivedForHistory)
     }
     
     /// Обновить распределение по валютам
@@ -1034,7 +1034,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             // Подготавливаем данные для групп до входа в TaskGroup
             let groupsData = await MainActor.run {
                 groupsToShow.enumerated().compactMap { index, groupItem -> (Int, String, String, [String], [String])? in
-                    let groupAccounts = self.orderedAccounts(in: groupItem)
+                    let groupAccounts = self.getAccounts(for: groupItem)
                     let filteredAccounts = selectedAccountIDs.isEmpty
                         ? groupAccounts
                         : groupAccounts.filter { selectedAccountIDs.contains($0.accountUniqueID) }
@@ -1065,7 +1065,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         }
 
                         let filteredAccounts = self
-                            .orderedAccounts(in: groupItem)
+                            .getAccounts(for: groupItem)
                             .filter { accountIDs.contains($0.accountUniqueID) }
                         guard !filteredAccounts.isEmpty else {
                             return (index, nil)
@@ -1236,13 +1236,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let revision = expectedRevision ?? nextChartUpdateRevision()
         guard isCurrentChartUpdateRevision(revision) else { return }
 
-        var accounts = getAccountsForCalculation()
+        var accounts = getAccountsForCalculation(includeArchivedForHistory: true)
         if accounts.isEmpty {
             reloadChartDataDependencies()
-            accounts = getAccountsForCalculation()
+            accounts = getAccountsForCalculation(includeArchivedForHistory: true)
         }
         if accounts.isEmpty {
-            accounts = fallbackAccountsForCalculation()
+            accounts = fallbackAccountsForCalculation(includeArchivedForHistory: true)
         }
         let period = resolvedPeriodDates(for: accounts)
         guard isCurrentChartUpdateRevision(revision) else { return }
@@ -1625,7 +1625,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         referenceDate: Date = Date(),
         calendar: Calendar = .current
     ) async -> [FinanceOverviewPeriodEntry] {
-        let accounts = getAccountsForCalculation()
+        let accounts = getAccountsForCalculation(includeArchivedForHistory: true)
         guard !accounts.isEmpty else { return [] }
 
         let normalizedReferenceDate = calendar.date(
@@ -2486,7 +2486,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         guard !sourceCurrencies.isEmpty else { return }
 
-        let accounts = getAccountsForCalculation()
+        let accounts = getAccountsForCalculation(includeArchivedForHistory: true)
         let (startDate, endDate) = resolvedPeriodDates(for: accounts)
         let calendar = Calendar.current
         let startDay = calendar.startOfDay(for: startDate)

@@ -179,9 +179,17 @@ struct CustomRateEditorView: View {
         store.rates = newRates
         store.primaryForRates = primaryCode
 
-        if RateSourcePreferenceStore.shared.preferred == .custom {
+        let isCustomSelected = RateSourcePreferenceStore.shared.preferred == .custom
+        if newRates.isEmpty && isCustomSelected {
+            // Откат на millio при очистке всех курсов
+            var prefStore = RateSourcePreferenceStore.shared
+            prefStore.preferred = .millio
+            CurrencyRateService.shared.setRateSource(.millio)
+            CurrencyWidgetSyncService.setString(RateSource.millio.rawValue, forKey: CurrencyWidgetShared.Keys.rateSource)
+        } else if isCustomSelected {
             CurrencyRateService.shared.setRateSource(.custom)
         }
+        CurrencyWidgetSyncService.syncCustomRates()
 
         onSave()
         dismiss()

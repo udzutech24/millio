@@ -287,6 +287,18 @@ struct FinanceLocalizationTests {
         )
         try assertLocalizedValue(
             strings: strings,
+            key: "finances.settings.archived_accounts.title",
+            locale: "ru",
+            equals: "Архивированные счета"
+        )
+        try assertLocalizedValue(
+            strings: strings,
+            key: "finances.settings.archived_accounts.subtitle",
+            locale: "en",
+            equals: "Restore hidden accounts"
+        )
+        try assertLocalizedValue(
+            strings: strings,
             key: "finances.settings.daily_audit.title",
             locale: "zh-Hans",
             equals: "每日余额快照"

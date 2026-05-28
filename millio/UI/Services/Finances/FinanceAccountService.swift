@@ -414,7 +414,7 @@ final class FinanceAccountService {
         }
 
         let kind = updateUnderlyingArchiveState(for: account, archivedAt: Date())
-        modelContext.delete(account)
+        account.updatedAt = Date()
 
         do {
             try modelContext.save()

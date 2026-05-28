@@ -252,6 +252,350 @@ struct FinanceDynamicsViewModelTests {
         #expect(allAccounts.count == 2)
     }
 
+    @Test("Архивация счёта с нулём сегодня не переписывает прошлый баланс динамики")
+    func testArchivedZeroBalanceAccountKeepsPastDynamicsBalance() async throws {
+        let modelContext = try createTestModelContext()
+        let now = Date()
+        let createdAt = now.addingTimeInterval(-3 * 86_400)
+        let yesterday = now.addingTimeInterval(-86_400)
+
+        let group = FinanceGroup(name: "История", colorHex: "#FFFFFF")
+        let card = Card(
+            name: "Историческая карта",
+            cardNumber: "4242",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 0
+        )
+        card.createdAt = createdAt
+        card.updatedAt = now
+        card.initialBalance = 10_000
+        card.hasInitialBalance = true
+
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+
+        modelContext.insert(group)
+        modelContext.insert(card)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+
+        let beforeArchive = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: yesterday,
+            accountCardIDs: [card.cardUniqueID],
+            debtAsNegative: true
+        )
+        #expect(abs(beforeArchive - 10_000) < 0.01)
+
+        financeViewModel.handle(.removeAccountFromGroup(account))
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+
+        let linksAfterArchive = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
+        let archivedLink = try #require(linksAfterArchive.first { $0.accountID == card.cardUniqueID })
+        let afterArchiveYesterday = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [archivedLink],
+            date: yesterday,
+            accountCardIDs: [card.cardUniqueID],
+            debtAsNegative: true
+        )
+        let afterArchiveNow = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [archivedLink],
+            date: now.addingTimeInterval(60),
+            accountCardIDs: [card.cardUniqueID],
+            debtAsNegative: true
+        )
+
+        #expect(abs(afterArchiveYesterday - 10_000) < 0.01)
+        #expect(abs(afterArchiveNow) < 0.01)
+    }
+
+    @Test("Архивация счёта: getAccountsForCalculation возвращает link и баланс за прошлые даты не меняется")
+    func testArchivedAccountIncludedInHistoricalCalculationViaCodePath() async throws {
+        let modelContext = try createTestModelContext()
+        let now = Date()
+        let createdAt = now.addingTimeInterval(-7 * 86_400)
+        let threeDaysAgo = now.addingTimeInterval(-3 * 86_400)
+        let yesterday = now.addingTimeInterval(-86_400)
+
+        // Сценарий: 10к на счёте, вчера снял всё → баланс 0, счёт удалён
+        let card = Card(
+            name: "Тест архив",
+            cardNumber: "9999",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 0
+        )
+        card.createdAt = createdAt
+        card.initialBalance = 10_000
+        card.hasInitialBalance = true
+
+        let transaction = CashflowTransaction(
+            transactionType: .expense,
+            amount: 10_000,
+            currency: "RUB",
+            transactionDate: yesterday,
+            cardID: card.cardUniqueID,
+            note: "Снятие"
+        )
+
+        let group = FinanceGroup(name: "Группа", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+
+        modelContext.insert(card)
+        modelContext.insert(transaction)
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+
+        // Баланс 3 дня назад (до расхода) = 10000
+        let balanceBefore = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: threeDaysAgo,
+            accountCardIDs: [card.cardUniqueID],
+            debtAsNegative: true
+        )
+        #expect(abs(balanceBefore - 10_000) < 0.01)
+
+        // Архивируем
+        financeViewModel.handle(.removeAccountFromGroup(account))
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+
+        // Link не должен удаляться из SwiftData
+        let links = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
+        #expect(links.contains { $0.accountID == card.cardUniqueID },
+                "FinanceAccount-link не должен удаляться при архивации")
+
+        // getAccountsForCalculation(includeArchivedForHistory:true) — реальный путь buildTimeSeriesData
+        let historicalAccounts = dynamicsViewModel.getAccountsForCalculation(includeArchivedForHistory: true)
+        #expect(historicalAccounts.contains { $0.accountID == card.cardUniqueID },
+                "Архивный счёт должен попасть в исторический расчёт через getAccountsForCalculation")
+
+        // Баланс 3 дня назад через тот же путь — не должен измениться
+        guard let archivedLink = historicalAccounts.first(where: { $0.accountID == card.cardUniqueID }) else {
+            Issue.record("Archived link not found via getAccountsForCalculation")
+            return
+        }
+        let balanceAfter = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [archivedLink],
+            date: threeDaysAgo,
+            accountCardIDs: [card.cardUniqueID],
+            debtAsNegative: true
+        )
+        #expect(abs(balanceAfter - 10_000) < 0.01,
+                "Исторический баланс не должен меняться после архивации счёта")
+    }
+
+    @Test("Groups breakdown скрывает archived-only Ungrouped при выключенном фильтре архивов")
+    func testGroupBreakdownHidesArchivedOnlyUngroupedByDefault() async throws {
+        let modelContext = try createTestModelContext()
+        let now = Date()
+        let createdAt = now.addingTimeInterval(-3 * 86_400)
+
+        let activeCard = Card(
+            name: "Active",
+            cardNumber: "1111",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 97_000_000
+        )
+        activeCard.createdAt = createdAt
+        activeCard.initialBalance = 97_000_000
+        activeCard.hasInitialBalance = true
+
+        let archivedCard = Card(
+            name: "Archived",
+            cardNumber: "2222",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 0
+        )
+        archivedCard.createdAt = createdAt
+        archivedCard.initialBalance = 10_000_000
+        archivedCard.hasInitialBalance = true
+        archivedCard.archivedAt = now
+
+        let activeGroup = FinanceGroup(name: "Вклады", colorHex: "#FFFFFF")
+        let ungroupedGroup = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: "#3C4B5E")
+
+        let activeAccount = FinanceAccount(accountType: .card, accountID: activeCard.cardUniqueID)
+        activeAccount.group = activeGroup
+        activeGroup.accounts = [activeAccount]
+
+        let archivedAccount = FinanceAccount(accountType: .card, accountID: archivedCard.cardUniqueID)
+        archivedAccount.group = ungroupedGroup
+        ungroupedGroup.accounts = [archivedAccount]
+
+        modelContext.insert(activeCard)
+        modelContext.insert(archivedCard)
+        modelContext.insert(activeGroup)
+        modelContext.insert(ungroupedGroup)
+        modelContext.insert(activeAccount)
+        modelContext.insert(archivedAccount)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.period = .day
+        dynamicsViewModel.state.viewMode = .groups
+
+        await dynamicsViewModel.updateDynamicsBreakdown()
+
+        let defaultItems = dynamicsViewModel.state.dynamicsBreakdown
+        #expect(defaultItems.map(\.name) == ["Вклады"])
+        #expect(abs(defaultItems.reduce(0) { $0 + $1.startValue } - 97_000_000) < 0.01)
+        #expect(abs(defaultItems.reduce(0) { $0 + $1.endValue } - 97_000_000) < 0.01)
+
+        dynamicsViewModel.handle(.setShowArchivedAccounts(true))
+        await dynamicsViewModel.updateDynamicsBreakdown()
+
+        #expect(dynamicsViewModel.state.dynamicsBreakdown.contains { $0.name == FinanceSystemGroups.ungroupedName })
+    }
+
+    @Test("Aggregated chart и header не переписывают историю после архивации счёта")
+    func testAggregatedChartAndHeaderPreserveHistoryAfterArchivingAccount() async throws {
+        let modelContext = try createTestModelContext()
+        let now = Date()
+        let createdAt = now.addingTimeInterval(-10 * 86_400)
+
+        let visibleCard = Card(
+            name: "Visible",
+            cardNumber: "1111",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 97_221_794
+        )
+        visibleCard.createdAt = createdAt
+        visibleCard.updatedAt = now
+        visibleCard.initialBalance = 97_566_945
+        visibleCard.hasInitialBalance = true
+
+        let archivedLaterCard = Card(
+            name: "Archived later",
+            cardNumber: "2222",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 0
+        )
+        archivedLaterCard.createdAt = createdAt
+        archivedLaterCard.updatedAt = now
+        archivedLaterCard.initialBalance = 10_000_000
+        archivedLaterCard.hasInitialBalance = true
+
+        let group = FinanceGroup(name: "Вклады", colorHex: "#FFFFFF")
+        let ungroupedGroup = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: "#3C4B5E")
+
+        let visibleAccount = FinanceAccount(accountType: .card, accountID: visibleCard.cardUniqueID)
+        visibleAccount.group = group
+        group.accounts = [visibleAccount]
+
+        let archivedLaterAccount = FinanceAccount(accountType: .card, accountID: archivedLaterCard.cardUniqueID)
+        archivedLaterAccount.group = ungroupedGroup
+        ungroupedGroup.accounts = [archivedLaterAccount]
+
+        modelContext.insert(visibleCard)
+        modelContext.insert(archivedLaterCard)
+        modelContext.insert(group)
+        modelContext.insert(ungroupedGroup)
+        modelContext.insert(visibleAccount)
+        modelContext.insert(archivedLaterAccount)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.period = .week
+        dynamicsViewModel.state.dynamicsMode = .aggregated
+        dynamicsViewModel.state.viewMode = .accounts
+
+        await dynamicsViewModel.updateCurrentBalanceAndDelta()
+        await dynamicsViewModel.updateChartDataAsync()
+
+        let beforeArchiveCurrentBalance = dynamicsViewModel.state.currentBalance
+        let beforeArchiveDelta = dynamicsViewModel.state.periodDelta.absolute
+        let beforeArchivePoints = dynamicsViewModel.state.chartData
+            .sorted { $0.date < $1.date }
+            .map(\.value)
+        #expect(!beforeArchivePoints.isEmpty)
+
+        financeViewModel.handle(.removeAccountFromGroup(archivedLaterAccount))
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.period = .week
+        dynamicsViewModel.state.dynamicsMode = .aggregated
+        dynamicsViewModel.state.viewMode = .accounts
+
+        await dynamicsViewModel.updateCurrentBalanceAndDelta()
+        await dynamicsViewModel.updateChartDataAsync()
+
+        let afterArchivePoints = dynamicsViewModel.state.chartData
+            .sorted { $0.date < $1.date }
+            .map(\.value)
+
+        #expect(abs(dynamicsViewModel.state.currentBalance - beforeArchiveCurrentBalance) < 0.01)
+        #expect(abs(dynamicsViewModel.state.periodDelta.absolute - beforeArchiveDelta) < 0.01)
+        #expect(afterArchivePoints.count == beforeArchivePoints.count)
+        for (before, after) in zip(beforeArchivePoints, afterArchivePoints) {
+            #expect(abs(after - before) < 0.01)
+        }
+    }
+
     @Test("Динамика для акций показывает короткий тикер вместо длинного имени")
     func testGetAccountInfoForDynamicsUsesShortTickerForStocks() throws {
         let modelContext = try createTestModelContext()

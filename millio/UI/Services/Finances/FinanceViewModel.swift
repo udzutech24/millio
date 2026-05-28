@@ -212,6 +212,18 @@ struct FinanceTradeCelebration: Equatable, Identifiable {
     }
 }
 
+struct ArchivedFinanceAccountRow: Identifiable, Equatable {
+    let id: String
+    let accountType: FinanceAccountType
+    let accountID: String
+    let name: String
+    let amount: Double
+    let currency: String
+    let icon: String
+    let archivedAt: Date
+    let groupName: String?
+}
+
 // MARK: - Finance Actions
 
 enum FinanceAction {
@@ -1410,6 +1422,85 @@ final class FinanceViewModel: ViewModelProtocol {
 
     private func restoreArchivedAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
         accountService.restoreArchivedAccountToGroup(accountType: accountType, accountID: accountID, group: group)
+        loadAccounts()
+        loadGroups()
+        calculateTotalAmount()
+        if accountType == .card { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
+        if accountType == .credit { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
+    }
+
+    func archivedAccountRows() -> [ArchivedFinanceAccountRow] {
+        let links = fetchFinanceAccountLinks()
+        let groupsByAccount = Dictionary(
+            links.map { ("\($0.accountTypeRaw)|\($0.accountID)", $0.group?.name) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        let cardRows = state.archivedCards.map { card in
+            let snapshot = CardSnapshotFactory.make(from: card)
+            let amount = snapshot.isCreditCard ? snapshot.debtAmount : snapshot.availableAmount
+            return ArchivedFinanceAccountRow(
+                id: "card|\(card.cardUniqueID)",
+                accountType: .card,
+                accountID: card.cardUniqueID,
+                name: snapshot.name,
+                amount: amount,
+                currency: snapshot.currency,
+                icon: snapshot.icon,
+                archivedAt: card.archivedAt ?? card.updatedAt,
+                groupName: groupsByAccount["card|\(card.cardUniqueID)"] ?? nil
+            )
+        }
+
+        let creditRows = state.archivedCredits.map { credit in
+            ArchivedFinanceAccountRow(
+                id: "credit|\(credit.creditUniqueID)",
+                accountType: .credit,
+                accountID: credit.creditUniqueID,
+                name: credit.name,
+                amount: credit.remainingAmount,
+                currency: credit.currency,
+                icon: credit.creditType.icon,
+                archivedAt: credit.archivedAt ?? credit.updatedAt,
+                groupName: groupsByAccount["credit|\(credit.creditUniqueID)"] ?? nil
+            )
+        }
+
+        let investmentRows = state.archivedInvestments.map { investment in
+            ArchivedFinanceAccountRow(
+                id: "investment|\(investment.investmentUniqueID)",
+                accountType: .investment,
+                accountID: investment.investmentUniqueID,
+                name: investmentDisplayName(investment),
+                amount: investment.amount,
+                currency: resolvedInvestmentCurrency(investment),
+                icon: investment.category.icon,
+                archivedAt: investment.archivedAt ?? investment.updatedAt,
+                groupName: groupsByAccount["investment|\(investment.investmentUniqueID)"] ?? nil
+            )
+        }
+
+        return (cardRows + creditRows + investmentRows).sorted { lhs, rhs in
+            if lhs.archivedAt != rhs.archivedAt {
+                return lhs.archivedAt > rhs.archivedAt
+            }
+            return lhs.name.localizedCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    func restoreArchivedAccount(_ row: ArchivedFinanceAccountRow) {
+        let targetGroup = preferredRestoreGroup(accountType: row.accountType, accountID: row.accountID)
+        handle(.restoreArchivedAccountToGroup(accountType: row.accountType, accountID: row.accountID, group: targetGroup))
+    }
+
+    private func preferredRestoreGroup(accountType: FinanceAccountType, accountID: String) -> FinanceGroup? {
+        fetchFinanceAccountLinks()
+            .first { $0.accountType == accountType && $0.accountID == accountID }?
+            .group
+    }
+
+    private func fetchFinanceAccountLinks() -> [FinanceAccount] {
+        (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
     }
 
     private func editAccount(_ account: FinanceAccount) {

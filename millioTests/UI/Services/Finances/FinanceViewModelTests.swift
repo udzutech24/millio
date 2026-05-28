@@ -2929,8 +2929,8 @@ struct FinanceViewModelTests {
         #expect(createdLink.group?.name == ungroupedName)
     }
 
-    @Test("Удаление карты из финансов архивирует Card и удаляет FinanceAccount")
-    func testRemoveCardAccountFromGroupArchivesUnderlyingAndDeletesLink() async throws {
+    @Test("Удаление карты из финансов архивирует Card и сохраняет FinanceAccount для истории")
+    func testRemoveCardAccountFromGroupArchivesUnderlyingAndKeepsLink() async throws {
         let modelContext = try createTestModelContext()
         let currencyService = MockCurrencyRateService()
 
@@ -2958,15 +2958,16 @@ struct FinanceViewModelTests {
         viewModel.handle(.removeAccountFromGroup(accountLink))
 
         let linksAfter = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
-        #expect(linksAfter.isEmpty)
+        #expect(linksAfter.count == 1)
+        #expect(linksAfter.first?.accountID == card.cardUniqueID)
 
         let cards = try modelContext.fetch(FetchDescriptor<Card>())
         let updatedCard = try #require(cards.first)
         #expect(updatedCard.archivedAt != nil)
     }
 
-    @Test("Удаление кредита из финансов архивирует Credit и удаляет FinanceAccount")
-    func testRemoveCreditAccountFromGroupArchivesUnderlyingAndDeletesLink() async throws {
+    @Test("Удаление кредита из финансов архивирует Credit и сохраняет FinanceAccount для истории")
+    func testRemoveCreditAccountFromGroupArchivesUnderlyingAndKeepsLink() async throws {
         let modelContext = try createTestModelContext()
         let currencyService = MockCurrencyRateService()
 
@@ -3001,15 +3002,16 @@ struct FinanceViewModelTests {
         viewModel.handle(.removeAccountFromGroup(accountLink))
 
         let linksAfter = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
-        #expect(linksAfter.isEmpty)
+        #expect(linksAfter.count == 1)
+        #expect(linksAfter.first?.accountID == credit.creditUniqueID)
 
         let credits = try modelContext.fetch(FetchDescriptor<Credit>())
         let updatedCredit = try #require(credits.first)
         #expect(updatedCredit.archivedAt != nil)
     }
 
-    @Test("Удаление инвестиции из финансов архивирует Investment и удаляет FinanceAccount")
-    func testRemoveInvestmentAccountFromGroupArchivesUnderlyingAndDeletesLink() async throws {
+    @Test("Удаление инвестиции из финансов архивирует Investment и сохраняет FinanceAccount для истории")
+    func testRemoveInvestmentAccountFromGroupArchivesUnderlyingAndKeepsLink() async throws {
         let modelContext = try createTestModelContext()
         let currencyService = MockCurrencyRateService()
 
@@ -3034,7 +3036,8 @@ struct FinanceViewModelTests {
         viewModel.handle(.removeAccountFromGroup(accountLink))
 
         let linksAfter = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
-        #expect(linksAfter.isEmpty)
+        #expect(linksAfter.count == 1)
+        #expect(linksAfter.first?.accountID == investment.investmentUniqueID)
 
         let investments = try modelContext.fetch(FetchDescriptor<Investment>())
         let updatedInvestment = try #require(investments.first)

@@ -429,9 +429,9 @@ struct FinanceLifecycleIntegrationTests {
         #expect(storedCard != nil)
         #expect(storedCard?.archivedAt != nil)
 
-        // FinanceAccount удалена из store
+        // FinanceAccount остаётся в store, чтобы историческая аналитика не переписывалась.
         let links = (try? harness.modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
-        #expect(!links.contains { $0.accountID == cardID })
+        #expect(links.contains { $0.accountID == cardID })
     }
 
     @Test("Quick edit и транзакционный путь дают одинаковый итоговый баланс после реоткрытия VM")
