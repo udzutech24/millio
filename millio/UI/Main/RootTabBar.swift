@@ -46,7 +46,7 @@ struct RootTabBar: View {
         .padding(.bottom, 12)
         .overlay(alignment: .bottom) {
             fabMenuOverlay
-                .offset(y: -88)
+                .offset(y: -108)
         }
     }
 
@@ -57,27 +57,29 @@ struct RootTabBar: View {
             fabPill(
                 title: MainLocalization.text(MainLocalization.quickActionIncome),
                 action: .income,
+                borderColor: Color(red: 0.22, green: 0.88, blue: 0.44),
                 openDelay: 0
             )
 
             fabPill(
                 title: MainLocalization.text(MainLocalization.quickActionExpense),
                 action: .expense,
+                borderColor: Color(red: 1.0, green: 0.32, blue: 0.32),
                 openDelay: 0.07
             )
         }
         .allowsHitTesting(showFABMenu)
     }
 
-    private func fabPill(title: String, action: FABAction, openDelay: Double) -> some View {
+    private func fabPill(title: String, action: FABAction, borderColor: Color, openDelay: Double) -> some View {
         Button {
             onFABAction(action)
         } label: {
             Text(title)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
-                .padding(.horizontal, 22)
-                .padding(.vertical, 13)
+                .padding(.horizontal, 26)
+                .padding(.vertical, 16)
                 .background {
                     ZStack {
                         Capsule().fill(.ultraThinMaterial)
@@ -88,18 +90,11 @@ struct RootTabBar: View {
                                 endPoint: .bottom
                             )
                         )
-                        Capsule().strokeBorder(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.38), Color.white.opacity(0.08)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 1
-                        )
+                        Capsule().strokeBorder(borderColor.opacity(0.85), lineWidth: 1.5)
                     }
                 }
-                .shadow(color: .black.opacity(0.40), radius: 18, x: 0, y: 6)
-                .shadow(color: .black.opacity(0.18), radius: 4, x: 0, y: 2)
+                .shadow(color: borderColor.opacity(0.30), radius: 14, x: 0, y: 4)
+                .shadow(color: .black.opacity(0.35), radius: 6, x: 0, y: 2)
         }
         .buttonStyle(.plain)
         .opacity(showFABMenu ? 1 : 0)

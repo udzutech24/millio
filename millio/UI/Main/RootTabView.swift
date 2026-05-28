@@ -92,6 +92,12 @@ struct RootTabView: View {
         .onChange(of: appState.pendingOpenCashflowIncome) { _, _ in consumePendingDeepLinks() }
         .onChange(of: appState.pendingOpenCashflowHistory) { _, _ in consumePendingDeepLinks() }
         .onChange(of: appState.primaryCurrencyCode) { _, _ in ensureViewModels() }
+        .onChange(of: router.selectedTab) { _, _ in
+            guard showFABMenu else { return }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.80)) {
+                showFABMenu = false
+            }
+        }
         .onChange(of: router.pendingFABAction) { _, action in
             guard let action else { return }
             router.pendingFABAction = nil
@@ -409,6 +415,7 @@ struct FinancesSettingsSheetWrapper: View {
 
     var body: some View {
         FinancesSettingsSheet(
+            viewModel: viewModel,
             accountSortMode: Binding(
                 get: { viewModel.state.accountSortMode },
                 set: { viewModel.handle(.setAccountSortMode($0)) }
