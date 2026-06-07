@@ -106,6 +106,9 @@
 - параллельные тестовые гонки (XCTest с `parallel-testing` enabled)
 - stale expectations после изменения copy или контракта
 - order-dependent tests (тест A падает только после теста B)
+- finance dynamics: chart/header/breakdown используют разный visible scope; архив включать только явным фильтром или historical API
+- finance create-flow: после save нового продукта reload account caches должен идти до рендера групп; иначе link есть, а UI скрывает счёт как unresolved
+- finance archive-flow: не удалять `FinanceAccount` link, если продукт архивируется; link нужен historical replay
 
 Работай максимально экономно по токенам и контексту. См. также `Recurring Test Problem Classes` в [`docs/MULTILINGUAL_HARDENING_PLAN.md`](docs/MULTILINGUAL_HARDENING_PLAN.md).
 

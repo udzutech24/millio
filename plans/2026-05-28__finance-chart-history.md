@@ -1,21 +1,47 @@
 # План: Finance Chart History — корректная история портфеля
 
-**Статус:** НЕ НАЧАТ  
+**Статус:** В РАБОТЕ
 **Создан:** 2026-05-28  
 **Размер:** L  
 **Бранч:** `feature/finance-chart-history`
 
 ---
 
-## Root cause (итог анализа)
+## Root cause (итог анализа, верифицировано 2026-05-31)
 
-**Bug 1 — Reconcile слишком широкий** (`FinanceDynamicsViewModel`, ~стр. 1857–1878)
+### Данные целы — проблема в scope фильтрации
 
-`date.addingTimeInterval(1) >= liveStateEffectiveDate`, где `liveStateEffectiveDate = max(lastTrackedCardChangeDate, card.updatedAt)`. При архивировании счёта `updatedAt = now` → reconcile применяется ко всем сегодняшним точкам → аномальный скачок.
+`calculateBalanceAtDate` через replay транзакций корректно восстанавливает прошлые значения и **не зависит от архивации**. История не потеряна.
 
-**Trigger:** пользователь заархивировал счёт → `card.updatedAt = now` → все точки дня «снэпятся» к live-балансу, хотя transaction replay без reconcile даёт корректные исторические значения.
+**Настоящий root cause:** `updateChartDataAsync:1239` фильтрует счета до visible-набора (`filter по isArchived=false`, строка ~935) → для архивного счёта `calculateBalanceAtDate` вообще не вызывается → все исторические точки = 0.
 
-**Системная проблема:** `calculateBalanceAtDate` — гибридная функция (replay + reconcile + conversion). Reconcile компенсирует неполную историю (ручная правка баланса без balanceAdjustment), но делает это неточно по дате. При масштабировании функция становится ненадёжной и медленной.
+Тот же эффект: `archivedAccountRows` показывает текущий баланс (0 после архивации), а не баланс на момент `archivedAt`.
+
+**Архитектурный конфликт:** история строится из *текущего состояния* счетов, а не хранится иммутабельно. Поэтому «исторический scope (включать архивные)» и «visible scope (только активные для header/breakdown)» — взаимоисключающи в одном проходе.
+
+---
+
+### Развилка: Вариант A vs Вариант B
+
+**Вариант A — быстрый scope-фикс (hotfix, S)**
+- Объём: ~3 строки + тест, 0.5 дня
+- `updateChartDataAsync:1239,1242` → `getAccountsForCalculation(includeArchivedForHistory: true)` только для chart series; header/breakdown остаются visible-scope
+- Восстановить тест неизменности истории после архивации в `FinanceDynamicsViewModelTests.swift` (сейчас маскирует регрессию)
+- **Даёт:** прошлые точки графика возвращаются
+- **Known issue:** chart с архивным счётом показывает суммарный баланс выше, чем breakdown (visible-only) — «деньги визуально не сходятся». Решается маркировкой архивных строк серым + сноска «счёт в архиве»
+- **Не решает:** список архивных всё ещё показывает текущий 0
+
+**Вариант B — иммутабельные снэпшоты (Phase 1, L)**
+- Объём: 10+ файлов, новая модель + миграция, ~2-3 недели
+- `PortfolioSnapshot` (SwiftData) — пишется при каждом значимом изменении; история = чтение снимков, а не replay
+- Решает всё: архивация физически не может изменить прошлый снимок; chart/header/breakdown единый источник → всегда согласованы; архивный показывает баланс на `archivedAt`
+- Риск: бэкофилл у живых пользователей
+
+**Рекомендация:** Вариант A сейчас (снять острую боль), Phase 1 — плановая работа. Расхождение chart↔breakdown — явный known issue до перехода на снимки.
+
+---
+
+**Bug 1 (устаревший анализ, для истории)** — Reconcile слишком широкий (`FinanceDynamicsViewModel`, ~стр. 1857–1878): `date.addingTimeInterval(1) >= liveStateEffectiveDate` → при архивации `updatedAt = now` → reconcile на всех точках дня. Этот эффект реален, но вторичен относительно scope-фильтра выше.
 
 ---
 
@@ -80,6 +106,47 @@ if Calendar.current.isDateInToday(date) {
 - Тест: после архивирования счёта исторические точки до `archivedAt` содержат баланс этого счёта
 
 **Gate:** тесты зелёные → коммит → TestFlight.
+
+### Журнал 2026-05-30 — current visible scope
+
+- [~] Current header переведён на visible-scope набор счетов, что и нижний breakdown.
+- [ ] Исправить временный ряд: chart history должен включать архивные счета до `archivedAt`.
+- [x] Заменить слишком грубый regression-тест на split-scope контракт: current header совпадает с breakdown, historical series сохраняет архив. (code review FIX #1/#2/#3/#5, тест зелёный)
+- [ ] Пройти остальные пункты Phase 0 по reconcile today-only отдельно.
+
+### `[ ]` Phase 0.4: Account lifecycle + split visible/historical scope
+
+**Цель:** новые карты появляются сразу после сохранения, архивирование не
+удаляет прошлое из графика.
+
+**Research:** [`thoughts/research/2026-05-30-finance-account-lifecycle-history.md`](../thoughts/research/2026-05-30-finance-account-lifecycle-history.md)
+
+**Файлы:**
+
+- `millio/UI/Services/Finances/FinanceAccountService.swift`
+- `millio/UI/Services/Finances/FinanceGroupService.swift`
+- `millio/UI/Services/Finances/FinanceDynamicsViewModel.swift`
+- `millioTests/UI/Services/Finances/FinanceViewModelTests.swift`
+- `millioTests/UI/Services/Finances/FinanceDynamicsViewModelTests.swift`
+
+**Шаги:**
+
+1. `[ ]` TDD: новая карта видна в `FinanceViewModel` сразу после `.addAccountToGroup`, без ручного `.loadAccounts`.
+2. `[ ]` После save в `addAccountToGroup()` обновить accounts cache и groups в безопасном порядке.
+3. `[ ]` TDD: удаление группы архивирует underlying-счета, но сохраняет `FinanceAccount` links для истории.
+4. `[ ]` В `deleteGroup()` не удалять links: отвязать их от удаляемой группы, затем дать cleanup перенести архивные links в системную группу.
+5. `[~]` TDD: после архивации historical chart содержит баланс счёта до `archivedAt`, current header совпадает с visible breakdown. (тест `testAggregatedChartAndHeaderMatchVisibleBreakdownAfterArchivingAccount` зелёный; chart history до `archivedAt` — ещё открыт)
+6. `[~]` Разделить scope: chart series использует historical accounts, current header/breakdown — visible accounts. (`updateDynamicsBreakdown` переведён на clamped `state.periodStartDate`/`periodEndDate` вместо `getPeriodDates()` — chart и breakdown теперь на одном интервале; полное split-scope разделение не завершено)
+7. `[~]` Прогнать `FinanceViewModelTests` и `FinanceDynamicsViewModelTests` на `iPhone 17 Pro Max`. (FinanceDynamicsViewModelTests — TEST SUCCEEDED; FinanceViewModelTests — не прогонялись)
+
+**Self-audit:**
+
+- Новая карта появляется без закрытия/повторного открытия экрана.
+- Архивный счёт не влияет на текущий итог после `archivedAt`.
+- Архивный счёт влияет на исторические точки до `archivedAt`.
+- Удаление группы не уничтожает link, нужный replay.
+
+**Guard phrase для старта:** «Реализуй фазу 0.4 по плану».
 
 ---
 
@@ -444,3 +511,5 @@ Phase 4:    PortfolioCalculating протокол + compression
 |------|-----|
 | 2026-05-28 | v1: план создан |
 | 2026-05-28 | v2: полный пересмотр по ревью. Исправлено: O(days×tx) → инкрементальный calculator; строгая модель снэпшота; Cashflow → Phase 0.5; reconcile не удаляется, сужается; полный список триггеров инвалидации; account-level breakdown; снэпшоты — local cache, не backup; explicit migration gates |
+| 2026-05-31 | Попытка Phase 0.4 откатана после визуальной регрессии графика. Нельзя просто смешивать historical chart series с visible header/breakdown: перед повторной реализацией нужен доказанный UI-контракт и визуальная проверка графика. |
+| 2026-06-01 | Phase 0.4: применены 5 исправлений code review. `updateDynamicsBreakdown` переведён на clamped `state.periodStartDate/periodEndDate` (chart и breakdown на одном интервале). Тест `testAggregatedChartAndHeaderMatchVisibleBreakdownAfterArchivingAccount` усилен (FIX #1 явный `archivedAt`, FIX #2 before-snapshot + assertions >1M, FIX #3 guard на непустой breakdown, FIX #5 порядок state-assignments) — TEST SUCCEEDED. Остаётся: chart history с архивом до `archivedAt`, полный split-scope, прогон FinanceViewModelTests, визуальная проверка графика. |

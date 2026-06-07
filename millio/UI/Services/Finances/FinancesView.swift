@@ -466,7 +466,7 @@ struct FinancesMainTabView: View {
     // что гарантирует onChange-срабатывание через SwiftData-нотификацию
     private var cardBalanceHash: Int {
         _allCards.reduce(0) { acc, card in
-            acc ^ Int(card.balance.bitPattern) ^ card.cardUniqueID.hashValue
+            acc ^ card.balance.hashValue ^ card.cardUniqueID.hashValue
         }
     }
 
