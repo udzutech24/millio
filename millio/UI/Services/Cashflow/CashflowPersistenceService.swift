@@ -42,6 +42,8 @@ final class CashflowPersistenceService {
     private let onDismissEditor: () -> Void
     private let onEditorIsShowing: () -> Bool
     private let onEditingTransactionMatchesExplicit: (CashflowTransaction) -> Bool
+    // Вызывается после успешного сохранения транзакции — fire-and-forget для внешних подписчиков
+    private let onTransactionSaved: (() -> Void)?
 
     // MARK: - Init
 
@@ -62,7 +64,8 @@ final class CashflowPersistenceService {
         onSetDeleteErrorMessage: @escaping (String?) -> Void,
         onDismissEditor: @escaping () -> Void,
         onEditorIsShowing: @escaping () -> Bool,
-        onEditingTransactionMatchesExplicit: @escaping (CashflowTransaction) -> Bool
+        onEditingTransactionMatchesExplicit: @escaping (CashflowTransaction) -> Bool,
+        onTransactionSaved: (() -> Void)? = nil
     ) {
         self.modelContext = modelContext
         self.now = now
@@ -81,6 +84,7 @@ final class CashflowPersistenceService {
         self.onDismissEditor = onDismissEditor
         self.onEditorIsShowing = onEditorIsShowing
         self.onEditingTransactionMatchesExplicit = onEditingTransactionMatchesExplicit
+        self.onTransactionSaved = onTransactionSaved
     }
 
     // MARK: - Public: Сохранение транзакции
@@ -311,6 +315,7 @@ final class CashflowPersistenceService {
                     onDismissEditor()
                 }
             }
+            onTransactionSaved?()
             return true
         } catch {
             AppLogger.log(.error, category: "Cashflow", "Failed to save transaction: \(error.localizedDescription)")

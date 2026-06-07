@@ -498,6 +498,17 @@ struct ProfileView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("profile.backupLink")
 
+        case .googleSheets:
+            NavigationLink {
+                SheetsConnectionView()
+            } label: {
+                settingsRow(item: .googleSheets, title: "sheets.menu.title") {
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.googleSheetsLink")
+
         case .security:
             NavigationLink {
                 AppSecuritySettingsView()

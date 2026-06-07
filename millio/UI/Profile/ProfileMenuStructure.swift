@@ -78,6 +78,7 @@ enum ProfileMenuItemID: String, Identifiable {
     case primaryCurrency
     case rateSource
     case backup
+    case googleSheets
     case security
     case dailyReminders
     case quickSetup
@@ -108,6 +109,8 @@ enum ProfileMenuItemID: String, Identifiable {
             return "arrow.triangle.2.circlepath"
         case .backup:
             return "arrow.clockwise.icloud"
+        case .googleSheets:
+            return "tablecells"
         case .security:
             return "lock.shield"
         case .dailyReminders:
@@ -153,6 +156,8 @@ enum ProfileMenuItemID: String, Identifiable {
             return .teal
         case .backup:
             return .cyan
+        case .googleSheets:
+            return .green
         case .security:
             return .green
         case .dailyReminders:
@@ -224,6 +229,7 @@ enum ProfileMenuStructure {
                 id: .settings,
                 items: [
                     .backup,
+                    .googleSheets,
                     .security,
                     .dailyReminders
                 ]

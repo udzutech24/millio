@@ -29,6 +29,23 @@ struct APIClientFactory {
         )
     }
 
+    func makeSheetsExportService(
+        authService: any AuthServiceProtocol,
+        session: any HTTPSessionProtocol = URLSession.shared
+    ) -> any SheetsExportServiceProtocol {
+        SheetsExportServiceImpl(
+            authService: authService,
+            configurationProvider: authConfigurationProvider(),
+            session: session
+        )
+    }
+
+    func makeSheetsExportTrigger(
+        exportService: any SheetsExportServiceProtocol
+    ) -> SheetsExportTrigger {
+        SheetsExportTrigger(exportService: exportService)
+    }
+
     func authConfigurationProvider() -> @Sendable () throws -> AuthConfiguration {
         let configuration = runtime.authConfiguration
         return { configuration }

@@ -19,6 +19,7 @@ struct RootTabView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.diContainer) private var diContainer
 
     // Отдельные стеки для каждого таба
     @State private var dashboardPath = NavigationPath()
@@ -333,7 +334,10 @@ struct RootTabView: View {
 
     private func ensureCashflowViewModel() {
         if cashflowViewModel == nil {
-            let vm = CashflowViewModel(modelContext: modelContext)
+            let vm = CashflowViewModel(
+                modelContext: modelContext,
+                sheetsExportTrigger: diContainer?.sheetsExportTrigger
+            )
             vm.handle(.syncDisplayCurrencyWithPrimary(appState.primaryCurrencyCode))
             vm.handle(.loadCards)
             vm.handle(.loadTransactions)

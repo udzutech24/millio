@@ -16,14 +16,18 @@ final class DIContainer {
     let backupManager: BackupManagerProtocol
     let authService: any AuthServiceProtocol
     let apiClientFactory: APIClientFactory
-    
+    let sheetsExportService: any SheetsExportServiceProtocol
+    let sheetsExportTrigger: SheetsExportTrigger
+
     init(
         appState: AppState,
         modelContainer: ModelContainer,
         dataRepository: DataRepositoryProtocol,
         backupManager: BackupManagerProtocol,
         authService: any AuthServiceProtocol,
-        apiClientFactory: APIClientFactory
+        apiClientFactory: APIClientFactory,
+        sheetsExportService: any SheetsExportServiceProtocol,
+        sheetsExportTrigger: SheetsExportTrigger
     ) {
         self.appState = appState
         self.modelContainer = modelContainer
@@ -31,6 +35,8 @@ final class DIContainer {
         self.backupManager = backupManager
         self.authService = authService
         self.apiClientFactory = apiClientFactory
+        self.sheetsExportService = sheetsExportService
+        self.sheetsExportTrigger = sheetsExportTrigger
     }
     
     @MainActor
@@ -65,14 +71,18 @@ final class DIContainer {
         }
         let apiClientFactory = APIClientFactory(runtime: backendRuntime)
         let authService: any AuthServiceProtocol = apiClientFactory.makeAuthService()
-        
+        let sheetsExportService = apiClientFactory.makeSheetsExportService(authService: authService)
+        let sheetsExportTrigger = apiClientFactory.makeSheetsExportTrigger(exportService: sheetsExportService)
+
         return DIContainer(
             appState: appState,
             modelContainer: modelContainer,
             dataRepository: dataRepository,
             backupManager: backupManager,
             authService: authService,
-            apiClientFactory: apiClientFactory
+            apiClientFactory: apiClientFactory,
+            sheetsExportService: sheetsExportService,
+            sheetsExportTrigger: sheetsExportTrigger
         )
     }
 }

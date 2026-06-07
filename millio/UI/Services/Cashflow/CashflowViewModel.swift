@@ -32,6 +32,8 @@ final class CashflowViewModel: ViewModelProtocol {
     private var eventSubscriptionID: UUID?
     private var restoreReloadTask: Task<Void, Never>?
     private var rateSourceObserver: NSObjectProtocol?
+    // Опциональный — не все экземпляры VM используют экспорт (например, тесты, Preview)
+    private let sheetsExportTrigger: SheetsExportTrigger?
 
     // MARK: - Services
     let historyService: CashflowHistoryService
@@ -135,6 +137,13 @@ final class CashflowViewModel: ViewModelProtocol {
             onEditorIsShowing: { [weak self] in self?.state.showTransactionEditor ?? false },
             onEditingTransactionMatchesExplicit: { [weak self] explicit in
                 self?.state.editingTransaction?.persistentModelID == explicit.persistentModelID
+            },
+            onTransactionSaved: { [weak self] in
+                guard let self, let trigger = sheetsExportTrigger else { return }
+                // Собираем снимок данных на момент сохранения и передаём в триггер.
+                // ViewModel владеет modelContext — Trigger не имеет доступа к SwiftData.
+                let exportData = self.buildExportData()
+                Task { await trigger.notifyTransactionAdded(with: exportData) }
             }
         )
     }()
@@ -144,8 +153,10 @@ final class CashflowViewModel: ViewModelProtocol {
         notificationManager: NotificationManagerProtocol? = nil,
         now: @escaping () -> Date = Date.init,
         assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)? = nil,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        sheetsExportTrigger: SheetsExportTrigger? = nil
     ) {
+        self.sheetsExportTrigger = sheetsExportTrigger
         self.modelContext = modelContext
         self.historicalRateStore = HistoricalRateStore(modelContext: modelContext)
         self.historyService = CashflowHistoryService(modelContext: modelContext)
@@ -388,6 +399,23 @@ final class CashflowViewModel: ViewModelProtocol {
         let descriptor = FetchDescriptor<Investment>()
         let allInvestments = (try? modelContext.fetch(descriptor)) ?? []
         state.availableInvestments = allInvestments.filter { $0.archivedAt == nil }
+    }
+
+    // MARK: - Sheets Export
+
+    /// Собирает полный снимок данных для отправки в Google Sheets.
+    /// Вызывается при сохранении транзакции — данные актуальны на момент вызова.
+    func buildExportData() -> MillioExportData {
+        let transactions = state.transactions
+        let cards = state.allCards
+        let budgets: [BudgetPlan] = (try? modelContext.fetch(FetchDescriptor<BudgetPlan>())) ?? []
+        let investments: [Investment] = (try? modelContext.fetch(FetchDescriptor<Investment>())) ?? []
+        return SheetsDataMapper.buildExportData(
+            transactions: transactions,
+            cards: cards,
+            budgets: budgets,
+            investments: investments
+        )
     }
 
     func loadBudgetPlanForCurrentPeriod() {
