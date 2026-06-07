@@ -11,7 +11,6 @@ import SwiftData
 struct FinanceCreateCardView: View {
     @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     
@@ -82,7 +81,7 @@ struct FinanceCreateCardView: View {
                             showPaywallAlert = true
                             return
                         }
-                        cardViewModel = CardViewModel(modelContext: modelContext)
+                        cardViewModel = CardViewModel(modelContext: viewModel.modelContext)
                         cardViewModel?.handle(.addCard)
                     }
             }
@@ -103,7 +102,6 @@ struct FinanceCreateCardView: View {
 struct FinanceCreateCreditView: View {
     @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     
@@ -174,7 +172,7 @@ struct FinanceCreateCreditView: View {
                             showPaywallAlert = true
                             return
                         }
-                        creditViewModel = CreditViewModel(modelContext: modelContext)
+                        creditViewModel = CreditViewModel(modelContext: viewModel.modelContext)
                         creditViewModel?.handle(.addCredit)
                     }
             }
@@ -195,7 +193,6 @@ struct FinanceCreateCreditView: View {
 struct FinanceCreateInvestmentView: View {
     @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     
@@ -266,7 +263,7 @@ struct FinanceCreateInvestmentView: View {
                             showPaywallAlert = true
                             return
                         }
-                        investmentViewModel = InvestmentViewModel(modelContext: modelContext)
+                        investmentViewModel = InvestmentViewModel(modelContext: viewModel.modelContext)
                         investmentViewModel?.handle(.addInvestment())
                     }
             }

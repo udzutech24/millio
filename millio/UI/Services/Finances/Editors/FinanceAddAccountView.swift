@@ -17,7 +17,6 @@ struct FinanceAddAccountView: View {
     let preselectedAccountType: FinanceAccountType?
     let presentationStyle: FinanceEditorPresentationStyle
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.locale) private var locale
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
@@ -498,10 +497,10 @@ struct FinanceAddAccountView: View {
 
         let maxOrder = viewModel.state.groups.map(\.order).max() ?? -1
         let newGroup = FinanceGroup(name: suggestedName, colorHex: recommendation.accentHex, order: maxOrder + 1)
-        modelContext.insert(newGroup)
+        viewModel.modelContext.insert(newGroup)
 
         do {
-            try modelContext.save()
+            try viewModel.modelContext.save()
             viewModel.handle(.loadGroups)
             selectedGroupID = newGroup.groupUniqueID
         } catch {
@@ -528,7 +527,7 @@ struct FinanceAddAccountView: View {
                         ProgressView()
                             .tint(AppColors.textPrimary)
                             .task {
-                                let vm = CardViewModel(modelContext: modelContext)
+                                let vm = CardViewModel(modelContext: viewModel.modelContext)
                                 if let editingCard {
                                     vm.handle(.editCard(editingCard))
                                 } else {
@@ -563,7 +562,7 @@ struct FinanceAddAccountView: View {
                         ProgressView()
                             .tint(AppColors.textPrimary)
                             .task {
-                                let vm = CreditViewModel(modelContext: modelContext)
+                                let vm = CreditViewModel(modelContext: viewModel.modelContext)
                                 if let editingCredit {
                                     vm.handle(.editCredit(editingCredit))
                                 } else {
@@ -593,7 +592,7 @@ struct FinanceAddAccountView: View {
                         ProgressView()
                             .tint(AppColors.textPrimary)
                             .task {
-                                let vm = InvestmentViewModel(modelContext: modelContext)
+                                let vm = InvestmentViewModel(modelContext: viewModel.modelContext)
                                 if let editingInvestment {
                                     vm.handle(.editInvestment(editingInvestment))
                                 } else {
@@ -893,21 +892,21 @@ struct FinanceAddAccountView: View {
             } else if let editingCard {
                 let editingID = editingCard.cardUniqueID
                 let descriptor = FetchDescriptor<FinanceAccount>()
-                let accountLink = (try? modelContext.fetch(descriptor))?.first(where: {
+                let accountLink = (try? viewModel.modelContext.fetch(descriptor))?.first(where: {
                     $0.accountType == .card && $0.accountID == editingID
                 })
                 selectedGroupID = accountLink?.group?.groupUniqueID
             } else if let editingCredit {
                 let editingID = editingCredit.creditUniqueID
                 let descriptor = FetchDescriptor<FinanceAccount>()
-                let accountLink = (try? modelContext.fetch(descriptor))?.first(where: {
+                let accountLink = (try? viewModel.modelContext.fetch(descriptor))?.first(where: {
                     $0.accountType == .credit && $0.accountID == editingID
                 })
                 selectedGroupID = accountLink?.group?.groupUniqueID
             } else if let editingInvestment {
                 let editingID = editingInvestment.investmentUniqueID
                 let descriptor = FetchDescriptor<FinanceAccount>()
-                let accountLink = (try? modelContext.fetch(descriptor))?.first(where: {
+                let accountLink = (try? viewModel.modelContext.fetch(descriptor))?.first(where: {
                     $0.accountType == .investment && $0.accountID == editingID
                 })
                 selectedGroupID = accountLink?.group?.groupUniqueID
