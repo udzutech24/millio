@@ -124,10 +124,18 @@ final class FinanceGroupService {
         let now = Date()
         var didAffectCards = false
         var didAffectCredits = false
+        let archiveGroup = FinanceSystemGroups.ensureUngroupedGroup(in: modelContext)
+        let shouldDeleteGroup = archiveGroup.groupUniqueID != group.groupUniqueID
+        var nextArchiveOrder = nextAccountOrder(in: archiveGroup)
 
         if let accounts = group.accounts {
             for account in accounts {
                 onArchiveUnderlying(account, now)
+                account.group = archiveGroup
+                account.order = nextArchiveOrder
+                account.updatedAt = now
+                nextArchiveOrder += 1
+
                 switch account.accountType {
                 case .card:
                     didAffectCards = true
@@ -136,11 +144,12 @@ final class FinanceGroupService {
                 case .investment:
                     break
                 }
-                modelContext.delete(account)
             }
         }
 
-        modelContext.delete(group)
+        if shouldDeleteGroup {
+            modelContext.delete(group)
+        }
 
         do {
             try modelContext.save()

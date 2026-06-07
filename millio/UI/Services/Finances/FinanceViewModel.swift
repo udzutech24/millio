@@ -391,6 +391,7 @@ final class FinanceViewModel: ViewModelProtocol {
                 self?.creditByID = payload.creditByID
                 self?.investmentByID = payload.investmentByID
             },
+            onLoadAccounts: { [weak self] in self?.loadAccounts() },
             onLoadGroups: { [weak self] in self?.loadGroups() },
             onUpdateUnattachedItems: { [weak self] in self?.updateUnattachedItems() },
             onCalculateTotal: { [weak self] in self?.calculateTotalAmount() },

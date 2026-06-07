@@ -419,6 +419,68 @@ struct FinanceDynamicsViewModelTests {
                 "Исторический баланс не должен меняться после архивации счёта")
     }
 
+    @Test("Удаление группы сохраняет archived link доступным для historical replay")
+    func testDeleteGroupPreservesArchivedLinkForHistoricalCalculation() async throws {
+        let modelContext = try createTestModelContext()
+        let now = Date()
+        let createdAt = now.addingTimeInterval(-7 * 86_400)
+        let threeDaysAgo = now.addingTimeInterval(-3 * 86_400)
+
+        let card = Card(
+            name: "Group deleted card",
+            cardNumber: "7777",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 10_000
+        )
+        card.createdAt = createdAt
+        card.initialBalance = 10_000
+        card.hasInitialBalance = true
+
+        let group = FinanceGroup(name: "Удаляемая", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+
+        modelContext.insert(card)
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        financeViewModel.handle(.deleteGroup(group))
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+
+        let links = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
+        let preservedLink = try #require(links.first { $0.accountID == card.cardUniqueID })
+        #expect(preservedLink.group?.name == FinanceSystemGroups.ungroupedName)
+        #expect(card.archivedAt != nil)
+
+        let historicalAccounts = dynamicsViewModel.getAccountsForCalculation(includeArchivedForHistory: true)
+        #expect(historicalAccounts.contains { $0.accountID == card.cardUniqueID },
+                "Archived link из удалённой группы должен оставаться достижимым для historical replay")
+
+        let balance = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: historicalAccounts,
+            date: threeDaysAgo,
+            accountCardIDs: [card.cardUniqueID],
+            debtAsNegative: true
+        )
+        #expect(abs(balance - 10_000) < 0.01)
+    }
+
     @Test("Groups breakdown скрывает archived-only Ungrouped при выключенном фильтре архивов")
     func testGroupBreakdownHidesArchivedOnlyUngroupedByDefault() async throws {
         let modelContext = try createTestModelContext()
@@ -497,8 +559,8 @@ struct FinanceDynamicsViewModelTests {
         #expect(dynamicsViewModel.state.dynamicsBreakdown.contains { $0.name == FinanceSystemGroups.ungroupedName })
     }
 
-    @Test("Aggregated chart и header не переписывают историю после архивации счёта")
-    func testAggregatedChartAndHeaderPreserveHistoryAfterArchivingAccount() async throws {
+    @Test("Aggregated chart и header используют тот же набор счетов, что и нижний breakdown")
+    func testAggregatedChartAndHeaderMatchVisibleBreakdownAfterArchivingAccount() async throws {
         let modelContext = try createTestModelContext()
         let now = Date()
         let createdAt = now.addingTimeInterval(-10 * 86_400)
@@ -522,7 +584,7 @@ struct FinanceDynamicsViewModelTests {
             bank: .other,
             cardType: .debit,
             currency: "RUB",
-            balance: 0
+            balance: 10_000_000
         )
         archivedLaterCard.createdAt = createdAt
         archivedLaterCard.updatedAt = now
@@ -564,18 +626,19 @@ struct FinanceDynamicsViewModelTests {
         dynamicsViewModel.state.dynamicsMode = .aggregated
         dynamicsViewModel.state.viewMode = .accounts
 
+        // FIX #2: snapshot ДО архивации — доказывает, что архивация реально изменила данные
         await dynamicsViewModel.updateCurrentBalanceAndDelta()
         await dynamicsViewModel.updateChartDataAsync()
+        let beforeArchivePoints = dynamicsViewModel.state.chartData.sorted { $0.date < $1.date }
+        let beforeArchiveBalance = dynamicsViewModel.state.currentBalance
 
-        let beforeArchiveCurrentBalance = dynamicsViewModel.state.currentBalance
-        let beforeArchiveDelta = dynamicsViewModel.state.periodDelta.absolute
-        let beforeArchivePoints = dynamicsViewModel.state.chartData
-            .sorted { $0.date < $1.date }
-            .map(\.value)
-        #expect(!beforeArchivePoints.isEmpty)
+        // FIX #1: явно выставляем archivedAt, чтобы isAccountArchived не зависел от
+        // порядка эвентов между removeAccountFromGroup и перестройкой cardsCache
+        archivedLaterCard.archivedAt = now
 
         financeViewModel.handle(.removeAccountFromGroup(archivedLaterAccount))
         dynamicsViewModel.handle(.loadData)
+        // FIX #5: state.dynamicsMode и viewMode выставляем строго ПОСЛЕ второго waitUntil
         await waitUntil { !dynamicsViewModel.state.isLoading }
         dynamicsViewModel.state.period = .week
         dynamicsViewModel.state.dynamicsMode = .aggregated
@@ -583,17 +646,37 @@ struct FinanceDynamicsViewModelTests {
 
         await dynamicsViewModel.updateCurrentBalanceAndDelta()
         await dynamicsViewModel.updateChartDataAsync()
+        await dynamicsViewModel.updateDynamicsBreakdown()
 
-        let afterArchivePoints = dynamicsViewModel.state.chartData
+        let chartPoints = dynamicsViewModel.state.chartData
             .sorted { $0.date < $1.date }
-            .map(\.value)
+        let breakdown = dynamicsViewModel.state.dynamicsBreakdown
 
-        #expect(abs(dynamicsViewModel.state.currentBalance - beforeArchiveCurrentBalance) < 0.01)
-        #expect(abs(dynamicsViewModel.state.periodDelta.absolute - beforeArchiveDelta) < 0.01)
-        #expect(afterArchivePoints.count == beforeArchivePoints.count)
-        for (before, after) in zip(beforeArchivePoints, afterArchivePoints) {
-            #expect(abs(after - before) < 0.01)
+        // FIX #3: явная проверка что в breakdown только visibleAccount (архивированный исключён)
+        #expect(breakdown.count == 1, "только visibleAccount должен быть в breakdown — архивированный счёт убран")
+
+        let breakdownStart = breakdown.reduce(0) { $0 + $1.startValue }
+        let breakdownEnd = breakdown.reduce(0) { $0 + $1.endValue }
+        let expectedDelta = breakdownEnd - breakdownStart
+
+        // FIX #2: утверждаем, что архивация реально убрала архивированный счёт из данных
+        #expect(!beforeArchivePoints.isEmpty, "до архивации должны быть точки на графике")
+        #expect(beforeArchiveBalance - dynamicsViewModel.state.currentBalance > 1_000_000,
+                "После архивации баланс должен уменьшиться на сумму архивированного счёта (~10M)")
+        if let firstBefore = beforeArchivePoints.first, let firstAfter = chartPoints.first {
+            #expect(firstBefore.value - firstAfter.value > 1_000_000,
+                    "Начальная точка графика должна уменьшиться после архивации (~10M initialBalance)")
         }
+
+        #expect(!chartPoints.isEmpty)
+        #expect(abs((chartPoints.first?.value ?? 0) - breakdownStart) < 0.01,
+                "Старт графика должен совпадать со стартом нижнего breakdown, без скрытых архивных счетов")
+        #expect(abs((chartPoints.last?.value ?? 0) - breakdownEnd) < 0.01,
+                "Финиш графика должен совпадать с endValue нижнего breakdown")
+        #expect(abs(dynamicsViewModel.state.currentBalance - breakdownEnd) < 0.01,
+                "Header currentBalance должен совпадать с нижним endValue")
+        #expect(abs(dynamicsViewModel.state.periodDelta.absolute - expectedDelta) < 0.01,
+                "Header delta должен совпадать с нижней дельтой")
     }
 
     @Test("Динамика для акций показывает короткий тикер вместо длинного имени")

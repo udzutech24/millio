@@ -2623,8 +2623,8 @@ struct FinanceViewModelTests {
         #expect(didPublish, "При удалении карты должно публиковаться событие обновления списка карт")
     }
 
-    @Test("Удаление группы архивирует все привязанные счета и удаляет связи")
-    func testDeleteGroupArchivesAccountsAndRemovesLinks() throws {
+    @Test("Удаление группы архивирует счета и сохраняет links в системной группе")
+    func testDeleteGroupArchivesAccountsAndPreservesLinksInUngroupedGroup() throws {
         let modelContext = try createTestModelContext()
 
         let group = FinanceGroup(name: "Группа", colorHex: "#FF0000")
@@ -2687,10 +2687,13 @@ struct FinanceViewModelTests {
         viewModel.handle(.deleteGroup(groupToDelete))
 
         let groups = (try? modelContext.fetch(FetchDescriptor<FinanceGroup>())) ?? []
-        #expect(groups.isEmpty)
+        #expect(!groups.contains { $0.groupUniqueID == group.groupUniqueID })
+
+        let ungroupedGroup = try #require(groups.first { $0.name == FinanceSystemGroups.ungroupedName })
 
         let links = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
-        #expect(links.isEmpty)
+        #expect(links.count == 3)
+        #expect(links.allSatisfy { $0.group?.groupUniqueID == ungroupedGroup.groupUniqueID })
 
         let cards = (try? modelContext.fetch(FetchDescriptor<Card>())) ?? []
         let credits = (try? modelContext.fetch(FetchDescriptor<Credit>())) ?? []
@@ -2703,6 +2706,7 @@ struct FinanceViewModelTests {
         #expect(updatedCard?.archivedAt != nil)
         #expect(updatedCredit?.archivedAt != nil)
         #expect(updatedInvestment?.archivedAt != nil)
+        #expect(viewModel.visibleGroupsForList().isEmpty)
     }
 
     @Test("Восстановление из архива сбрасывает archivedAt и выставляет новую дату при повторной архивации")
@@ -3214,6 +3218,102 @@ struct FinanceViewModelTests {
 
         let infoAfter = viewModel.getAccountInfo(account: account)
         #expect(infoAfter?.amount == 13_111.0, "После updateAccountAmount getAccountInfo должен вернуть новый баланс без дополнительного loadAccounts")
+    }
+
+    @Test("addAccountToGroup сразу обновляет кэш счетов и показывает новый счёт в списке")
+    func testAddAccountToGroupReloadsAccountsCacheAndShowsNewAccountImmediately() throws {
+        let modelContext = try createTestModelContext()
+        EventBus.shared.removeAllSubscribers()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        #expect(viewModel.visibleGroupsForList().isEmpty)
+
+        let card = Card(
+            name: "Новая карта",
+            cardNumber: "0004",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 42_000.0
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        viewModel.handle(.addAccountToGroup(
+            accountType: .card,
+            accountID: card.cardUniqueID,
+            group: nil
+        ))
+
+        let visibleGroup = try #require(viewModel.visibleGroupsForList().first)
+        #expect(visibleGroup.name == L("finances.group.ungrouped"))
+
+        let orderedAccounts = viewModel.orderedAccounts(for: visibleGroup)
+        let addedAccount = try #require(orderedAccounts.first)
+
+        #expect(addedAccount.accountID == card.cardUniqueID)
+        #expect(viewModel.getAccountInfo(account: addedAccount)?.amount == 42_000.0)
+    }
+
+    @Test("FinanceAccountService.addAccountToGroup обновляет кэш перед группами")
+    func testAddAccountToGroupReloadsAccountsBeforeGroups() throws {
+        let modelContext = try createTestModelContext()
+        var callbackOrder: [String] = []
+        var loadedCardIDs: Set<String> = []
+
+        let group = FinanceGroup(name: "Сервисная группа", colorHex: "#FFFFFF")
+        let card = Card(
+            name: "Сервисная карта",
+            cardNumber: "0005",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 15_000.0
+        )
+        modelContext.insert(group)
+        modelContext.insert(card)
+        try modelContext.save()
+
+        var service: FinanceAccountService!
+        service = FinanceAccountService(
+            modelContext: modelContext,
+            ungroupedGroupName: L("finances.group.ungrouped"),
+            groupsProvider: { [group] },
+            nextOrderProvider: { _ in 0 },
+            onAccountsLoaded: { payload in
+                loadedCardIDs = Set(payload.availableCards.map(\.cardUniqueID))
+                callbackOrder.append("loadAccounts")
+            },
+            onCachesRebuilt: { _ in },
+            onLoadAccounts: {
+                service.loadAccounts()
+            },
+            onLoadGroups: {
+                callbackOrder.append("loadGroups")
+            },
+            onUpdateUnattachedItems: {},
+            onCalculateTotal: {
+                callbackOrder.append("calculateTotal")
+            },
+            onScheduleGroupTotalRefresh: { _ in
+                callbackOrder.append("scheduleRefresh")
+            },
+            onDismissAddAccountSheet: {
+                callbackOrder.append("dismiss")
+            }
+        )
+
+        service.addAccountToGroup(accountType: .card, accountID: card.cardUniqueID, group: group)
+
+        #expect(loadedCardIDs.contains(card.cardUniqueID))
+        #expect(callbackOrder.prefix(2) == ["loadAccounts", "loadGroups"])
     }
 
     @Test("EventBus cardsUpdated вызывает loadAccounts и обновляет getAccountInfo")

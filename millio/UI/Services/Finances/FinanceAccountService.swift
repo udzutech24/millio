@@ -58,6 +58,7 @@ final class FinanceAccountService {
     /// Вернуть перестроенные кэши доступных счетов в VM
     private let onCachesRebuilt: (CachesRebuiltPayload) -> Void
 
+    private let onLoadAccounts: () -> Void
     private let onLoadGroups: () -> Void
     private let onUpdateUnattachedItems: () -> Void
     private let onCalculateTotal: () -> Void
@@ -79,6 +80,7 @@ final class FinanceAccountService {
         nextOrderProvider: @escaping (FinanceGroup) -> Int,
         onAccountsLoaded: @escaping (AccountsLoadedPayload) -> Void,
         onCachesRebuilt: @escaping (CachesRebuiltPayload) -> Void,
+        onLoadAccounts: @escaping () -> Void,
         onLoadGroups: @escaping () -> Void,
         onUpdateUnattachedItems: @escaping () -> Void,
         onCalculateTotal: @escaping () -> Void,
@@ -91,6 +93,7 @@ final class FinanceAccountService {
         self.nextOrderProvider = nextOrderProvider
         self.onAccountsLoaded = onAccountsLoaded
         self.onCachesRebuilt = onCachesRebuilt
+        self.onLoadAccounts = onLoadAccounts
         self.onLoadGroups = onLoadGroups
         self.onUpdateUnattachedItems = onUpdateUnattachedItems
         self.onCalculateTotal = onCalculateTotal
@@ -398,6 +401,7 @@ final class FinanceAccountService {
 
         do {
             try modelContext.save()
+            onLoadAccounts()
             onLoadGroups()
             onCalculateTotal()
             onScheduleGroupTotalRefresh(targetGroup.groupUniqueID)
