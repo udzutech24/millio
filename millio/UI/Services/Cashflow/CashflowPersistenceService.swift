@@ -127,6 +127,7 @@ final class CashflowPersistenceService {
 
         do {
             try modelContext.save()
+            publishTransactionsUpdated()
             if recalculate {
                 onCardsUpdated()
                 onInvestmentsUpdated()
@@ -145,6 +146,7 @@ final class CashflowPersistenceService {
         do {
             try modelContext.save()
             restorePreservedAccountBalancesIfNeeded(preservedBalances)
+            publishTransactionsUpdated()
             onTransactionsSnapshotMutated()
         } catch {
             AppLogger.log(.error, category: "Cashflow", "Failed to delete transaction without recalculation: \(error.localizedDescription)")
@@ -303,6 +305,7 @@ final class CashflowPersistenceService {
         do {
             try modelContext.save()
             publishAffectedAccountEvents(affectedEvents)
+            publishTransactionsUpdated()
             onTransactionsMutated()
             if dismissEditorOnSuccess {
                 let shouldDismiss: Bool
@@ -725,6 +728,10 @@ final class CashflowPersistenceService {
                 EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             }
         }
+    }
+
+    private func publishTransactionsUpdated() {
+        EventBus.shared.publish(FinanceEvent.transactionsUpdated)
     }
 
     // MARK: - Private: Сохранение/восстановление балансов

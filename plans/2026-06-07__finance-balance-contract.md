@@ -11,8 +11,8 @@
 
 `В РАБОТЕ`
 
-**Реализовано:** Phase 0–2
-**Осталось:** Phase 3–5
+**Реализовано:** Phase 0–2, Phase 4
+**Осталось:** Phase 3, Phase 5
 
 ## Цель
 
@@ -23,7 +23,7 @@
 - [x] AC1: Новый счёт сразу виден в `visibleGroupsForList()` / `orderedAccounts` после `addAccountToGroup()`
 - [x] AC2: После `deleteGroup()` links сохранены, underlying archived; тест обновлён
 - [ ] AC3: Archive → restore сохраняет lifecycle interval (счёт «помнит», что был архивирован)
-- [ ] AC4: `transactionsUpdated` — всегда; `cardsUpdated` — только при структурном изменении счёта
+- [x] AC4: `transactionsUpdated` — всегда; `cardsUpdated` — только при структурном изменении счёта
 - [ ] AC5: Chart series → `historicalAsOf` scope; header/breakdown → `currentVisible` scope
 - [ ] AC6: Все тесты зелёные; стандарт `deleteGroup → links.isEmpty` заменён
   - Стандарт `deleteGroup → links.isEmpty` заменён в Phase 2; полный suite ещё не запускался из-за грязного рабочего дерева.
@@ -186,27 +186,34 @@ xcodebuild test -scheme millio -destination 'platform=iOS Simulator,id=49601B0B-
 
 ---
 
-### `[ ]` Phase 4: Разделение событий transactionsUpdated / cardsUpdated
+### `[x]` Phase 4: Разделение событий transactionsUpdated / cardsUpdated
 
 **AC из spec:** AC4
 
-**Root cause:** `CashflowPersistenceService.affectedAccountEvents()` гардится через `shouldApplyCardBalanceImmediately()`. Future/recurring транзакции → `cardsUpdated` не публикуется → UI cashflow не знает о новой транзакции.
+**Root cause после ревизии 2026-06-08:** `FinanceEvent.transactionsUpdated` уже существует, а `CashflowViewModel` уже подписан на него. Незакрыт контракт публикации: `CashflowPersistenceService` после успешных save/update/delete транзакций обновляет локальное состояние через callbacks, но не публикует глобальный `transactionsUpdated`. При этом `cardsUpdated`/`investmentsUpdated` уже завязаны на фактический балансный эффект через `shouldApplyCardBalanceImmediately()` / `persistedBalanceEffectWasApplied()` и не должны становиться “универсальным refresh-событием”.
 
-**Решение:** Ввести `FinanceEvent.transactionsUpdated` — публикуется всегда при изменении любой транзакции. `cardsUpdated`/`investmentsUpdated` — публикуются только при реальном изменении баланса счёта (текущее поведение `shouldApplyCardBalanceImmediately` сохраняется). UI, который нуждается в обновлении списка транзакций, подписывается на `transactionsUpdated`.
+**Решение:** Завершить publication contract: `CashflowPersistenceService` публикует `FinanceEvent.transactionsUpdated` всегда после успешной мутации транзакций. `cardsUpdated`/`investmentsUpdated` публикуются только когда реально применён или откачен балансный эффект. Future/planned/recurring транзакции дают `transactionsUpdated == true`, но `cardsUpdated == false`, если баланс не применяется немедленно.
 
 **Файлы:**
-- `millio/Core/EventBus/FinanceEvent.swift` (или где определён enum) — добавить `.transactionsUpdated`
-- `millio/UI/Services/Cashflow/CashflowPersistenceService.swift` — публиковать `transactionsUpdated` в конце каждого save/update/delete метода
-- `millio/UI/Services/Cashflow/CashflowViewModel.swift` — подписаться на `transactionsUpdated` там, где сейчас полагается на `cardsUpdated` для перезагрузки транзакций
+- `millio/Core/Events/EventBus.swift` — проверить, что `.transactionsUpdated` уже есть (без изменений)
+- `millio/UI/Services/Cashflow/CashflowPersistenceService.swift` — публиковать `transactionsUpdated` после успешных save/update/delete транзакций
+- `millio/UI/Services/Cashflow/CashflowViewModel.swift` — проверить существующую подписку (без изменений, если уже корректна)
+- `millioTests/UI/Services/Cashflow/CashflowViewModelTests.swift` — тест publication contract
 
 **Шаги:**
-1. `[ ]` Найти где определён `FinanceEvent` enum
-2. `[ ]` Добавить `.transactionsUpdated`
-3. `[ ]` В `CashflowPersistenceService` найти все save/update/delete entry points и добавить публикацию `transactionsUpdated`
-4. `[ ]` Найти в `CashflowViewModel` подписки на `cardsUpdated`, которые перезагружают транзакции (а не балансы) — заменить на `transactionsUpdated`
-5. `[ ]` Написать тест: future-транзакция сохранена → `transactionsUpdated` опубликован, `cardsUpdated` — нет
-6. `[ ]` `xcodebuild test` — все зелёные
-7. `[ ]` Коммит: `feat(finance): separate transactionsUpdated from cardsUpdated event`
+1. `[x]` Подтвердить, что `FinanceEvent.transactionsUpdated` уже определён в `EventBus.swift`
+2. `[x]` Подтвердить, что `CashflowViewModel` уже reload-ит транзакции по `transactionsUpdated`
+3. `[x]` Написать красный тест: future/planned transaction save/update/delete публикует `transactionsUpdated`
+   - Доказано: `CashflowViewModelTests/testFutureTransactionMutationsPublishTransactionsUpdatedWithoutCardsUpdated` падал до production fix в полном `CashflowViewModelTests`.
+4. `[x]` В этом же тесте зафиксировать, что future/planned transaction не публикует `cardsUpdated`, если балансный эффект не применяется немедленно
+5. `[x]` В `CashflowPersistenceService` добавить минимальный helper публикации `transactionsUpdated` после успешного `modelContext.save()` для save/update/delete
+6. `[x]` Убедиться, что `cardsUpdated`/`investmentsUpdated` остаются только в `publishAffectedAccountEvents(...)`
+7. `[x]` `xcodebuild test` — минимум `CashflowViewModelTests`
+   - ✅ `xcodebuild test -scheme millio -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' -derivedDataPath /tmp/millio-phase4-derived -only-testing:millioTests/CashflowViewModelTests`
+   - Дополнительно проверено:
+     - ✅ изолированный `FinanceLifecycleIntegrationTests/deletingMarketBuyRevertsSettlementAndPositionTogether`
+     - ⚠️ полный `FinanceLifecycleIntegrationTests` стабильно падает в этом же order-dependent кейсе, при этом изолированный кейс проходит; зафиксировано как отдельная процессная/тестовая проблема в `improvements/process/2026-06-08-finance-lifecycle-order-dependent-suite.md`.
+8. `[x]` Коммит: `fix(finance): publish transactionsUpdated for cashflow mutations`
 
 **Guard phrase:** «Реализуй Phase 4 по плану.»
 

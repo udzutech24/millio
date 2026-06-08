@@ -589,6 +589,94 @@ extension CashflowViewModelTests {
         #expect(viewModel.state.transactions.first?.note == "Тест")
     }
 
+    @Test("Future transaction mutations publish transactionsUpdated without cardsUpdated")
+    func testFutureTransactionMutationsPublishTransactionsUpdatedWithoutCardsUpdated() async throws {
+        EventBus.shared.removeAllSubscribers()
+        defer { EventBus.shared.removeAllSubscribers() }
+
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+        let futureDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 18, hour: 9)) ?? fixedNow
+
+        let card = Card(
+            name: "Main",
+            cardNumber: "1010",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+
+        var transactionsUpdatedCount = 0
+        var cardsUpdatedCount = 0
+        let subscriptionID = EventBus.shared.subscribe { event in
+            switch event {
+            case FinanceEvent.transactionsUpdated:
+                transactionsUpdatedCount += 1
+            case FinanceEvent.cardsUpdated:
+                cardsUpdatedCount += 1
+            default:
+                break
+            }
+        }
+        defer { EventBus.shared.unsubscribe(subscriptionID) }
+
+        func resetEventCounters() {
+            transactionsUpdatedCount = 0
+            cardsUpdatedCount = 0
+        }
+
+        let plannedExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 250,
+            currency: "RUB",
+            transactionDate: futureDate,
+            cardID: card.cardUniqueID,
+            expenseCategory: .bills,
+            affectsCardBalance: true
+        )
+
+        let didSave = await viewModel.persistTransaction(plannedExpense)
+
+        #expect(didSave)
+        #expect(transactionsUpdatedCount == 1)
+        #expect(cardsUpdatedCount == 0)
+        #expect(abs(card.balance - 1_000) < 0.01)
+        let saved = try #require(viewModel.state.transactions.first)
+
+        resetEventCounters()
+        let updatedExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: futureDate,
+            cardID: card.cardUniqueID,
+            expenseCategory: .bills,
+            affectsCardBalance: true
+        )
+
+        let didUpdate = await viewModel.persistTransaction(updatedExpense, replacing: saved)
+
+        #expect(didUpdate)
+        #expect(transactionsUpdatedCount == 1)
+        #expect(cardsUpdatedCount == 0)
+        #expect(abs(card.balance - 1_000) < 0.01)
+
+        resetEventCounters()
+        viewModel.handle(.deleteTransaction(saved, recalculate: true))
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            transactionsUpdatedCount == 1
+        }
+        #expect(cardsUpdatedCount == 0)
+        #expect(abs(card.balance - 1_000) < 0.01)
+    }
+
     @Test("Cashflow обновляет список карт по событию cardsUpdated")
     func testCardsUpdatedEventReloadsCards() async throws {
         let modelContext = try createTestModelContext()
