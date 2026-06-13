@@ -857,7 +857,9 @@ struct CashflowScheduledTransactionsView: View {
         switch mode {
         case .recurring:
             createRecurrenceRule = .monthly
-            createInitialDate = Date()
+            let cal = Calendar.current
+            let thisMonthStart = cal.date(from: cal.dateComponents([.year, .month], from: Date())) ?? Date()
+            createInitialDate = cal.date(byAdding: .month, value: 1, to: thisMonthStart) ?? Date()
             showCreateSheet = true
         case .planner:
             createPlannedForSelectedDate()
