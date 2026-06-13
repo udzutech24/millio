@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 // MARK: - SheetsConnectionView
 
@@ -8,6 +9,7 @@ struct SheetsConnectionView: View {
 
     @Environment(\.diContainer) private var diContainer
     @Environment(\.openURL) private var openURL
+    @Environment(\.modelContext) private var modelContext
 
     @State private var status: SheetsExportStatus = .disconnected
     @State private var isLoading = false
@@ -129,6 +131,15 @@ struct SheetsConnectionView: View {
 
             // Кнопки действий
             HStack(spacing: AppSpacing.m) {
+                Button {
+                    Task { await syncNow() }
+                } label: {
+                    Label(L("sheets.connected.syncButton"), systemImage: "arrow.triangle.2.circlepath")
+                        .font(.millioCaption)
+                        .foregroundStyle(AppColors.profileValueAccent)
+                }
+                .disabled(isLoading)
+
                 if let sheetURL = status.spreadsheetURL {
                     Button {
                         openURL(sheetURL)
@@ -169,6 +180,28 @@ struct SheetsConnectionView: View {
     }
 
     // MARK: - Действия
+
+    private func syncNow() async {
+        guard let service = diContainer?.sheetsExportService else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let transactions = try modelContext.fetch(FetchDescriptor<CashflowTransaction>())
+            let cards = try modelContext.fetch(FetchDescriptor<Card>())
+            let budgets = try modelContext.fetch(FetchDescriptor<BudgetPlan>())
+            let investments = try modelContext.fetch(FetchDescriptor<Investment>())
+            let exportData = SheetsDataMapper.buildExportData(
+                transactions: transactions,
+                cards: cards,
+                budgets: budgets,
+                investments: investments
+            )
+            _ = try await service.syncNow(with: exportData)
+            await refreshStatus()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 
     private func refreshStatus() async {
         guard let service = diContainer?.sheetsExportService else { return }

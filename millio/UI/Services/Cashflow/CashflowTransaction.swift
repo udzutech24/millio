@@ -847,7 +847,9 @@ final class CashflowTransaction: Persistable {
     /// Операция должна участвовать в метриках доходов/расходов Cashflow.
     /// Optional-флаг позволяет без миграции корректно скрыть legacy settlement-транзакции
     /// от market buy/sell, которые раньше сохранялись как обычные income/expense.
+    /// Recurring-шаблоны исключены: они маркеры настройки, учитываются через сгенерированные экземпляры.
     var shouldAffectCashflowTotals: Bool {
+        if isRecurringTemplate { return false }
         if let affectsCashflowTotals {
             return affectsCashflowTotals
         }

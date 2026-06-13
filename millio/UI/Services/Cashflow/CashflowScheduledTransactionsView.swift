@@ -81,6 +81,25 @@ struct CashflowScheduledTransactionsView: View {
         filteredPlannerEntries.first
     }
 
+    /// Сумма повторяющихся поступлений/расходов в месяц, сгруппированная по валюте.
+    private var recurringMonthlyTotals: [(currency: String, amount: Double)] {
+        var totals: [String: Double] = [:]
+        for t in recurringTransactions {
+            let monthly: Double
+            switch t.recurrenceRule {
+            case .monthly:     monthly = t.amount
+            case .quarterly:   monthly = t.amount / 3
+            case .semiannual:  monthly = t.amount / 6
+            case .yearly:      monthly = t.amount / 12
+            case .weekly:      monthly = t.amount * (52.0 / 12.0)
+            case .none:        monthly = t.amount
+            }
+            totals[t.currency, default: 0] += monthly
+        }
+        return totals.map { (currency: $0.key, amount: $0.value) }
+            .sorted { $0.currency < $1.currency }
+    }
+
     private var plannerMonthlyCount: Int {
         filteredPlannerEntries.filter { $0.kind == .recurringMonthly }.count
     }
@@ -209,6 +228,9 @@ struct CashflowScheduledTransactionsView: View {
 
     @ViewBuilder
     private var recurringContent: some View {
+        if !recurringTransactions.isEmpty {
+            listCard(recurringTotalCard)
+        }
         if filteredTransactions.isEmpty {
             listCard(emptyState)
         } else {
@@ -217,6 +239,73 @@ struct CashflowScheduledTransactionsView: View {
                     .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var recurringTotalCard: some View {
+        FinancesGlassCard(accentColor: kind.accentColor, cornerRadius: 20, contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: kind == .income ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(kind.accentColor)
+                        .frame(width: 38, height: 38)
+                        .background(Circle().fill(kind.accentColor.opacity(0.14)))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(
+                            String(
+                                localized: "cashflow.scheduled.recurring_total.title",
+                                defaultValue: kind == .income ? "Monthly income" : "Monthly expenses",
+                                comment: "Header label for monthly recurring total"
+                            )
+                        )
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppColors.textSecondary)
+
+                        Text(
+                            String(
+                                localized: "cashflow.scheduled.recurring_total.subtitle",
+                                defaultValue: "Total per month across all recurring",
+                                comment: "Subtitle for monthly recurring total"
+                            )
+                        )
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary.opacity(0.7))
+                    }
+
+                    Spacer(minLength: 8)
+                }
+
+                Divider()
+                    .overlay(Color.white.opacity(0.08))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(recurringMonthlyTotals.indices, id: \.self) { idx in
+                        let entry = recurringMonthlyTotals[idx]
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(
+                                String(
+                                    localized: "cashflow.scheduled.recurring_total.per_month",
+                                    defaultValue: "/ month",
+                                    comment: "Per month suffix"
+                                )
+                            )
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppColors.textSecondary)
+
+                            Spacer()
+
+                            Text(totalAmountString(amount: entry.amount, currency: entry.currency))
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                    }
+                }
             }
         }
     }
@@ -895,6 +984,10 @@ struct CashflowScheduledTransactionsView: View {
     }
 
     private func amountString(for transaction: CashflowTransaction) -> String {
+        totalAmountString(amount: transaction.amount, currency: transaction.currency)
+    }
+
+    private func totalAmountString(amount: Double, currency: String) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = " "
@@ -902,8 +995,8 @@ struct CashflowScheduledTransactionsView: View {
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 2
 
-        let amount = formatter.string(from: NSNumber(value: transaction.amount)) ?? "0"
-        return "\(amount) \(transaction.currency)"
+        let formatted = formatter.string(from: NSNumber(value: amount)) ?? "0"
+        return "\(formatted) \(currency)"
     }
 
     private func formatDate(_ date: Date) -> String {

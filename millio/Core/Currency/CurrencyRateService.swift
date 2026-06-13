@@ -297,7 +297,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
                     guard self.cacheGeneration == generation else { return }
                     if !snapshot.rates.isEmpty {
                         self.cachedRates = snapshot.rates
-                        self.lastUpdateTS = snapshot.updatedAt
+                        self.lastUpdateTS = snapshot.fetchedAt
                     }
                     return
                 } catch {
@@ -312,7 +312,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
             let fetchTime = Date().timeIntervalSince1970
             if let stale = await self.rateRepository.peekCachedSnapshot(source: self.rateSource), !stale.rates.isEmpty {
                 self.cachedRates = stale.rates
-                self.lastUpdateTS = stale.updatedAt
+                self.lastUpdateTS = fetchTime
                 AppLogger.log(.info, category: "CurrencyRateService", "Using stale cached rates (age: \(Int((fetchTime - stale.fetchedAt) / 3600))h)")
             } else {
                 AppLogger.log(.error, category: "CurrencyRateService", "All rate sources failed and no stale cache available")

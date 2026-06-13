@@ -399,8 +399,9 @@ struct FinanceDynamicsViewModelTests {
         #expect(links.contains { $0.accountID == card.cardUniqueID },
                 "FinanceAccount-link не должен удаляться при архивации")
 
-        // getAccountsForCalculation(includeArchivedForHistory:true) — реальный путь buildTimeSeriesData
-        let historicalAccounts = dynamicsViewModel.getAccountsForCalculation(includeArchivedForHistory: true)
+        let historicalAccounts = dynamicsViewModel.getAccountsForCalculation(
+            scope: .historicalInterval(DateInterval(start: createdAt, end: now))
+        )
         #expect(historicalAccounts.contains { $0.accountID == card.cardUniqueID },
                 "Архивный счёт должен попасть в исторический расчёт через getAccountsForCalculation")
 
@@ -468,7 +469,9 @@ struct FinanceDynamicsViewModelTests {
         #expect(preservedLink.group?.name == FinanceSystemGroups.ungroupedName)
         #expect(card.archivedAt != nil)
 
-        let historicalAccounts = dynamicsViewModel.getAccountsForCalculation(includeArchivedForHistory: true)
+        let historicalAccounts = dynamicsViewModel.getAccountsForCalculation(
+            scope: .historicalInterval(DateInterval(start: createdAt, end: now))
+        )
         #expect(historicalAccounts.contains { $0.accountID == card.cardUniqueID },
                 "Archived link из удалённой группы должен оставаться достижимым для historical replay")
 
@@ -559,8 +562,8 @@ struct FinanceDynamicsViewModelTests {
         #expect(dynamicsViewModel.state.dynamicsBreakdown.contains { $0.name == FinanceSystemGroups.ungroupedName })
     }
 
-    @Test("Aggregated chart и header используют тот же набор счетов, что и нижний breakdown")
-    func testAggregatedChartAndHeaderMatchVisibleBreakdownAfterArchivingAccount() async throws {
+    @Test("Aggregated chart хранит archived history, а header и breakdown остаются visible-only")
+    func testAggregatedChartUsesHistoricalAccountsWhileHeaderAndBreakdownStayVisible() async throws {
         let modelContext = try createTestModelContext()
         let now = Date()
         let createdAt = now.addingTimeInterval(-10 * 86_400)
@@ -630,6 +633,7 @@ struct FinanceDynamicsViewModelTests {
         await dynamicsViewModel.updateCurrentBalanceAndDelta()
         await dynamicsViewModel.updateChartDataAsync()
         let beforeArchivePoints = dynamicsViewModel.state.chartData.sorted { $0.date < $1.date }
+        let beforeArchiveStart = try #require(beforeArchivePoints.first?.value)
         let beforeArchiveBalance = dynamicsViewModel.state.currentBalance
 
         // FIX #1: явно выставляем archivedAt, чтобы isAccountArchived не зависел от
@@ -659,20 +663,19 @@ struct FinanceDynamicsViewModelTests {
         let breakdownEnd = breakdown.reduce(0) { $0 + $1.endValue }
         let expectedDelta = breakdownEnd - breakdownStart
 
-        // FIX #2: утверждаем, что архивация реально убрала архивированный счёт из данных
+        // Архивация убирает счёт из live header, но не должна переписывать chart history.
         #expect(!beforeArchivePoints.isEmpty, "до архивации должны быть точки на графике")
         #expect(beforeArchiveBalance - dynamicsViewModel.state.currentBalance > 1_000_000,
                 "После архивации баланс должен уменьшиться на сумму архивированного счёта (~10M)")
-        if let firstBefore = beforeArchivePoints.first, let firstAfter = chartPoints.first {
-            #expect(firstBefore.value - firstAfter.value > 1_000_000,
-                    "Начальная точка графика должна уменьшиться после архивации (~10M initialBalance)")
-        }
 
         #expect(!chartPoints.isEmpty)
-        #expect(abs((chartPoints.first?.value ?? 0) - breakdownStart) < 0.01,
-                "Старт графика должен совпадать со стартом нижнего breakdown, без скрытых архивных счетов")
+        let afterArchiveStart = try #require(chartPoints.first?.value)
+        #expect(abs(afterArchiveStart - beforeArchiveStart) < 0.01,
+                "Старт графика должен сохранить archived history, а не сжаться до visible-only")
+        #expect(afterArchiveStart - breakdownStart > 1_000_000,
+                "Historical chart ожидаемо выше visible-only breakdown до snapshot-модели")
         #expect(abs((chartPoints.last?.value ?? 0) - breakdownEnd) < 0.01,
-                "Финиш графика должен совпадать с endValue нижнего breakdown")
+                "Финиш графика после archivedAt должен совпадать с visible-only endValue")
         #expect(abs(dynamicsViewModel.state.currentBalance - breakdownEnd) < 0.01,
                 "Header currentBalance должен совпадать с нижним endValue")
         #expect(abs(dynamicsViewModel.state.periodDelta.absolute - expectedDelta) < 0.01,

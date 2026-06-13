@@ -304,6 +304,9 @@ final class NotificationManager: NotificationManagerProtocol {
         locale: Locale
     ) -> String {
         let dateText = formattedDate(reminderDate, locale: locale)
+        let amountText = formattedAmount(transaction.amount, currency: transaction.currency, locale: locale)
+        let noteSuffix = transaction.note.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
+            .map { " · \($0)" } ?? ""
 
         switch language {
         case .russian:
@@ -314,10 +317,10 @@ final class NotificationManager: NotificationManagerProtocol {
                 default: return ""
                 }
             }()
-
             return transaction.isRecurringTemplate
-                ? "Напоминание: регулярный \(kind) запланирован на \(dateText)."
-                : "Напоминание: запланированный \(kind) на \(dateText)."
+                ? "Регулярный \(kind) — \(amountText)\(noteSuffix)"
+                : "Плановый \(kind) — \(amountText)\(noteSuffix)"
+
         case .simplifiedChinese:
             let kind: String = {
                 switch transaction.transactionType {
@@ -326,10 +329,10 @@ final class NotificationManager: NotificationManagerProtocol {
                 default: return ""
                 }
             }()
-
             return transaction.isRecurringTemplate
-                ? "提醒：周期性\(kind)计划于\(dateText)。"
-                : "提醒：计划\(kind)时间为\(dateText)。"
+                ? "周期性\(kind) \(amountText) 今日\(noteSuffix)"
+                : "计划\(kind) \(amountText) 今日\(noteSuffix)"
+
         case .system, .english, .german, .spanish, .turkish, .french:
             let kind: String = {
                 switch transaction.transactionType {
@@ -338,11 +341,22 @@ final class NotificationManager: NotificationManagerProtocol {
                 default: return ""
                 }
             }()
-
             return transaction.isRecurringTemplate
-                ? "Reminder: recurring \(kind) is due on \(dateText)."
-                : "Reminder: planned \(kind) is due on \(dateText)."
+                ? "Recurring \(kind) — \(amountText)\(noteSuffix)"
+                : "Planned \(kind) — \(amountText)\(noteSuffix)"
         }
+    }
+
+    private func formattedAmount(_ amount: Double, currency: String, locale: Locale) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = locale
+        formatter.groupingSeparator = " "
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        let formatted = formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
+        return "\(formatted) \(currency)"
     }
 
     private func formattedDate(_ date: Date, locale: Locale) -> String {

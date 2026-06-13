@@ -55,14 +55,18 @@ enum SheetsDataMapper {
             category = nil
         }
 
+        let accountType = tx.cardID.flatMap { cardsByID[$0]?.cardTypeRaw }
+
         return TransactionRow(
             date: iso8601.string(from: tx.transactionDate),
             amount: abs(tx.amount),
             type: tx.transactionTypeRaw,
             category: category,
             account: accountName,
+            account_type: accountType,
             note: tx.note,
             currency: tx.currency,
+            is_transfer: tx.transactionType == .transfer,
             millio_id: tx.transactionUniqueID,
             updated_at: iso8601.string(from: tx.updatedAt)
         )

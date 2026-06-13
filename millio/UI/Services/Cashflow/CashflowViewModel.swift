@@ -403,6 +403,13 @@ final class CashflowViewModel: ViewModelProtocol {
 
     // MARK: - Sheets Export
 
+    /// Запускает немедленную полную синхронизацию без дебаунса — для ручного trigger'а из UI.
+    func syncAllNow() {
+        guard let trigger = sheetsExportTrigger else { return }
+        let exportData = buildExportData()
+        Task { await trigger.syncImmediately(with: exportData) }
+    }
+
     /// Собирает полный снимок данных для отправки в Google Sheets.
     /// Вызывается при сохранении транзакции — данные актуальны на момент вызова.
     func buildExportData() -> MillioExportData {

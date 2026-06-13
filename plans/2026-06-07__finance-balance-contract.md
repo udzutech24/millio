@@ -11,8 +11,9 @@
 
 `В РАБОТЕ`
 
-**Реализовано:** Phase 0–2, Phase 4
-**Осталось:** Phase 3, Phase 5
+**Реализовано:** Phase 0–2, Phase 4–5
+**Осталось:** —
+**Deferred (pending decision):** Phase 3 — отложена решением от 2026-06-10 (узкий сценарий vs цена SchemaVersion V4 + CloudKit); вернуть при жалобах пользователей или с решением по снапшотам
 
 ## Цель
 
@@ -22,16 +23,18 @@
 
 - [x] AC1: Новый счёт сразу виден в `visibleGroupsForList()` / `orderedAccounts` после `addAccountToGroup()`
 - [x] AC2: После `deleteGroup()` links сохранены, underlying archived; тест обновлён
-- [ ] AC3: Archive → restore сохраняет lifecycle interval (счёт «помнит», что был архивирован)
+- [ ] ~~AC3: Archive → restore сохраняет lifecycle interval (счёт «помнит», что был архивирован)~~ — **deferred** вместе с Phase 3 (2026-06-10), known limitation
 - [x] AC4: `transactionsUpdated` — всегда; `cardsUpdated` — только при структурном изменении счёта
-- [ ] AC5: Chart series → `historicalAsOf` scope; header/breakdown → `currentVisible` scope
+- [x] AC5: Chart series → `historicalInterval(period)` scope; header/breakdown → `currentVisible` scope
 - [ ] AC6: Все тесты зелёные; стандарт `deleteGroup → links.isEmpty` заменён
-  - Стандарт `deleteGroup → links.isEmpty` заменён в Phase 2; полный suite ещё не запускался из-за грязного рабочего дерева.
+  - Стандарт `deleteGroup → links.isEmpty` заменён в Phase 2.
+  - Phase 5 targeted suites зелёные: `FinanceDynamicsViewModelTests`, `FinanceViewModelTests`.
+  - Полный suite ещё не запускался из-за грязного рабочего дерева.
 
 ## Challenge Log
 
 ### 1. Решает ли план проблему из spec?
-- AC1 → Phase 1. Phase 2 → AC2. Phase 3 → AC3. Phase 4 → AC4. Phase 5 → AC5. AC6 покрывается тестами в каждой фазе.
+- AC1 → Phase 1. Phase 2 → AC2. Phase 3 → AC3 deferred/known limitation. Phase 4 → AC4. Phase 5 → AC5. AC6 покрывается тестами в каждой фазе.
 
 ### 2. Самое эффективное решение?
 - **Альтернатива A (текущий план):** поэтапно, по одному месту — риск минимален, каждая фаза атомарна
@@ -150,9 +153,11 @@ xcodebuild test -scheme millio -destination 'platform=iOS Simulator,id=49601B0B-
 
 ---
 
-### `[ ]` Phase 3: Lifecycle history для архивации/restore
+### `[ ]` Phase 3: Lifecycle history для архивации/restore — **DEFERRED (2026-06-10)**
 
-**AC из spec:** AC3
+> Отложена: root cause в коде подтверждён (`FinanceAccountService.swift:457` сбрасывает `archivedAt = nil`), но сценарий узкий (archive → restore → просмотр истории за период архивации), а цена высокая (новая @Model, SchemaVersion V4, миграция, влияние на CloudKit backup/restore). Возвращаем в работу при реальных жалобах пользователей или вместе с решением по снапшотам (Альтернатива B из Challenge Log). До тех пор — known limitation.
+
+**AC из spec:** AC3 (deferred)
 
 **Root cause:** `restoreArchivedAccountToGroup()` сбрасывает `archivedAt = nil`. `FinanceDynamicsViewModel` использует `archivedAt` как единственную временну́ю границу. После restore интервал «счёт был архивирован» стирается.
 
@@ -219,30 +224,44 @@ xcodebuild test -scheme millio -destination 'platform=iOS Simulator,id=49601B0B-
 
 ---
 
-### `[ ]` Phase 5: Scope-унификация в FinanceDynamicsViewModel
+### `[x]` Phase 5: Scope-унификация в FinanceDynamicsViewModel
 
 **AC из spec:** AC5
 
 **Поглощает:** Вариант A из `plans/2026-05-28__finance-chart-history.md`
 
-**Root cause:** `updateChartDataAsync:1239` фильтрует счета через `getAccountsForCalculation()` без archived scope → архивный счёт не попадает в chart series → исторические точки = 0.
+**Root cause (ревизия 2026-06-10):** `updateChartDataAsync` (актуальные строки ~1254–1266, не 1239) строит chart series через `getAccountsForCalculation()` без archived scope. Archived-счета берутся только для расчёта периода (строка ~1266, `allAccountsForPeriod`), но не для самих series — исторические точки архивного счёта теряются: chart совпадает с visible-only breakdown, но расходится с исторической правдой. После фикса chart станет историческим, а breakdown останется visible-only — это расхождение будет **ожидаемым** known issue до snapshot-модели (см. Edge Cases).
 
-**Решение:** Передать `scope: .historicalAsOf(date)` при расчёте chart series; header/breakdown по-прежнему через `currentVisible`. Использовать `FinanceBalanceScope` из Phase 0.
+**Уточнения по коду (2026-06-10):**
+- `FinanceBalanceScope` существует (Phase 0), но `getAccountsForCalculation` всё ещё bool-based (`includeArchivedForHistory:`). «Дешёвый фикс» только через bool возможен, но слабее: правильное решение — мигрировать API на `scope: FinanceBalanceScope`.
+- `calculateBalanceAtDate` уже корректно отсекает archived после `archivedAt` → historical accounts можно передавать в series без ручной фильтрации по каждой точке.
+- Тест `testAggregatedChartAndHeaderMatchVisibleBreakdownAfterArchivingAccount` закрепляет **старое поведение** (chart после архивации = visible-only breakdown). Его нужно переписать в рамках фазы, иначе он защищает баг.
+- Нет теста, что `updateChartDataAsync` кладёт archived history в `state.chartData` — это и есть недостающий failing test.
+
+**Решение:** Сначала failing test на `updateChartDataAsync → chartData includes archived before archivedAt`, затем enum-based `getAccountsForCalculation(scope:)`, затем явное разделение scope'ов. Точный контракт: `chartAccounts = getAccountsForCalculation(scope: .historicalInterval(period))` — account set выбирается один раз до `buildTimeSeriesData`, поэтому scope для series — interval, а не `historicalAsOf(date)` (per-point отсечение archived после `archivedAt` делает `calculateBalanceAtDate`). Header (`updateCurrentBalanceAndDelta`) и breakdown (`updateDynamicsBreakdown`) — явно `.currentVisible`.
 
 **Файлы:**
-- `millio/UI/Services/Finances/FinanceDynamicsViewModel.swift` — строка ~1239: `getAccountsForCalculation(scope: .historicalAsOf(date))`; строки header/breakdown — явно `.currentVisible`
-- `millioTests/UI/Services/Finances/FinanceDynamicsViewModelTests.swift` — тест: archived счёт появляется в исторических chart точках за период до архивации; текущий header не включает archived
+- `millio/UI/Services/Finances/FinanceDynamicsViewModel.swift` — строки ~1254–1266: series через scope-based вызов; header/breakdown — явно `.currentVisible`
+- `millioTests/UI/Services/Finances/FinanceDynamicsViewModelTests.swift` — новый тест на chartData + переписать `testAggregatedChartAndHeaderMatchVisibleBreakdownAfterArchivingAccount`
 
 **Шаги:**
-1. `[ ]` Прочитать строки 1230–1250 `FinanceDynamicsViewModel` (getAccountsForCalculation call)
-2. `[ ]` Обновить `getAccountsForCalculation` чтобы принимал `FinanceBalanceScope`; добавить ветку для `.historicalAsOf`
-3. `[ ]` В `updateChartDataAsync` передавать `.historicalAsOf(date)` для серий
-4. `[ ]` Header/breakdown — явно `.currentVisible`
-5. `[ ]` Написать тест: после архивации счёта исторические точки на chart за период до `archivedAt` не равны 0
-6. `[ ]` Написать тест: header не включает archived счёт
-7. `[ ]` Обновить `plans/2026-05-28__finance-chart-history.md` — пометить Вариант A как реализованный в этом плане
-8. `[ ]` `xcodebuild test` — все зелёные
-9. `[ ]` Коммит: `fix(finance): use historicalAsOf scope for chart series, currentVisible for header`
+1. `[x]` Написать failing test: после архивации счёта `updateChartDataAsync` кладёт в `state.chartData` исторические точки archived счёта за период до `archivedAt` (не равны 0)
+2. `[x]` Переписать `testAggregatedChartAndHeaderMatchVisibleBreakdownAfterArchivingAccount` под новый контракт (chart = historical, header/breakdown = visible-only); зафиксировать ожидаемое расхождение chart vs breakdown как контракт
+3. `[x]` Мигрировать `getAccountsForCalculation` на `scope: FinanceBalanceScope` (bool-вариант оставить как deprecated-обёртку или удалить, если call-sites немного)
+4. `[x]` В `updateChartDataAsync` series строить из `chartAccounts = getAccountsForCalculation(scope: .historicalInterval(period))` без ручной пер-точечной фильтрации (её делает `calculateBalanceAtDate`); в `updateCurrentBalanceAndDelta` (header) и `updateDynamicsBreakdown` (breakdown) закрепить `.currentVisible`
+5. `[x]` Тест: header/breakdown не включают archived счёт
+6. `[x]` Обновить `plans/2026-05-28__finance-chart-history.md` — пометить Вариант A как реализованный в этом плане
+7. `[x]` `xcodebuild test` — все зелёные (минимум `FinanceDynamicsViewModelTests` + `FinanceViewModelTests`)
+8. `[ ]` Коммит: `fix(finance): use historical scope for chart series, currentVisible for header`
+
+**Проверка Phase 5:**
+
+```bash
+xcodebuild test -scheme millio -destination 'platform=iOS Simulator,id=49601B0B-FAE4-4039-94BA-B333C5DFCAAB' -derivedDataPath /tmp/millio-phase5-derived -only-testing:millioTests/FinanceDynamicsViewModelTests
+xcodebuild test -scheme millio -destination 'platform=iOS Simulator,id=49601B0B-FAE4-4039-94BA-B333C5DFCAAB' -derivedDataPath /tmp/millio-phase5-derived -only-testing:millioTests/FinanceViewModelTests
+```
+
+Результат: оба targeted suite `TEST SUCCEEDED`. Полный suite не запускался.
 
 **Guard phrase:** «Реализуй Phase 5 по плану.»
 
@@ -257,13 +276,13 @@ xcodebuild test -scheme millio -destination 'platform=iOS Simulator,id=49601B0B-
 - [ ] SchemaVersion V4 migration у пользователей с existing данными — lightweight, без трансформаций
 - [ ] `transactionsUpdated` при массовом импорте — батчить (один event в конце, не N событий)
 - [ ] Скрытая системная группа с archived-only links — убедиться, что она не появляется в `visibleGroupsForList()` по умолчанию
-- [ ] Links из удалённой группы остаются достижимыми для `getAccountsForCalculation(includeArchivedForHistory: true)` через `state.groups`
+- [ ] Links из удалённой группы остаются достижимыми для `getAccountsForCalculation(scope: .historicalInterval(...))` через `state.groups` (после миграции API в Phase 5; старый bool-вызов `includeArchivedForHistory: true` не использовать)
 
 ## Gates (перед `[x]` на каждой фазе)
 
 - [ ] `xcodebuild test -scheme millio` — все тесты зелёные
-- [ ] Нет SwiftData crash при SchemaVersion V4 (Phase 3)
-- [ ] CloudKit backup/restore не сломан после Phase 3 (ручная проверка)
+- [ ] Нет SwiftData crash при SchemaVersion V4 (только если Phase 3 будет возвращена из deferred)
+- [ ] CloudKit backup/restore не сломан после Phase 3 (только если Phase 3 будет возвращена из deferred)
 
 ## Журнал изменений
 
@@ -274,6 +293,9 @@ xcodebuild test -scheme millio -destination 'platform=iOS Simulator,id=49601B0B-
 - `2026-06-07` — проверен live-report "счёт не появился после добавления": полный `FinanceViewModelTests` подтверждает контракт `addAccountToGroup(nil) -> Ungrouped -> visibleGroupsForList()`. Ручной скрин был на booted `iPhone 17 Pro Max / iOS 26.2`, тогда как тесты Phase 1/2 шли на `iPhone 17 / iOS 26.5`; установленный app на 26.2 запущен отдельно. Следующий ручной retest должен запускать свежую сборку именно на destination `49601B0B-FAE4-4039-94BA-B333C5DFCAAB`.
 - `2026-06-07` — live-логи дали реальную причину: `Removed 1 invalid finance account links` после store scope switch `guest -> cached user`. UI add/create flow создавал product VM от `@Environment(\.modelContext)`, а finance-link писал через `FinanceViewModel.modelContext`; при расхождении контекстов cleanup не видел underlying card/credit/investment и удалял link. Исправлено: `FinanceAddAccountView` и legacy `FinanceCreateViews` используют единый `viewModel.modelContext` для product VM, group recommendation и edit-link lookup. Проверено: `FinanceViewModelTests` зелёные; `xcodebuild build` зелёный на live destination `49601B0B-FAE4-4039-94BA-B333C5DFCAAB`.
 - `2026-06-07` — Phase 0 реализована: добавлен `FinanceBalanceScope` с пятью scope'ами, в `FinanceDynamicsViewModel` добавлен `BalanceScope` marker и комментарии у текущих `getAccountsForCalculation` call-sites без изменения бизнес-логики. Проверено: `FinanceDynamicsViewModelTests` зелёные на destination `49601B0B-FAE4-4039-94BA-B333C5DFCAAB`.
+- `2026-06-10` — ревизия оставшихся фаз (Claude + Codex, независимо сошлись). **Phase 5 актуальна:** root cause подтверждён на строках ~1254–1266 (series из visible-only, archived только для периода); шаги переписаны — сначала failing test на `state.chartData`, миграция API на `scope:`, переписать тест-защитник старого поведения `testAggregatedChartAndHeaderMatchVisibleBreakdownAfterArchivingAccount`. **Phase 3 под вопросом:** root cause в коде (`FinanceAccountService.swift:457` сбрасывает `archivedAt = nil`), но сценарий узкий (archive → restore → просмотр истории за период архивации), а цена высокая (новая @Model, SchemaVersion V4, миграция, влияние на CloudKit backup). Рекомендация: отложить до реальных жалоб пользователей или решения по снапшотам (Альтернатива B); решение за Алексеем. Анализ Кодекса: `../.business/история/2026-06-10-finance-balance-contract-phase-5-plan-check.md`.
+- `2026-06-10` — план Phase 5 доуточнён по ревью Кодекса (`../.business/история/2026-06-10-finance-balance-contract-new-plan-review.md`): (1) scope для chart series — `.historicalInterval(period)`, не `historicalAsOf` (account set выбирается один раз до `buildTimeSeriesData`); (2) `.currentVisible` закрепляется в `updateCurrentBalanceAndDelta` и `updateDynamicsBreakdown`, не внутри `updateChartDataAsync`; (3) root cause переформулирован — visible-only chart сейчас совпадает с breakdown, но расходится с исторической правдой; после фикса расхождение chart vs breakdown станет ожидаемым known issue до snapshot-модели; (4) edge case переведён с bool-вызова на scope-вызов; (5) Phase 3 формально помечена DEFERRED в статусе, AC3 — deferred/known limitation.
+- `2026-06-10` — Phase 5 реализована: `FinanceDynamicsViewModel.getAccountsForCalculation` переведён на `FinanceBalanceScope`, bool API оставлен deprecated-обёрткой; `updateChartDataAsync` строит series из `.historicalInterval(period)`, а header/breakdown используют `.currentVisible`; тест `testAggregatedChartUsesHistoricalAccountsWhileHeaderAndBreakdownStayVisible` фиксирует новый контракт. Зелёные targeted suites: `FinanceDynamicsViewModelTests`, `FinanceViewModelTests` на destination `49601B0B-FAE4-4039-94BA-B333C5DFCAAB`.
 
 ## Итог (заполняется при завершении)
 

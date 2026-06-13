@@ -48,6 +48,8 @@ final class CashflowHistoryService {
         let usesCategoryFilter = !(normalizedCategoryRawValue?.isEmpty ?? true)
 
         return transactions.filter { transaction in
+            // Recurring-шаблоны отображаются только в экране «Повторяющиеся», не в истории.
+            if transaction.isRecurringTemplate { return false }
             if shouldHideLinkedSettlementTransactionInHistory(transaction, in: transactions) {
                 return false
             }

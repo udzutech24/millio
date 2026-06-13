@@ -10,6 +10,14 @@ struct MillioExportData: Encodable, Sendable {
     let archivedAccounts: [AccountArchiveRow]
     let budgets: [BudgetRow]
     let investments: [InvestmentRow]
+
+    enum CodingKeys: String, CodingKey {
+        case transactions
+        case accounts
+        case archivedAccounts = "accounts_archive"
+        case budgets
+        case investments
+    }
 }
 
 // MARK: - Строки листов
@@ -20,13 +28,17 @@ struct TransactionRow: Encodable, Sendable {
     let date: String
     /// Сумма (всегда положительная)
     let amount: Double
-    /// "expense" / "income" / "transfer"
+    /// "expense" / "income" / "transfer" / "balance_adjustment" / ...
     let type: String
     let category: String?
     /// Название счёта (карты-источника)
     let account: String?
+    /// Тип счёта ("debit" / "credit" / "savings" / ...)
+    let account_type: String?
     let note: String?
     let currency: String
+    /// true для транзакций типа transfer
+    let is_transfer: Bool
     /// Стабильный ID для идемпотентного обновления
     let millio_id: String
     let updated_at: String

@@ -23,10 +23,10 @@
 
 ### Развилка: Вариант A vs Вариант B
 
-**Вариант A — быстрый scope-фикс (hotfix, S)**
+**Вариант A — быстрый scope-фикс (hotfix, S) — реализован 2026-06-10 в `plans/2026-06-07__finance-balance-contract.md` Phase 5**
 - Объём: ~3 строки + тест, 0.5 дня
-- `updateChartDataAsync:1239,1242` → `getAccountsForCalculation(includeArchivedForHistory: true)` только для chart series; header/breakdown остаются visible-scope
-- Восстановить тест неизменности истории после архивации в `FinanceDynamicsViewModelTests.swift` (сейчас маскирует регрессию)
+- `updateChartDataAsync` → `getAccountsForCalculation(scope: .historicalInterval(period))` только для chart series; header/breakdown остаются `.currentVisible`
+- Восстановлен тест неизменности истории после архивации в `FinanceDynamicsViewModelTests.swift`: `testAggregatedChartUsesHistoricalAccountsWhileHeaderAndBreakdownStayVisible`
 - **Даёт:** прошлые точки графика возвращаются
 - **Known issue:** chart с архивным счётом показывает суммарный баланс выше, чем breakdown (visible-only) — «деньги визуально не сходятся». Решается маркировкой архивных строк серым + сноска «счёт в архиве»
 - **Не решает:** список архивных всё ещё показывает текущий 0

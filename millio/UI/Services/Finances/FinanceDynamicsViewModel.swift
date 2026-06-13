@@ -217,7 +217,7 @@ enum FinanceDynamicsAction {
 final class FinanceDynamicsViewModel: ViewModelProtocol {
     typealias State = FinanceDynamicsState
     typealias Action = FinanceDynamicsAction
-    /// Phase 0 balance-scope contract marker. Existing bool-based filtering migrates in Phase 5.
+    /// Balance-scope contract for selecting finance accounts by calculation intent.
     typealias BalanceScope = FinanceBalanceScope
     
     @Published var state = FinanceDynamicsState()
@@ -591,7 +591,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return (try? modelContext.fetch(descriptor)) ?? []
     }
 
-    private func fallbackAccountsForCalculation(includeArchivedForHistory: Bool = false) -> [FinanceAccount] {
+    private func fallbackAccountsForCalculation(scope: BalanceScope = .currentVisible) -> [FinanceAccount] {
         let groupsByID = Dictionary(uniqueKeysWithValues: state.groups.map { ($0.groupUniqueID, $0) })
         let selectedGroupIDs = state.selectedGroupIDs
         let selectedAccountIDs = state.selectedAccountIDs
@@ -611,11 +611,20 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             return true
         }
 
-        if includeArchivedForHistory || state.showArchivedAccounts {
+        if shouldIncludeArchivedAccounts(for: scope) {
             return accounts
         }
 
         return accounts.filter { !isAccountArchived($0) }
+    }
+
+    private func shouldIncludeArchivedAccounts(for scope: BalanceScope) -> Bool {
+        switch scope {
+        case .currentVisible:
+            return state.showArchivedAccounts
+        case .historicalAsOf, .historicalInterval, .dashboardSnapshot, .cashflowContribution:
+            return true
+        }
     }
     
     /// Перестроить кэши для оптимизации производительности
@@ -796,12 +805,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private func updateCurrentBalanceAndDelta(for selectedDate: Date?) async {
         if Task.isCancelled { return }
 
-        // BalanceScope.currentVisible: live header/delta must ignore archived accounts by default.
-        let accounts = getAccountsForCalculation()
+        let accounts = getAccountsForCalculation(scope: .currentVisible)
         // Период вычисляем по всем счетам (включая archived), чтобы диапазон не плыл при архивации.
         // Расчёты баланса/дельты ниже идут только по visible accounts.
-        // BalanceScope.historicalInterval: period bounds must see archived links.
-        let accountsForPeriod = getAccountsForCalculation(includeArchivedForHistory: true)
+        let accountsForPeriod = getAccountsForCalculation(scope: .historicalInterval(DateInterval(start: .distantPast, end: .distantFuture)))
         let (startDate, endDate) = resolvedPeriodDates(for: accountsForPeriod)
         state.periodStartDate = startDate
         state.periodEndDate = endDate
@@ -881,12 +888,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         state.periodDelta = (delta, calculateDeltaPercent(delta: delta, startBalance: startBalance))
     }
     
-    /// Получить счета для расчета (в зависимости от фильтров).
-    /// Phase 0 scope mapping:
-    /// - includeArchivedForHistory == false -> BalanceScope.currentVisible
-    /// - includeArchivedForHistory == true -> BalanceScope.historicalInterval / historicalAsOf
-    /// The actual enum-based API is intentionally deferred to Phase 5.
-    func getAccountsForCalculation(includeArchivedForHistory: Bool = false) -> [FinanceAccount] {
+    /// Получить счета для расчета под конкретный balance scope.
+    func getAccountsForCalculation(scope: BalanceScope = .currentVisible) -> [FinanceAccount] {
         let groupsToShow = state.selectedGroupIDs.isEmpty
             ? state.groups
             : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
@@ -941,7 +944,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         
         let visibleAccounts: [FinanceAccount]
-        if includeArchivedForHistory || state.showArchivedAccounts {
+        if shouldIncludeArchivedAccounts(for: scope) {
             visibleAccounts = uniqueAccounts
         } else {
             visibleAccounts = uniqueAccounts.filter { !isAccountArchived($0) }
@@ -954,13 +957,21 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         // SwiftData relationships can be stale right after inserts/updates in tests and some
         // freshly-saved flows. Falling back to a direct account fetch keeps dynamics deterministic
         // instead of silently producing an empty chart.
-        return fallbackAccountsForCalculation(includeArchivedForHistory: includeArchivedForHistory)
+        return fallbackAccountsForCalculation(scope: scope)
+    }
+
+    @available(*, deprecated, message: "Use getAccountsForCalculation(scope:) with FinanceBalanceScope.")
+    func getAccountsForCalculation(includeArchivedForHistory: Bool) -> [FinanceAccount] {
+        getAccountsForCalculation(
+            scope: includeArchivedForHistory
+                ? .historicalInterval(DateInterval(start: .distantPast, end: .distantFuture))
+                : .currentVisible
+        )
     }
     
     /// Обновить распределение по валютам
     func updateCurrencyBreakdown() async {
-        // BalanceScope.currentVisible: currency distribution mirrors the live visible total.
-        let accounts = getAccountsForCalculation()
+        let accounts = getAccountsForCalculation(scope: .currentVisible)
         let displayCurrency = state.displayCurrency
         let endDate = getPeriodDates().end
 
@@ -1025,8 +1036,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
 
     /// Обновить список динамики
     func updateDynamicsBreakdown() async {
-        // BalanceScope.currentVisible: breakdown rows mirror the live visible selection.
-        let accounts = getAccountsForCalculation()
+        let accounts = getAccountsForCalculation(scope: .currentVisible)
         let requestedPeriod = getPeriodDates()
         let startDate = requestedPeriod.start
         let endDate = requestedPeriod.end
@@ -1154,8 +1164,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     group.addTask { @MainActor in
                         let accountCardIDs = isCard ? Set([accountCardID]) : Set<String>()
 
-                        // BalanceScope.currentVisible: account breakdown resolves against current visible rows.
-                        let currentAccounts = self.getAccountsForCalculation()
+                        let currentAccounts = self.getAccountsForCalculation(scope: .currentVisible)
                         guard let account = currentAccounts.first(where: { $0.accountUniqueID == accountUniqueID }) else {
                             return (index, nil)
                         }
@@ -1251,34 +1260,47 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let revision = expectedRevision ?? nextChartUpdateRevision()
         guard isCurrentChartUpdateRevision(revision) else { return }
 
-        // BalanceScope.currentVisible for Phase 0. Phase 5 will switch chart series to historicalAsOf(date).
-        var accounts = getAccountsForCalculation()
-        if accounts.isEmpty {
+        var visibleAccounts = getAccountsForCalculation(scope: .currentVisible)
+        if visibleAccounts.isEmpty {
             reloadChartDataDependencies()
-            // BalanceScope.currentVisible retry after reloading SwiftData-backed dependencies.
-            accounts = getAccountsForCalculation()
+            visibleAccounts = getAccountsForCalculation(scope: .currentVisible)
         }
-        if accounts.isEmpty {
-            accounts = fallbackAccountsForCalculation()
+        if visibleAccounts.isEmpty {
+            visibleAccounts = fallbackAccountsForCalculation(scope: .currentVisible)
         }
-        // Период вычисляем по всем счетам (включая archived), чтобы диапазон не плыл при архивации.
-        // BalanceScope.historicalInterval: range calculation must include archived links.
-        let allAccountsForPeriod = getAccountsForCalculation(includeArchivedForHistory: true)
-        let period = resolvedPeriodDates(for: allAccountsForPeriod.isEmpty ? accounts : allAccountsForPeriod)
+
+        let allAccountsForPeriod = getAccountsForCalculation(
+            scope: .historicalInterval(DateInterval(start: .distantPast, end: .distantFuture))
+        )
+        let period = resolvedPeriodDates(for: allAccountsForPeriod.isEmpty ? visibleAccounts : allAccountsForPeriod)
         guard isCurrentChartUpdateRevision(revision) else { return }
         state.periodStartDate = period.start
         state.periodEndDate = period.end
+
+        var chartAccounts = getAccountsForCalculation(
+            scope: .historicalInterval(DateInterval(start: period.start, end: period.end))
+        )
+        if chartAccounts.isEmpty {
+            chartAccounts = fallbackAccountsForCalculation(
+                scope: .historicalInterval(DateInterval(start: period.start, end: period.end))
+            )
+        }
+        if chartAccounts.isEmpty {
+            chartAccounts = visibleAccounts
+        }
         
         // Строим данные графика в зависимости от режима
         let useNetTotals = shouldUseNetTotals()
         switch state.dynamicsMode {
         case .aggregated:
             // Все счета в одну линию
-            let liveEndBalanceAggr: Double? = accounts.count == 1 && state.selectedDate == nil
-                ? await liveConvertedBalance(for: accounts[0], displayCurrency: state.displayCurrency, at: period.end)
+            let liveEndBalanceAggr: Double? = chartAccounts.count == 1
+                && state.selectedDate == nil
+                && !isAccountArchived(chartAccounts[0])
+                ? await liveConvertedBalance(for: chartAccounts[0], displayCurrency: state.displayCurrency, at: period.end)
                 : nil
             let chartData = await buildTimeSeriesData(
-                accounts: accounts,
+                accounts: chartAccounts,
                 startDate: period.start,
                 endDate: period.end,
                 label: L("finances.dynamics.chart.total_label"),
@@ -1291,8 +1313,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         case .byAccounts:
             // Каждый счет - отдельная линия
             var allDataPoints: [ChartDataPoint] = []
-            for account in accounts {
-                let liveEndBalancePerAccount: Double? = accounts.count == 1 && state.selectedDate == nil
+            for account in chartAccounts {
+                let liveEndBalancePerAccount: Double? = chartAccounts.count == 1
+                    && state.selectedDate == nil
+                    && !isAccountArchived(account)
                     ? await liveConvertedBalance(for: account, displayCurrency: state.displayCurrency, at: period.end)
                     : nil
                 let accountData = await buildTimeSeriesData(
@@ -1310,8 +1334,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
 
         case .singleAccount(let accountID):
             // Один выбранный счет
-            if let account = accounts.first(where: { $0.accountUniqueID == accountID }) {
-                let liveEndBalanceSingle: Double? = state.selectedDate == nil
+            if let account = chartAccounts.first(where: { $0.accountUniqueID == accountID }) {
+                let liveEndBalanceSingle: Double? = state.selectedDate == nil && !isAccountArchived(account)
                     ? await liveConvertedBalance(for: account, displayCurrency: state.displayCurrency, at: period.end)
                     : nil
                 let chartData = await buildTimeSeriesData(
@@ -1645,8 +1669,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         referenceDate: Date = Date(),
         calendar: Calendar = .current
     ) async -> [FinanceOverviewPeriodEntry] {
-        // BalanceScope.dashboardSnapshot: overview sparkline uses historical accounts for stable periods.
-        let accounts = getAccountsForCalculation(includeArchivedForHistory: true)
+        let accounts = getAccountsForCalculation(scope: .dashboardSnapshot)
         guard !accounts.isEmpty else { return [] }
 
         let normalizedReferenceDate = calendar.date(
@@ -2507,8 +2530,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         guard !sourceCurrencies.isEmpty else { return }
 
-        // BalanceScope.historicalInterval: rate prefetch must cover all archived-visible history.
-        let accounts = getAccountsForCalculation(includeArchivedForHistory: true)
+        let accounts = getAccountsForCalculation(
+            scope: .historicalInterval(DateInterval(start: .distantPast, end: .distantFuture))
+        )
         let (startDate, endDate) = resolvedPeriodDates(for: accounts)
         let calendar = Calendar.current
         let startDay = calendar.startOfDay(for: startDate)

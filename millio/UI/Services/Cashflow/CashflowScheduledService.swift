@@ -271,9 +271,11 @@ final class CashflowScheduledService {
             guard template.recurrenceRule != .none else { continue }
 
             let templateDate = calendar.startOfDay(for: template.transactionDate)
-            guard templateDate < today else { continue }
+            guard templateDate <= today else { continue }
             let expectedSeriesKey = "\(templateSeriesID)|\(template.transactionTypeRaw)"
-            var occurrenceIndex = 1
+            // Начинаем с 0: шаблон — маркер настройки, не транзакция.
+            // Для каждой даты (включая первую) создаём отдельный сгенерированный экземпляр.
+            var occurrenceIndex = 0
 
             while let expectedDate = Self.recurrenceOccurrenceDate(
                 templateDate: templateDate,
@@ -282,13 +284,15 @@ final class CashflowScheduledService {
                 occurrenceIndex: occurrenceIndex,
                 calendar: calendar
             ) {
-                guard expectedDate > templateDate else {
+                guard expectedDate >= templateDate else {
                     occurrenceIndex += 1
                     continue
                 }
                 if expectedDate > today { break }
 
+                // Шаблоны исключаем из проверки существования: нас интересуют только сгенерированные экземпляры.
                 let existsInMonth = allTransactions.contains {
+                    guard !$0.isRecurringTemplate else { return false }
                     guard seriesKey($0) == expectedSeriesKey else { return false }
                     return calendar.isDate($0.transactionDate, inSameDayAs: expectedDate)
                 }

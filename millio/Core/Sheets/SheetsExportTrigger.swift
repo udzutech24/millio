@@ -16,6 +16,18 @@ actor SheetsExportTrigger {
         self.exportService = exportService
     }
 
+    /// Немедленный sync без дебаунса — для ручного trigger'а из UI.
+    func syncImmediately(with exportData: MillioExportData) async {
+        guard await exportService.getStatus().isConnected else { return }
+        pendingTask?.cancel()
+        do {
+            _ = try await exportService.syncNow(with: exportData)
+            AppLogger.log(.info, category: "SheetsExport", "Ручная синхронизация завершена.")
+        } catch {
+            AppLogger.log(.warning, category: "SheetsExport", "Ручная синхронизация не удалась: \(error.localizedDescription)")
+        }
+    }
+
     func notifyTransactionAdded(with exportData: MillioExportData) async {
         // Не запускаем sync если аккаунт не подключён — избегаем 401 каждые 5 сек
         guard await exportService.getStatus().isConnected else { return }
