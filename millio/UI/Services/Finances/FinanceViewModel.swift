@@ -329,6 +329,14 @@ final class FinanceViewModel: ViewModelProtocol {
         )
     }()
 
+    // snapshotService использует lazy из-за зависимости от totalsService
+    private(set) lazy var snapshotService: AccountBalanceSnapshotService = {
+        AccountBalanceSnapshotService(
+            totalsService: self.totalsService,
+            groupsProvider: { [weak self] in self?.state.groups ?? [] }
+        )
+    }()
+
     // savingsGoalService использует lazy, т.к. замыкания захватывают self
     private(set) lazy var savingsGoalService: FinanceSavingsGoalService = {
         FinanceSavingsGoalService(
@@ -978,6 +986,11 @@ final class FinanceViewModel: ViewModelProtocol {
         // Дельта через replay транзакций — согласованно с Аналитикой
         let (delta, pct) = await computeDashboardDeltaViaAnalytics(startDaysAgo: daysCount, currentTotal: currentTotal)
         state.dashboardWeekDelta = (absolute: delta, percent: pct)
+
+        // Снапшоты счетов — в фоне, не блокируем критический путь UI
+        Task { [weak self] in
+            await self?.snapshotService.snapshotIfNeeded()
+        }
     }
 
     /// Вычисляет дельту баланса за период startDaysAgo→сегодня через FinanceDynamicsViewModel.

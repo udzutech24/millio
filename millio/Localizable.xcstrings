@@ -67729,6 +67729,9 @@
         }
       }
     },
+    "Min" : {
+
+    },
     "monetization.cashback.categories.limit.hard_format" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -88581,6 +88584,9 @@
         }
       }
     },
+    "Баланс" : {
+
+    },
     "Быстрая настройка" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -88953,6 +88959,12 @@
           }
         }
       }
+    },
+    "График появится через несколько дней\nпосле использования приложения" : {
+
+    },
+    "Дата" : {
+
     },
     "Добавить" : {
       "extractionState" : "stale",
@@ -89469,6 +89481,9 @@
           }
         }
       }
+    },
+    "Накапливаем историю" : {
+
     },
     "Настройки" : {
       "comment" : "A section header in the settings menu.",

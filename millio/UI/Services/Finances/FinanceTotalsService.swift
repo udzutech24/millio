@@ -155,6 +155,23 @@ final class FinanceTotalsService {
         return total
     }
 
+    // MARK: - Public: Балансы всех счетов (для снапшотов)
+
+    /// Возвращает текущий баланс каждого счёта из всех групп.
+    /// Ключ — `account.accountID`. Используется в AccountBalanceSnapshotService.
+    func calculateAllAccountBalances() async -> [String: (value: Double, currency: String)] {
+        let groups = groupsProvider()
+        var result: [String: (value: Double, currency: String)] = [:]
+        for group in groups {
+            guard let accounts = group.accounts else { continue }
+            for account in accounts {
+                let amount = await getAccountAmount(account: account)
+                result[account.accountID] = amount
+            }
+        }
+        return result
+    }
+
     // MARK: - Public: Нормализация валюты
 
     func normalizedConversionCurrency(_ currency: String) -> String {

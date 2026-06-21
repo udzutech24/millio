@@ -441,10 +441,19 @@ private struct FinanceAccountRow: View {
     let onEdit: () -> Void
     let onQuickEditAmount: () -> Void
 
+    @State private var showBalanceChart = false
+
     // Читаем баланс из viewModel в body — @ObservedObject FinanceAccountRow сам перерисуется
     // при objectWillChange, не завися от того, перерисует ли родитель FinanceGroupRow
     private var resolvedAmount: Double {
         viewModel.getAccountInfo(account: account)?.amount ?? amount
+    }
+
+    private var sparklineColor: Color {
+        if let hex = customIconColor, !hex.isEmpty {
+            return Color(hex: hex)
+        }
+        return AppColors.brandPrimary
     }
 
     private let contentLeadingInset: CGFloat = 28
@@ -493,9 +502,29 @@ private struct FinanceAccountRow: View {
                         .foregroundStyle(AppColors.textTertiary.opacity(0.9))
                         .lineLimit(1)
                 }
+
+                // Sparkline истории баланса
+                let sparkPoints = AccountBalanceHistoryStore.dailyAmounts(
+                    accountID: account.accountID,
+                    currency: currency,
+                    daysCount: 14
+                ).compactMap { $0 }
+                if sparkPoints.count >= 2 {
+                    Button {
+                        showBalanceChart = true
+                    } label: {
+                        AccountBalanceSparklineView(
+                            accountID: account.accountID,
+                            currency: currency,
+                            color: sparklineColor
+                        )
+                        .frame(width: 56, height: 22)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            
+
             trailingAmountSection(
                 amountFontSize: 15,
                 maximumFractionDigits: 0
@@ -507,6 +536,14 @@ private struct FinanceAccountRow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             onEdit()
+        }
+        .sheet(isPresented: $showBalanceChart) {
+            AccountBalanceChartView(
+                accountID: account.accountID,
+                accountName: name,
+                currency: currency,
+                accentColor: sparklineColor
+            )
         }
     }
 
