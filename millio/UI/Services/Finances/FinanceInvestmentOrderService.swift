@@ -230,6 +230,12 @@ final class FinanceInvestmentOrderService {
                 changedAccountTypes.insert(settlementAccountForOrder.accountType)
             }
 
+            // После полной продажи позиция обнуляется — архивируем счёт,
+            // чтобы фильтр archivedAt == nil убрал его из активных списков.
+            if side == .sell, (investment.marketQuantity ?? 0) == 0 {
+                investment.archivedAt = Date()
+            }
+
             try modelContext.save()
             onLoadAccounts()
             onCalculateTotalAmount()

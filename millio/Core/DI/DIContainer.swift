@@ -43,12 +43,15 @@ final class DIContainer {
     static func create(
         appState: AppState,
         modelContainer: ModelContainer,
-        backendRuntime: BackendSessionRuntime
+        backendRuntime: BackendSessionRuntime,
+        scopeIdentifier: String
     ) -> DIContainer {
         let runtimeEnvironment = AppRuntimeEnvironment.current()
         let modelContext = modelContainer.mainContext
         do {
             try DataIntegrityCleaner.runIfNeeded(modelContext: modelContext)
+            try DataIntegrityCleaner.revertBadArchiveMigrationIfNeeded(modelContext: modelContext, scopeIdentifier: scopeIdentifier)
+            try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: modelContext, scopeIdentifier: scopeIdentifier)
         } catch {
             AppLogger.log(.error, category: "Integrity", "Data integrity cleanup failed: \(error.localizedDescription)")
         }

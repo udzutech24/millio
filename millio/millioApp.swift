@@ -199,7 +199,8 @@ struct millioApp: App {
 
         let binding = await prepareDependencyBinding(
             for: container,
-            backendRuntime: backendRuntime
+            backendRuntime: backendRuntime,
+            scopeIdentifier: activeDataScope.storeConfigurationName
         )
         applyDependencyBinding(binding, backendRuntime: backendRuntime)
 
@@ -229,13 +230,15 @@ struct millioApp: App {
     @MainActor
     private func prepareDependencyBinding(
         for modelContainer: ModelContainer,
-        backendRuntime: BackendSessionRuntime
+        backendRuntime: BackendSessionRuntime,
+        scopeIdentifier: String
     ) async -> AppDependencyBinding {
         let diStart = DispatchTime.now()
         let container = DIContainer.create(
             appState: appState,
             modelContainer: modelContainer,
-            backendRuntime: backendRuntime
+            backendRuntime: backendRuntime,
+            scopeIdentifier: scopeIdentifier
         )
         let apiClientFactory = APIClientFactory(runtime: backendRuntime)
         await MarketAPIClient.shared.configure(
@@ -381,7 +384,8 @@ struct millioApp: App {
         if let backendRuntime, let targetContainer {
             let preparedBinding = await prepareDependencyBinding(
                 for: targetContainer,
-                backendRuntime: backendRuntime
+                backendRuntime: backendRuntime,
+                scopeIdentifier: targetScope.storeConfigurationName
             )
             guard !Task.isCancelled else { return false }
             binding = preparedBinding
