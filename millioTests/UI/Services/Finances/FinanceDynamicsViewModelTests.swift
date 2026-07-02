@@ -3136,4 +3136,139 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(balanceAfterEdit - 995) < 0.01,
                 "После изменения replay должен вернуть 995 (с учётом balanceAdjustment и reconciliation)")
     }
+
+    // MARK: - Регрессия: пустой график Dynamics (specs/2026-06-24-dynamics-chart-empty-fix.md)
+
+    private func makeDynamicsViewModel(_ modelContext: ModelContext) -> FinanceDynamicsViewModel {
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        return FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+    }
+
+    @Test("BUG #1: earliestClosedSnapshotDateByAccount возвращает ПЕРВУЮ (минимальную) дату")
+    func testEarliestClosedSnapshotDateReturnsMinimumDate() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let accountID = "acc-earliest"
+
+        let dayMinus5 = calendar.date(byAdding: .day, value: -5, to: today)!
+        let dayMinus3 = calendar.date(byAdding: .day, value: -3, to: today)!
+        let dayMinus1 = calendar.date(byAdding: .day, value: -1, to: today)!
+        insertAccountSnapshot(modelContext, accountID: accountID, date: dayMinus3, amount: 200)
+        insertAccountSnapshot(modelContext, accountID: accountID, date: dayMinus5, amount: 100)
+        insertAccountSnapshot(modelContext, accountID: accountID, date: dayMinus1, amount: 300)
+        try modelContext.save()
+
+        let viewModel = makeDynamicsViewModel(modelContext)
+        let result = viewModel.earliestClosedSnapshotDateByAccount(
+            accountIDs: [accountID],
+            baseCurrency: "RUB"
+        )
+
+        let expected = calendar.startOfDay(for: dayMinus5)
+        #expect(result[accountID].map { calendar.startOfDay(for: $0) } == expected,
+                "Регрессия BUG #1: должна сохраняться первая дата снапшота, а не последняя")
+    }
+
+    @Test("BUG #2: счёт без снапшотов не обнуляет requiredSnapshotAccountIDs")
+    func testAccountWithoutSnapshotsDoesNotBreakRequiredIDs() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let dayMinus5 = calendar.date(byAdding: .day, value: -5, to: today)!
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+
+        let cardA = Card(name: "A", cardNumber: "1111", bank: .other, cardType: .debit, currency: "RUB", balance: 100)
+        cardA.createdAt = dayMinus5
+        let cardB = Card(name: "B", cardNumber: "2222", bank: .other, cardType: .debit, currency: "RUB", balance: 200)
+        cardB.createdAt = dayMinus5
+
+        let group = FinanceGroup(name: "Счета", colorHex: "#FFFFFF")
+        let accountA = FinanceAccount(accountType: .card, accountID: cardA.cardUniqueID)
+        accountA.createdAt = dayMinus5
+        accountA.group = group
+        let accountB = FinanceAccount(accountType: .card, accountID: cardB.cardUniqueID)
+        accountB.createdAt = dayMinus5
+        accountB.group = group
+        group.accounts = [accountA, accountB]
+
+        modelContext.insert(cardA)
+        modelContext.insert(cardB)
+        modelContext.insert(group)
+        modelContext.insert(accountA)
+        modelContext.insert(accountB)
+        // Снапшоты только у счёта A; у счёта B их нет вообще
+        insertAccountSnapshot(modelContext, accountID: cardA.cardUniqueID, date: dayMinus5, amount: 100)
+        insertAccountSnapshot(modelContext, accountID: cardA.cardUniqueID, date: yesterday, amount: 150)
+        try modelContext.save()
+
+        let viewModel = makeDynamicsViewModel(modelContext)
+        let snapshotStartByAccountID = viewModel.earliestClosedSnapshotDateByAccount(
+            accountIDs: [cardA.cardUniqueID, cardB.cardUniqueID],
+            baseCurrency: "RUB"
+        )
+        let required = viewModel.requiredSnapshotAccountIDs(
+            for: yesterday,
+            accounts: [accountA, accountB],
+            snapshotStartByAccountID: snapshotStartByAccountID
+        )
+
+        #expect(required.contains(cardA.cardUniqueID),
+                "Счёт со снапшотами должен оставаться в required-списке")
+        #expect(!required.contains(cardB.cardUniqueID),
+                "Счёт без снапшотов должен исключаться из required, а не обнулять список")
+        #expect(!required.isEmpty,
+                "Регрессия BUG #2: счёт без снапшотов не должен приводить к пустому required-списку")
+    }
+
+    @Test("Интеграция: 3 последовательных закрытых снапшота дают непустой aggregated график")
+    func testAggregatedChartNotEmptyWithConsecutiveClosedSnapshots() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let dayMinus3 = calendar.date(byAdding: .day, value: -3, to: today)!
+        let dayMinus2 = calendar.date(byAdding: .day, value: -2, to: today)!
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+
+        let card = Card(name: "Основная", cardNumber: "4242", bank: .other, cardType: .debit, currency: "RUB", balance: 130_000)
+        card.createdAt = dayMinus3
+        let group = FinanceGroup(name: "Счета", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.createdAt = dayMinus3
+        account.group = group
+        group.accounts = [account]
+
+        modelContext.insert(card)
+        modelContext.insert(group)
+        modelContext.insert(account)
+        insertAccountSnapshot(modelContext, accountID: card.cardUniqueID, date: dayMinus3, amount: 100_000)
+        insertAccountSnapshot(modelContext, accountID: card.cardUniqueID, date: dayMinus2, amount: 110_000)
+        insertAccountSnapshot(modelContext, accountID: card.cardUniqueID, date: yesterday, amount: 120_000)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+
+        #expect(dynamicsViewModel.state.chartData.count >= 2,
+                "При 2+ закрытых снапшотах без gaps aggregated график не должен быть пустым (.authoritative)")
+    }
 }

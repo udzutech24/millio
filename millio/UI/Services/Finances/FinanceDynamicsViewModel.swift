@@ -1518,10 +1518,21 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     return
                 case .gap:
                     guard isCurrentChartUpdateRevision(revision) else { return }
+                    // Диагностика: логируем причину пустого графа (AC4, specs/2026-06-24)
+                    AppLogger.log(
+                        .debug,
+                        category: "FinanceDynamics",
+                        "chartData пуст — .gap (accountIDs: \(visibleAccounts.map(\.accountID)), period: \(period.start)–\(period.end), currency: \(state.displayCurrency))"
+                    )
                     state.chartData = []
                     return
                 case .insufficient:
                     guard isCurrentChartUpdateRevision(revision) else { return }
+                    AppLogger.log(
+                        .debug,
+                        category: "FinanceDynamics",
+                        "chartData пуст — .insufficient (accountIDs: \(visibleAccounts.map(\.accountID)), period: \(period.start)–\(period.end), currency: \(state.displayCurrency))"
+                    )
                     state.chartData = []
                     return
                 }
@@ -1658,7 +1669,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         requiredSnapshotAccountIDs(for: day, accounts: accounts, snapshotStartByAccountID: [:])
     }
 
-    private func requiredSnapshotAccountIDs(
+    // internal (не private) — для регрессионных unit-тестов (specs/2026-06-24, AC6)
+    func requiredSnapshotAccountIDs(
         for day: Date,
         accounts: [FinanceAccount],
         snapshotStartByAccountID: [String: Date]
@@ -1677,7 +1689,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             .map(\.accountID)
     }
 
-    private func earliestClosedSnapshotDateByAccount(
+    // internal (не private) — для регрессионных unit-тестов (specs/2026-06-24, AC6)
+    func earliestClosedSnapshotDateByAccount(
         accountIDs: [String],
         baseCurrency: String
     ) -> [String: Date] {
@@ -1711,6 +1724,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                   let date = AccountDailySnapshotReader.date(from: snapshot.dateKey) else {
                 return
             }
+            // Храним ПЕРВУЮ (минимальную) дату закрытого снапшота по каждому счёту:
+            // существующая запись сохраняется, если она не позже новой даты (skip).
+            // Инвариант закреплён регрессионным тестом (specs/2026-06-24, AC1/AC6) —
+            // инверсия сравнения на `>=` даёт максимум и ломает aggregated-график.
             if let existing = result[snapshot.accountID], existing <= date { return }
             result[snapshot.accountID] = date
         }
