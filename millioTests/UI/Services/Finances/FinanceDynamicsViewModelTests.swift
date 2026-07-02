@@ -48,7 +48,9 @@ struct FinanceDynamicsViewModelTests {
         FinanceGroup.self,
         FinanceAccount.self,
         CashflowTransaction.self,
-        HistoricalRate.self
+        HistoricalRate.self,
+        AccountDailySnapshot.self,
+        PortfolioDailySnapshot.self
     ])
     private static var retainedContainers: [ModelContainer] = []
 
@@ -74,6 +76,29 @@ struct FinanceDynamicsViewModelTests {
             }
             try? await Task.sleep(nanoseconds: intervalNanoseconds)
         }
+    }
+
+    private func insertAccountSnapshot(
+        _ context: ModelContext,
+        accountID: String,
+        date: Date,
+        amount: Double,
+        state: DailySnapshotState = .closed,
+        updatedAt: Date? = nil
+    ) {
+        context.insert(AccountDailySnapshot(
+            accountID: accountID,
+            dateKey: AccountDailySnapshotReader.dateKey(for: date),
+            accountBalance: amount,
+            accountCurrency: "RUB",
+            baseCurrency: "RUB",
+            fxRateToBase: 1,
+            balanceInBaseCurrency: amount,
+            rateProvider: "test",
+            snapshotState: state,
+            closedAt: state.isFullyClosed ? date : nil,
+            updatedAt: updatedAt ?? date
+        ))
     }
 
     @Test("Период 1 день маппится на один день")
@@ -103,6 +128,429 @@ struct FinanceDynamicsViewModelTests {
 
         #expect(interval >= 86_300)
         #expect(interval <= 86_500)
+    }
+
+    @Test("Aggregated график пустой, если account snapshots еще не накопились")
+    func testAggregatedChartIsEmptyWhenSnapshotsAreMissing() async throws {
+        let modelContext = try createTestModelContext()
+        let now = Date()
+
+        let card = Card(
+            name: "Основная",
+            cardNumber: "4242",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 123_456
+        )
+        card.initialBalance = 100_000
+        card.hasInitialBalance = true
+        card.createdAt = now.addingTimeInterval(-7 * 86_400)
+
+        let group = FinanceGroup(name: "Счета", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+
+        modelContext.insert(card)
+        modelContext.insert(group)
+        modelContext.insert(account)
+
+        let income = CashflowTransaction(
+            transactionType: .income,
+            amount: 23_456,
+            currency: "RUB",
+            transactionDate: now.addingTimeInterval(-2 * 86_400),
+            cardID: card.cardUniqueID,
+            note: "Пополнение"
+        )
+        modelContext.insert(income)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+
+        #expect(dynamicsViewModel.state.chartData.isEmpty)
+    }
+
+    @Test("Aggregated график не склеивает gaps в account snapshots")
+    func testAggregatedChartDoesNotConnectAccountSnapshotGaps() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let threeDaysAgo = calendar.date(byAdding: .day, value: -3, to: today)!
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+
+        let card = Card(
+            name: "Основная",
+            cardNumber: "4242",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 130_000
+        )
+        let group = FinanceGroup(name: "Счета", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+
+        modelContext.insert(card)
+        modelContext.insert(group)
+        modelContext.insert(account)
+        modelContext.insert(AccountDailySnapshot(
+            accountID: card.cardUniqueID,
+            dateKey: AccountDailySnapshotReader.dateKey(for: threeDaysAgo),
+            accountBalance: 100_000,
+            accountCurrency: "RUB",
+            baseCurrency: "RUB",
+            fxRateToBase: 1,
+            balanceInBaseCurrency: 100_000,
+            rateProvider: "test",
+            snapshotState: .closed,
+            closedAt: threeDaysAgo,
+            updatedAt: threeDaysAgo
+        ))
+        modelContext.insert(AccountDailySnapshot(
+            accountID: card.cardUniqueID,
+            dateKey: AccountDailySnapshotReader.dateKey(for: yesterday),
+            accountBalance: 130_000,
+            accountCurrency: "RUB",
+            baseCurrency: "RUB",
+            fxRateToBase: 1,
+            balanceInBaseCurrency: 130_000,
+            rateProvider: "test",
+            snapshotState: .closed,
+            closedAt: yesterday,
+            updatedAt: yesterday
+        ))
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+
+        #expect(dynamicsViewModel.state.chartData.isEmpty)
+    }
+
+    @Test("Aggregated график показывает migration anchor плюс live today")
+    func testAggregatedChartUsesLegacyAnchorAndLiveToday() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+
+        let card = Card(
+            name: "Legacy",
+            cardNumber: "4242",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 29_576_639
+        )
+        card.uniqueID = "legacy-anchor-card"
+        card.createdAt = calendar.date(byAdding: .day, value: -120, to: today)!
+        card.hasInitialBalance = false
+
+        let group = FinanceGroup(name: "Счета", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+
+        modelContext.insert(card)
+        modelContext.insert(group)
+        modelContext.insert(account)
+        insertAccountSnapshot(
+            modelContext,
+            accountID: card.cardUniqueID,
+            date: yesterday,
+            amount: 29_573_518
+        )
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        financeViewModel.state.displayCurrency = "RUB"
+        financeViewModel.state.totalAmount = card.balance
+        financeViewModel.state.groups = [group]
+        financeViewModel.state.availableCards = [card]
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.state.displayCurrency = "RUB"
+        dynamicsViewModel.state.period = .week
+        dynamicsViewModel.state.dynamicsMode = .aggregated
+        dynamicsViewModel.state.groups = [group]
+        dynamicsViewModel.state.availableCards = [card]
+        dynamicsViewModel.rebuildCaches()
+
+        await dynamicsViewModel.updateChartDataAsync()
+        await dynamicsViewModel.updateCurrentBalanceAndDelta()
+        await dynamicsViewModel.updateDynamicsBreakdown()
+
+        let chartPoints = dynamicsViewModel.state.chartData.sorted { $0.date < $1.date }
+        #expect(chartPoints.count == 2)
+        #expect(calendar.isDate(chartPoints[0].date, inSameDayAs: yesterday))
+        #expect(abs(chartPoints[0].value - 29_573_518) < 0.01)
+        #expect(calendar.isDate(chartPoints[1].date, inSameDayAs: today))
+        #expect(abs(chartPoints[1].value - 29_576_639) < 0.01)
+        #expect(abs(dynamicsViewModel.state.currentBalance - 29_576_639) < 0.01)
+        #expect(abs(dynamicsViewModel.state.periodDelta.absolute - 3_121) < 0.01)
+        #expect(dynamicsViewModel.state.dynamicsBreakdown.count == 1)
+        #expect(abs((dynamicsViewModel.state.dynamicsBreakdown.first?.startValue ?? 0) - 29_573_518) < 0.01)
+        #expect(abs((dynamicsViewModel.state.dynamicsBreakdown.first?.endValue ?? 0) - 29_576_639) < 0.01)
+    }
+
+    @Test("Aggregated total-row сходится с детализацией и live total")
+    func testAggregatedTotalRowMatchesSnapshotBackedChart() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let twoDaysAgo = calendar.date(byAdding: .day, value: -2, to: today)!
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+
+        let cardA = Card(
+            name: "Вклады",
+            cardNumber: "1111",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 80_000_000
+        )
+        let cardB = Card(
+            name: "Акции",
+            cardNumber: "2222",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 14_920_726
+        )
+        cardA.createdAt = twoDaysAgo
+        cardB.createdAt = twoDaysAgo
+        let groupA = FinanceGroup(name: "Вклады", colorHex: "#FFFFFF")
+        let groupB = FinanceGroup(name: "Акции", colorHex: "#FFFFFF")
+        let accountA = FinanceAccount(accountType: .card, accountID: cardA.cardUniqueID)
+        let accountB = FinanceAccount(accountType: .card, accountID: cardB.cardUniqueID)
+        accountA.createdAt = twoDaysAgo
+        accountB.createdAt = twoDaysAgo
+        accountA.group = groupA
+        accountB.group = groupB
+        groupA.accounts = [accountA]
+        groupB.accounts = [accountB]
+
+        modelContext.insert(cardA)
+        modelContext.insert(cardB)
+        modelContext.insert(groupA)
+        modelContext.insert(groupB)
+        modelContext.insert(accountA)
+        modelContext.insert(accountB)
+
+        modelContext.insert(AccountDailySnapshot(
+            accountID: cardA.cardUniqueID,
+            dateKey: AccountDailySnapshotReader.dateKey(for: twoDaysAgo),
+            accountBalance: 50_000_000,
+            accountCurrency: "RUB",
+            baseCurrency: "RUB",
+            fxRateToBase: 1,
+            balanceInBaseCurrency: 50_000_000,
+            rateProvider: "test",
+            snapshotState: .closed,
+            closedAt: twoDaysAgo
+        ))
+        modelContext.insert(AccountDailySnapshot(
+            accountID: cardB.cardUniqueID,
+            dateKey: AccountDailySnapshotReader.dateKey(for: twoDaysAgo),
+            accountBalance: 10_178_634,
+            accountCurrency: "RUB",
+            baseCurrency: "RUB",
+            fxRateToBase: 1,
+            balanceInBaseCurrency: 10_178_634,
+            rateProvider: "test",
+            snapshotState: .closed,
+            closedAt: twoDaysAgo
+        ))
+        modelContext.insert(AccountDailySnapshot(
+            accountID: cardA.cardUniqueID,
+            dateKey: AccountDailySnapshotReader.dateKey(for: yesterday),
+            accountBalance: 80_000_000,
+            accountCurrency: "RUB",
+            baseCurrency: "RUB",
+            fxRateToBase: 1,
+            balanceInBaseCurrency: 80_000_000,
+            rateProvider: "test",
+            snapshotState: .closed,
+            closedAt: yesterday,
+            updatedAt: yesterday
+        ))
+        modelContext.insert(AccountDailySnapshot(
+            accountID: cardB.cardUniqueID,
+            dateKey: AccountDailySnapshotReader.dateKey(for: yesterday),
+            accountBalance: 14_920_533,
+            accountCurrency: "RUB",
+            baseCurrency: "RUB",
+            fxRateToBase: 1,
+            balanceInBaseCurrency: 14_920_533,
+            rateProvider: "test",
+            snapshotState: .closed,
+            closedAt: yesterday,
+            updatedAt: yesterday
+        ))
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        await waitUntil { financeViewModel.state.groups.count == 2 }
+        await waitUntil { abs(financeViewModel.state.totalAmount - 94_920_726) < 0.01 }
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.period = .custom
+        dynamicsViewModel.state.customPeriod = (start: twoDaysAgo, end: Date())
+
+        await dynamicsViewModel.updateChartDataAsync()
+        await dynamicsViewModel.updateCurrentBalanceAndDelta()
+        await dynamicsViewModel.updateDynamicsBreakdown()
+
+        let chartStart = try #require(dynamicsViewModel.state.chartData.first?.value)
+        let chartEnd = try #require(dynamicsViewModel.state.chartData.last?.value)
+        let totalRow = try #require(FinanceDynamicsPresentation.totalRow(
+            from: dynamicsViewModel.state.dynamicsBreakdown,
+            viewMode: .groups
+        ))
+        let detailStart = dynamicsViewModel.state.dynamicsBreakdown.reduce(0) { $0 + $1.startValue }
+        let detailEnd = dynamicsViewModel.state.dynamicsBreakdown.reduce(0) { $0 + $1.endValue }
+
+        #expect(abs(totalRow.startValue - chartStart) < 0.01)
+        #expect(abs(totalRow.startValue - detailStart) < 0.01)
+        #expect(abs(totalRow.endValue - chartEnd) < 0.01)
+        #expect(abs(totalRow.endValue - detailEnd) < 0.01)
+        #expect(abs(totalRow.endValue - financeViewModel.state.totalAmount) < 0.01)
+        #expect(abs(totalRow.delta - (chartEnd - chartStart)) < 0.01)
+    }
+
+    @Test("SelectedDate меняет header, total-row и детализацию по одним account snapshots")
+    func testSelectedDateUsesSameAccountSnapshotsForHeaderTotalRowAndDetails() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let twoDaysAgo = calendar.date(byAdding: .day, value: -2, to: today)!
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+
+        let cardA = Card(
+            name: "A",
+            cardNumber: "1111",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        let cardB = Card(
+            name: "B",
+            cardNumber: "2222",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 2_000
+        )
+        cardA.createdAt = twoDaysAgo
+        cardB.createdAt = twoDaysAgo
+        let groupA = FinanceGroup(name: "A", colorHex: "#FFFFFF")
+        let groupB = FinanceGroup(name: "B", colorHex: "#FFFFFF")
+        let accountA = FinanceAccount(accountType: .card, accountID: cardA.cardUniqueID)
+        let accountB = FinanceAccount(accountType: .card, accountID: cardB.cardUniqueID)
+        accountA.createdAt = twoDaysAgo
+        accountB.createdAt = twoDaysAgo
+        accountA.group = groupA
+        accountB.group = groupB
+        groupA.accounts = [accountA]
+        groupB.accounts = [accountB]
+
+        modelContext.insert(cardA)
+        modelContext.insert(cardB)
+        modelContext.insert(groupA)
+        modelContext.insert(groupB)
+        modelContext.insert(accountA)
+        modelContext.insert(accountB)
+
+        insertAccountSnapshot(modelContext, accountID: cardA.cardUniqueID, date: twoDaysAgo, amount: 100)
+        insertAccountSnapshot(modelContext, accountID: cardB.cardUniqueID, date: twoDaysAgo, amount: 200)
+        insertAccountSnapshot(modelContext, accountID: cardA.cardUniqueID, date: yesterday, amount: 150)
+        insertAccountSnapshot(modelContext, accountID: cardB.cardUniqueID, date: yesterday, amount: 250)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        await waitUntil { financeViewModel.state.groups.count == 2 }
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.period = .custom
+        dynamicsViewModel.state.customPeriod = (start: twoDaysAgo, end: Date())
+
+        await dynamicsViewModel.updateChartDataAsync()
+        dynamicsViewModel.handle(.selectDateOnChart(yesterday))
+        await waitUntil { abs(dynamicsViewModel.state.currentBalance - 400) < 0.01 }
+        await dynamicsViewModel.updateDynamicsBreakdown()
+
+        let selectedPoint = try #require(dynamicsViewModel.state.chartData.first {
+            calendar.isDate($0.date, inSameDayAs: yesterday)
+        })
+        let totalRow = try #require(FinanceDynamicsPresentation.totalRow(
+            from: dynamicsViewModel.state.dynamicsBreakdown,
+            viewMode: .groups
+        ))
+        let detailEnd = dynamicsViewModel.state.dynamicsBreakdown.reduce(0) { $0 + $1.endValue }
+
+        #expect(abs(selectedPoint.value - 400) < 0.01)
+        #expect(abs(dynamicsViewModel.state.currentBalance - 400) < 0.01)
+        #expect(abs(totalRow.endValue - 400) < 0.01)
+        #expect(abs(detailEnd - 400) < 0.01)
+        #expect(abs(totalRow.delta - 100) < 0.01)
+        #expect(abs(dynamicsViewModel.state.periodDelta.absolute - 100) < 0.01)
     }
 
     @Test("Ручная корректировка долга учитывается в динамике без транзакций")
@@ -562,8 +1010,12 @@ struct FinanceDynamicsViewModelTests {
         #expect(dynamicsViewModel.state.dynamicsBreakdown.contains { $0.name == FinanceSystemGroups.ungroupedName })
     }
 
-    @Test("Aggregated chart хранит archived history, а header и breakdown остаются visible-only")
+    @Test("Aggregated chart, header и breakdown используют один visible account set после архивации")
     func testAggregatedChartUsesHistoricalAccountsWhileHeaderAndBreakdownStayVisible() async throws {
+        let previousPrimaryCurrency = SettingsManager.shared.primaryCurrencyCode
+        SettingsManager.shared.primaryCurrencyCode = "RUB"
+        defer { SettingsManager.shared.primaryCurrencyCode = previousPrimaryCurrency }
+
         let modelContext = try createTestModelContext()
         let now = Date()
         let createdAt = now.addingTimeInterval(-10 * 86_400)
@@ -593,6 +1045,7 @@ struct FinanceDynamicsViewModelTests {
         archivedLaterCard.updatedAt = now
         archivedLaterCard.initialBalance = 10_000_000
         archivedLaterCard.hasInitialBalance = true
+        archivedLaterCard.archivedAt = now
 
         let group = FinanceGroup(name: "Вклады", colorHex: "#FFFFFF")
         let ungroupedGroup = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: "#3C4B5E")
@@ -611,42 +1064,71 @@ struct FinanceDynamicsViewModelTests {
         modelContext.insert(ungroupedGroup)
         modelContext.insert(visibleAccount)
         modelContext.insert(archivedLaterAccount)
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        let weekStart = calendar.startOfDay(
+            for: calendar.date(byAdding: .day, value: -7, to: today) ?? createdAt
+        )
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today) ?? today
+        var snapshotDay = weekStart
+        while snapshotDay <= yesterday {
+            insertAccountSnapshot(
+                modelContext,
+                accountID: visibleCard.cardUniqueID,
+                date: snapshotDay,
+                amount: 97_566_945
+            )
+            insertAccountSnapshot(
+                modelContext,
+                accountID: archivedLaterCard.cardUniqueID,
+                date: snapshotDay,
+                amount: 10_000_000
+            )
+            guard let next = calendar.date(byAdding: .day, value: 1, to: snapshotDay) else { break }
+            snapshotDay = next
+        }
         try modelContext.save()
 
         let financeViewModel = FinanceViewModel(
             modelContext: modelContext,
             currencyService: MockDynamicsCurrencyRateService(),
-            skipInitialLoad: false
+            skipInitialLoad: true
         )
         let dynamicsViewModel = FinanceDynamicsViewModel(
             modelContext: modelContext,
             financeViewModel: financeViewModel,
             currencyService: MockDynamicsCurrencyRateService()
         )
-        dynamicsViewModel.handle(.loadData)
-        await waitUntil { !dynamicsViewModel.state.isLoading }
+
+        financeViewModel.state.displayCurrency = "RUB"
+        financeViewModel.state.totalAmount = visibleCard.balance
+        financeViewModel.state.groups = [group, ungroupedGroup]
+        financeViewModel.state.availableCards = [visibleCard, archivedLaterCard]
+
+        dynamicsViewModel.state.availableCards = [visibleCard, archivedLaterCard]
+        dynamicsViewModel.state.availableCredits = []
+        dynamicsViewModel.state.availableInvestments = []
+        dynamicsViewModel.state.groups = [group, ungroupedGroup]
+        dynamicsViewModel.state.displayCurrency = "RUB"
         dynamicsViewModel.state.period = .week
         dynamicsViewModel.state.dynamicsMode = .aggregated
         dynamicsViewModel.state.viewMode = .accounts
+        dynamicsViewModel.rebuildCaches()
 
-        // FIX #2: snapshot ДО архивации — доказывает, что архивация реально изменила данные
-        await dynamicsViewModel.updateCurrentBalanceAndDelta()
-        await dynamicsViewModel.updateChartDataAsync()
-        let beforeArchivePoints = dynamicsViewModel.state.chartData.sorted { $0.date < $1.date }
-        let beforeArchiveStart = try #require(beforeArchivePoints.first?.value)
-        let beforeArchiveBalance = dynamicsViewModel.state.currentBalance
-
-        // FIX #1: явно выставляем archivedAt, чтобы isAccountArchived не зависел от
-        // порядка эвентов между removeAccountFromGroup и перестройкой cardsCache
-        archivedLaterCard.archivedAt = now
-
-        financeViewModel.handle(.removeAccountFromGroup(archivedLaterAccount))
-        dynamicsViewModel.handle(.loadData)
-        // FIX #5: state.dynamicsMode и viewMode выставляем строго ПОСЛЕ второго waitUntil
-        await waitUntil { !dynamicsViewModel.state.isLoading }
-        dynamicsViewModel.state.period = .week
-        dynamicsViewModel.state.dynamicsMode = .aggregated
-        dynamicsViewModel.state.viewMode = .accounts
+        let visibleSnapshotPoints = AccountDailySnapshotReader.accountPortfolioDailyPoints(
+            context: modelContext,
+            accountIDs: [visibleCard.cardUniqueID],
+            baseCurrency: "RUB",
+            startDate: weekStart,
+            endDate: yesterday,
+            requiredAccountIDsByDateKey: { _, day in
+                calendar.startOfDay(for: visibleCard.createdAt) <= calendar.startOfDay(for: day)
+                    ? [visibleCard.cardUniqueID]
+                    : []
+            }
+        )
+        #expect(!visibleSnapshotPoints.isEmpty, "reader должен видеть visible-only account snapshots")
 
         await dynamicsViewModel.updateCurrentBalanceAndDelta()
         await dynamicsViewModel.updateChartDataAsync()
@@ -656,24 +1138,19 @@ struct FinanceDynamicsViewModelTests {
             .sorted { $0.date < $1.date }
         let breakdown = dynamicsViewModel.state.dynamicsBreakdown
 
-        // FIX #3: явная проверка что в breakdown только visibleAccount (архивированный исключён)
         #expect(breakdown.count == 1, "только visibleAccount должен быть в breakdown — архивированный счёт убран")
 
         let breakdownStart = breakdown.reduce(0) { $0 + $1.startValue }
         let breakdownEnd = breakdown.reduce(0) { $0 + $1.endValue }
         let expectedDelta = breakdownEnd - breakdownStart
 
-        // Архивация убирает счёт из live header, но не должна переписывать chart history.
-        #expect(!beforeArchivePoints.isEmpty, "до архивации должны быть точки на графике")
-        #expect(beforeArchiveBalance - dynamicsViewModel.state.currentBalance > 1_000_000,
-                "После архивации баланс должен уменьшиться на сумму архивированного счёта (~10M)")
-
+        // Архивация убирает счёт из live header и из aggregated chart account set.
         #expect(!chartPoints.isEmpty)
         let afterArchiveStart = try #require(chartPoints.first?.value)
-        #expect(abs(afterArchiveStart - beforeArchiveStart) < 0.01,
-                "Старт графика должен сохранить archived history, а не сжаться до visible-only")
-        #expect(afterArchiveStart - breakdownStart > 1_000_000,
-                "Historical chart ожидаемо выше visible-only breakdown до snapshot-модели")
+        #expect(abs(afterArchiveStart - 97_566_945) < 0.01,
+                "После архивации aggregated chart должен начинаться с visible-only snapshot")
+        #expect(abs(afterArchiveStart - breakdownStart) < 0.01,
+                "Старт графика должен совпадать с visible-only breakdown")
         #expect(abs((chartPoints.last?.value ?? 0) - breakdownEnd) < 0.01,
                 "Финиш графика после archivedAt должен совпадать с visible-only endValue")
         #expect(abs(dynamicsViewModel.state.currentBalance - breakdownEnd) < 0.01,
@@ -1533,12 +2010,9 @@ struct FinanceDynamicsViewModelTests {
         dynamicsViewModel.state.period = .year
 
         await dynamicsViewModel.updateChartDataAsync()
-        await waitUntil {
-            dynamicsViewModel.state.chartData.isEmpty == false
-        }
 
         #expect(dynamicsViewModel.state.periodStartDate >= createdAt)
-        #expect((dynamicsViewModel.state.chartData.first?.date ?? .distantPast) >= createdAt)
+        #expect(dynamicsViewModel.state.chartData.isEmpty)
     }
 
     @Test("Breakdown по акциям использует общий старт периода и показывает ноль до появления позиции")

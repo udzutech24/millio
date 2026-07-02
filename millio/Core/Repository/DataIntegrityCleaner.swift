@@ -57,8 +57,10 @@ enum DataIntegrityCleaner {
     /// - Parameter scopeIdentifier: имя store (например "millio_guest" или "millio_user_<hash>").
     ///   Включается в ключ UserDefaults, чтобы миграция выполнялась независимо
     ///   для guest-store и каждого user-store.
-    static func archiveZeroQuantityInvestmentsIfNeeded(modelContext: ModelContext, scopeIdentifier: String) throws {
-        let key = "migration.archiveZeroQuantityInvestments.v1.\(scopeIdentifier)"
+    static func archiveZeroQuantityInvestmentsIfNeeded(modelContext: ModelContext, scopeIdentifier: String = "default") throws {
+        let key = scopeIdentifier == "default"
+            ? "migration.archiveZeroQuantityInvestments.v1"
+            : "migration.archiveZeroQuantityInvestments.v1.\(scopeIdentifier)"
         guard !UserDefaults.standard.bool(forKey: key) else { return }
 
         var descriptor = FetchDescriptor<Investment>()

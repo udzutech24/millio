@@ -55,14 +55,17 @@ struct DataIntegrityCleanerMigrationTests {
 
         // Создаём три позиции: две "проданных" и одну активную
         let soldA = Investment(name: "AAPL", amount: 0)
+        soldA.category = .stocks
         soldA.marketQuantity = 0.0
         soldA.archivedAt = nil
 
         let soldB = Investment(name: "BTC", amount: 0)
+        soldB.category = .crypto
         soldB.marketQuantity = nil   // nil тоже считается нулём (аналогично executeInvestmentOrder)
         soldB.archivedAt = nil
 
         let active = Investment(name: "TSLA", amount: 5000)
+        active.category = .stocks
         active.marketQuantity = 5.0
         active.archivedAt = nil
 
@@ -91,6 +94,7 @@ struct DataIntegrityCleanerMigrationTests {
         let ctx = try makeContext()
 
         let alreadyArchived = Investment(name: "AAPL", amount: 0)
+        alreadyArchived.category = .stocks
         alreadyArchived.marketQuantity = 0.0
         let originalDate = Date(timeIntervalSince1970: 1_000_000)
         alreadyArchived.archivedAt = originalDate
@@ -111,6 +115,7 @@ struct DataIntegrityCleanerMigrationTests {
         let ctx = try makeContext()
 
         let sold = Investment(name: "ETH", amount: 0)
+        sold.category = .crypto
         sold.marketQuantity = 0.0
         sold.archivedAt = nil
         ctx.insert(sold)

@@ -16,13 +16,17 @@ struct BackupRestoreIntegrityTests {
             FinanceAccount.self,
             CashflowTransaction.self,
             CashflowCustomCategory.self,
-            HistoricalRate.self
+            HistoricalRate.self,
+            AccountDailySnapshot.self,
+            PortfolioDailySnapshot.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: [config])
     }
     
     private func resetAll(in context: ModelContext) throws {
+        try context.deleteAll(AccountDailySnapshot.self)
+        try context.deleteAll(PortfolioDailySnapshot.self)
         try context.deleteAll(CashflowTransaction.self)
         try context.deleteAll(CashflowCustomCategory.self)
         try context.deleteAll(HistoricalRate.self)
@@ -360,6 +364,61 @@ struct BackupRestoreIntegrityTests {
         #expect(stateVisible, "FinanceViewModel.state.groups должны появиться после restoreCompleted")
         #expect(viewModel.state.groups.first?.name == "Основная")
         #expect(!viewModel.state.availableCards.isEmpty, "availableCards должны появиться после restoreCompleted")
+    }
+
+    @Test("Backup/restore сохраняет daily snapshots без дублей")
+    func testDailySnapshotsRoundTripThroughBackupRestore() async throws {
+        let registryState = ModelTypeRegistry.shared.captureState()
+        defer { ModelTypeRegistry.shared.restoreState(registryState) }
+        FinanceFeatureRegistration.register()
+
+        let container = makeContainer()
+        let context = container.mainContext
+        try resetAll(in: context)
+
+        context.insert(AccountDailySnapshot(
+            accountID: "card-1",
+            dateKey: "2026-06-20",
+            accountBalance: 200,
+            accountCurrency: "USD",
+            baseCurrency: "RUB",
+            fxRateToBase: 90,
+            balanceInBaseCurrency: 18_000,
+            rateProvider: "historical",
+            rateTimestamp: Date(timeIntervalSince1970: 1_000),
+            snapshotState: .closed,
+            timezoneIdentifier: "Europe/Istanbul",
+            closedAt: Date(timeIntervalSince1970: 1_100),
+            createdAt: Date(timeIntervalSince1970: 900),
+            updatedAt: Date(timeIntervalSince1970: 1_100)
+        ))
+        context.insert(PortfolioDailySnapshot(
+            dateKey: "2026-06-20",
+            totalBalanceInBaseCurrency: 18_000,
+            baseCurrency: "RUB",
+            snapshotState: .closed,
+            timezoneIdentifier: "Europe/Istanbul",
+            closedAt: Date(timeIntervalSince1970: 1_100),
+            createdAt: Date(timeIntervalSince1970: 900),
+            updatedAt: Date(timeIntervalSince1970: 1_100)
+        ))
+        try context.save()
+
+        let backupData = try DataRepository.exportAllData(from: context)
+        let repository = DataRepository(modelContext: context, modelContainer: container)
+
+        try await repository.clearAllDataAsync()
+        try await repository.importAllDataAsync(backupData)
+        try await repository.importAllDataAsync(backupData)
+
+        let accountSnapshots = try context.fetch(FetchDescriptor<AccountDailySnapshot>())
+        let portfolioSnapshots = try context.fetch(FetchDescriptor<PortfolioDailySnapshot>())
+
+        #expect(accountSnapshots.count == 1)
+        #expect(accountSnapshots.first?.accountBalance == 200)
+        #expect(accountSnapshots.first?.balanceInBaseCurrency == 18_000)
+        #expect(portfolioSnapshots.count == 1)
+        #expect(portfolioSnapshots.first?.totalBalanceInBaseCurrency == 18_000)
     }
 
     @Test("runIfNeeded выполняется только один раз и выставляет флаг в UserDefaults")

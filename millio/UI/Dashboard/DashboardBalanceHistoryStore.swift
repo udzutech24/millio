@@ -45,6 +45,15 @@ enum DashboardBalanceHistoryStore {
         }
     }
 
+    /// Сырые данные для одноразовой миграции в SwiftData daily snapshots.
+    static func loadRaw() -> [Record] {
+        loadAll()
+    }
+
+    static func clearUserDefaults() {
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
     private static func loadAll() -> [Record] {
         guard let data = UserDefaults.standard.data(forKey: key),
               let decoded = try? JSONDecoder().decode([Record].self, from: data)

@@ -37,6 +37,12 @@ enum FinanceFeatureRegistration {
             return exported
         }
         ModelTypeRegistry.shared.registerImporter(FinanceAccountImporter.self)
+
+        ModelTypeRegistry.shared.register(AccountDailySnapshot.self, typeName: "AccountDailySnapshot")
+        ModelTypeRegistry.shared.registerImporter(AccountDailySnapshotImporter.self)
+
+        ModelTypeRegistry.shared.register(PortfolioDailySnapshot.self, typeName: "PortfolioDailySnapshot")
+        ModelTypeRegistry.shared.registerImporter(PortfolioDailySnapshotImporter.self)
     }
 }
 

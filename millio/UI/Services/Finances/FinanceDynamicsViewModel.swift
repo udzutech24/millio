@@ -138,6 +138,12 @@ struct ChartDataPoint: Identifiable, Equatable {
     }
 }
 
+private enum AccountSnapshotSeriesResult {
+    case authoritative([ChartDataPoint])
+    case insufficient
+    case gap
+}
+
 // MARK: - Dynamics Mode
 
 enum DynamicsMode: Equatable {
@@ -805,6 +811,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private func updateCurrentBalanceAndDelta(for selectedDate: Date?) async {
         if Task.isCancelled { return }
 
+        if usesAccountSnapshotSeriesForCurrentSelection(),
+           applyAccountSnapshotSeriesBalance(selectedDate: selectedDate) {
+            return
+        }
+
         let accounts = getAccountsForCalculation(scope: .currentVisible)
         // Период вычисляем по всем счетам (включая archived), чтобы диапазон не плыл при архивации.
         // Расчёты баланса/дельты ниже идут только по visible accounts.
@@ -886,6 +897,36 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             useNetTotals: useNetTotals
         )
         state.periodDelta = (delta, calculateDeltaPercent(delta: delta, startBalance: startBalance))
+    }
+
+    private func usesAccountSnapshotSeriesForCurrentSelection() -> Bool {
+        guard case .aggregated = state.dynamicsMode else { return false }
+        return !state.isSingleGroupMode &&
+            !state.isSingleAccountMode &&
+            state.selectedGroupIDs.isEmpty &&
+            state.selectedAccountIDs.isEmpty
+    }
+
+    private func applyAccountSnapshotSeriesBalance(selectedDate: Date?) -> Bool {
+        guard !state.chartData.isEmpty else { return false }
+        let calendar = Calendar.current
+        let targetPoint: ChartDataPoint
+        if let selectedDate {
+            let selectedDay = calendar.startOfDay(for: selectedDate)
+            guard let point = state.chartData.last(where: { calendar.isDate($0.date, inSameDayAs: selectedDay) }) else {
+                return false
+            }
+            targetPoint = point
+        } else {
+            guard let point = state.chartData.last else { return false }
+            targetPoint = point
+        }
+
+        guard let startPoint = state.chartData.first else { return false }
+        let delta = targetPoint.value - startPoint.value
+        state.currentBalance = targetPoint.value
+        state.periodDelta = (delta, calculateDeltaPercent(delta: delta, startBalance: startPoint.value))
+        return true
     }
     
     /// Получить счета для расчета под конкретный balance scope.
@@ -1047,6 +1088,17 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let selectedGroupIDs = state.selectedGroupIDs
         let selectedAccountIDs = state.selectedAccountIDs
         let groups = state.groups
+
+        if usesAccountSnapshotSeriesForCurrentSelection(),
+           let snapshotBreakdown = await buildSnapshotBackedBreakdown(
+               viewMode: viewMode,
+               groups: groups,
+               selectedGroupIDs: selectedGroupIDs,
+               selectedAccountIDs: selectedAccountIDs
+           ) {
+            state.dynamicsBreakdown = snapshotBreakdown
+            return
+        }
 
         switch viewMode {
         case .groups:
@@ -1255,6 +1307,165 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             state.dynamicsBreakdown = breakdown
         }
     }
+
+    private func buildSnapshotBackedBreakdown(
+        viewMode: DynamicsViewMode,
+        groups: [FinanceGroup],
+        selectedGroupIDs: Set<String>,
+        selectedAccountIDs: Set<String>
+    ) async -> [DynamicsBreakdownItem]? {
+        guard let startPoint = state.chartData.first else { return nil }
+        let calendar = Calendar.current
+        let startKey = AccountDailySnapshotReader.dateKey(for: startPoint.date)
+        let selectedDate = state.selectedDate.map { calendar.startOfDay(for: $0) }
+        let selectedEndKey = selectedDate.map(AccountDailySnapshotReader.dateKey(for:))
+        let displayCurrency = state.displayCurrency
+        let today = calendar.startOfDay(for: Date())
+        let selectedDateIsToday = selectedDate.map { calendar.isDate($0, inSameDayAs: today) } ?? false
+
+        switch viewMode {
+        case .groups:
+            let groupsToShow = selectedGroupIDs.isEmpty
+                ? groups
+                : groups.filter { selectedGroupIDs.contains($0.groupUniqueID) }
+
+            var items: [DynamicsBreakdownItem] = []
+            for group in groupsToShow {
+                let groupAccounts = getAccounts(for: group)
+                let filteredAccounts = selectedAccountIDs.isEmpty
+                    ? groupAccounts
+                    : groupAccounts.filter { selectedAccountIDs.contains($0.accountUniqueID) }
+                guard !filteredAccounts.isEmpty else { continue }
+                guard let startValue = snapshotTotal(accounts: filteredAccounts, dateKey: startKey) else {
+                    return nil
+                }
+
+                let endValue: Double
+                if selectedDateIsToday || selectedEndKey == nil {
+                    guard let liveTotal = await liveTotal(accounts: filteredAccounts, displayCurrency: displayCurrency) else {
+                        return nil
+                    }
+                    endValue = liveTotal
+                } else if let selectedEndKey {
+                    guard let snapshotEndValue = snapshotTotal(accounts: filteredAccounts, dateKey: selectedEndKey) else {
+                        return nil
+                    }
+                    endValue = snapshotEndValue
+                } else {
+                    return nil
+                }
+
+                let delta = endValue - startValue
+                items.append(DynamicsBreakdownItem(
+                    id: group.groupUniqueID,
+                    name: group.name,
+                    startValue: startValue,
+                    endValue: endValue,
+                    delta: delta,
+                    deltaPercent: calculateDeltaPercent(delta: delta, startBalance: startValue),
+                    icon: nil,
+                    accountType: nil,
+                    isCreditCard: false,
+                    isArchived: false
+                ))
+            }
+            return items
+
+        case .accounts:
+            let accounts = getAccountsForCalculation(scope: .currentVisible)
+            var items: [DynamicsBreakdownItem] = []
+            for account in accounts {
+                guard let accountInfo = getAccountInfoForDynamics(account: account),
+                      let startValue = snapshotAccountValue(account: account, dateKey: startKey) else {
+                    return nil
+                }
+
+                let endValue: Double
+                if selectedDateIsToday || selectedEndKey == nil {
+                    guard let liveValue = await liveConvertedBalance(
+                        for: account,
+                        displayCurrency: displayCurrency,
+                        at: Date()
+                    ) else {
+                        return nil
+                    }
+                    endValue = liveValue
+                } else if let selectedEndKey {
+                    guard let snapshotEndValue = snapshotAccountValue(account: account, dateKey: selectedEndKey) else {
+                        return nil
+                    }
+                    endValue = snapshotEndValue
+                } else {
+                    return nil
+                }
+
+                let isCreditCard = isCreditCardDebtAccount(account)
+                let isCredit = account.accountType == .credit
+                let rawDelta = endValue - startValue
+                let delta = (isCreditCard || isCredit) ? -rawDelta : rawDelta
+                items.append(DynamicsBreakdownItem(
+                    id: account.accountUniqueID,
+                    name: accountInfo.name,
+                    startValue: startValue,
+                    endValue: endValue,
+                    delta: delta,
+                    deltaPercent: calculateDeltaPercent(delta: delta, startBalance: startValue),
+                    icon: accountInfo.icon,
+                    accountType: account.accountType,
+                    isCreditCard: isCreditCard,
+                    isArchived: isAccountArchived(account)
+                ))
+            }
+            return items
+        }
+    }
+
+    private func snapshotTotal(accounts: [FinanceAccount], dateKey: String) -> Double? {
+        var total = 0.0
+        for account in accounts {
+            guard let value = snapshotAccountValue(account: account, dateKey: dateKey) else {
+                return nil
+            }
+            total += value
+        }
+        return total
+    }
+
+    private func snapshotAccountValue(account: FinanceAccount, dateKey: String) -> Double? {
+        guard let snapshot = try? AccountDailySnapshotReader.fetchAccountSnapshot(
+            context: modelContext,
+            accountID: account.accountID,
+            dateKey: dateKey,
+            baseCurrency: state.displayCurrency
+        ),
+        DailySnapshotState(rawValue: snapshot.snapshotState)?.isFullyClosed == true else {
+            return nil
+        }
+        return snapshot.balanceInBaseCurrency
+    }
+
+    private func liveTotal(accounts: [FinanceAccount], displayCurrency: String) async -> Double? {
+        var total = 0.0
+        for account in accounts {
+            guard let value = await liveConvertedBalance(
+                for: account,
+                displayCurrency: displayCurrency,
+                at: Date()
+            ) else {
+                return nil
+            }
+            total += value
+        }
+        return total
+    }
+
+    private func isCreditCardDebtAccount(_ account: FinanceAccount) -> Bool {
+        guard account.accountType == .card,
+              let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) else {
+            return false
+        }
+        return card.cardType == .credit
+    }
     
     func updateChartDataAsync(expectedRevision: Int? = nil) async {
         let revision = expectedRevision ?? nextChartUpdateRevision()
@@ -1293,6 +1504,29 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let useNetTotals = shouldUseNetTotals()
         switch state.dynamicsMode {
         case .aggregated:
+            if usesAccountSnapshotSeriesForCurrentSelection() {
+                let snapshotSeries = await buildAccountSnapshotSeries(
+                    accounts: visibleAccounts,
+                    startDate: period.start,
+                    endDate: period.end
+                )
+                switch snapshotSeries {
+                case .authoritative(let snapshotChartData):
+                    guard isCurrentChartUpdateRevision(revision) else { return }
+                    state.chartData = snapshotChartData
+                    _ = applyAccountSnapshotSeriesBalance(selectedDate: state.selectedDate)
+                    return
+                case .gap:
+                    guard isCurrentChartUpdateRevision(revision) else { return }
+                    state.chartData = []
+                    return
+                case .insufficient:
+                    guard isCurrentChartUpdateRevision(revision) else { return }
+                    state.chartData = []
+                    return
+                }
+            }
+
             // Все счета в одну линию
             let liveEndBalanceAggr: Double? = chartAccounts.count == 1
                 && state.selectedDate == nil
@@ -1353,6 +1587,176 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 state.chartData = []
             }
         }
+    }
+
+    private func buildAccountSnapshotSeries(
+        accounts: [FinanceAccount],
+        startDate: Date,
+        endDate: Date
+    ) async -> AccountSnapshotSeriesResult {
+        guard !accounts.isEmpty else { return .insufficient }
+        let calendar = Calendar.current
+        let startDay = calendar.startOfDay(for: startDate)
+        let endDay = calendar.startOfDay(for: endDate)
+        let today = calendar.startOfDay(for: Date())
+        let lastClosedDay = calendar.date(byAdding: .day, value: -1, to: today) ?? today
+        let closedEndDay = min(endDay, lastClosedDay)
+        let snapshotStartByAccountID = earliestClosedSnapshotDateByAccount(
+            accountIDs: accounts.map(\.accountID),
+            baseCurrency: state.displayCurrency
+        )
+
+        var points: [ChartDataPoint] = []
+        if startDay <= closedEndDay {
+            let snapshotPoints = AccountDailySnapshotReader.accountPortfolioDailyPoints(
+                context: modelContext,
+                accountIDs: accounts.map(\.accountID),
+                baseCurrency: state.displayCurrency,
+                startDate: startDay,
+                endDate: closedEndDay,
+                requiredAccountIDsByDateKey: { [weak self] _, day in
+                    self?.requiredSnapshotAccountIDs(
+                        for: day,
+                        accounts: accounts,
+                        snapshotStartByAccountID: snapshotStartByAccountID
+                    ) ?? []
+                }
+            )
+            if snapshotPoints.isEmpty || hasInternalDailyGap(snapshotPoints.map(\.date)) {
+                return .gap
+            }
+            if endDay >= today, snapshotPoints.last.map({ calendar.startOfDay(for: $0.date) }) != closedEndDay {
+                return .gap
+            }
+            points.append(contentsOf: snapshotPoints.map { point in
+                ChartDataPoint(
+                    date: point.date,
+                    value: point.amount,
+                    label: L("finances.dynamics.chart.total_label")
+                )
+            })
+        }
+
+        if endDay >= today, let liveTotal = await currentPortfolioLiveTotal() {
+            points.removeAll { calendar.isDate($0.date, inSameDayAs: today) }
+            points.append(ChartDataPoint(
+                date: endDate,
+                value: liveTotal,
+                label: L("finances.dynamics.chart.total_label")
+            ))
+        }
+
+        let sortedPoints = points.sorted { $0.date < $1.date }
+        guard sortedPoints.count >= 2 else { return .insufficient }
+        if hasInternalDailyGap(sortedPoints.map(\.date)) {
+            return .gap
+        }
+        return .authoritative(sortedPoints)
+    }
+
+    private func requiredSnapshotAccountIDs(for day: Date, accounts: [FinanceAccount]) -> [String] {
+        requiredSnapshotAccountIDs(for: day, accounts: accounts, snapshotStartByAccountID: [:])
+    }
+
+    private func requiredSnapshotAccountIDs(
+        for day: Date,
+        accounts: [FinanceAccount],
+        snapshotStartByAccountID: [String: Date]
+    ) -> [String] {
+        let calendar = Calendar.current
+        let snapshotDay = calendar.startOfDay(for: day)
+        return accounts
+            .filter { account in
+                guard let snapshotStart = snapshotStartByAccountID[account.accountID] else { return false }
+                let knownStart = max(
+                    calendar.startOfDay(for: accountKnownWindowStart(account)),
+                    calendar.startOfDay(for: snapshotStart)
+                )
+                return knownStart <= snapshotDay
+            }
+            .map(\.accountID)
+    }
+
+    private func earliestClosedSnapshotDateByAccount(
+        accountIDs: [String],
+        baseCurrency: String
+    ) -> [String: Date] {
+        let accountIDSet = Set(accountIDs)
+        guard !accountIDSet.isEmpty else { return [:] }
+
+        let descriptor = FetchDescriptor<AccountDailySnapshot>(
+            predicate: #Predicate<AccountDailySnapshot> { snapshot in
+                snapshot.baseCurrency == baseCurrency
+            },
+            sortBy: [
+                SortDescriptor(\.accountID),
+                SortDescriptor(\.dateKey),
+                SortDescriptor(\.updatedAt, order: .reverse)
+            ]
+        )
+        let snapshots = ((try? modelContext.fetch(descriptor)) ?? [])
+            .filter { accountIDSet.contains($0.accountID) }
+
+        var latestByAccountAndDate: [String: AccountDailySnapshot] = [:]
+        for snapshot in snapshots {
+            let key = "\(snapshot.accountID)|\(snapshot.dateKey)"
+            if let existing = latestByAccountAndDate[key], existing.updatedAt >= snapshot.updatedAt {
+                continue
+            }
+            latestByAccountAndDate[key] = snapshot
+        }
+
+        return latestByAccountAndDate.values.reduce(into: [:]) { result, snapshot in
+            guard DailySnapshotState(rawValue: snapshot.snapshotState)?.isFullyClosed == true,
+                  let date = AccountDailySnapshotReader.date(from: snapshot.dateKey) else {
+                return
+            }
+            if let existing = result[snapshot.accountID], existing <= date { return }
+            result[snapshot.accountID] = date
+        }
+    }
+
+    private func accountKnownWindowStart(_ account: FinanceAccount) -> Date {
+        switch account.accountType {
+        case .card:
+            return cardsCache[account.accountID]?.createdAt ?? account.createdAt
+        case .credit:
+            return creditsCache[account.accountID]?.createdAt ?? account.createdAt
+        case .investment:
+            return investmentsCache[account.accountID]?.createdAt ?? account.createdAt
+        }
+    }
+
+    private func hasInternalDailyGap(_ dates: [Date]) -> Bool {
+        let calendar = Calendar.current
+        let days = dates
+            .map { calendar.startOfDay(for: $0) }
+            .sorted()
+        guard days.count >= 2 else { return false }
+
+        for index in 1..<days.count {
+            let previous = days[index - 1]
+            let current = days[index]
+            let distance = calendar.dateComponents([.day], from: previous, to: current).day ?? 0
+            if distance > 1 { return true }
+        }
+        return false
+    }
+
+    private func currentPortfolioLiveTotal() async -> Double? {
+        let sourceCurrency = normalizedConversionCurrency(financeViewModel.state.displayCurrency)
+        let targetCurrency = normalizedConversionCurrency(state.displayCurrency)
+        let amount = financeViewModel.state.totalAmount
+        guard sourceCurrency != targetCurrency else { return amount }
+        guard let rate = await currencyService.getRate(from: sourceCurrency, to: targetCurrency), rate > 0 else {
+            AppLogger.log(
+                .warning,
+                category: "Finance",
+                "[Dynamics] Failed to convert live portfolio total from \(sourceCurrency) to \(targetCurrency)."
+            )
+            return nil
+        }
+        return amount * rate
     }
     
     /// Построить временной ряд данных для графика

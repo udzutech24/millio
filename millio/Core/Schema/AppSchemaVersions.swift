@@ -76,6 +76,33 @@ enum AppSchemaV3: VersionedSchema {
     ]
 }
 
+// MARK: - V4 (daily snapshot history in SwiftData)
+
+enum AppSchemaV4: VersionedSchema {
+    static var versionIdentifier = Schema.Version(4, 0, 0)
+    static var models: [any PersistentModel.Type] = [
+        Item.self,
+        CashflowTransaction.self,
+        CashflowSystemCategoryOverride.self,
+        CashflowCustomCategory.self,
+        BudgetPlan.self,
+        BudgetCategoryLimit.self,
+        Cashback.self,
+        UserSubscription.self,
+        CashbackCustomCategory.self,
+        Card.self,
+        FinanceAccount.self,
+        FinanceGroup.self,
+        Credit.self,
+        Investment.self,
+        AssetCatalogItem.self,
+        AssetProviderMapping.self,
+        HistoricalRate.self,
+        AccountDailySnapshot.self,
+        PortfolioDailySnapshot.self,
+    ]
+}
+
 // MARK: - Текущая схема (единственный источник правды)
 
 // При добавлении нового @Model:
@@ -83,7 +110,7 @@ enum AppSchemaV3: VersionedSchema {
 //   2. Добавить lightweight stage V{N}→V{N+1} в AppMigrationPlan.stages
 //   3. Обновить этот typealias на AppSchemaV{N+1}
 //   4. Запустить SchemaConsistencyTests — должны быть зелёными
-typealias AppSchemaCurrent = AppSchemaV3
+typealias AppSchemaCurrent = AppSchemaV4
 
 // MARK: - План миграции
 
@@ -93,11 +120,13 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         AppSchemaV1.self,
         AppSchemaV2.self,
         AppSchemaV3.self,
+        AppSchemaV4.self,
     ]
 
     static var stages: [MigrationStage] = [
         .lightweight(fromVersion: AppSchemaV1.self, toVersion: AppSchemaV2.self),
         .lightweight(fromVersion: AppSchemaV2.self, toVersion: AppSchemaV3.self),
+        .lightweight(fromVersion: AppSchemaV3.self, toVersion: AppSchemaV4.self),
     ]
 }
 
@@ -125,6 +154,8 @@ extension AppMigrationPlan {
                  AssetCatalogItem.self,
                  AssetProviderMapping.self,
                  HistoricalRate.self,
+                 AccountDailySnapshot.self,
+                 PortfolioDailySnapshot.self,
             migrationPlan: AppMigrationPlan.self,
             configurations: configuration
         )
@@ -149,6 +180,8 @@ extension AppMigrationPlan {
                  AssetCatalogItem.self,
                  AssetProviderMapping.self,
                  HistoricalRate.self,
+                 AccountDailySnapshot.self,
+                 PortfolioDailySnapshot.self,
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         )

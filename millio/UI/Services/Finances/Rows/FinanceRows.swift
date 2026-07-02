@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import SwiftData
 import UniformTypeIdentifiers
 
 private struct OverflowFadeWidthKey: PreferenceKey {
@@ -442,6 +443,7 @@ private struct FinanceAccountRow: View {
     let onQuickEditAmount: () -> Void
 
     @State private var showBalanceChart = false
+    @Environment(\.modelContext) private var modelContext
 
     // Читаем баланс из viewModel в body — @ObservedObject FinanceAccountRow сам перерисуется
     // при objectWillChange, не завися от того, перерисует ли родитель FinanceGroupRow
@@ -504,12 +506,14 @@ private struct FinanceAccountRow: View {
                 }
 
                 // Sparkline истории баланса
-                let sparkPoints = AccountBalanceHistoryStore.dailyAmounts(
+                let sparkPoints = AccountDailySnapshotReader.accountDailyAmounts(
+                    context: modelContext,
                     accountID: account.accountID,
                     currency: currency,
                     daysCount: 14
-                ).compactMap { $0 }
-                if sparkPoints.count >= 2 {
+                )
+                let contiguousSparkPoints = AccountDailySnapshotReader.contiguousKnownAmounts(from: sparkPoints)
+                if contiguousSparkPoints.count >= 2 {
                     Button {
                         showBalanceChart = true
                     } label: {

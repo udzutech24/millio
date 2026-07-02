@@ -332,8 +332,10 @@ final class FinanceViewModel: ViewModelProtocol {
     // snapshotService использует lazy из-за зависимости от totalsService
     private(set) lazy var snapshotService: AccountBalanceSnapshotService = {
         AccountBalanceSnapshotService(
+            modelContext: self.modelContext,
             totalsService: self.totalsService,
-            groupsProvider: { [weak self] in self?.state.groups ?? [] }
+            currencyService: self.currencyService,
+            baseCurrencyProvider: { [weak self] in self?.state.displayCurrency ?? SettingsManager.shared.primaryCurrencyCode }
         )
     }()
 
@@ -923,22 +925,23 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     /// Вычисляет 7-дневный спарклайн и дельту для виджета дашборда.
-    /// Форма кривой — из DashboardBalanceHistoryStore (снапшоты).
-    /// Дельта — через FinanceDynamicsViewModel (replay транзакций, текущие курсы),
-    /// аналогично экрану Аналитики, чтобы знаки всегда совпадали.
+    /// Форма кривой — сумма SwiftData `AccountDailySnapshot` по included accounts.
+    /// Missing account snapshot inside the known window is a gap: we do not compact it into a fake line.
+    /// Дельта остаётся live-projection через FinanceDynamicsViewModel, чтобы today совпадал с текущей суммой.
     func computeDashboardSparkline() async {
         let displayCurrency = state.displayCurrency
         let currentTotal = state.totalAmount
         let daysCount = max(1, SettingsManager.shared.dashboardDeltaPeriodDays)
+        let accountIDs = dashboardSnapshotAccountIDs()
 
-        DashboardBalanceHistoryStore.save(currentTotal, currency: displayCurrency)
-
-        let rawPoints = DashboardBalanceHistoryStore.dailyAmounts(
-            currency: displayCurrency,
+        let rawPoints = AccountDailySnapshotReader.accountPortfolioDailyAmounts(
+            context: modelContext,
+            accountIDs: accountIDs,
+            baseCurrency: displayCurrency,
             daysCount: daysCount
         )
 
-        let validPoints = rawPoints.compactMap { $0 }
+        let validPoints = AccountDailySnapshotReader.contiguousKnownAmounts(from: rawPoints)
         let validCount = validPoints.count
 
         // Если истории меньше 2 точек — кривую не рисуем, но дельту всё равно считаем
@@ -950,17 +953,7 @@ final class FinanceViewModel: ViewModelProtocol {
             return
         }
 
-        // Заполняем пропуски: вперёд от первого известного значения
-        var filled = [Double](repeating: currentTotal, count: daysCount)
-        var lastKnown: Double = validPoints.first ?? currentTotal
-        for i in filled.indices {
-            if let v = rawPoints[i] {
-                lastKnown = v
-                filled[i] = v
-            } else {
-                filled[i] = lastKnown
-            }
-        }
+        let filled = validPoints
 
         let minVal = filled.min() ?? 0.0
         let maxVal = filled.max() ?? 1.0
@@ -990,6 +983,35 @@ final class FinanceViewModel: ViewModelProtocol {
         // Снапшоты счетов — в фоне, не блокируем критический путь UI
         Task { [weak self] in
             await self?.snapshotService.snapshotIfNeeded()
+        }
+    }
+
+    private func dashboardSnapshotAccountIDs() -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+
+        for group in state.groups {
+            for account in orderedAccounts(for: group) where isIncludedCurrentAccount(account) {
+                if seen.insert(account.accountID).inserted {
+                    result.append(account.accountID)
+                }
+            }
+        }
+
+        return result
+    }
+
+    private func isIncludedCurrentAccount(_ account: FinanceAccount) -> Bool {
+        switch account.accountType {
+        case .card:
+            guard let card = cardByID[account.accountID] else { return false }
+            return card.includeInTotal && card.archivedAt == nil
+        case .credit:
+            guard let credit = creditByID[account.accountID] else { return false }
+            return credit.includeInTotal && credit.archivedAt == nil
+        case .investment:
+            guard let investment = investmentByID[account.accountID] else { return false }
+            return investment.includeInTotal && investment.archivedAt == nil
         }
     }
 

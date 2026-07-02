@@ -8,46 +8,39 @@
 //
 
 import Foundation
+import SwiftData
 
 @MainActor
 final class AccountBalanceSnapshotService {
 
+    private let modelContext: ModelContext
     private let totalsService: FinanceTotalsService
-    private let groupsProvider: () -> [FinanceGroup]
+    private let currencyService: CurrencyRateServiceProtocol
+    private let baseCurrencyProvider: () -> String
 
-    init(totalsService: FinanceTotalsService, groupsProvider: @escaping () -> [FinanceGroup]) {
+    init(
+        modelContext: ModelContext,
+        totalsService: FinanceTotalsService,
+        currencyService: CurrencyRateServiceProtocol,
+        baseCurrencyProvider: @escaping () -> String
+    ) {
+        self.modelContext = modelContext
         self.totalsService = totalsService
-        self.groupsProvider = groupsProvider
+        self.currencyService = currencyService
+        self.baseCurrencyProvider = baseCurrencyProvider
     }
 
     // MARK: - Public
 
-    /// Делает снапшоты всех счетов, если сегодня ещё не делали.
-    /// Также запускает cleanup осиротевших UUID.
+    /// Закрывает прошедшие дни в SwiftData daily snapshots.
+    /// Старый JSON-store больше не пишет историю: он остаётся только источником миграции.
     func snapshotIfNeeded() async {
-        let today = AccountBalanceHistoryStore.dayKey(for: Date())
-        guard lastSnapshotDay != today else { return }
-
-        let balances = await totalsService.calculateAllAccountBalances()
-        for (accountID, balance) in balances {
-            AccountBalanceHistoryStore.save(
-                accountID: accountID,
-                amount: balance.value,
-                currency: balance.currency
-            )
-        }
-
-        lastSnapshotDay = today
-
-        // Удаляем историю удалённых счетов
-        let activeIDs = Set(balances.keys)
-        AccountBalanceHistoryStore.cleanup(keepingIDs: activeIDs)
-    }
-
-    // MARK: - Private
-
-    private var lastSnapshotDay: String {
-        get { UserDefaults.standard.string(forKey: "account_snapshot_last_day") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "account_snapshot_last_day") }
+        let service = DailySnapshotClosingService(
+            modelContext: modelContext,
+            totalsService: totalsService,
+            currencyService: currencyService,
+            baseCurrencyProvider: baseCurrencyProvider
+        )
+        await service.closeAllPendingDays()
     }
 }

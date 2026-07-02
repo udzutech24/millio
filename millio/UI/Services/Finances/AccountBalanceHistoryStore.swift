@@ -25,7 +25,7 @@ enum AccountBalanceHistoryStore {
     }
 
     // Весь файл: accountID → [Record]
-    private typealias Storage = [String: [Record]]
+    typealias Storage = [String: [Record]]
 
     // MARK: - Public API
 
@@ -65,14 +65,26 @@ enum AccountBalanceHistoryStore {
         (load()[accountID] ?? []).filter { $0.currency == currency }.count
     }
 
-    /// Удаляет историю счетов, которых больше нет в списке активных.
-    /// Вызывать при старте приложения, чтобы осиротевшие UUID не накапливались.
+    /// Сырые данные для одноразовой миграции в SwiftData daily snapshots.
+    static func loadRaw() -> Storage {
+        load()
+    }
+
+    /// Архивирует старый JSON после успешной миграции. Не удаляем файл сразу:
+    /// это страховка на случай сбоя новой схемы у пользователя.
+    static func renameToMigrated() {
+        guard let url = fileURL else { return }
+        let migratedURL = url.deletingPathExtension().appendingPathExtension("migrated")
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        try? FileManager.default.removeItem(at: migratedURL)
+        try? FileManager.default.moveItem(at: url, to: migratedURL)
+    }
+
+    /// Исторические данные нельзя чистить по списку активных счетов:
+    /// архивный/удалённый счёт всё ещё участник закрытой истории.
     static func cleanup(keepingIDs activeIDs: Set<String>) {
-        var storage = load()
-        let orphans = storage.keys.filter { !activeIDs.contains($0) }
-        guard !orphans.isEmpty else { return }
-        orphans.forEach { storage.removeValue(forKey: $0) }
-        save(storage)
+        assertionFailure("AccountBalanceHistoryStore.cleanup запрещён: daily snapshots являются immutable history")
+        AppLogger.log(.warning, category: "Finance", "Ignored AccountBalanceHistoryStore.cleanup for \(activeIDs.count) active IDs")
     }
 
     // MARK: - Private

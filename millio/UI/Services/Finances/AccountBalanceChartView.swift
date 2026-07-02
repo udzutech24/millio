@@ -3,10 +3,11 @@
 //  millio
 //
 //  История баланса счёта: sparkline-строка + full-screen chart sheet.
-//  Данные берёт из AccountBalanceHistoryStore.
+//  Данные берёт из SwiftData AccountDailySnapshot.
 //
 
 import SwiftUI
+import SwiftData
 import Charts
 
 // MARK: - Период
@@ -41,13 +42,16 @@ struct AccountBalanceSparklineView: View {
     let accountID: String
     let currency: String
     let color: Color
+    @Environment(\.modelContext) private var modelContext
 
     private var points: [Double] {
-        AccountBalanceHistoryStore.dailyAmounts(
+        let rawAmounts = AccountDailySnapshotReader.accountDailyAmounts(
+            context: modelContext,
             accountID: accountID,
             currency: currency,
             daysCount: 14
-        ).compactMap { $0 }
+        )
+        return AccountDailySnapshotReader.contiguousKnownAmounts(from: rawAmounts)
     }
 
     var body: some View {
@@ -81,9 +85,11 @@ struct AccountBalanceChartView: View {
     @State private var selectedPeriod: AccountBalancePeriod = .month
     @State private var selectedPoint: BalancePoint? = nil
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     private var allPoints: [BalancePoint] {
-        let rawAmounts = AccountBalanceHistoryStore.dailyAmounts(
+        let rawAmounts = AccountDailySnapshotReader.accountDailyAmounts(
+            context: modelContext,
             accountID: accountID,
             currency: currency,
             daysCount: selectedPeriod.days
@@ -91,16 +97,18 @@ struct AccountBalanceChartView: View {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
 
-        // Заполняем пропуски: forward-fill от первого известного значения
-        var lastKnown: Double? = nil
+        guard let first = rawAmounts.firstIndex(where: { $0 != nil }),
+              let last = rawAmounts.lastIndex(where: { $0 != nil }),
+              first <= last,
+              rawAmounts[first...last].allSatisfy({ $0 != nil }) else {
+            return []
+        }
+
         var result: [BalancePoint] = []
-        for (i, raw) in rawAmounts.enumerated() {
+        for i in first...last {
             let daysBack = rawAmounts.count - 1 - i
             let date = calendar.date(byAdding: .day, value: -daysBack, to: today) ?? today
-            if let v = raw {
-                lastKnown = v
-            }
-            if let v = lastKnown {
+            if let v = rawAmounts[i] {
                 result.append(BalancePoint(id: i, date: date, value: v))
             }
         }
@@ -110,11 +118,13 @@ struct AccountBalanceChartView: View {
     private var hasEnoughData: Bool { allPoints.count >= 2 }
 
     private var isAvailable: Bool {
-        let count = AccountBalanceHistoryStore.recordCount(
+        let rawAmounts = AccountDailySnapshotReader.accountDailyAmounts(
+            context: modelContext,
             accountID: accountID,
-            currency: currency
+            currency: currency,
+            daysCount: selectedPeriod.days
         )
-        return count >= Int(Double(selectedPeriod.days) * 0.1)
+        return AccountDailySnapshotReader.contiguousKnownAmounts(from: rawAmounts).count >= 2
     }
 
     private var minValue: Double { allPoints.map(\.value).min() ?? 0 }
@@ -181,9 +191,13 @@ struct AccountBalanceChartView: View {
     private var periodPicker: some View {
         HStack(spacing: AppSpacing.xs) {
             ForEach(AccountBalancePeriod.allCases, id: \.self) { period in
-                let enoughData = AccountBalanceHistoryStore.recordCount(
-                    accountID: accountID, currency: currency
-                ) >= Int(Double(period.days) * 0.1)
+                let rawAmounts = AccountDailySnapshotReader.accountDailyAmounts(
+                    context: modelContext,
+                    accountID: accountID,
+                    currency: currency,
+                    daysCount: period.days
+                )
+                let enoughData = AccountDailySnapshotReader.contiguousKnownAmounts(from: rawAmounts).count >= 2
 
                 Button {
                     if enoughData { selectedPeriod = period }
