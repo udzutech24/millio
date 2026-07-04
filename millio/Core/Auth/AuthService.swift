@@ -1295,6 +1295,11 @@ final class AuthManager {
 
         do {
             guard let session = try await service.restoreSession() else {
+                // restoreSession вызывается только на cold start (millioApp.initializeColdStart),
+                // сразу за ним идёт явный synchronizeDataScope, который и разрешает скоуп
+                // (guest или, по resilience-кэшу, user-стор оффлайн). Поэтому здесь НЕ дёргаем
+                // finalizeSignOut/onSessionChanged: это было бы избыточным ребиндом + лишним
+                // CloudKit-fetch в presentRestoreFlow (риск №2/offline).
                 clearState()
                 diagnostics.log(.info, phase: "auth.session.restore.completed", operation: .refresh, requestId: nil, backendRequestId: nil, details: ["restored": "false"])
                 return
@@ -1316,6 +1321,9 @@ final class AuthManager {
                 )
                 return
             }
+            // Cold-start restore-ошибка без кэша сессии. Скоуп разрешит явный
+            // synchronizeDataScope в initializeColdStart (транзиент → resilience-кэш сохранит
+            // user-стор; терминал → guest + роутинг в .auth). Отдельный ребинд тут не нужен.
             clearState()
             present(error, operation: .refresh)
         }
@@ -1452,7 +1460,11 @@ final class AuthManager {
         } catch {
             present(error, operation: .me)
             if case AuthServiceError.unauthorized = error {
-                clearState()
+                // Терминальный force-signout в рантайме (сервер отозвал сессию, 401 на /me).
+                // Без ребинда скоуп остаётся на user → данные прежнего пользователя видны
+                // после «continue as guest» (security-баг 2026-06-16). finalizeSignOut забывает
+                // user-скоуп и триггерит ребинд на guest + пересоздание VM (A2).
+                await finalizeSignOut()
             }
         }
     }
@@ -1472,8 +1484,7 @@ final class AuthManager {
         }
 
         await service.logout()
-        clearState()
-        await onSessionChanged?(nil)
+        await finalizeSignOut()
     }
 
     func logResolvedRoute(_ route: RootViewRoute) {
@@ -1527,6 +1538,17 @@ final class AuthManager {
         accessTokenExpiresAt = nil
         status = .signedOut
         lastAuthRequestId = nil
+    }
+
+    /// Терминальный выход из сессии (явный logout ИЛИ 401, восстановление невозможно):
+    /// сбрасывает auth-состояние, забывает user-скоуп в ScopeCache (иначе resilience-блок
+    /// synchronizeDataScope переоткроет user-стор) и триггерит ребинд данных на guest через
+    /// onSessionChanged. Транзиентные сетевые ошибки сюда НЕ попадают — они сохраняют сессию
+    /// (см. shouldKeepSessionOnRestoreFailure), скоуп не меняется (риск №4).
+    private func finalizeSignOut() async {
+        clearState()
+        ScopeCache.clearUserID()
+        await onSessionChanged?(nil)
     }
 
     private func clearFeedback() {
