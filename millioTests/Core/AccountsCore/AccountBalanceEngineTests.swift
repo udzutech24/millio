@@ -157,6 +157,35 @@ struct AccountBalanceEngineTests {
         #expect(balance == 1800)
     }
 
+    /// Долг Фазы 0 (закрыт в 1a-core): цена запрашивается на дату РЕПЛЕЯ `on:`, а не на дату
+    /// последнего события — иначе balanceAt(вчера) и balanceAt(сегодня) совпадали бы молча при
+    /// неизменном портфеле, хотя рыночная цена за это время могла измениться.
+    private final class DateCapturingPriceProvider: MarketPriceProviding {
+        private(set) var capturedDates: [Date] = []
+        let price: Decimal
+        init(price: Decimal) { self.price = price }
+        func price(symbol: String, assetClass: MarketAssetClass, on date: Date) -> Decimal? {
+            capturedDates.append(date)
+            return price
+        }
+    }
+
+    @Test
+    func engineE_queriesPriceProviderWithReplayDateNotLastEventDate() {
+        let events = [
+            event(date: day1, type: .buy, quantity: 10, unitPrice: 100),
+        ]
+        let meta = MarketMeta(symbol: "AAPL", assetClass: .stock)
+        let provider = DateCapturingPriceProvider(price: 150)
+
+        // Последнее событие — day1, но реплеим на day3: провайдер должен получить day3.
+        _ = AccountBalanceEngine.balanceAt(
+            events: events, kind: .marketInvestment, on: day3, priceProvider: provider, marketMeta: meta
+        )
+
+        #expect(provider.capturedDates == [day3])
+    }
+
     // MARK: - F: manualAsset — последняя revaluation ≤date
 
     @Test

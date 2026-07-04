@@ -175,6 +175,7 @@ Group (@Model) — ярлык-контейнер: name, colorHex, displayCurrenc
 ## 3. Фазы (вертикальный срез, каждая = отдельная сессия + feature-бранч)
 
 **Фаза 0 — Spec + каркас модели (M).** Написать `specs/2026-07-04-accounts-core.md`: контракт `Account`/`AccountEvent`/`balanceAt`, семантика архив/удаление, список 11 пресетов→6 движков. Схема SwiftData + версия. Без UI. Gate: компиляция + schema-тест.
+- **[x] РЕАЛИЗОВАНА 2026-07-04, коммит `09e0819`.** `millio/Core/AccountsCore/` (8 файлов: 4 @Model + Kind/EventType/Meta + AccountBalanceEngine), схема V4 + lightweight V3→V4, 19 unit-тестов зелёные (6 движков, S5-детерминизм, redenomination AC11/AC15, отрицательный баланс AC9). Гейт «не хуже baseline» пройден (baseline-падения: `progress/accounts-core-baseline-failures.md`). Заметка: `@Attribute(.unique)` несовместим с CloudKit-автоконфигурацией контейнеров — не используем. Долг Фазы 1a: пробросить `date` в priceProvider (сейчас берётся дата последнего события).
 
 **Фаза 1 — Денежный движок A (наличка/карта/банк.счёт) на новом ядре (L). По stress-test S10 разделена на 1a (ядро+ручные операции+сид-полигон+виджет/Dashboard) и 1b (перевод Cashflow на события — отдельная сессия и гейт).**
 - Модель Account+Event для kind .cash/.debitCard/.bankAccount.
@@ -184,6 +185,7 @@ Group (@Model) — ярлык-контейнер: name, colorHex, displayCurrenc
 - Экран добавления для этих 3 пресетов. Редактирование баланса → создаёт adjustment-event.
 - Тесты: реплей, тотал=Accounts=Analytics, график непрерывен, архив/удаление каскадом.
 - **/stress-test обязателен** (данные пользователя). Gate: build+tests+self-audit по spec.
+- **[x] 1a-core РЕАЛИЗОВАН 2026-07-04.** `AccountsCoreService` (единственная точка записи: createAccount/recordEvent/adjustBalance/transfer/deleteEvent/updateEvent/archiveAccount/restoreAccount), `AccountSnapshotRebuilder` (фоновый `@ModelActor`, разреженный кэш по checkpoint-дням событий, `rebuild`/`rebuildAll`), `AccountsTotalsService` (`totalAt`/`seriesBetween`, курс на дату точки — AC13). Долг Фазы 0 закрыт: `date` пробрасывается в `priceProvider`. 13 новых тестов (AC1/AC9/AC12/AC8/инкрементальность/Т5/Т2-бенчмарк/AC13). Гейт «не хуже baseline» пройден. Найдены и исправлены 2 реальных cross-context бага SwiftData (снапшоты фонового актора не видны через закэшированную relationship в mainContext — читаем `FetchDescriptor` напрямую и в записи, и в чтении) + оптимизация раннего выхода в `rebuild` (иначе тёплый кэш всё равно сканировал все события). UI и интеграция с Cashflow — 1a-ui (следующая сессия).
 
 **Фаза 2 — Обязательства C/D (кредит, долг) (M).** Перенос .loan/.debt на события (выдача/платёж), знак в тотале, направление долга. Тесты на знак и на группу Ungrouped (чинит отрицательный Ungrouped).
 

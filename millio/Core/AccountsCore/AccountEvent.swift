@@ -96,4 +96,18 @@ final class AccountEvent {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter.string(from: date)
     }
+
+    /// Публичный доступ к вычислению dayKey — нужен сервисам записи/кэша (инвалидация, пересборка),
+    /// не для UI. Использует ТЕКУЩУЮ таймзону вызывающего — корректно только для новых точек;
+    /// у уже созданных событий `dayKey` не пересчитывать (см. докстринг поля выше, Т5).
+    static func dayKey(for date: Date) -> String {
+        makeDayKey(from: date)
+    }
+
+    /// Правка даты события задним числом — пересчитывает `dayKey` синхронно с новой датой.
+    /// Используется только `AccountsCoreService.updateEvent` (единственная точка записи, AC1).
+    func setDate(_ newDate: Date) {
+        date = newDate
+        dayKey = Self.makeDayKey(from: newDate)
+    }
 }

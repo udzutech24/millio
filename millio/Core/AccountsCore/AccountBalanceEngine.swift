@@ -37,7 +37,7 @@ enum AccountBalanceEngine {
             // C: обязательство — выдачи увеличивают долг (отрицательно), платежи уменьшают. Не обрезаем нулём.
             return ledgerSum(transformed, signMap: loanSignMap)
         case .market:
-            return marketBalance(transformed, priceProvider: priceProvider, marketMeta: marketMeta)
+            return marketBalance(transformed, on: date, priceProvider: priceProvider, marketMeta: marketMeta)
         case .manualAsset:
             return manualAssetBalance(transformed)
         }
@@ -126,6 +126,7 @@ enum AccountBalanceEngine {
 
     private static func marketBalance(
         _ events: [TransformedEvent],
+        on date: Date,
         priceProvider: MarketPriceProviding?,
         marketMeta: MarketMeta?
     ) -> Decimal {
@@ -139,9 +140,10 @@ enum AccountBalanceEngine {
 
         guard quantity != 0 else { return 0 }
 
-        let asOfDate = events.last?.date ?? Date()
+        // Долг Фазы 0: цена запрашивается НА ДАТУ реплея `date`, а не на дату последнего события —
+        // иначе balanceAt(вчера) и balanceAt(сегодня) молча совпадали бы при неизменном portfolio.
         let providedPrice = marketMeta.flatMap { meta in
-            priceProvider?.price(symbol: meta.symbol, assetClass: meta.assetClass, on: asOfDate)
+            priceProvider?.price(symbol: meta.symbol, assetClass: meta.assetClass, on: date)
         }
 
         let lastKnownPrice = events.reversed().first { event in
