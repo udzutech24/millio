@@ -198,7 +198,9 @@ struct AccountBalanceEngineTests {
     /// Долг Фазы 0 (закрыт в 1a-core): цена запрашивается на дату РЕПЛЕЯ `on:`, а не на дату
     /// последнего события — иначе balanceAt(вчера) и balanceAt(сегодня) совпадали бы молча при
     /// неизменном портфеле, хотя рыночная цена за это время могла измениться.
-    private final class DateCapturingPriceProvider: MarketPriceProviding {
+    /// `@unchecked Sendable`: используется только синхронно внутри одного теста (не пересекает акторы) —
+    /// `MarketPriceProviding` теперь требует `Sendable` (Фаза 4, реплей может идти в фоновом акторе).
+    private final class DateCapturingPriceProvider: MarketPriceProviding, @unchecked Sendable {
         private(set) var capturedDates: [Date] = []
         let price: Decimal
         init(price: Decimal) { self.price = price }
@@ -222,6 +224,33 @@ struct AccountBalanceEngineTests {
         )
 
         #expect(provider.capturedDates == [day3])
+    }
+
+    /// Фаза 4, брифинг задача 6 (решение): dividend/fee на `.marketInvestment` НЕ меняют quantity
+    /// и НЕ входят в qty×price — они чисто информационные для P&L карточки (`AccountDetailView`),
+    /// а не часть баланса самого движка (иначе «стоимость позиции» смешалась бы с денежными потоками).
+    @Test
+    func engineE_dividendAndFeeDoNotAffectMarketBalance() {
+        let withoutCashEvents = [
+            event(date: day1, type: .buy, quantity: 10, unitPrice: 100),
+        ]
+        let withCashEvents = withoutCashEvents + [
+            event(date: day2, type: .dividend, amount: 50),
+            event(date: day2, type: .fee, amount: 5),
+        ]
+
+        let meta = MarketMeta(symbol: "AAPL", assetClass: .stock)
+        let baseline = AccountBalanceEngine.balanceAt(
+            events: withoutCashEvents, kind: .marketInvestment, on: day2,
+            priceProvider: MockPriceProvider(price: 110), marketMeta: meta
+        )
+        let withCashFlows = AccountBalanceEngine.balanceAt(
+            events: withCashEvents, kind: .marketInvestment, on: day2,
+            priceProvider: MockPriceProvider(price: 110), marketMeta: meta
+        )
+
+        #expect(baseline == 1100) // 10 × 110
+        #expect(withCashFlows == baseline) // dividend/fee не изменили баланс движка E
     }
 
     // MARK: - F: manualAsset — последняя revaluation ≤date

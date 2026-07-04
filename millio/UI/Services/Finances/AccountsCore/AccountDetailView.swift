@@ -25,6 +25,11 @@ struct AccountDetailView: View {
         case adjustBalance
         case transfer
         case earlyClose
+        case buy
+        case sell
+        case dividend
+        case fee
+        case revalue
 
         var id: Int { hashValue }
     }
@@ -33,12 +38,20 @@ struct AccountDetailView: View {
         AccountsCoreService(modelContext: modelContext)
     }
 
+    /// Провайдер живых цен нового ядра (Фаза 4) — синхронный снэпшот append-only кэша
+    /// `HistoricalAssetPrice`, читается один раз на пересчёт body. `nil` для не-рыночных счетов.
+    private var priceProviderForThisAccount: MarketPriceProviding? {
+        guard account.kind == .marketInvestment, let meta = account.marketMeta else { return nil }
+        return AccountMarketPriceService(modelContext: modelContext).makeSnapshotProvider(symbols: [meta.symbol])
+    }
+
     private var balanceToday: Decimal {
         _ = refreshToken // читаем @State, чтобы body пересчитывался после мутаций
         return AccountBalanceEngine.balanceAt(
             events: account.events ?? [],
             kind: account.kind,
             on: Date(),
+            priceProvider: priceProviderForThisAccount,
             marketMeta: account.marketMeta
         )
     }
@@ -59,6 +72,9 @@ struct AccountDetailView: View {
                     actionsRow
                     if account.kind == .deposit {
                         depositForecastSection
+                    }
+                    if account.kind == .marketInvestment {
+                        marketInfoSection
                     }
                     historySection
                 }
@@ -324,6 +340,109 @@ struct AccountDetailView: View {
         gross * (1 - effectiveNetTaxRate)
     }
 
+    // MARK: - Рыночный счёт (.marketInvestment) — qty/цена/P&L (Фаза 4)
+
+    /// Текущее количество актива — реплей Σ buy−sell (та же логика, что движок E, но локально:
+    /// нужно и для отображения, и для предупреждения «продажа больше остатка», не жёсткого запрета).
+    private var currentQuantity: Decimal {
+        _ = refreshToken
+        return (account.events ?? []).reduce(Decimal(0)) { acc, event in
+            switch event.type {
+            case .buy: return acc + (event.quantity ?? 0)
+            case .sell: return acc - (event.quantity ?? 0)
+            default: return acc
+            }
+        }
+    }
+
+    private var totalBuyCost: Decimal {
+        (account.events ?? []).filter { $0.type == .buy }
+            .reduce(Decimal(0)) { $0 + ($1.quantity ?? 0) * ($1.unitPrice ?? 0) }
+    }
+
+    private var totalSellProceeds: Decimal {
+        (account.events ?? []).filter { $0.type == .sell }
+            .reduce(Decimal(0)) { $0 + ($1.quantity ?? 0) * ($1.unitPrice ?? 0) }
+    }
+
+    /// P&L нереализованный = рыночная стоимость сейчас − Σ buy + Σ sell (брифинг Фазы 4, задача 4).
+    /// Средняя цена покупки (avg cost basis) НЕ хранится — выводится этим же реплеем при необходимости.
+    private var unrealizedPL: Decimal {
+        balanceToday - totalBuyCost + totalSellProceeds
+    }
+
+    /// Текущая цена за единицу + признак «не сегодняшняя» (пометка «посл. известная»). `nil` цены из
+    /// live-кэша (`AccountMarketPriceService`) трактуем как «нет сегодняшних данных» — падаем на
+    /// последнюю цену buy/sell/revaluation из событий (офлайн/auth-error, брифинг Фазы 4, задача 2).
+    private var currentUnitPrice: Decimal {
+        if let meta = account.marketMeta,
+           let cached = priceProviderForThisAccount?.price(symbol: meta.symbol, assetClass: meta.assetClass, on: Date()) {
+            return cached
+        }
+        return (account.events ?? [])
+            .sorted { $0.date < $1.date }
+            .last(where: { ($0.type == .buy || $0.type == .sell) && $0.unitPrice != nil })?
+            .unitPrice ?? 0
+    }
+
+    /// `true`, если сегодняшней живой цены в кэше нет вовсе — карточка показывает пометку
+    /// «посл. известная цена» (упрощение, задокументировано: не различаем «вчера»/«неделю назад»).
+    private var isPriceStale: Bool {
+        guard let meta = account.marketMeta else { return true }
+        return priceProviderForThisAccount?.price(symbol: meta.symbol, assetClass: meta.assetClass, on: Date()) == nil
+    }
+
+    private var marketInfoSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.m) {
+            Text(L("accounts_core.detail.market.info_title"))
+                .font(.millioCaption)
+                .foregroundStyle(AppColors.textTertiary)
+                .textCase(.uppercase)
+
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                HStack {
+                    Text(L("accounts_core.detail.market.quantity_label"))
+                        .font(.millioCalloutRegular)
+                        .foregroundStyle(AppColors.textSecondary)
+                    Spacer()
+                    Text(formattedAmount(currentQuantity))
+                        .font(.millioBodySemibold)
+                        .foregroundStyle(AppColors.textPrimary)
+                }
+                HStack {
+                    Text(L("accounts_core.detail.market.price_label"))
+                        .font(.millioCalloutRegular)
+                        .foregroundStyle(AppColors.textSecondary)
+                    Spacer()
+                    HStack(spacing: AppSpacing.xs) {
+                        Text("\(formattedAmount(currentUnitPrice)) \(account.currency)")
+                            .font(.millioBodySemibold)
+                            .foregroundStyle(AppColors.textPrimary)
+                        if isPriceStale {
+                            Text(L("accounts_core.detail.market.price_stale_badge"))
+                                .font(.millioCaptionRegular)
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
+                    }
+                }
+                HStack {
+                    Text(L("accounts_core.detail.market.pl_label"))
+                        .font(.millioCalloutRegular)
+                        .foregroundStyle(AppColors.textSecondary)
+                    Spacer()
+                    Text("\(signedAmountText(unrealizedPL, type: .adjustment)) \(account.currency)")
+                        .font(.millioBodySemibold)
+                        .foregroundStyle(unrealizedPL < 0 ? AppColors.error : AppColors.textPrimary)
+                }
+            }
+            .padding(AppSpacing.m)
+            .background(
+                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                    .fill(AppColors.iconBackground)
+            )
+        }
+    }
+
     private var formattedBalance: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -339,21 +458,41 @@ struct AccountDetailView: View {
     private var actionsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: AppSpacing.s) {
-                actionButton(incomeActionTitle, icon: "plus.circle.fill") {
-                    requestTopUpOrOpenIncomeSheet()
-                }
-                actionButton(expenseActionTitle, icon: "minus.circle.fill") {
-                    sheet = .expense
-                }
-                actionButton(L("accounts_core.detail.action.adjust_balance"), icon: "slider.horizontal.3") {
-                    sheet = .adjustBalance
-                }
-                actionButton(L("accounts_core.detail.action.transfer"), icon: "arrow.left.arrow.right") {
-                    sheet = .transfer
-                }
-                if account.kind == .deposit, account.depositMeta?.allowsEarlyClose == true {
-                    actionButton(L("accounts_core.detail.deposit.action.early_close"), icon: "xmark.circle.fill", isDestructive: true) {
-                        showEarlyCloseConfirm = true
+                switch account.kind {
+                case .marketInvestment:
+                    actionButton(L("accounts_core.detail.market.action.buy"), icon: "plus.circle.fill") {
+                        sheet = .buy
+                    }
+                    actionButton(L("accounts_core.detail.market.action.sell"), icon: "minus.circle.fill") {
+                        sheet = .sell
+                    }
+                    actionButton(L("accounts_core.detail.market.action.dividend"), icon: "banknote.fill") {
+                        sheet = .dividend
+                    }
+                    actionButton(L("accounts_core.detail.market.action.fee"), icon: "minus.circle") {
+                        sheet = .fee
+                    }
+                case .manualAsset:
+                    actionButton(L("accounts_core.detail.manual_asset.action.revalue"), icon: "arrow.triangle.2.circlepath") {
+                        sheet = .revalue
+                    }
+                default:
+                    actionButton(incomeActionTitle, icon: "plus.circle.fill") {
+                        requestTopUpOrOpenIncomeSheet()
+                    }
+                    actionButton(expenseActionTitle, icon: "minus.circle.fill") {
+                        sheet = .expense
+                    }
+                    actionButton(L("accounts_core.detail.action.adjust_balance"), icon: "slider.horizontal.3") {
+                        sheet = .adjustBalance
+                    }
+                    actionButton(L("accounts_core.detail.action.transfer"), icon: "arrow.left.arrow.right") {
+                        sheet = .transfer
+                    }
+                    if account.kind == .deposit, account.depositMeta?.allowsEarlyClose == true {
+                        actionButton(L("accounts_core.detail.deposit.action.early_close"), icon: "xmark.circle.fill", isDestructive: true) {
+                            showEarlyCloseConfirm = true
+                        }
                     }
                 }
                 actionButton(L("accounts_core.detail.action.delete"), icon: "archivebox.fill", isDestructive: true) {
@@ -490,7 +629,13 @@ struct AccountDetailView: View {
                 }
             }
             Spacer()
-            if let amount = event.amount {
+            if event.type == .buy || event.type == .sell, let quantity = event.quantity, let unitPrice = event.unitPrice {
+                // buy/sell не имеют `amount` (движок E считает по quantity×price, не по денежной сумме) —
+                // показываем позицию явно, а не пустую строку.
+                Text("\(formattedAmount(quantity)) × \(formattedAmount(unitPrice))")
+                    .font(.millioBodySemibold)
+                    .foregroundStyle(AppColors.textPrimary)
+            } else if let amount = event.amount {
                 Text(signedAmountText(amount, type: event.type))
                     .font(.millioBodySemibold)
                     .foregroundStyle(amount < 0 ? AppColors.error : AppColors.textPrimary)
@@ -521,6 +666,10 @@ struct AccountDetailView: View {
         case .interest: return L("accounts_core.detail.event.interest")
         case .fee: return L("accounts_core.detail.event.fee")
         case .extraPayment: return L("accounts_core.detail.event.extra_payment")
+        case .buy: return L("accounts_core.detail.event.buy")
+        case .sell: return L("accounts_core.detail.event.sell")
+        case .dividend: return L("accounts_core.detail.event.dividend")
+        case .revaluation: return L("accounts_core.detail.event.revaluation")
         default: return type.rawValue
         }
     }
@@ -569,6 +718,46 @@ struct AccountDetailView: View {
                 modelContext: modelContext,
                 onSave: { destination in
                     performEarlyClose(transferTo: destination)
+                }
+            )
+        case .buy:
+            AccountBuySellSheet(
+                title: L("accounts_core.detail.market.action.buy"),
+                currentQuantity: currentQuantity,
+                showsSellWarning: false,
+                onSave: { quantity, unitPrice, date, note in
+                    perform { try service.buy(account: account, quantity: quantity, unitPrice: unitPrice, date: date, note: note) }
+                }
+            )
+        case .sell:
+            AccountBuySellSheet(
+                title: L("accounts_core.detail.market.action.sell"),
+                currentQuantity: currentQuantity,
+                showsSellWarning: true,
+                onSave: { quantity, unitPrice, date, note in
+                    perform { try service.sell(account: account, quantity: quantity, unitPrice: unitPrice, date: date, note: note) }
+                }
+            )
+        case .dividend:
+            AccountEventEntrySheet(
+                title: L("accounts_core.detail.market.action.dividend"),
+                onSave: { amount, date, note in
+                    perform { try service.recordMarketCashEvent(account: account, type: .dividend, amount: amount, date: date, note: note) }
+                }
+            )
+        case .fee:
+            AccountEventEntrySheet(
+                title: L("accounts_core.detail.market.action.fee"),
+                onSave: { amount, date, note in
+                    perform { try service.recordMarketCashEvent(account: account, type: .fee, amount: amount, date: date, note: note) }
+                }
+            )
+        case .revalue:
+            AccountAdjustBalanceSheet(
+                currentBalance: balanceToday,
+                titleOverride: L("accounts_core.detail.manual_asset.action.revalue"),
+                onSave: { newValue in
+                    perform { try service.revalue(account: account, newValue: newValue) }
                 }
             )
         }

@@ -23,7 +23,7 @@ struct AccountsCoreSeederTests {
             predicate: #Predicate<Account> { $0.name != "__accounts_core_seed_v1__" }
         )
         let accounts = try ctx.fetch(descriptor)
-        #expect(accounts.count == 11) // 10 (Фаза 0/1) + 1 .debt (Фаза 2)
+        #expect(accounts.count == 12) // 10 (Фаза 0/1) + 1 .debt (Фаза 2) + 1 .manualAsset (Фаза 4)
     }
 
     @Test @MainActor
@@ -40,7 +40,7 @@ struct AccountsCoreSeederTests {
             predicate: #Predicate<Account> { $0.name != "__accounts_core_seed_v1__" }
         )
         let accounts = try ctx.fetch(descriptor)
-        #expect(accounts.count == 11) // повторный вызов не задублировал
+        #expect(accounts.count == 12) // повторный вызов не задублировал
     }
 
     /// Регрессия Фазы 2: `expense` в сиде раньше хранил ОТРИЦАТЕЛЬНОЕ число (двойное отрицание
@@ -80,6 +80,45 @@ struct AccountsCoreSeederTests {
         #expect(debt.debtMeta?.direction == .owedToMe)
         let debtBalance = AccountBalanceEngine.balanceAt(events: debt.events ?? [], kind: debt.kind, on: Date())
         #expect(debtBalance == 500_000)
+    }
+
+    /// Фаза 4, брифинг задача 5: 2 сид-акции работают через новый провайдер офлайн — без
+    /// `AccountMarketPriceService` (нет кэша живых цен) движок падает на lastKnown ИЗ СОБЫТИЙ buy,
+    /// сид не падает и не даёт нулевой/некорректный баланс (S9: недоступность цены — не фатальна).
+    @Test @MainActor
+    func seedStockPositionsWorkOfflineViaLastKnownBuyPrice() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        _ = try AccountsCoreSeeder.seedDemoPortfolio(context: ctx)
+
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.name == "AAPL" })
+        let stock = try #require(try ctx.fetch(descriptor).first)
+        #expect(stock.kind == .marketInvestment)
+        #expect(stock.marketMeta?.symbol == "AAPL")
+
+        // Без priceProvider (офлайн) — балансы считаются по последней известной цене покупки.
+        let balance = AccountBalanceEngine.balanceAt(events: stock.events ?? [], kind: stock.kind, on: Date(), marketMeta: stock.marketMeta)
+        #expect(balance == 18_000) // 100 × 180 (цена buy-события из сида)
+    }
+
+    /// Фаза 4, брифинг задача 5: ручной актив «Квартира» — 20М ₽ через revaluation-историю из 2 точек
+    /// (opening 17М → revaluation 20М), идемпотентно (уже покрыто `seedIsIdempotent` выше).
+    @Test @MainActor
+    func seedManualAssetHasRevaluationHistoryAndCurrentValue() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        _ = try AccountsCoreSeeder.seedDemoPortfolio(context: ctx)
+
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.name == "Квартира" })
+        let apartment = try #require(try ctx.fetch(descriptor).first)
+        #expect(apartment.kind == .manualAsset)
+
+        let events = apartment.events ?? []
+        #expect(events.contains { $0.type == .openingBalance && $0.amount == 17_000_000 })
+        #expect(events.contains { $0.type == .revaluation && $0.amount == 20_000_000 })
+
+        let balance = AccountBalanceEngine.balanceAt(events: events, kind: apartment.kind, on: Date())
+        #expect(balance == 20_000_000) // последняя revaluation, не opening
     }
 
     @Test @MainActor

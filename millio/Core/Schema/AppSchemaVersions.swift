@@ -87,6 +87,9 @@ enum AppSchemaV4: VersionedSchema {
         AccountEvent.self,
         AccountGroup.self,
         AccountDailySnapshot.self,
+        // Фаза 4: append-only кэш рыночных цен (S9/AC10) — V4 ещё не выпущена, правим in-place,
+        // как sourceTransactionID в Фазе 1b (см. AppMigrationPlan ниже, комментарий не меняется).
+        HistoricalAssetPrice.self,
     ]
 }
 
@@ -145,6 +148,7 @@ extension AppMigrationPlan {
                  AccountEvent.self,
                  AccountGroup.self,
                  AccountDailySnapshot.self,
+                 HistoricalAssetPrice.self,
             migrationPlan: AppMigrationPlan.self,
             configurations: configuration
         )
@@ -173,6 +177,7 @@ extension AppMigrationPlan {
                  AccountEvent.self,
                  AccountGroup.self,
                  AccountDailySnapshot.self,
+                 HistoricalAssetPrice.self,
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         )

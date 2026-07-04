@@ -1185,6 +1185,31 @@ struct FinanceAddAccountView: View {
         return .deposit
     }
 
+    /// kind нового ядра для пресетов «Акции»/«Крипта»/«Недвижимость»/«Бизнес»/«Другое»/«Инвестиция»
+    /// (Фаза 4) — `nil` для остальных пресетов (карта/счёт/вклад/кредит/долг — уже обработаны выше)
+    /// и для режима редактирования. «Долг» сюда НЕ попадает — обработан `newCoreObligationKindForCurrentSelection`.
+    /// «Инвестиция» (универсальная, category=.other, preset=.asset) — по наличию тикера в форме:
+    /// тикер есть → рыночный счёт, нет → ручной актив (брифинг Фазы 4, задача 1).
+    private var newCoreAssetKindForCurrentSelection: AccountKind? {
+        guard addAccountMode == .create, editingInvestment == nil else { return nil }
+        guard selectedAccountType == .investment else { return nil }
+        switch selectedInvestmentCategory {
+        case .stocks, .crypto:
+            return .marketInvestment
+        case .house, .business:
+            return .manualAsset
+        case .other where selectedInvestmentPreset == .category:
+            // Пресет «Другое» — всегда ручной актив.
+            return .manualAsset
+        case .other where selectedInvestmentPreset == .asset:
+            // Пресет «Инвестиция» — по наличию тикера в собранных данных формы.
+            let hasTicker = investmentData?.marketData?.symbol?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            return hasTicker ? .marketInvestment : .manualAsset
+        default:
+            return nil
+        }
+    }
+
     /// Создание вклада/накопительного счёта на новом ядре (Фаза 3): создаёт счёт + сразу генерирует
     /// БУДУЩИЕ interest-события по расписанию капитализации (`DepositInterestScheduler`) — карточка
     /// счёта открывается уже с прогнозом «в месяц»/«за срок», без отдельного шага «посчитать».
@@ -1319,6 +1344,54 @@ struct FinanceAddAccountView: View {
         }
     }
 
+    /// Создание рыночного/ручного актива на новом ядре event-sourcing (Фаза 4). Никогда не создаёт
+    /// старый `Investment` — единственная точка записи: `AccountsCoreService`.
+    private func createAssetAccountOnNewCore(kind: AccountKind) {
+        guard let investmentData else { return }
+        let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
+        let group = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: viewModel.modelContext)
+        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+
+        do {
+            switch kind {
+            case .marketInvestment:
+                guard let marketData = investmentData.marketData,
+                      let symbol = marketData.symbol?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !symbol.isEmpty,
+                      let quantity = marketData.quantity else { return }
+                // Цена ПОКУПКИ — приоритет `purchaseUnitPrice` (пользователь ввёл вручную), иначе
+                // последняя известная рыночная цена на момент выбора тикера (брифинг Фазы 4, задача 1).
+                let unitPrice = Decimal(marketData.purchaseUnitPrice ?? marketData.unitPrice ?? 0)
+                let currency = (marketData.currency?.isEmpty == false) ? marketData.currency! : investmentData.currency
+                let meta = AccountsCoreAdditionBridge.marketMeta(symbol: symbol, category: selectedInvestmentCategory)
+                let account = try service.createAccount(
+                    name: resolvedName,
+                    kind: .marketInvestment,
+                    currency: currency,
+                    openingBalance: 0, // движок E игнорирует opening — баланс считает только buy/sell
+                    group: group,
+                    marketMeta: meta
+                )
+                try service.buy(account: account, quantity: Decimal(quantity), unitPrice: unitPrice)
+            case .manualAsset:
+                try service.createAccount(
+                    name: resolvedName,
+                    kind: .manualAsset,
+                    currency: investmentData.currency,
+                    openingBalance: Decimal(investmentData.amount),
+                    group: group,
+                    manualAssetMeta: AccountsCoreAdditionBridge.manualAssetMeta()
+                )
+            default:
+                return
+            }
+            dismiss()
+        } catch {
+            AppLogger.log(.error, category: "AccountsCore", "Не удалось создать актив нового ядра: \(error)")
+        }
+    }
+
     private func addAccount() {
         guard validateEntitlementsForSave() else { return }
 
@@ -1334,6 +1407,11 @@ struct FinanceAddAccountView: View {
 
         if let newCoreObligationKind = newCoreObligationKindForCurrentSelection {
             createObligationAccountOnNewCore(kind: newCoreObligationKind)
+            return
+        }
+
+        if let newCoreAssetKind = newCoreAssetKindForCurrentSelection {
+            createAssetAccountOnNewCore(kind: newCoreAssetKind)
             return
         }
 

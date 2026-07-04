@@ -133,4 +133,32 @@ struct AccountsCoreAdditionBridgeTests {
         )
         #expect(meta.earlyClosePenalty == nil)
     }
+
+    // MARK: - marketMeta/manualAssetMeta (Фаза 4 — пресеты «Акции»/«Крипта»/недвижимость/бизнес/другое)
+
+    @Test
+    func marketMetaUppercasesSymbolAndDefaultsToStock() {
+        let meta = AccountsCoreAdditionBridge.marketMeta(symbol: "aapl", category: .stocks)
+        #expect(meta.symbol == "AAPL")
+        #expect(meta.assetClass == .stock)
+    }
+
+    @Test
+    func marketMetaUsesCryptoAssetClassOnlyForCryptoCategory() {
+        let crypto = AccountsCoreAdditionBridge.marketMeta(symbol: "btc", category: .crypto)
+        #expect(crypto.assetClass == .crypto)
+
+        // «Инвестиция» универсальная (category=.other) с тикером — по умолчанию акция, не облигация/металл
+        // (форма их не собирает — нет UI-пути отличить, см. докстринг).
+        let genericWithTicker = AccountsCoreAdditionBridge.marketMeta(symbol: "voo", category: .other)
+        #expect(genericWithTicker.assetClass == .stock)
+    }
+
+    @Test
+    func manualAssetMetaHasEmptyOptionalFieldsByDefault() {
+        let meta = AccountsCoreAdditionBridge.manualAssetMeta()
+        #expect(meta.revalReminderMonths == nil)
+        #expect(meta.depreciationRatePerYear == nil)
+        #expect(meta.linkedLoanID == nil)
+    }
 }

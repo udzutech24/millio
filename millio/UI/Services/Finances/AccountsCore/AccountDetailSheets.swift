@@ -51,12 +51,16 @@ struct AccountEventEntrySheet: View {
 struct AccountAdjustBalanceSheet: View {
     let currentBalance: Decimal
     let onSave: (Decimal) -> Void
+    /// Заголовок формы — по умолчанию «Изменить баланс», но эта же форма переиспользуется для
+    /// переоценки ручного актива (Фаза 4: «Переоценить» — тот же ввод «новое значение целиком»).
+    var titleOverride: String?
 
     @Environment(\.dismiss) private var dismiss
     @State private var amountText: String
 
-    init(currentBalance: Decimal, onSave: @escaping (Decimal) -> Void) {
+    init(currentBalance: Decimal, titleOverride: String? = nil, onSave: @escaping (Decimal) -> Void) {
         self.currentBalance = currentBalance
+        self.titleOverride = titleOverride
         self.onSave = onSave
         _amountText = State(initialValue: NSDecimalNumber(decimal: currentBalance).stringValue)
     }
@@ -74,7 +78,7 @@ struct AccountAdjustBalanceSheet: View {
                         .keyboardType(.decimalPad)
                 }
             }
-            .navigationTitle(L("accounts_core.detail.sheet.adjust.title"))
+            .navigationTitle(titleOverride ?? L("accounts_core.detail.sheet.adjust.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -159,6 +163,75 @@ struct AccountTransferSheet: View {
                         onSave(destination, amount)
                     }
                     .disabled(parsedAmount == nil || selectedDestination == nil)
+                }
+            }
+        }
+    }
+}
+
+/// Форма «купить/продать» рыночного актива (Фаза 4): количество + цена за единицу + дата + заметка,
+/// вызывает `AccountsCoreService.buy`/`sell`. Продажа больше остатка — предупреждение (НЕ жёсткий
+/// запрет, брифинг Фазы 4, задача 4): текст под полем, кнопка «Сохранить» остаётся активной.
+struct AccountBuySellSheet: View {
+    let title: String
+    let currentQuantity: Decimal
+    /// `true` для формы продажи — включает предупреждение о превышении остатка.
+    let showsSellWarning: Bool
+    let onSave: (Decimal, Decimal, Date, String?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var quantityText = ""
+    @State private var unitPriceText = ""
+    @State private var date = Date()
+    @State private var note = ""
+
+    private var parsedQuantity: Decimal? {
+        let normalized = quantityText.replacingOccurrences(of: ",", with: ".")
+        guard let value = Decimal(string: normalized), value > 0 else { return nil }
+        return value
+    }
+
+    private var parsedUnitPrice: Decimal? {
+        let normalized = unitPriceText.replacingOccurrences(of: ",", with: ".")
+        guard let value = Decimal(string: normalized), value > 0 else { return nil }
+        return value
+    }
+
+    private var exceedsCurrentQuantity: Bool {
+        guard showsSellWarning, let quantity = parsedQuantity else { return false }
+        return quantity > currentQuantity
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(L("accounts_core.detail.sheet.market.quantity_placeholder"), text: $quantityText)
+                        .keyboardType(.decimalPad)
+                    TextField(L("accounts_core.detail.sheet.market.unit_price_placeholder"), text: $unitPriceText)
+                        .keyboardType(.decimalPad)
+                    DatePicker(L("accounts_core.detail.sheet.date_label"), selection: $date, displayedComponents: .date)
+                    TextField(L("accounts_core.detail.sheet.note_placeholder"), text: $note)
+                }
+                if exceedsCurrentQuantity {
+                    Section {
+                        Text(String(format: L("accounts_core.detail.market.sell_exceeds_warning_format"), NSDecimalNumber(decimal: currentQuantity).stringValue))
+                            .foregroundStyle(AppColors.warning)
+                    }
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("accounts_core.detail.sheet.cancel")) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("accounts_core.detail.sheet.save")) {
+                        guard let quantity = parsedQuantity, let unitPrice = parsedUnitPrice else { return }
+                        onSave(quantity, unitPrice, date, note.isEmpty ? nil : note)
+                    }
+                    .disabled(parsedQuantity == nil || parsedUnitPrice == nil)
                 }
             }
         }

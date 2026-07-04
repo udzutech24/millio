@@ -182,4 +182,57 @@ struct AccountsTotalsServiceTests {
         // (изолированно на пустом хосте укладывается в единицы мс), см. progress-заметку по Т2.
         #expect(elapsed < .seconds(2), "totalAt(today) на тёплом кэше занял \(elapsed) — ожидали < 2с")
     }
+
+    // MARK: - Фаза 4: реальный MarketPriceProviding подключён к totalAt/seriesBetween
+
+    /// Прокладка провайдера (брифинг Фазы 4, задача 3): без `marketPriceService` — рыночный счёт
+    /// считается по lastKnown buy-цене (fallback внутри движка E), не выпадает из тотала.
+    @Test @MainActor
+    func totalAtFallsBackToLastKnownPriceWithoutMarketPriceService() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+        rateService.todayRate = 1
+
+        let account = try service.createAccount(
+            name: "AAPL", kind: .marketInvestment, currency: "USD", openingBalance: 0,
+            marketMeta: MarketMeta(symbol: "AAPL", assetClass: .stock)
+        )
+        try service.buy(account: account, quantity: 10, unitPrice: 100)
+
+        // marketPriceService НЕ передан — обратная совместимость с Фазой 1a.
+        let totals = AccountsTotalsService(modelContext: ctx, rebuilder: rebuilder, rateService: rateService)
+        let total = await totals.totalAt(Date(), in: "USD")
+        #expect(total == 1000) // 10 × 100 (lastKnown buy-цена), счёт участвует в тотале
+    }
+
+    /// С подключённым `AccountMarketPriceService` тотал использует ЖИВУЮ кэшированную цену,
+    /// а не last-known buy-цену (брифинг Фазы 4, задача 3 — интеграция провайдера в тотал).
+    @Test @MainActor
+    func totalAtUsesLiveCachedPriceWhenMarketPriceServiceIsWired() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+        rateService.todayRate = 1
+
+        let account = try service.createAccount(
+            name: "AAPL", kind: .marketInvestment, currency: "USD", openingBalance: 0,
+            marketMeta: MarketMeta(symbol: "AAPL", assetClass: .stock)
+        )
+        try service.buy(account: account, quantity: 10, unitPrice: 100) // цена покупки — 100
+
+        // В кэше уже есть СЕГОДНЯШНЯЯ живая цена 155 (симулируем предварительный refresh).
+        let todayKey = AccountEvent.dayKey(for: Date())
+        ctx.insert(HistoricalAssetPrice(symbol: "AAPL", assetClass: .stock, dayKey: todayKey, price: 155, source: "test"))
+        try ctx.save()
+
+        let marketPriceService = AccountMarketPriceService(modelContext: ctx)
+        let totals = AccountsTotalsService(modelContext: ctx, rebuilder: rebuilder, rateService: rateService, marketPriceService: marketPriceService)
+        let total = await totals.totalAt(Date(), in: "USD")
+        #expect(total == 1550) // 10 × 155 (живая цена из кэша), НЕ 10 × 100 (цена покупки)
+    }
 }

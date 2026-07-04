@@ -1,8 +1,10 @@
 import Foundation
 
 /// Источник рыночной цены на дату (котировки акций/крипты/облигаций/металлов).
-/// В Фазе 0 — только протокол; реальная реализация (кэш котировок) — в следующих фазах.
-protocol MarketPriceProviding {
+/// Реализация (Фаза 4): `AccountMarketPriceService`/`CachedPriceSnapshot` — синхронный append-only
+/// кэш, см. `AccountMarketPriceService.swift`. `Sendable`: реплей может идти в фоновом
+/// `@ModelActor` (`AccountSnapshotRebuilder`, S4) — провайдер пересекает границу актора как аргумент.
+protocol MarketPriceProviding: Sendable {
     func price(symbol: String, assetClass: MarketAssetClass, on date: Date) -> Decimal?
 }
 

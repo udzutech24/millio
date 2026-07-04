@@ -133,6 +133,16 @@ enum AccountsCoreSeeder {
             }
         }
 
+        // MARK: Группа «Недвижимость» — ручной актив (Фаза 4): 2 переоценки, 20М ₽ на сегодня.
+        let realEstateGroup = AccountGroup(name: "Недвижимость")
+        context.insert(realEstateGroup)
+        let apartment = try service.createAccount(
+            name: "Квартира", kind: .manualAsset, currency: "RUB",
+            openingBalance: 17_000_000, group: realEstateGroup, date: monthsAgo(6)
+        )
+        apartment.manualAssetMeta = ManualAssetMeta(revalReminderMonths: 12, depreciationRatePerYear: nil, linkedLoanID: nil)
+        try service.revalue(account: apartment, newValue: 20_000_000, date: monthsAgo(1))
+
         // Маркер идемпотентности — служебный счёт вне тоталов (includeInTotal = false).
         let marker = Account(name: markerName, kind: .cash, currency: "RUB")
         marker.includeInTotal = false

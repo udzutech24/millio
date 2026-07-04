@@ -315,13 +315,20 @@ final class FinanceViewModel: ViewModelProtocol {
 
     private static let manualStockRefreshCooldown: TimeInterval = 15
 
+    /// Реальный источник рыночных цен нового ядра (Фаза 4) — переиспользует ТОТ ЖЕ
+    /// `marketDataClient`, что и старый мир (`marketDataService` ниже), второй клиент не заводим (S9).
+    private(set) lazy var accountMarketPriceService: AccountMarketPriceService = {
+        AccountMarketPriceService(modelContext: self.modelContext, marketDataClient: self.marketDataClient)
+    }()
+
     /// Тотал/график нового ядра event-sourcing (Фаза 1a-ui, AC2) — единая точка для Accounts- и
     /// Analytics-тотала (см. `newCoreTotalProvider` в `totalsService` и `FinanceDynamicsViewModel`).
     private(set) lazy var accountsTotalsService: AccountsTotalsService = {
         AccountsTotalsService(
             modelContext: self.modelContext,
             rebuilder: AccountSnapshotRebuilder(modelContainer: self.modelContext.container),
-            rateService: self.currencyService
+            rateService: self.currencyService,
+            marketPriceService: self.accountMarketPriceService
         )
     }()
 
@@ -1333,6 +1340,7 @@ final class FinanceViewModel: ViewModelProtocol {
     func warmupRemoteDataForStartup() async {
         await refreshCurrencyQuotes(forceRefresh: false)
         await marketDataService.refreshStockPrices(forceRefresh: false)
+        await accountMarketPriceService.refreshTodayPrices()
         state.lastRefreshedAt = Date()
     }
 
@@ -1397,6 +1405,7 @@ final class FinanceViewModel: ViewModelProtocol {
         state.isLoadingRates = true
         defer { state.isLoadingRates = false }
         let message = await marketDataService.refreshStockPricesManual()
+        await accountMarketPriceService.refreshTodayPrices()
         presentRefreshIssueIfNeeded(message: message)
     }
 
@@ -1406,6 +1415,7 @@ final class FinanceViewModel: ViewModelProtocol {
         defer { state.isLoadingRates = false }
         await refreshCurrencyQuotes(forceRefresh: true)
         let stockMessage = await marketDataService.refreshStockPricesManual()
+        await accountMarketPriceService.refreshTodayPrices()
         state.lastRefreshedAt = Date()
         presentRefreshIssueIfNeeded(message: stockMessage ?? state.currencyConversionWarning)
     }

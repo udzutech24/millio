@@ -1,10 +1,10 @@
 import Foundation
 import SwiftData
 
-/// Мост «старый флоу добавления счёта → новое ядро event-sourcing» (Фаза 1a-ui, 2).
-/// Пресеты «Карта»/«Счёт» (Фаза 1a) и «Кредит»/«Долг» (Фаза 2) создают `Account` нового ядра
-/// вместо `Card`/`Credit`/`Investment`. Остальные 7 пресетов (вклад/акции/крипта/недвижимость/
-/// бизнес/…) остаются на старом пути — перенос запланирован в фазах 3–4 (план `2026-07-04__accounts-core-rebuild-plan.md`).
+/// Мост «старый флоу добавления счёта → новое ядро event-sourcing» (Фаза 1a-ui, 2, 3, 4).
+/// Пресеты «Карта»/«Счёт» (Фаза 1a), «Кредит»/«Долг» (Фаза 2), «Вклад» (Фаза 3) и «Акции»/«Крипта»/
+/// «Инвестиция»/«Недвижимость»/«Бизнес»/«Другое» (Фаза 4) создают `Account` нового ядра вместо
+/// `Card`/`Credit`/`Investment`. Полный перенос экрана добавления и снос старых моделей — Фаза 6.
 enum AccountsCoreAdditionBridge {
 
     /// kind для денежного пресета «Карта»: пустой/невыбранный банк (`.other`) трактуется как
@@ -62,6 +62,20 @@ enum AccountsCoreAdditionBridge {
     /// старая форма не собирает вовсе (нет UI-поля) — оставляем nil, а не редизайним форму (вне скоупа).
     static func debtMeta(direction: DebtDirection) -> DebtMeta {
         DebtMeta(direction: direction, counterparty: nil, dueDate: nil, rate: nil)
+    }
+
+    /// Мэппинг символа тикера формы «Акции»/«Крипта»/«Инвестиция» → `MarketMeta` (Фаза 4).
+    /// Класс актива определяется ТОЛЬКО категорией `.crypto` — облигации/металлы не собираются
+    /// текущей формой (нет UI-пути), дефолт `.stock` безопасен и для «универсальной» инвестиции с тикером.
+    static func marketMeta(symbol: String, category: InvestmentCategory) -> MarketMeta {
+        MarketMeta(symbol: symbol.uppercased(), assetClass: category == .crypto ? .crypto : .stock)
+    }
+
+    /// Мэппинг ручного актива (недвижимость/бизнес/другое/«инвестиция» без тикера) → `ManualAssetMeta`
+    /// (Фаза 4). Старая форма не собирает ни напоминание о переоценке, ни амортизацию — пустые поля,
+    /// а не выдуманные значения (тот же принцип, что и в `loanMeta`/`debtMeta` выше).
+    static func manualAssetMeta() -> ManualAssetMeta {
+        ManualAssetMeta(revalReminderMonths: nil, depreciationRatePerYear: nil, linkedLoanID: nil)
     }
 
     /// Мэппинг новой формы «Вклад»/«Накопительный счёт» (Фаза 3, `InlineDepositCreateForm`) →

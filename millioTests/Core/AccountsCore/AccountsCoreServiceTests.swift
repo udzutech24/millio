@@ -257,4 +257,139 @@ struct AccountsCoreServiceTests {
         #expect(destinationBalance == 200_000) // без штрафа — весь остаток
         #expect((deposit.events ?? []).first { $0.type == .fee } == nil)
     }
+
+    // MARK: - Фаза 4: buy/sell/dividend/fee/revalue
+
+    @Test
+    func buyCreatesEventAndIncreasesQuantity() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+
+        let account = try service.createAccount(
+            name: "AAPL", kind: .marketInvestment, currency: "USD", openingBalance: 0,
+            marketMeta: MarketMeta(symbol: "AAPL", assetClass: .stock)
+        )
+        try service.buy(account: account, quantity: 10, unitPrice: 150)
+
+        let balance = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .marketInvestment, on: Date(), marketMeta: account.marketMeta)
+        #expect(balance == 1500) // 10 × 150 (без provider — fallback на lastKnown buy-цену)
+    }
+
+    @Test
+    func sellReducesQuantityAndAllowsExceedingCurrentHolding() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+
+        let account = try service.createAccount(
+            name: "AAPL", kind: .marketInvestment, currency: "USD", openingBalance: 0,
+            marketMeta: MarketMeta(symbol: "AAPL", assetClass: .stock)
+        )
+        try service.buy(account: account, quantity: 5, unitPrice: 100)
+        // Продажа БОЛЬШЕ остатка — не жёсткий запрет (брифинг Фазы 4, задача 4): сервис не бросает ошибку.
+        try service.sell(account: account, quantity: 8, unitPrice: 120)
+
+        let balance = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .marketInvestment, on: Date(), marketMeta: account.marketMeta)
+        #expect(balance == -360) // quantity = -3 × 120
+    }
+
+    @Test
+    func buySellRejectedForNonMarketKind() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(name: "Карта", kind: .cash, currency: "RUB", openingBalance: 0)
+
+        #expect(throws: AccountsCoreServiceError.self) {
+            try service.buy(account: account, quantity: 1, unitPrice: 1)
+        }
+    }
+
+    /// Task 6: dividend/fee — информационные события, НЕ меняют quantity/баланс движка E.
+    @Test
+    func recordMarketCashEventDoesNotAffectMarketBalance() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(
+            name: "AAPL", kind: .marketInvestment, currency: "USD", openingBalance: 0,
+            marketMeta: MarketMeta(symbol: "AAPL", assetClass: .stock)
+        )
+        try service.buy(account: account, quantity: 10, unitPrice: 100)
+        let balanceBefore = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .marketInvestment, on: Date(), marketMeta: account.marketMeta)
+
+        try service.recordMarketCashEvent(account: account, type: .dividend, amount: 50)
+        try service.recordMarketCashEvent(account: account, type: .fee, amount: 5)
+
+        let balanceAfter = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .marketInvestment, on: Date(), marketMeta: account.marketMeta)
+        #expect(balanceAfter == balanceBefore)
+        #expect((account.events ?? []).filter { $0.type == .dividend || $0.type == .fee }.count == 2)
+    }
+
+    @Test
+    func recordMarketCashEventRejectsUnsupportedType() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(
+            name: "AAPL", kind: .marketInvestment, currency: "USD", openingBalance: 0,
+            marketMeta: MarketMeta(symbol: "AAPL", assetClass: .stock)
+        )
+        #expect(throws: AccountsCoreServiceError.self) {
+            try service.recordMarketCashEvent(account: account, type: .income, amount: 10)
+        }
+    }
+
+    @Test
+    func revalueUpdatesManualAssetBalance() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(name: "Квартира", kind: .manualAsset, currency: "RUB", openingBalance: 17_000_000)
+
+        try service.revalue(account: account, newValue: 20_000_000)
+
+        let balance = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .manualAsset, on: Date())
+        #expect(balance == 20_000_000)
+    }
+
+    /// Переоценка задним числом меняет точки от своей даты вперёд, но НЕ трогает точки ДО неё
+    /// (брифинг Фазы 4, задача 6, блок F) — движок сам берёт последнюю revaluation ≤date.
+    @Test
+    func revalueBackdatedDoesNotChangeEarlierPoints() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        // openingBalance ДОЛЖЕН быть раньше первой переоценки — иначе balanceBeforeFirstRevaluation
+        // проверяла бы точку ДО существования счёта (реальная ошибка сборки теста, не движка).
+        let account = try service.createAccount(
+            name: "Квартира", kind: .manualAsset, currency: "RUB", openingBalance: 17_000_000,
+            date: Date().addingTimeInterval(-60 * 86_400)
+        )
+
+        let earlierDate = Date().addingTimeInterval(-30 * 86_400)
+        try service.revalue(account: account, newValue: 18_000_000, date: earlierDate)
+        try service.revalue(account: account, newValue: 20_000_000) // сегодня
+
+        let balanceBeforeFirstRevaluation = AccountBalanceEngine.balanceAt(
+            events: account.events ?? [], kind: .manualAsset, on: earlierDate.addingTimeInterval(-1)
+        )
+        let balanceToday = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .manualAsset, on: Date())
+
+        #expect(balanceBeforeFirstRevaluation == 17_000_000) // opening — до первой переоценки
+        #expect(balanceToday == 20_000_000)
+    }
+
+    @Test
+    func revalueRejectedForNonManualAssetKind() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(name: "Карта", kind: .cash, currency: "RUB", openingBalance: 0)
+
+        #expect(throws: AccountsCoreServiceError.self) {
+            try service.revalue(account: account, newValue: 1000)
+        }
+    }
 }

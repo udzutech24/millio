@@ -40,6 +40,8 @@ final class AccountsCoreService {
         depositMeta: DepositMeta? = nil,
         loanMeta: LoanMeta? = nil,
         debtMeta: DebtMeta? = nil,
+        marketMeta: MarketMeta? = nil,
+        manualAssetMeta: ManualAssetMeta? = nil,
         note: String? = nil,
         date: Date = Date()
     ) throws -> Account {
@@ -49,6 +51,8 @@ final class AccountsCoreService {
         account.depositMeta = depositMeta
         account.loanMeta = loanMeta
         account.debtMeta = debtMeta
+        account.marketMeta = marketMeta
+        account.manualAssetMeta = manualAssetMeta
         account.note = note
         modelContext.insert(account)
 
@@ -107,6 +111,67 @@ final class AccountsCoreService {
         let delta = newValue - current
 
         let event = AccountEvent(account: account, date: date, type: .adjustment, amount: delta)
+        modelContext.insert(event)
+        invalidateCache(for: account, from: date)
+        try modelContext.save()
+        return event
+    }
+
+    // MARK: - Рыночный счёт (Фаза 4): buy/sell/dividend/fee
+
+    /// Покупка актива — увеличивает `quantity` (движок E реплеит Σ buy−sell × цена(дата)).
+    /// `unitPrice` — цена ПОКУПКИ (не текущая рыночная), фиксируется на событии навсегда.
+    @discardableResult
+    func buy(account: Account, quantity: Decimal, unitPrice: Decimal, date: Date = Date(), note: String? = nil) throws -> AccountEvent {
+        guard account.kind == .marketInvestment else { throw AccountsCoreServiceError.unsupportedEventType(.buy) }
+        let event = AccountEvent(account: account, date: date, type: .buy, quantity: quantity, unitPrice: unitPrice, note: note)
+        modelContext.insert(event)
+        invalidateCache(for: account, from: date)
+        try modelContext.save()
+        return event
+    }
+
+    /// Продажа актива — уменьшает `quantity`. НЕ проверяет «продажа больше остатка» (не жёсткий
+    /// запрет, брифинг Фазы 4, п.4) — предупреждение считает вызывающий UI по текущему `quantity`.
+    @discardableResult
+    func sell(account: Account, quantity: Decimal, unitPrice: Decimal, date: Date = Date(), note: String? = nil) throws -> AccountEvent {
+        guard account.kind == .marketInvestment else { throw AccountsCoreServiceError.unsupportedEventType(.sell) }
+        let event = AccountEvent(account: account, date: date, type: .sell, quantity: quantity, unitPrice: unitPrice, note: note)
+        modelContext.insert(event)
+        invalidateCache(for: account, from: date)
+        try modelContext.save()
+        return event
+    }
+
+    /// Дивиденд/комиссия рыночного счёта — ЧИСТО ИНФОРМАЦИОННЫЕ события для P&L карточки счёта
+    /// (брифинг Фазы 4, задача 6, решение): движок E (`AccountBalanceEngine.marketBalance`) считает
+    /// баланс ТОЛЬКО по buy/sell, dividend/fee НЕ влияют на quantity и не входят в qty×price —
+    /// намеренно, чтобы «стоимость позиции» не путалась с денежными потоками от неё.
+    @discardableResult
+    func recordMarketCashEvent(
+        account: Account,
+        type: AccountEventType,
+        amount: Decimal,
+        date: Date = Date(),
+        note: String? = nil
+    ) throws -> AccountEvent {
+        guard account.kind == .marketInvestment, type == .dividend || type == .fee else {
+            throw AccountsCoreServiceError.unsupportedEventType(type)
+        }
+        let event = AccountEvent(account: account, date: date, type: type, amount: amount, note: note)
+        modelContext.insert(event)
+        try modelContext.save()
+        return event
+    }
+
+    // MARK: - Ручной актив (Фаза 4): переоценка
+
+    /// Переоценка ручного актива — `revaluation` фиксирует НОВУЮ полную стоимость (не дельту),
+    /// движок F (`AccountBalanceEngine.manualAssetBalance`) берёт последнюю ≤ дате реплея.
+    @discardableResult
+    func revalue(account: Account, newValue: Decimal, date: Date = Date(), note: String? = nil) throws -> AccountEvent {
+        guard account.kind == .manualAsset else { throw AccountsCoreServiceError.unsupportedEventType(.revaluation) }
+        let event = AccountEvent(account: account, date: date, type: .revaluation, amount: newValue, note: note)
         modelContext.insert(event)
         invalidateCache(for: account, from: date)
         try modelContext.save()

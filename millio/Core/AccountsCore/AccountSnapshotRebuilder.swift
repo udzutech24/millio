@@ -14,26 +14,28 @@ actor AccountSnapshotRebuilder {
     /// Инкрементально пересобирает кэш счёта: досчитывает checkpoint-ы для всех дней событий,
     /// оставшихся ПОСЛЕ последнего сохранившегося снапшота, вплоть до дня `upTo` включительно.
     /// Уже существующие снапшоты (валидные — их не тронула инвалидация) не пересчитываются.
-    func rebuild(accountID: PersistentIdentifier, upTo: Date) throws {
+    /// `priceProvider` — только для `.marketInvestment` (Фаза 4, S4: `Sendable`-снэпшот кэша цен,
+    /// собранный ВНЕ этого актора синхронным чтением `AccountMarketPriceService.makeSnapshotProvider`).
+    func rebuild(accountID: PersistentIdentifier, upTo: Date, priceProvider: MarketPriceProviding? = nil) throws {
         guard let account = modelContext.model(for: accountID) as? Account else { return }
-        try rebuildCheckpoints(for: account, upTo: upTo, keepExisting: true)
+        try rebuildCheckpoints(for: account, upTo: upTo, keepExisting: true, priceProvider: priceProvider)
     }
 
     /// Полная пересборка «с нуля»: удаляет все снапшоты счёта и реплеит заново по всем дням событий.
     /// Результат идентичен прямому реплею на любую дату (AC8) — используется тестом и для
     /// разового «Пересобрать кэш» без миграции старых данных.
-    func rebuildAll(accountID: PersistentIdentifier) throws {
+    func rebuildAll(accountID: PersistentIdentifier, priceProvider: MarketPriceProviding? = nil) throws {
         guard let account = modelContext.model(for: accountID) as? Account else { return }
         for snapshot in account.snapshots ?? [] {
             modelContext.delete(snapshot)
         }
         try modelContext.save()
-        try rebuildCheckpoints(for: account, upTo: .distantFuture, keepExisting: false)
+        try rebuildCheckpoints(for: account, upTo: .distantFuture, keepExisting: false, priceProvider: priceProvider)
     }
 
     // MARK: - Внутренняя пересборка
 
-    private func rebuildCheckpoints(for account: Account, upTo: Date, keepExisting: Bool) throws {
+    private func rebuildCheckpoints(for account: Account, upTo: Date, keepExisting: Bool, priceProvider: MarketPriceProviding?) throws {
         let upToKey = AccountEvent.dayKey(for: upTo)
         let existing = account.snapshots ?? []
         // Последний ОСТАВШИЙСЯ снапшот — граница, до которой кэш валиден и трогать не нужно.
@@ -65,6 +67,7 @@ actor AccountSnapshotRebuilder {
                 events: events,
                 kind: account.kind,
                 on: cursor,
+                priceProvider: priceProvider,
                 marketMeta: account.marketMeta
             )
             let isClosed = !account.participates(on: cursor)
