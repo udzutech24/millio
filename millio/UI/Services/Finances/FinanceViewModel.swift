@@ -240,6 +240,8 @@ enum FinanceAction {
     case restoreArchivedAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?)
     case removeAccountFromGroup(FinanceAccount)
     case deleteAccountPermanently(FinanceAccount)
+    /// Track C: перевод легаси-счёта в новое ядро (создаёт core-двойник, скрывает легаси атомарно).
+    case convertAccountToCore(FinanceAccount)
     case showCreateCardSheet
     case hideCreateCardSheet
     case showCreateCreditSheet
@@ -398,6 +400,11 @@ final class FinanceViewModel: ViewModelProtocol {
                 self?.accountService.updateUnderlyingArchiveState(for: account, archivedAt: date)
             }
         )
+    }()
+
+    /// Track C: конвертация легаси-счёта в новое ядро. Legacy-агностичен (сторону легаси даём замыканием).
+    private(set) lazy var legacyAccountConverter: LegacyAccountConverter = {
+        LegacyAccountConverter(modelContext: self.modelContext, registry: .shared)
     }()
 
     // accountService использует lazy из-за замыканий на self
@@ -611,6 +618,8 @@ final class FinanceViewModel: ViewModelProtocol {
             removeAccountFromGroup(account)
         case .deleteAccountPermanently(let account):
             deleteAccountPermanently(account)
+        case .convertAccountToCore(let account):
+            convertAccountToCore(account)
             
         case .showCreateCardSheet:
             state.showCreateCardSheet = true
@@ -1510,6 +1519,103 @@ final class FinanceViewModel: ViewModelProtocol {
         if accountType == .credit { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
     }
 
+    // MARK: - Track C: конвертация легаси-счёта в новое ядро
+
+    /// Уже конвертирован ли легаси-счёт (для UI: показывать «Перевести» или трактовать restore как un-convert).
+    func isAccountConvertedToCore(_ account: FinanceAccount) -> Bool {
+        legacyAccountConverter.isConverted(legacyUniqueID: account.accountID)
+    }
+
+    /// Перевод легаси-счёта в новое ядро (MVP: только opening-balance = текущий баланс легаси).
+    /// Атомарно (риск №8): core-двойник создаётся и легаси скрывается (`archivedAt`) в одном акте,
+    /// тотал до == после (двойник вносит ровно то, что вносил легаси). Обновление списков/тоталов
+    /// старого и нового мира — той же D1-механикой (`investmentsUpdated` → loadAccounts + пересчёт).
+    private func convertAccountToCore(_ account: FinanceAccount) {
+        guard let plan = makeConversionPlan(for: account) else {
+            AppLogger.log(.error, category: "Finance", "Convert to core: не удалось построить план для \(account.accountID)")
+            return
+        }
+        let coreGroup = resolveCoreGroup(for: account)
+        let input = LegacyAccountConverter.Input(
+            legacyUniqueID: plan.legacyUniqueID,
+            name: plan.name,
+            currency: plan.currency,
+            kind: plan.kind,
+            openingBalance: plan.openingBalance,
+            group: coreGroup,
+            cardMeta: plan.cardMeta,
+            loanMeta: plan.loanMeta,
+            manualAssetMeta: plan.manualAssetMeta
+        )
+        do {
+            try legacyAccountConverter.convert(input) { [weak self] in
+                guard let self else { return }
+                // Скрываем легаси В ТОМ ЖЕ акте: archivedAt + save (junction не удаляем — un-convert снимет archivedAt).
+                self.accountService.updateUnderlyingArchiveState(for: account, archivedAt: Date())
+                try self.modelContext.save()
+            }
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Convert to core failed: \(error.localizedDescription)")
+            return
+        }
+        loadAccounts()
+        loadGroups()
+        calculateTotalAmount()
+        EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+        if account.accountType == .card { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
+        if account.accountType == .credit { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
+    }
+
+    /// Откат конвертации: удаляет core-двойник и возвращает легаси в активные (снимает `archivedAt`).
+    /// Работает по (accountType, accountID) — доступен из архивного контекста без `FinanceAccount`.
+    private func unconvertAccountFromCore(accountType: FinanceAccountType, accountID: String) {
+        do {
+            try legacyAccountConverter.unconvert(legacyUniqueID: accountID) { [weak self] in
+                guard let self else { return }
+                self.accountService.updateUnderlyingArchiveState(accountType: accountType, accountID: accountID, archivedAt: nil)
+                try self.modelContext.save()
+            }
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Un-convert failed: \(error.localizedDescription)")
+            return
+        }
+        loadAccounts()
+        loadGroups()
+        calculateTotalAmount()
+        EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+        if accountType == .card { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
+        if accountType == .credit { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
+    }
+
+    private func makeConversionPlan(for account: FinanceAccount) -> LegacyAccountConversion.Plan? {
+        switch account.accountType {
+        case .card:
+            guard let card = cardByID[account.accountID] else { return nil }
+            return LegacyAccountConversion.plan(for: card)
+        case .credit:
+            guard let credit = creditByID[account.accountID] else { return nil }
+            return LegacyAccountConversion.plan(for: credit)
+        case .investment:
+            guard let investment = investmentByID[account.accountID] else { return nil }
+            return LegacyAccountConversion.plan(for: investment, currency: resolvedInvestmentCurrency(investment))
+        }
+    }
+
+    /// Core-группа для двойника: находим/создаём `AccountGroup` по имени легаси-группы (тот же
+    /// мост по имени, что `newCoreAccounts(matching:)`). Ungrouped/без группы → nil.
+    private func resolveCoreGroup(for account: FinanceAccount) -> AccountGroup? {
+        guard let groupName = account.group?.name,
+              groupName != FinanceSystemGroups.ungroupedName,
+              !groupName.isEmpty else { return nil }
+        let descriptor = FetchDescriptor<AccountGroup>(predicate: #Predicate<AccountGroup> { $0.name == groupName })
+        if let existing = try? modelContext.fetch(descriptor).first {
+            return existing
+        }
+        let group = AccountGroup(name: groupName)
+        modelContext.insert(group)
+        return group
+    }
+
     func archivedAccountRows() -> [ArchivedFinanceAccountRow] {
         let links = fetchFinanceAccountLinks()
         let groupsByAccount = Dictionary(
@@ -1570,6 +1676,12 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     func restoreArchivedAccount(_ row: ArchivedFinanceAccountRow) {
+        // Track C: конвертированный (не просто архивный) легаси возвращается ТОЛЬКО через un-convert —
+        // он удаляет core-двойник. Обычный restore оставил бы и легаси, и двойник → двойной счёт (риск №8).
+        if legacyAccountConverter.isConverted(legacyUniqueID: row.accountID) {
+            unconvertAccountFromCore(accountType: row.accountType, accountID: row.accountID)
+            return
+        }
         let targetGroup = preferredRestoreGroup(accountType: row.accountType, accountID: row.accountID)
         handle(.restoreArchivedAccountToGroup(accountType: row.accountType, accountID: row.accountID, group: targetGroup))
     }

@@ -1,6 +1,6 @@
 # План: фикс race guest→user + конвертация легаси-счетов
 
-**Дата:** 2026-07-04 · **Статус: В РАБОТЕ** (Track A A1–A4 реализован; Track B/C/D не начаты)
+**Дата:** 2026-07-04 · **Статус: В РАБОТЕ** (Track A A1–A4 ✅, Track C C1–C3 ✅, Track D D1 ✅; Track B B2 не начат)
 **Ветка:** feature/accounts-core (поверх фаз 0–6a rebuild'а) · **Родитель:** `plans/2026-07-04__accounts-core-rebuild-plan.md` §8, хвост №10
 **Research:** millio-audit 2026-07-04 (карта ниже) · **Handoff:** `progress/accounts-core-rebuild-handoff.md` §Сим-проверка
 
@@ -95,13 +95,37 @@ VM-слой — нет. → UI-записи идут в guest мимо CloudKit-
 Легаси-счета (Card/Credit/Investment/FinanceAccount) с Ф6a read-only: ни удалить, ни изменить (скрин: счёт «ОГ»).
 Нужен per-account выход в новое ядро.
 
-- [ ] **C1. Действие «Перевести в новое ядро»** в деталке легаси-счёта: создаёт Account нового ядра
-  (маппинг типов: FinanceAccount/Card→bank/card, Credit→credit, Investment→market; opening-balance-событие
-  = текущий баланс легаси, той же валютой, датой конвертации), легаси помечается converted → скрывается из
-  списков и **исключается из тоталов атомарно** (риск №8). Физического удаления нет до 6b (Non-Goal бэкапа).
-- [ ] **C2. Опция переноса истории** (решение при реализации: только opening balance MVP или + реплей истории
-  транзакций легаси в события ядра). Рекомендация: MVP = opening balance, история остаётся видимой в легаси-архиве.
-- [ ] **C3. Откат:** un-convert (удалить new-core счёт-двойник, снять флаг converted), пока легаси жив.
+- [x] **C1. Действие «Перевести в новое ядро»** РЕАЛИЗОВАН. Кнопка `convertToCoreFooterButton` рядом с
+  «Удалить актив» в `FinanceDynamicsView` (оба футера — обычный + рыночный), подтверждающий оверлей
+  (RU/EN/zh-Hans + de/es/fr/tr). Создаёт core-`Account` через `AccountsCoreService.createAccount` (grep-гейт ✅).
+  **Маппинг типов (девиация от брифинга, обоснована):** Card→`.debitCard` (netWorthAmount, signed),
+  Credit→`.loan` (opening=магнитуда `remainingAmount`, движок C инвертирует), Investment→**`.manualAsset`**,
+  а НЕ `.marketInvestment` — рыночный движок E считает qty×price и ИГНОРИРУЕТ opening → двойник показал бы 0,
+  ломая инвариант тотала; MVP запрещает реплей котировок; `.manualAsset` (движок F) замораживает значение
+  одним opening-событием без meta/дрейфа. openingBalance приведён к знаку движка, `includeInTotal=true`
+  (кредит вносит `-remaining` всегда, единственный способ гарантировать инвариант). Атомарность (риск №8):
+  `LegacyAccountConverter.convert` создаёт двойник и скрывает легаси (`archivedAt`) одним синхронным актом;
+  при сбое скрытия двойник откатывается (компенсация). Обновление списков/тоталов — D1-механикой
+  (loadAccounts-триплет + `EventBus.investmentsUpdated`).
+- [x] **C2. Опция переноса истории — РЕШЕНО: MVP = только opening balance**, без реплея. История остаётся
+  видимой в легаси-архиве (`archivedAccountRows()`) до 6b. **Выбор converted-маркера:** НЕ поле в @Model
+  (= изменение схемы V4, риск №11) — переиспользуем существующий `archivedAt` (скрывает легаси) + реестр
+  соответствий `legacyUniqueID→coreAccountID` в UserDefaults (`LegacyConversionRegistry`, device-local:
+  при утере откат недоступен, но double-count не возникает — инвариант держит хранимый `archivedAt`).
+- [x] **C3. Откат un-convert** РЕАЛИЗОВАН. `LegacyAccountConverter.unconvert` удаляет core-двойник
+  (`physicallyDelete` по реестру) + снимает `archivedAt` легаси. UI: `restoreArchivedAccount` роутит
+  конвертированный легаси в un-convert (обычный restore оставил бы и легаси, и двойник → double-count, риск №8).
+
+**Файлы:** `Core/AccountsCore/LegacyConversionRegistry.swift`, `Core/AccountsCore/LegacyAccountConverter.swift`
+(новые, legacy-агностичны), `UI/Services/Finances/LegacyAccountConversion.swift` (маппинг), правки
+`FinanceViewModel.swift` (action `.convertAccountToCore` + методы + роутинг restore), `FinanceDynamicsView.swift`
+(кнопка + оверлей + confirm), `Localizable.xcstrings` (+4 ключа ×7 языков).
+**Тесты:** `LegacyAccountConverterTests` (9: инвариант тотала конвертации/un-convert/re-convert/валюта!=primary,
+loan/manualAsset знак, rollback, реестр) + `LegacyAccountConversionMappingTests` (8: card/credit/investment→plan) — зелёные.
+**Гейты:** build ✅ 0 ошибок/warning, grep-гейт ✅, целевые сьюты Finance*/Account* зелёные (кроме
+предсуществующего `FinanceAccountArchivePolicyTests.exactThresholdTriggerWarning` — не связан, файл не трогали).
+**Вручную (не покрыто автоматикой):** UI-прокрутка конвертации на устройстве/симуляторе — DEBUG-сидер сеет
+только new-core, легаси-счёт нужно создать руками + требуется Apple-login окружение; логика доказана юнит-тестами.
 
 **Зависимость:** C строго после A (иначе конвертация пишет в guest-стор — риск №9). B и C независимы, но
 для владельца B раньше C (его данные разошлись).
@@ -187,3 +211,14 @@ D — после мини-research, удобно паровозом с A2 (об�
   - **Гейты:** build ✅, grep ✅, тесты 1583/17 (лучше baseline) ✅, сим cold start guest ✅.
   - **Открыто:** ручная проверка сценариев с Apple-логином; Track B (reconciliation) обязателен до релиза
     A вместе (риск №1); Track C/D не трогались.
+- 2026-07-05: **Track C C1–C3 реализован** по команде владельца (feature/accounts-core, НЕ мержено/пушено).
+  Per-account «Перевести в новое ядро» + un-convert. **Ключевое инженерное решение (ментор-девиация):**
+  Investment→`.manualAsset`, а НЕ `.marketInvestment` из брифинга — market-движок E игнорирует opening
+  (показал бы 0, ломая инвариант тотала), MVP запрещает реплей котировок; manualAsset (F) замораживает
+  значение. **Converted-маркер:** `archivedAt` (без изменения схемы V4) + реестр в UserDefaults
+  (`LegacyConversionRegistry`). Атомарность риска №8 — компенсирующий rollback двойника при сбое скрытия
+  легаси; риск восстановления конвертированного через архив закрыт роутингом `restoreArchivedAccount`→un-convert.
+  Новые: `LegacyConversionRegistry`, `LegacyAccountConverter` (Core, legacy-агностичны), `LegacyAccountConversion`
+  (маппинг). Тесты: 9 конвертер/инвариант + 8 маппинг — зелёные. Build ✅ 0 w, grep ✅, Finance*/Account* ✅
+  (кроме предсуществующего `exactThresholdTriggerWarning`). **Открыто:** UI-прокрутка конвертации вручную
+  (сидер сеет только new-core; нужен Apple-login + ручной легаси-счёт) — логика доказана юнит-тестами.
