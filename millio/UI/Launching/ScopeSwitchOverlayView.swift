@@ -10,6 +10,10 @@
 import SwiftUI
 
 struct ScopeSwitchOverlayView: View {
+    /// Ключ сообщения оверлея — по умолчанию «Переключение профиля…».
+    /// Reconciliation (Track B) переиспользует оверлей с «Восстанавливаю данные…».
+    var messageKey: String.LocalizationValue = "app.scope.switching"
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -19,7 +23,7 @@ struct ScopeSwitchOverlayView: View {
                     .tint(AppColors.textPrimary)
                     .scaleEffect(1.15)
 
-                Text(L("app.scope.switching"))
+                Text(L(messageKey))
                     .font(.millioHeadline)
                     .foregroundStyle(AppColors.textSecondary)
             }

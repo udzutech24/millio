@@ -77,6 +77,9 @@ struct millioApp: App {
     @State private var scopeIdentityToken: Int = 0
     // Оверлей «Переключение профиля…» на время рантайм-смены скоупа (login/logout/force-signout).
     @State private var isSwitchingScope = false
+    // Track B: оверлей «Восстанавливаю данные…» на время merge guest→user (reconciliation).
+    @State private var isReconciling = false
+    @State private var scopeReconciliationService = ScopeReconciliationService()
     @State private var backendRuntime: BackendSessionRuntime?
     @State private var startupCoordinator = StartupCoordinator(initialScope: .guest)
     @State private var appRefreshCoordinator = AppRefreshCoordinator()
@@ -143,6 +146,11 @@ struct millioApp: App {
                     if isSwitchingScope {
                         ScopeSwitchOverlayView()
                             .zIndex(10)
+                    }
+
+                    if isReconciling {
+                        ScopeSwitchOverlayView(messageKey: "reconciliation.overlay.restoring")
+                            .zIndex(11)
                     }
                 }
                 .preferredColorScheme(.dark)
@@ -399,7 +407,57 @@ struct millioApp: App {
         // восстановления нужен lifecycle == .ready. В рантайме (login/logout) onScopeResolved
         // == nil, порядок не меняется.
         await onScopeResolved?()
+        // Track B: reconciliation guest→user ПОСЛЕ свопа контейнера и .ready, но ДО restore-флоу —
+        // чтобы restore видел уже слитый (непустой) user-стор. Не блокирует .ready (идёт off-main,
+        // детектор-скрининг дёшев при отсутствии расхождения).
+        await reconcileScopeIfNeeded(resolvedScope: resolvedScope)
         await presentRestoreFlowIfNeeded()
+    }
+
+    /// Track B: сливает данные, записанные в guest-стор после first-login, в канонический user-стор.
+    /// Идемпотентно (done-маркер по scope), дёшево при отсутствии расхождения (детектор-скрининг).
+    @MainActor
+    private func reconcileScopeIfNeeded(resolvedScope: DataScope) async {
+        guard case .user = resolvedScope else { return }
+        guard !ScopeMergeMarker.isDone(userScopeKey: resolvedScope.storeConfigurationName) else { return }
+        guard let userContainer = activeModelContainer else { return }
+        // Гость — источник merge. Нет гостевого стора → мержить нечего.
+        guard Self.storeExists(for: .guest), let guestContainer = Self.makeModelContainer(for: .guest) else { return }
+
+        let usedFallback = ScopeStoreOpenTracker.shared.usedFallback(resolvedScope.storeConfigurationName)
+            || ScopeStoreOpenTracker.shared.usedFallback(DataScope.guest.storeConfigurationName)
+
+        let outcome = await scopeReconciliationService.reconcile(
+            userContainer: userContainer,
+            userScope: resolvedScope,
+            guestContainer: guestContainer,
+            userStoreURL: Self.storeURL(for: resolvedScope),
+            guestStoreURL: Self.storeURL(for: .guest),
+            usedFallbackOpen: usedFallback,
+            onWillMerge: { withAnimation(AppAnimation.standard) { isReconciling = true } }
+        )
+
+        if case .merged(let report) = outcome {
+            // Пересоздаём дерево на слитых данных: FinanceViewModel/CashflowViewModel перечитают user-стор.
+            scopeIdentityToken &+= 1
+            if report.accountsAdded + report.transactionsAdded > 0 {
+                let message = String(
+                    format: L("reconciliation.summary.restored",
+                              defaultValue: "Data restored: %1$lld accounts, %2$lld transactions"),
+                    report.accountsAdded, report.transactionsAdded
+                )
+                toastCenter.show(message: message)
+            }
+            // Оверлей «висит» ещё кадр, пока пересоздаётся дерево, затем гаснет (как ScopeSwitch).
+            if isReconciling {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(Self.scopeSwitchOverlayLingerMilliseconds))
+                    withAnimation(AppAnimation.easeOut) { isReconciling = false }
+                }
+            }
+        } else if isReconciling {
+            withAnimation(AppAnimation.easeOut) { isReconciling = false }
+        }
     }
 
     @MainActor
@@ -568,6 +626,8 @@ struct millioApp: App {
             if storeAlreadyExists {
                 #if DEBUG
                 let schema = AppSchema.create()
+                // Track B (митигация B1b №6): стор пересоздан → reconciliation не фиксирует done.
+                ScopeStoreOpenTracker.shared.markFallback(scope.storeConfigurationName)
                 return Self.rebuildStorePreservingData(at: storeURL, schema: schema, scope: scope)
                 #else
                 // Migration plan failed on an existing store (e.g. schema version mismatch after
@@ -584,6 +644,8 @@ struct millioApp: App {
                 )
                 if let fallback = try? ModelContainer(for: AppSchema.create(), configurations: [fallbackConfig]) {
                     AppLogger.log(.warning, category: "App", "Opened store without migration plan — data may be partially readable")
+                    // Track B (митигация B1b №6): partially readable → reconciliation не фиксирует done.
+                    ScopeStoreOpenTracker.shared.markFallback(scope.storeConfigurationName)
                     return fallback
                 }
                 // Store is unrecoverable: rename to .corrupt and create fresh so the user can at
