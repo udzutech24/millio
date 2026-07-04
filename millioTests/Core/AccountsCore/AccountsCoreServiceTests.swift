@@ -392,4 +392,74 @@ struct AccountsCoreServiceTests {
             try service.revalue(account: account, newValue: 1000)
         }
     }
+
+    // MARK: - Фаза 5, задача 3: физическое удаление и целостность переводов (S2)
+
+    /// A→B перевод, удаляем A навсегда → у B баланс НЕ меняется, нога B стала income без transferID
+    /// (иначе баланс B продолжал бы включать сумму, «прилетевшую в никуда» — S2 в плане).
+    @Test
+    func physicallyDeleteConvertsSurvivorTransferLegToIncomeAndPreservesBalance() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+
+        let accountA = try service.createAccount(name: "A", kind: .cash, currency: "RUB", openingBalance: 1000)
+        let accountB = try service.createAccount(name: "B", kind: .cash, currency: "RUB", openingBalance: 0)
+        try service.transfer(from: accountA, to: accountB, amountInSourceCurrency: 300)
+
+        let balanceBeforeDelete = AccountBalanceEngine.balanceAt(events: accountB.events ?? [], kind: accountB.kind, on: Date())
+        #expect(balanceBeforeDelete == 300)
+
+        try service.physicallyDelete(accountA)
+
+        let balanceAfterDelete = AccountBalanceEngine.balanceAt(events: accountB.events ?? [], kind: accountB.kind, on: Date())
+        #expect(balanceAfterDelete == 300) // инвариант: баланс выжившего счёта не изменился
+
+        let survivorEvents = accountB.events ?? []
+        #expect(survivorEvents.count == 2) // opening + бывший transferIn
+        let convertedLeg = survivorEvents.first { $0.type == .income }
+        #expect(convertedLeg != nil)
+        #expect(convertedLeg?.transferID == nil) // больше не перевод
+        #expect(convertedLeg?.note?.contains("A") == true) // пометка с именем удалённого счёта
+    }
+
+    /// Симметричный случай: удаляем ПОЛУЧАТЕЛЯ (B) — нога источника (A) должна стать expense.
+    @Test
+    func physicallyDeleteConvertsSourceLegToExpenseWhenDestinationDeleted() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+
+        let accountA = try service.createAccount(name: "A", kind: .cash, currency: "RUB", openingBalance: 1000)
+        let accountB = try service.createAccount(name: "B", kind: .cash, currency: "RUB", openingBalance: 0)
+        try service.transfer(from: accountA, to: accountB, amountInSourceCurrency: 300)
+
+        try service.physicallyDelete(accountB)
+
+        let balanceA = AccountBalanceEngine.balanceAt(events: accountA.events ?? [], kind: accountA.kind, on: Date())
+        #expect(balanceA == 700) // 1000 - 300, как и было до удаления B
+
+        let survivorEvents = accountA.events ?? []
+        let convertedLeg = survivorEvents.first { $0.type == .expense }
+        #expect(convertedLeg != nil)
+        #expect(convertedLeg?.transferID == nil)
+    }
+
+    /// Удаление счёта без переводов — просто каскад events+snapshots, без побочных эффектов на другие счета.
+    @Test
+    func physicallyDeleteWithoutTransfersJustCascades() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+
+        let account = try service.createAccount(name: "Соло", kind: .cash, currency: "RUB", openingBalance: 500)
+        try service.recordEvent(account: account, type: .income, amount: 100)
+
+        try service.physicallyDelete(account)
+
+        let remaining = try ctx.fetch(FetchDescriptor<Account>())
+        #expect(remaining.isEmpty)
+        let remainingEvents = try ctx.fetch(FetchDescriptor<AccountEvent>())
+        #expect(remainingEvents.isEmpty) // каскад унёс события удалённого счёта
+    }
 }

@@ -235,4 +235,48 @@ struct AccountsTotalsServiceTests {
         let total = await totals.totalAt(Date(), in: "USD")
         #expect(total == 1550) // 10 × 155 (живая цена из кэша), НЕ 10 × 100 (цена покупки)
     }
+
+    // MARK: - AC6 (Фаза 5, задача 1): архивация time-aware — история ДО archivedAt неизменна байт-в-байт
+
+    /// Создаём счёт с историей → архивируем → точка ДО archivedAt (вчера) в `seriesBetween`
+    /// совпадает С ТОЧНОСТЬЮ ДО Decimal (не приблизительно) с точкой ДО архивации; сегодняшняя
+    /// точка счёт больше не включает; `restoreAccount` полностью обратим.
+    @Test @MainActor
+    func archivingAccountDoesNotChangeHistoricalPointsButExcludesToday() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+        rateService.todayRate = 1
+
+        let account = try service.createAccount(name: "Карта", kind: .cash, currency: "RUB", openingBalance: 1000, date: day(0))
+        try service.recordEvent(account: account, type: .income, amount: 500, date: day(1))
+        try ctx.save()
+
+        let totals = AccountsTotalsService(modelContext: ctx, rebuilder: rebuilder, rateService: rateService)
+
+        let seriesBeforeArchive = await totals.seriesBetween(start: day(0), end: day(2), currency: "RUB")
+        #expect(seriesBeforeArchive.map(\.1) == [1000, 1500, 1500])
+
+        // Архивируем РОВНО на day(2) — граница строгая (date < archivedAt), сама точка day(2) уже не участвует.
+        try service.archiveAccount(account, on: day(2))
+
+        let seriesAfterArchive = await totals.seriesBetween(start: day(0), end: day(2), currency: "RUB")
+        // Байт-в-байт: точки ДО archivedAt идентичны ДО и ПОСЛЕ архивации (не «примерно похожи»).
+        #expect(seriesAfterArchive[0].1 == seriesBeforeArchive[0].1) // day(0): 1000 == 1000
+        #expect(seriesAfterArchive[1].1 == seriesBeforeArchive[1].1) // day(1): 1500 == 1500
+        #expect(seriesAfterArchive[2].1 == 0) // day(2) == archivedAt → не участвует, "обнуление с сегодня"
+
+        // "Сегодня" (реальное текущее время, далеко после day(2)) счёт тоже не участвует.
+        let totalToday = await totals.totalAt(Date(), in: "RUB")
+        #expect(totalToday == 0)
+
+        // Обратимость: после restore точка day(2) и "сегодня" снова включают счёт.
+        try service.restoreAccount(account)
+        let seriesAfterRestore = await totals.seriesBetween(start: day(0), end: day(2), currency: "RUB")
+        #expect(seriesAfterRestore.map(\.1) == seriesBeforeArchive.map(\.1))
+        let totalTodayAfterRestore = await totals.totalAt(Date(), in: "RUB")
+        #expect(totalTodayAfterRestore == 1500)
+    }
 }

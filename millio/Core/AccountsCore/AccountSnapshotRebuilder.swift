@@ -33,26 +33,62 @@ actor AccountSnapshotRebuilder {
         try rebuildCheckpoints(for: account, upTo: .distantFuture, keepExisting: false, priceProvider: priceProvider)
     }
 
+    /// Разовая пересборка кэша ВСЕХ счетов нового ядра (задача 6/Фаза 5, AC8 debug-ручка) — для
+    /// восстановления консистентности после ручного вмешательства в БД или подозрения на
+    /// рассинхронизацию кэша. Возвращает число обработанных счетов (для тоста в UI).
+    @discardableResult
+    func rebuildAllAccounts() throws -> Int {
+        let accounts = try modelContext.fetch(FetchDescriptor<Account>())
+        for account in accounts {
+            try rebuildAll(accountID: account.persistentModelID)
+        }
+        return accounts.count
+    }
+
     // MARK: - Внутренняя пересборка
 
     private func rebuildCheckpoints(for account: Account, upTo: Date, keepExisting: Bool, priceProvider: MarketPriceProviding?) throws {
         let upToKey = AccountEvent.dayKey(for: upTo)
-        let existing = account.snapshots ?? []
+        var existing = account.snapshots ?? []
+
+        // Архивный счёт (задача 4/Фаза 5): снапшоты СТРОГО ПОСЛЕ дня закрытия не имеют права
+        // существовать — история после archivedAt не участвует в тоталах (participates(on:)),
+        // поэтому кэшу нечего там хранить. Чистим хвост даже если он остался от rebuild ДО архивации.
+        let archivedDayKey = account.archivedAt.map { AccountEvent.dayKey(for: $0) }
+        if let archivedDayKey {
+            let staleAfterArchive = existing.filter { $0.dayKey > archivedDayKey }
+            if !staleAfterArchive.isEmpty {
+                for snapshot in staleAfterArchive { modelContext.delete(snapshot) }
+                existing.removeAll { $0.dayKey > archivedDayKey }
+            }
+        }
+
         // Последний ОСТАВШИЙСЯ снапшот — граница, до которой кэш валиден и трогать не нужно.
         let lastValidKey = keepExisting ? (existing.map(\.dayKey).max() ?? "") : ""
 
         // Т2: быстрый выход БЕЗ обращения к `account.events` — на тёплом кэше (снапшот уже
         // покрывает запрошенную дату) не сканируем всю историю событий на каждый вызов totalAt.
-        guard keepExisting == false || lastValidKey < upToKey else { return }
+        guard keepExisting == false || lastValidKey < upToKey else {
+            if archivedDayKey != nil { try modelContext.save() } // сохранить чистку хвоста выше
+            return
+        }
 
         let events = account.events ?? []
-        guard !events.isEmpty else { return }
+        guard !events.isEmpty else {
+            if archivedDayKey != nil { try modelContext.save() }
+            return
+        }
 
         let dayKeysToBuild = Set(events.map(\.dayKey))
             .filter { $0 > lastValidKey && $0 <= upToKey }
+            // Не строим checkpoint-ы позже дня закрытия — счёт больше не участвует (AC6/AC7, задача 4).
+            .filter { archivedDayKey == nil || $0 <= archivedDayKey! }
             .sorted()
 
-        guard !dayKeysToBuild.isEmpty else { return }
+        guard !dayKeysToBuild.isEmpty else {
+            if archivedDayKey != nil { try modelContext.save() }
+            return
+        }
 
         var byKey: [String: AccountDailySnapshot] = [:]
         for snapshot in existing { byKey[snapshot.dayKey] = snapshot }

@@ -478,6 +478,64 @@ final class AccountsCoreService {
         try modelContext.save()
     }
 
+    // MARK: - Физическое удаление (экран «Архив» ТОЛЬКО, AC7)
+
+    /// Безвозвратно удаляет счёт вместе с его событиями/снапшотами (SwiftData `.cascade`).
+    /// ОБЯЗАТЕЛЬНО перед каскадом чинит инвариант Σ переводов = 0 (S2, риск плана): нога перевода
+    /// на ВЫЖИВШЕМ счёте не может остаться привязанной к `transferID`, у которого вторая нога сейчас
+    /// улетит вместе с удалённым счётом — иначе баланс выжившего счёта продолжит включать сумму,
+    /// «прилетевшую в никуда». Конвертируем такую ногу в обычное income/expense-событие с пометкой
+    /// в `note`, `transferID` сбрасываем — деньги остаются на выжившем счёте, но это уже не перевод.
+    /// Единственная точка вызова — экран «Архив» (см. `ArchivedAccountsView`), проверено grep-гейтом
+    /// (задача 2 брифинга Фазы 5): нигде больше в UI `modelContext.delete(Account)` не зовётся.
+    func physicallyDelete(_ account: Account) throws {
+        let accountID = account.id
+        let ownEvents = try modelContext.fetch(
+            FetchDescriptor<AccountEvent>(predicate: #Predicate<AccountEvent> { $0.account?.id == accountID })
+        )
+
+        let transferIDs = Set(ownEvents.compactMap(\.transferID))
+        if !transferIDs.isEmpty {
+            // #Predicate плохо дружит с `Set.contains` на опциональном UUID (SwiftData macro-ограничение) —
+            // фетчим все события с непустым transferID и фильтруем множеством в памяти. Датасет переводов
+            // конкретного счёта мал (не вся база), это дешевле, чем N отдельных запросов по одному transferID.
+            let legsDescriptor = FetchDescriptor<AccountEvent>(
+                predicate: #Predicate<AccountEvent> { $0.transferID != nil }
+            )
+            let allLegs = try modelContext.fetch(legsDescriptor).filter { leg in
+                guard let legTransferID = leg.transferID else { return false }
+                return transferIDs.contains(legTransferID)
+            }
+            var earliestBySurvivor: [UUID: Date] = [:]
+
+            for leg in allLegs {
+                // Пропускаем ноги самого удаляемого счёта — они уйдут каскадом ниже.
+                guard let legAccount = leg.account, legAccount.id != accountID else { continue }
+
+                // Конвертация: transferIn → income, transferOut → expense (сохраняем знак движения
+                // денег на выжившем счёте — именно это отличает income/expense от произвольной суммы).
+                leg.typeRaw = (leg.type == .transferIn ? AccountEventType.income : AccountEventType.expense).rawValue
+                leg.transferID = nil
+                let markerNote = String(format: L("accounts_core.archive.transfer_orphan_note"), account.name)
+                leg.note = [leg.note, markerNote].compactMap { $0 }.joined(separator: " · ")
+
+                earliestBySurvivor[legAccount.id] = min(earliestBySurvivor[legAccount.id] ?? leg.date, leg.date)
+            }
+
+            let survivorsByID = Dictionary(uniqueKeysWithValues: allLegs.compactMap { leg -> (UUID, Account)? in
+                guard let legAccount = leg.account, legAccount.id != accountID else { return nil }
+                return (legAccount.id, legAccount)
+            })
+            for (survivorID, earliestDate) in earliestBySurvivor {
+                guard let survivor = survivorsByID[survivorID] else { continue }
+                invalidateCache(for: survivor, from: earliestDate)
+            }
+        }
+
+        modelContext.delete(account) // каскад .cascade удалит events + snapshots самого счёта
+        try modelContext.save()
+    }
+
     // MARK: - Инвалидация кэша
 
     /// Удаляет снапшоты счёта от даты `date` включительно и дальше — снапшот-кэш «синхронный» слой,

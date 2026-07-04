@@ -18,6 +18,10 @@ struct AccountDetailView: View {
     /// запрет, alert с подтверждением («да, всё равно» открывает обычную форму дохода).
     @State private var showTopUpWarning = false
     @State private var showEarlyCloseConfirm = false
+    /// S8 (риск плана): архивация ненулевого счёта «прячет деньги» на графике без объяснения.
+    /// Вместо прямого архивирования — выбор «перевести остаток» (тогда ступеньки не будет)
+    /// или «закрыть с остатком» (архивировать как есть, осознанно).
+    @State private var showNonZeroBalanceArchiveWarning = false
 
     private enum ActiveSheet: Identifiable {
         case income
@@ -118,6 +122,20 @@ struct AccountDetailView: View {
             Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
         } message: {
             Text(L("accounts_core.detail.deposit.early_close_confirm.message"))
+        }
+        .alert(
+            L("accounts_core.detail.delete_nonzero_confirm.title"),
+            isPresented: $showNonZeroBalanceArchiveWarning
+        ) {
+            Button(L("accounts_core.detail.delete_nonzero_confirm.transfer_first")) {
+                sheet = .transfer
+            }
+            Button(L("accounts_core.detail.delete_nonzero_confirm.close_anyway"), role: .destructive) {
+                archiveAccount()
+            }
+            Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
+        } message: {
+            Text(L("accounts_core.detail.delete_nonzero_confirm.message"))
         }
         .alert(
             L("accounts_core.detail.error.title"),
@@ -496,9 +514,19 @@ struct AccountDetailView: View {
                     }
                 }
                 actionButton(L("accounts_core.detail.action.delete"), icon: "archivebox.fill", isDestructive: true) {
-                    showArchiveConfirm = true
+                    requestArchiveConfirmation()
                 }
             }
+        }
+    }
+
+    /// Ненулевой баланс (S8): сначала показываем выбор «перевести остаток / закрыть как есть»,
+    /// вместо простого confirm — обычный `showArchiveConfirm` остаётся для счетов с нулём.
+    private func requestArchiveConfirmation() {
+        if AccountArchivePolicy.shouldWarnBeforeArchiving(balance: balanceToday) {
+            showNonZeroBalanceArchiveWarning = true
+        } else {
+            showArchiveConfirm = true
         }
     }
 

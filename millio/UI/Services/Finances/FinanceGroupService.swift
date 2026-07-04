@@ -149,6 +149,19 @@ final class FinanceGroupService {
 
         if shouldDeleteGroup {
             modelContext.delete(group)
+            // Мост Cashflow→новое ядро (задача 7, Фаза 5): `AccountGroup` нового мира мэппится на
+            // `FinanceGroup` ПО ИМЕНИ (см. `AccountsCoreAdditionBridge.resolveAccountGroup`). Без этой
+            // строки удаление старой группы оставляло бы счета нового ядра «привязанными» к группе,
+            // которой больше нет в UI старого мира — они не появлялись бы ни в старой, ни в Ungrouped.
+            // Удаление АккаунтГруппы каскадом `.nullify` переводит её счета в Ungrouped (group = nil),
+            // сами счета и их события НЕ трогает (AC7: это не архивация и не удаление счёта).
+            let groupName = group.name
+            let coreGroupDescriptor = FetchDescriptor<AccountGroup>(
+                predicate: #Predicate<AccountGroup> { $0.name == groupName }
+            )
+            if let coreGroup = try? modelContext.fetch(coreGroupDescriptor).first {
+                modelContext.delete(coreGroup)
+            }
         }
 
         do {

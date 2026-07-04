@@ -167,6 +167,12 @@ struct FinancesSettingsSheet: View {
         viewModel.archivedAccountRows()
     }
 
+    /// Архив нового ядра (Фаза 5) — отдельный пункт, т.к. счета нового ядра НЕ входят в
+    /// `archivedAccountRows()` (это старый мир Card/Credit/Investment).
+    private var hasArchivedNewCoreAccounts: Bool {
+        viewModel.hasArchivedNewCoreAccounts()
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -204,6 +210,19 @@ struct FinancesSettingsSheet: View {
                             settingsRow(
                                 title: financesLocalized("finances.settings.archived_accounts.title"),
                                 subtitle: financesLocalized("finances.settings.archived_accounts.subtitle"),
+                                icon: "archivebox.fill"
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if hasArchivedNewCoreAccounts {
+                        NavigationLink {
+                            ArchivedAccountsView(modelContext: viewModel.modelContext)
+                        } label: {
+                            settingsRow(
+                                title: L("accounts_core.archive.title"),
+                                subtitle: L("accounts_core.archive.subtitle"),
                                 icon: "archivebox.fill"
                             )
                         }

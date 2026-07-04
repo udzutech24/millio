@@ -1156,6 +1156,13 @@ final class FinanceViewModel: ViewModelProtocol {
             }
     }
 
+    /// Есть ли хоть один архивный счёт нового ядра — дешёвая проверка для показа пункта «Архив»
+    /// в настройках (Фаза 5, задача 2 брифинга), без загрузки самих объектов.
+    func hasArchivedNewCoreAccounts() -> Bool {
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.archivedAt != nil })
+        return ((try? modelContext.fetchCount(descriptor)) ?? 0) > 0
+    }
+
     /// Баланс счёта нового ядра «сейчас» — прямой синхронный реплей событий (список короткий,
     /// см. Т2 в плане; async-кэш через `AccountsTotalsService` подключается там, где важна
     /// производительность на длинной истории — тотал/график).

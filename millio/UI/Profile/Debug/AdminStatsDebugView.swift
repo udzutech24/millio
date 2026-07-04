@@ -72,6 +72,17 @@ struct AdminStatsDebugView: View {
                 .tint(AppColors.textPrimary)
                 .accessibilityIdentifier("profile.adminStats.seedAccountsCoreButton")
             }
+            // Одноразовая пересборка снапшот-кэша нового ядра (задача 6, Фаза 5, AC8 debug-ручка) —
+            // на случай подозрения на рассинхронизацию кэша после ручного вмешательства в БД.
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    rebuildAccountsCoreCache()
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                }
+                .tint(AppColors.textPrimary)
+                .accessibilityIdentifier("profile.adminStats.rebuildAccountsCoreCacheButton")
+            }
         }
         .alert(
             AppLocalization.string("accounts_core.debug.seed_confirm.title", locale: locale),
@@ -122,6 +133,31 @@ struct AdminStatsDebugView: View {
             seedResultMessage = error.localizedDescription
         }
         showSeedResult = true
+    }
+
+    /// `AccountSnapshotRebuilder.rebuildAllAccounts()` — задача 6 брифинга Фазы 5 (AC8 UI-ручка).
+    private func rebuildAccountsCoreCache() {
+        guard let diContainer else {
+            seedResultMessage = "Debug dependencies are not available in this app session."
+            showSeedResult = true
+            return
+        }
+        let container = diContainer.modelContainer
+        Task {
+            let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+            do {
+                let count = try await rebuilder.rebuildAllAccounts()
+                await MainActor.run {
+                    seedResultMessage = String(format: AppLocalization.string("accounts_core.debug.rebuild_cache_success_format", locale: locale), count)
+                    showSeedResult = true
+                }
+            } catch {
+                await MainActor.run {
+                    seedResultMessage = error.localizedDescription
+                    showSeedResult = true
+                }
+            }
+        }
     }
 
     private var loadingCard: some View {

@@ -126,4 +126,42 @@ struct AccountSnapshotRebuilderTests {
         #expect(snapshot != nil, "снапшот должен лежать под зафиксированным dayKey события, а не под текущим")
         #expect(snapshot?.balance == 500)
     }
+
+    // MARK: - Задача 4 Фазы 5: снапшоты ПОСЛЕ archivedAt не строятся и вычищаются при rebuild
+
+    /// Счёт с событиями на 4 дня, кэш полностью прогрет. Дальше архивация ставится НАПРЯМУЮ на
+    /// модели (без `AccountsCoreService.archiveAccount`, который уже сам чистит хвост через
+    /// `invalidateCache`) — так мы изолированно проверяем защиту именно в `AccountSnapshotRebuilder`:
+    /// хвост ПОСЛЕ дня закрытия должен исчезнуть при следующей пересборке, даже если её никто не просил.
+    @Test @MainActor
+    func rebuildPurgesSnapshotsAfterArchivedDayAndStopsBuildingNewOnes() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+
+        let account = try service.createAccount(name: "Карта", kind: .cash, currency: "RUB", openingBalance: 100, date: day(0))
+        try service.recordEvent(account: account, type: .income, amount: 100, date: day(1))
+        try service.recordEvent(account: account, type: .income, amount: 100, date: day(2))
+        try service.recordEvent(account: account, type: .income, amount: 100, date: day(3))
+        try ctx.save()
+
+        try await rebuilder.rebuildAll(accountID: account.persistentModelID)
+        let warmSnapshots = try fetchSnapshots(ctx, accountID: account.id)
+        #expect(warmSnapshots.count == 4) // day0..day3, кэш полностью прогрет
+
+        // Архивация «в обход» сервиса — намеренно, чтобы не задействовать invalidateCache
+        // и проверить защиту именно на стороне rebuilder-а (описано в докстринге теста).
+        account.archivedAt = day(2)
+        try ctx.save()
+
+        try await rebuilder.rebuild(accountID: account.persistentModelID, upTo: day(3))
+
+        let afterSnapshots = try fetchSnapshots(ctx, accountID: account.id)
+        let day2Key = AccountEvent.dayKey(for: day(2))
+        let day3Key = AccountEvent.dayKey(for: day(3))
+        #expect(afterSnapshots.contains { $0.dayKey == day2Key }) // день закрытия — граничный, остаётся
+        #expect(!afterSnapshots.contains { $0.dayKey == day3Key }) // ПОСЛЕ закрытия — вычищен
+        #expect(afterSnapshots.count == 3) // day0, day1, day2 — не day3
+    }
 }
