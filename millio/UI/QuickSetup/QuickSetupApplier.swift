@@ -101,6 +101,11 @@ struct QuickSetupApplier {
         try modelContext.save()
     }
 
+    /// Применяет продукты онбординга на НОВОМ ядре event-sourcing (Фаза 6a) — единственная точка
+    /// записи `AccountsCoreService`, легаси `Card`/`Credit`/`Investment`/`FinanceAccount` для НОВЫХ
+    /// счетов больше не создаются (это был последний живой обходной путь легаси-создания, найденный
+    /// аудитом Фазы 6a: онбординг создавал легаси-продукты в обход `AccountsCoreAdditionBridge`,
+    /// которым уже пользуется основной экран добавления счёта).
     private func applyProducts(_ products: [QuickSetupProductDraft], groups: [QuickSetupGroupDraft]) throws {
         guard !products.isEmpty else { return }
 
@@ -108,6 +113,7 @@ struct QuickSetupApplier {
         var ungroupedGroup: FinanceGroup?
         var trackedTickerCount = try activeTrackedTickerCount()
         let locale = AppLocalization.currentAppLocale
+        let service = AccountsCoreService(modelContext: modelContext)
 
         for draft in products {
             let targetGroup: FinanceGroup
@@ -119,54 +125,42 @@ struct QuickSetupApplier {
                 ungroupedGroup = resolved
                 targetGroup = resolved
             }
+            let accountGroup = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: modelContext)
+
             switch draft.type {
             case .card:
-                let card = Card(
+                // Онбординг не собирает банк — всегда `.other`, тот же путь, что и обычная форма
+                // добавления карты (см. `AccountsCoreAdditionBridge.cardKind`).
+                try service.createAccount(
                     name: draft.name,
-                    cardNumber: "",
-                    bank: .other,
-                    cardType: .debit,
-                    priority: .normal,
+                    kind: AccountsCoreAdditionBridge.cardKind(bank: .other),
                     currency: draft.currencyCode,
-                    balance: draft.amount,
-                    includeInTotal: true
+                    openingBalance: Decimal(draft.amount),
+                    group: accountGroup
                 )
-                modelContext.insert(card)
-                let link = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
-                link.group = targetGroup
-                modelContext.insert(link)
 
             case .realEstate:
-                let investment = Investment(
+                try service.createAccount(
                     name: draft.name,
-                    investmentType: .positive,
-                    category: .house,
-                    amount: draft.amount,
+                    kind: .manualAsset,
                     currency: draft.currencyCode,
-                    includeInTotal: true,
-                    priority: .normal,
-                    isFavorite: false
+                    openingBalance: Decimal(draft.amount),
+                    group: accountGroup,
+                    manualAssetMeta: AccountsCoreAdditionBridge.manualAssetMeta()
                 )
-                modelContext.insert(investment)
-                let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-                link.group = targetGroup
-                modelContext.insert(link)
 
             case .debt:
-                let investment = Investment(
+                // Онбординг знает только «я должен» (старая форма тоже не собирала направление
+                // отдельно для этого пресета) — знак минус движок C сам не проставляет для `.debt`,
+                // это делает вызывающий код (см. `createObligationAccountOnNewCore`).
+                try service.createAccount(
                     name: draft.name,
-                    investmentType: .negative,
-                    category: .debt,
-                    amount: draft.amount,
+                    kind: .debt,
                     currency: draft.currencyCode,
-                    includeInTotal: true,
-                    priority: .normal,
-                    isFavorite: false
+                    openingBalance: -Decimal(draft.amount),
+                    group: accountGroup,
+                    debtMeta: AccountsCoreAdditionBridge.debtMeta(direction: .owedByMe)
                 )
-                modelContext.insert(investment)
-                let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-                link.group = targetGroup
-                modelContext.insert(link)
 
             case .crypto:
                 guard EntitlementPolicy.canAddQuickSetupTrackedProduct(
@@ -176,43 +170,30 @@ struct QuickSetupApplier {
                 ) else {
                     throw QuickSetupApplyError.cryptoRequiresPro(locale: locale)
                 }
-                let investment = Investment(
-                    name: draft.symbol ?? draft.name,
-                    investmentType: .positive,
-                    category: .crypto,
-                    amount: draft.amount,
-                    currency: draft.currencyCode,
-                    includeInTotal: true,
-                    priority: .normal,
-                    isFavorite: true
-                )
-                applyMarketSnapshot(draft.marketSnapshot, to: investment)
-                modelContext.insert(investment)
-                let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-                link.group = targetGroup
-                modelContext.insert(link)
+                try createMarketOrManualAsset(service: service, draft: draft, category: .crypto, group: accountGroup)
                 trackedTickerCount += 1
 
             case .credit:
                 let amount = max(0, draft.amount)
                 let defaultTermMonths = 24
                 let monthlyPayment = max(0, amount / Double(defaultTermMonths))
-                let credit = Credit(
-                    name: draft.name,
-                    amount: amount,
-                    interestRate: 0,
-                    monthlyPayment: monthlyPayment,
-                    startDate: Date(),
-                    termMonths: defaultTermMonths,
-                    currency: draft.currencyCode,
-                    bank: .other,
-                    creditType: .consumer,
-                    includeInTotal: true
+                // Онбординг не собирает ставку/дату платежа — тот же пробел, что и у основной формы
+                // «Кредит» (см. `AccountsCoreAdditionBridge.loanMeta`). openingBalance = ТЕКУЩИЙ остаток
+                // (в упрощённой форме онбординга это то же число, что и principal).
+                let meta = AccountsCoreAdditionBridge.loanMeta(
+                    principal: Decimal(amount),
+                    monthlyPayment: monthlyPayment > 0 ? Decimal(monthlyPayment) : nil,
+                    paymentDay: nil,
+                    termEnd: nil
                 )
-                modelContext.insert(credit)
-                let link = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
-                link.group = targetGroup
-                modelContext.insert(link)
+                try service.createAccount(
+                    name: draft.name,
+                    kind: .loan,
+                    currency: draft.currencyCode,
+                    openingBalance: Decimal(amount),
+                    group: accountGroup,
+                    loanMeta: meta
+                )
 
             case .ticker:
                 guard EntitlementPolicy.canAddQuickSetupTrackedProduct(
@@ -225,32 +206,46 @@ struct QuickSetupApplier {
                         locale: locale
                     )
                 }
-                let investment = Investment(
-                    name: draft.symbol ?? draft.name,
-                    investmentType: .positive,
-                    category: .stocks,
-                    amount: draft.amount,
-                    currency: draft.currencyCode,
-                    includeInTotal: true,
-                    priority: .normal,
-                    isFavorite: true
-                )
-                applyMarketSnapshot(draft.marketSnapshot, to: investment)
-                modelContext.insert(investment)
-                let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-                link.group = targetGroup
-                modelContext.insert(link)
+                try createMarketOrManualAsset(service: service, draft: draft, category: .stocks, group: accountGroup)
                 trackedTickerCount += 1
             }
         }
+    }
 
-        try modelContext.save()
-
-        if products.contains(where: { $0.type == .card }) {
-            EventBus.shared.publish(FinanceEvent.cardsUpdated)
-        }
-        if products.contains(where: { $0.type == .credit }) {
-            EventBus.shared.publish(FinanceEvent.creditsUpdated)
+    /// Акции/крипта с известным тикером (`marketSnapshot` собран поиском в форме онбординга) —
+    /// рыночный счёт нового ядра с сразу примененной покупкой. Без снапшота (защитный путь, поиск
+    /// формы этого не допускает, но пробел старого кода не воспроизводим) — ручной актив на сумму
+    /// черновика, тот же выбор, что у пресета «Инвестиция» без тикера (Фаза 4).
+    private func createMarketOrManualAsset(
+        service: AccountsCoreService,
+        draft: QuickSetupProductDraft,
+        category: InvestmentCategory,
+        group: AccountGroup?
+    ) throws {
+        if let snapshot = draft.marketSnapshot {
+            let meta = AccountsCoreAdditionBridge.marketMeta(symbol: snapshot.symbol, category: category)
+            let account = try service.createAccount(
+                name: draft.name,
+                kind: .marketInvestment,
+                currency: snapshot.currencyCode,
+                openingBalance: 0, // движок E игнорирует opening — баланс считает только buy/sell
+                group: group,
+                marketMeta: meta
+            )
+            try service.buy(
+                account: account,
+                quantity: Decimal(snapshot.quantity),
+                unitPrice: Decimal(snapshot.purchaseUnitPrice)
+            )
+        } else {
+            try service.createAccount(
+                name: draft.name,
+                kind: .manualAsset,
+                currency: draft.currencyCode,
+                openingBalance: Decimal(draft.amount),
+                group: group,
+                manualAssetMeta: AccountsCoreAdditionBridge.manualAssetMeta()
+            )
         }
     }
 
@@ -295,45 +290,16 @@ struct QuickSetupApplier {
         return result
     }
 
+    /// Счётчик отслеживаемых тикеров нового ядра (Фаза 6a) — на старте онбординга стор всегда
+    /// пуст, поэтому практический результат не меняется, но считаем честно на случай повторного
+    /// запуска онбординга/будущей миграции существующих данных.
     private func activeTrackedTickerCount() throws -> Int {
-        let descriptor = FetchDescriptor<Investment>()
-        let investments = try modelContext.fetch(descriptor)
-        return investments.reduce(into: 0) { partialResult, investment in
-            guard investment.archivedAt == nil else { return }
-            if investment.category == .stocks || investment.category == .crypto {
-                partialResult += 1
-            }
+        let descriptor = FetchDescriptor<Account>()
+        let accounts = try modelContext.fetch(descriptor)
+        return accounts.reduce(into: 0) { partialResult, account in
+            guard account.archivedAt == nil, account.kind == .marketInvestment else { return }
+            partialResult += 1
         }
-    }
-
-    private func applyMarketSnapshot(_ snapshot: QuickSetupProductMarketSnapshot?, to investment: Investment) {
-        guard let snapshot else { return }
-
-        if let identity = MarketAssetIdentityResolver.resolve(
-            category: investment.category,
-            symbol: snapshot.symbol,
-            exchange: snapshot.exchange,
-            instrumentName: investment.name,
-            micCode: nil,
-            instrumentType: investment.category == .crypto ? "Cryptocurrency" : "Common Stock",
-            currency: snapshot.currencyCode,
-            country: nil,
-            providerName: snapshot.providerRaw
-        ) {
-            investment.assetID = identity.assetID
-            AssetCatalogStore(modelContext: modelContext).syncIfSupported(identity: identity)
-        }
-
-        investment.marketSymbol = snapshot.symbol
-        investment.marketExchange = snapshot.exchange
-        investment.marketCurrency = snapshot.currencyCode
-        investment.marketQuantity = snapshot.quantity
-        investment.averagePurchaseUnitPrice = snapshot.purchaseUnitPrice
-        investment.totalPurchaseCost = snapshot.purchaseUnitPrice * snapshot.quantity
-        investment.lastKnownUnitPrice = snapshot.currentUnitPrice ?? snapshot.purchaseUnitPrice
-        investment.lastKnownPriceUpdatedAt = snapshot.priceUpdatedAt
-        investment.marketProviderRaw = snapshot.providerRaw
-        investment.recalculateAmountFromPosition()
     }
 
     private func normalizeGroupName(_ value: String) -> String {

@@ -14,6 +14,49 @@ enum AccountsCoreAdditionBridge {
         bank == .other ? .cash : .debitCard
     }
 
+    /// kind нового ядра для денежных пресетов («Карта»/«Счёт»), либо `nil`, если это не денежный
+    /// пресет ИЛИ идёт редактирование СУЩЕСТВУЮЩЕГО легаси-счёта (`isEditingLegacy`).
+    /// Фикс бага Фазы 6a: без проверки `isEditingLegacy` открытие формы для правки существующей
+    /// легаси `Card`/`Investment(account)` создавало НОВЫЙ Account вместо обновления старой записи
+    /// (`FinanceAddAccountView.newCoreMoneyKindForCurrentSelection` не учитывал `editingCard`/`editingInvestment`) —
+    /// правка легаси-счёта осталась старым путём (`updateCard`/`updateInvestment`), редактирование
+    /// new-core счетов — через `AccountDetailView`, не эту форму.
+    static func moneyKind(
+        accountType: FinanceAccountType,
+        investmentPreset: FinanceAddAccountInvestmentPreset,
+        bank: Bank,
+        isEditingLegacy: Bool
+    ) -> AccountKind? {
+        guard !isEditingLegacy else { return nil }
+        switch accountType {
+        case .card:
+            return cardKind(bank: bank)
+        case .investment where investmentPreset == .account:
+            return .bankAccount
+        default:
+            return nil
+        }
+    }
+
+    /// kind нового ядра для пресетов «Кредит»/«Долг», либо `nil` — та же логика и та же причина,
+    /// что у `moneyKind` (Фаза 6a): редактирование существующего легаси `Credit`/`Investment(debt)`
+    /// не должно создавать новый Account.
+    static func obligationKind(
+        accountType: FinanceAccountType,
+        investmentCategory: InvestmentCategory,
+        isEditingLegacy: Bool
+    ) -> AccountKind? {
+        guard !isEditingLegacy else { return nil }
+        switch accountType {
+        case .credit:
+            return .loan
+        case .investment where investmentCategory == .debt:
+            return .debt
+        default:
+            return nil
+        }
+    }
+
     /// Находит `AccountGroup` с тем же именем, что у выбранной `FinanceGroup`, либо создаёт новую.
     /// ВРЕМЕННЫЙ мэппинг по имени (до Фазы 6, когда группы старого/нового мира объединятся в одну
     /// сущность) — см. спеку §2.7 и план, раздел «Фаза 6». `nil` (счёт без группы = Ungrouped)
@@ -62,6 +105,43 @@ enum AccountsCoreAdditionBridge {
     /// старая форма не собирает вовсе (нет UI-поля) — оставляем nil, а не редизайним форму (вне скоупа).
     static func debtMeta(direction: DebtDirection) -> DebtMeta {
         DebtMeta(direction: direction, counterparty: nil, dueDate: nil, rate: nil)
+    }
+
+    /// kind нового ядра для пресета «Вклад»/«Накопительный счёт» (Фаза 3), либо `nil` — та же
+    /// логика `isEditingLegacy`, что у `moneyKind`/`obligationKind` (Фаза 6a).
+    static func depositKind(
+        accountType: FinanceAccountType,
+        investmentPreset: FinanceAddAccountInvestmentPreset,
+        isEditingLegacy: Bool
+    ) -> AccountKind? {
+        guard !isEditingLegacy, accountType == .investment, investmentPreset == .deposit else { return nil }
+        return .deposit
+    }
+
+    /// kind нового ядра для пресетов «Акции»/«Крипта»/«Недвижимость»/«Бизнес»/«Другое»/«Инвестиция»
+    /// (Фаза 4), либо `nil` («Долг» сюда не входит — см. `obligationKind`). «Инвестиция»
+    /// (category=.other, preset=.asset) — по наличию тикера (`hasTicker`): тикер есть → рыночный
+    /// счёт, нет → ручной актив (брифинг Фазы 4, задача 1).
+    static func assetKind(
+        accountType: FinanceAccountType,
+        investmentCategory: InvestmentCategory,
+        investmentPreset: FinanceAddAccountInvestmentPreset,
+        hasTicker: Bool,
+        isEditingLegacy: Bool
+    ) -> AccountKind? {
+        guard !isEditingLegacy, accountType == .investment else { return nil }
+        switch investmentCategory {
+        case .stocks, .crypto:
+            return .marketInvestment
+        case .house, .business:
+            return .manualAsset
+        case .other where investmentPreset == .category:
+            return .manualAsset
+        case .other where investmentPreset == .asset:
+            return hasTicker ? .marketInvestment : .manualAsset
+        default:
+            return nil
+        }
     }
 
     /// Мэппинг символа тикера формы «Акции»/«Крипта»/«Инвестиция» → `MarketMeta` (Фаза 4).

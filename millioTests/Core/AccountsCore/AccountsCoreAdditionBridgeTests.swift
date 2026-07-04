@@ -161,4 +161,64 @@ struct AccountsCoreAdditionBridgeTests {
         #expect(meta.depreciationRatePerYear == nil)
         #expect(meta.linkedLoanID == nil)
     }
+
+    // MARK: - moneyKind/obligationKind (Фаза 6a — регресс: правка легаси-счёта не должна создавать дубликат)
+
+    @Test
+    func moneyKindResolvesCardAndBankAccountWhenCreating() {
+        #expect(
+            AccountsCoreAdditionBridge.moneyKind(
+                accountType: .card, investmentPreset: .asset, bank: .sberbank, isEditingLegacy: false
+            ) == .debitCard
+        )
+        #expect(
+            AccountsCoreAdditionBridge.moneyKind(
+                accountType: .investment, investmentPreset: .account, bank: .other, isEditingLegacy: false
+            ) == .bankAccount
+        )
+    }
+
+    @Test
+    func moneyKindReturnsNilWhenEditingExistingLegacyAccount() {
+        // Баг Фазы 6a: без этой проверки открытие формы для правки существующей легаси `Card`
+        // создавало НОВЫЙ Account вместо обновления старой записи.
+        #expect(
+            AccountsCoreAdditionBridge.moneyKind(
+                accountType: .card, investmentPreset: .asset, bank: .sberbank, isEditingLegacy: true
+            ) == nil
+        )
+        #expect(
+            AccountsCoreAdditionBridge.moneyKind(
+                accountType: .investment, investmentPreset: .account, bank: .other, isEditingLegacy: true
+            ) == nil
+        )
+    }
+
+    @Test
+    func obligationKindResolvesLoanAndDebtWhenCreating() {
+        #expect(
+            AccountsCoreAdditionBridge.obligationKind(
+                accountType: .credit, investmentCategory: .other, isEditingLegacy: false
+            ) == .loan
+        )
+        #expect(
+            AccountsCoreAdditionBridge.obligationKind(
+                accountType: .investment, investmentCategory: .debt, isEditingLegacy: false
+            ) == .debt
+        )
+    }
+
+    @Test
+    func obligationKindReturnsNilWhenEditingExistingLegacyAccount() {
+        #expect(
+            AccountsCoreAdditionBridge.obligationKind(
+                accountType: .credit, investmentCategory: .other, isEditingLegacy: true
+            ) == nil
+        )
+        #expect(
+            AccountsCoreAdditionBridge.obligationKind(
+                accountType: .investment, investmentCategory: .debt, isEditingLegacy: true
+            ) == nil
+        )
+    }
 }

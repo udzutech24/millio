@@ -2,21 +2,14 @@ import XCTest
 import SwiftData
 @testable import millio
 
+/// Фаза 6a: онбординг создаёт `Account` нового ядра (`AccountsCoreService`), легаси
+/// `Card`/`Credit`/`Investment`/`FinanceAccount` для НОВЫХ продуктов больше не появляются —
+/// поэтому тесты ниже проверяют новое ядро, а не старые модели (это был последний живой
+/// легаси-путь создания счетов, найденный аудитом Фазы 6a).
 @MainActor
 final class QuickSetupApplierTests: XCTestCase {
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema([
-            Card.self,
-            Credit.self,
-            Investment.self,
-            FinanceGroup.self,
-            FinanceAccount.self,
-            CashflowSystemCategoryOverride.self,
-            CashflowCustomCategory.self,
-            CashbackCustomCategory.self
-        ])
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try ModelContainer(for: schema, configurations: [config])
+        try AppMigrationPlan.makeInMemoryContainer()
     }
 
     func testApplyCreatesSelectedGroupsAndAssignsProductsToThem() throws {
@@ -65,13 +58,19 @@ final class QuickSetupApplierTests: XCTestCase {
         let groups = try context.fetch(FetchDescriptor<FinanceGroup>())
         XCTAssertEqual(groups.map(\.name), [group.name])
 
-        let accounts = try context.fetch(FetchDescriptor<FinanceAccount>())
+        let accounts = try context.fetch(FetchDescriptor<Account>())
         XCTAssertEqual(accounts.count, 1)
         XCTAssertEqual(accounts.first?.group?.name, group.name)
+        XCTAssertEqual(accounts.first?.name, "Основная карта")
+        XCTAssertEqual(accounts.first?.kind, .cash) // онбординг не собирает банк — всегда bank=.other → .cash
+        let balance = AccountBalanceEngine.balanceAt(
+            events: accounts.first?.events ?? [], kind: .cash, on: Date()
+        )
+        XCTAssertEqual(balance, 1500)
 
+        // Легаси-модели для НОВОГО продукта не создаются вовсе (Фаза 6a).
         let cards = try context.fetch(FetchDescriptor<Card>())
-        XCTAssertEqual(cards.count, 1)
-        XCTAssertEqual(cards.first?.name, "Основная карта")
+        XCTAssertEqual(cards.count, 0)
     }
 
     func testApplyFallsBackToUngroupedWhenProductHasNoGroup() throws {
@@ -117,7 +116,8 @@ final class QuickSetupApplierTests: XCTestCase {
         XCTAssertEqual(groups.count, 1)
         XCTAssertEqual(groups.first?.name, FinanceSystemGroups.ungroupedName)
 
-        let accounts = try context.fetch(FetchDescriptor<FinanceAccount>())
+        let accounts = try context.fetch(FetchDescriptor<Account>())
+        XCTAssertEqual(accounts.count, 1)
         XCTAssertEqual(accounts.first?.group?.name, FinanceSystemGroups.ungroupedName)
     }
 
@@ -246,36 +246,56 @@ final class QuickSetupApplierTests: XCTestCase {
         XCTAssertEqual(groups.count, 1)
         XCTAssertEqual(groups.first?.name, group.name)
 
-        let accounts = try context.fetch(FetchDescriptor<FinanceAccount>())
+        // Легаси-модели для НОВЫХ продуктов больше не создаются (Фаза 6a) — единственный
+        // след онбординга теперь `Account` нового ядра.
+        XCTAssertEqual(try context.fetch(FetchDescriptor<FinanceAccount>()).count, 0)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Card>()).count, 0)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Credit>()).count, 0)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Investment>()).count, 0)
+
+        let accounts = try context.fetch(FetchDescriptor<Account>())
         XCTAssertEqual(accounts.count, 6)
         XCTAssertTrue(accounts.allSatisfy { $0.group?.name == group.name })
 
-        let cards = try context.fetch(FetchDescriptor<Card>())
-        XCTAssertEqual(cards.count, 1)
-        XCTAssertEqual(cards.first?.name, "Карта")
-        XCTAssertEqual(cards.first?.balance, 1200)
+        let card = try XCTUnwrap(accounts.first(where: { $0.name == "Карта" }))
+        XCTAssertEqual(card.kind, .cash)
+        XCTAssertEqual(
+            AccountBalanceEngine.balanceAt(events: card.events ?? [], kind: .cash, on: Date()), 1200
+        )
 
-        let credits = try context.fetch(FetchDescriptor<Credit>())
-        XCTAssertEqual(credits.count, 1)
-        XCTAssertEqual(credits.first?.name, "Кредит")
-        XCTAssertEqual(credits.first?.amount, 300_000)
+        let realEstate = try XCTUnwrap(accounts.first(where: { $0.name == "Квартира" }))
+        XCTAssertEqual(realEstate.kind, .manualAsset)
+        XCTAssertEqual(
+            AccountBalanceEngine.balanceAt(events: realEstate.events ?? [], kind: .manualAsset, on: Date()),
+            5_000_000
+        )
 
-        let investments = try context.fetch(FetchDescriptor<Investment>())
-        XCTAssertEqual(investments.count, 4)
-        XCTAssertNotNil(investments.first(where: { $0.name == "Квартира" && $0.category == .house }))
-        XCTAssertNotNil(investments.first(where: { $0.name == "Долг другу" && $0.category == .debt }))
+        let debt = try XCTUnwrap(accounts.first(where: { $0.name == "Долг другу" }))
+        XCTAssertEqual(debt.kind, .debt)
+        XCTAssertEqual(debt.debtMeta?.direction, .owedByMe)
+        XCTAssertEqual(
+            AccountBalanceEngine.balanceAt(events: debt.events ?? [], kind: .debt, on: Date()), -15_000
+        )
 
-        let stock = try XCTUnwrap(investments.first(where: { $0.marketSymbol == "AAPL" }))
-        XCTAssertEqual(stock.category, .stocks)
-        XCTAssertEqual(stock.marketQuantity, 2)
-        XCTAssertEqual(stock.averagePurchaseUnitPrice, 150)
-        XCTAssertEqual(stock.lastKnownUnitPrice, 160)
+        let credit = try XCTUnwrap(accounts.first(where: { $0.name == "Кредит" }))
+        XCTAssertEqual(credit.kind, .loan)
+        XCTAssertEqual(credit.loanMeta?.principal, 300_000)
 
-        let crypto = try XCTUnwrap(investments.first(where: { $0.marketSymbol == "BTC/USD" }))
-        XCTAssertEqual(crypto.category, .crypto)
-        XCTAssertEqual(crypto.marketQuantity, 0.5)
-        XCTAssertEqual(crypto.averagePurchaseUnitPrice, 400_000)
-        XCTAssertEqual(crypto.lastKnownUnitPrice, 420_000)
+        let stock = try XCTUnwrap(accounts.first(where: { $0.name == "AAPL" }))
+        XCTAssertEqual(stock.kind, .marketInvestment)
+        XCTAssertEqual(stock.marketMeta?.symbol, "AAPL")
+        XCTAssertEqual(stock.marketMeta?.assetClass, .stock)
+        let stockBuy = try XCTUnwrap(stock.events?.first { $0.type == .buy })
+        XCTAssertEqual(stockBuy.quantity, 2)
+        XCTAssertEqual(stockBuy.unitPrice, 150)
+
+        let crypto = try XCTUnwrap(accounts.first(where: { $0.name == "BTC/USD" }))
+        XCTAssertEqual(crypto.kind, .marketInvestment)
+        XCTAssertEqual(crypto.marketMeta?.symbol, "BTC/USD")
+        XCTAssertEqual(crypto.marketMeta?.assetClass, .crypto)
+        let cryptoBuy = try XCTUnwrap(crypto.events?.first { $0.type == .buy })
+        XCTAssertEqual(cryptoBuy.quantity, 0.5)
+        XCTAssertEqual(cryptoBuy.unitPrice, 400_000)
     }
 
     func testApplyFreeQuickSetupAllowsSecondTickerDuringBeta() throws {

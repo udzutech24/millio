@@ -1150,64 +1150,55 @@ struct FinanceAddAccountView: View {
     
     /// kind нового ядра для текущего выбора пресета «Карта»/«Счёт» — `nil` для остальных
     /// пресетов (вклад/инвестиции/…, они пока идут старым путём, см. `AccountsCoreAdditionBridge`)
-    /// и для режима редактирования (у new-core счетов редактирование — через `AccountDetailView`, не эту форму).
+    /// и для режима редактирования (`isEditingMode` — правка СУЩЕСТВУЮЩЕЙ легаси `Card`/`Investment`,
+    /// у new-core счетов редактирование — через `AccountDetailView`, не эту форму). Фикс Фазы 6a:
+    /// без `isEditingMode` правка легаси-карты создавала счёт-дубликат нового ядра вместо обновления —
+    /// см. докстринг `AccountsCoreAdditionBridge.moneyKind`.
     private var newCoreMoneyKindForCurrentSelection: AccountKind? {
         guard addAccountMode == .create else { return nil }
-        switch selectedAccountType {
-        case .card:
-            return AccountsCoreAdditionBridge.cardKind(bank: cardData?.bank ?? .other)
-        case .investment where selectedInvestmentPreset == .account:
-            return .bankAccount
-        default:
-            return nil
-        }
+        return AccountsCoreAdditionBridge.moneyKind(
+            accountType: selectedAccountType,
+            investmentPreset: selectedInvestmentPreset,
+            bank: cardData?.bank ?? .other,
+            isEditingLegacy: isEditingMode
+        )
     }
 
     /// kind нового ядра для пресетов «Кредит»/«Долг» (Фаза 2) — `nil` для остальных пресетов
-    /// и для режима редактирования (редактирование new-core обязательств — через `AccountDetailView`).
+    /// и для режима редактирования (та же причина и фикс Фазы 6a, см. `newCoreMoneyKindForCurrentSelection`).
     private var newCoreObligationKindForCurrentSelection: AccountKind? {
         guard addAccountMode == .create else { return nil }
-        switch selectedAccountType {
-        case .credit:
-            return .loan
-        case .investment where selectedInvestmentCategory == .debt:
-            return .debt
-        default:
-            return nil
-        }
+        return AccountsCoreAdditionBridge.obligationKind(
+            accountType: selectedAccountType,
+            investmentCategory: selectedInvestmentCategory,
+            isEditingLegacy: isEditingMode
+        )
     }
 
     /// kind нового ядра для пресета «Вклад»/«Накопительный счёт» (Фаза 3) — `nil` для остальных
     /// пресетов и для режима редактирования (правка depositMeta — через `AccountDetailView`, не эту форму).
     private var newCoreDepositKindForCurrentSelection: AccountKind? {
-        guard addAccountMode == .create, editingInvestment == nil else { return nil }
-        guard selectedAccountType == .investment, selectedInvestmentPreset == .deposit else { return nil }
-        return .deposit
+        guard addAccountMode == .create else { return nil }
+        return AccountsCoreAdditionBridge.depositKind(
+            accountType: selectedAccountType,
+            investmentPreset: selectedInvestmentPreset,
+            isEditingLegacy: isEditingMode
+        )
     }
 
     /// kind нового ядра для пресетов «Акции»/«Крипта»/«Недвижимость»/«Бизнес»/«Другое»/«Инвестиция»
     /// (Фаза 4) — `nil` для остальных пресетов (карта/счёт/вклад/кредит/долг — уже обработаны выше)
     /// и для режима редактирования. «Долг» сюда НЕ попадает — обработан `newCoreObligationKindForCurrentSelection`.
-    /// «Инвестиция» (универсальная, category=.other, preset=.asset) — по наличию тикера в форме:
-    /// тикер есть → рыночный счёт, нет → ручной актив (брифинг Фазы 4, задача 1).
     private var newCoreAssetKindForCurrentSelection: AccountKind? {
-        guard addAccountMode == .create, editingInvestment == nil else { return nil }
-        guard selectedAccountType == .investment else { return nil }
-        switch selectedInvestmentCategory {
-        case .stocks, .crypto:
-            return .marketInvestment
-        case .house, .business:
-            return .manualAsset
-        case .other where selectedInvestmentPreset == .category:
-            // Пресет «Другое» — всегда ручной актив.
-            return .manualAsset
-        case .other where selectedInvestmentPreset == .asset:
-            // Пресет «Инвестиция» — по наличию тикера в собранных данных формы.
-            let hasTicker = investmentData?.marketData?.symbol?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            return hasTicker ? .marketInvestment : .manualAsset
-        default:
-            return nil
-        }
+        guard addAccountMode == .create else { return nil }
+        let hasTicker = investmentData?.marketData?.symbol?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        return AccountsCoreAdditionBridge.assetKind(
+            accountType: selectedAccountType,
+            investmentCategory: selectedInvestmentCategory,
+            investmentPreset: selectedInvestmentPreset,
+            hasTicker: hasTicker,
+            isEditingLegacy: isEditingMode
+        )
     }
 
     /// Создание вклада/накопительного счёта на новом ядре (Фаза 3): создаёт счёт + сразу генерирует
