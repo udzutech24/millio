@@ -33,6 +33,9 @@ enum AccountsCoreSeeder {
         let depositsGroup = AccountGroup(name: "Вклады")
         context.insert(depositsGroup)
 
+        // Фаза 3: вклады переведены на `DepositInterestScheduler` — расписание генерируется от даты
+        // создания счёта до срока/горизонта, ручных interest-событий больше не вставляем (генератор
+        // сам компаундит через реплей, см. `AccountBalanceEngineDepositTests`).
         let deposit1 = try service.createAccount(
             name: "Вклад «Надёжный»", kind: .deposit, currency: "RUB",
             openingBalance: 30_000_000, group: depositsGroup, date: monthsAgo(6)
@@ -41,9 +44,10 @@ enum AccountsCoreSeeder {
             rate: 12, capitalization: .monthly,
             termEnd: calendar.date(byAdding: .year, value: 1, to: now),
             payoutDay: 1, allowsTopUp: false, allowsEarlyClose: true,
-            earlyClosePenalty: 50, remindEnd: true, autoRollover: false
+            // Доля УДЕРЖАНИЯ 0…1 (не процент, см. докстринг `DepositMeta.earlyClosePenalty`).
+            earlyClosePenalty: 0.5, remindEnd: true, autoRollover: false
         )
-        appendMonthlyInterest(to: deposit1, principal: 30_000_000, annualRate: 12, months: 6, context: context, calendar: calendar, now: now)
+        try DepositInterestScheduler.regenerateFutureInterestEvents(for: deposit1, service: service, asOf: monthsAgo(6), context: context)
 
         let deposit2 = try service.createAccount(
             name: "Вклад «Пополняемый»", kind: .deposit, currency: "RUB",
@@ -55,7 +59,7 @@ enum AccountsCoreSeeder {
             payoutDay: 1, allowsTopUp: true, allowsEarlyClose: false,
             earlyClosePenalty: nil, remindEnd: true, autoRollover: true
         )
-        appendMonthlyInterest(to: deposit2, principal: 15_000_000, annualRate: 10, months: 6, context: context, calendar: calendar, now: now)
+        try DepositInterestScheduler.regenerateFutureInterestEvents(for: deposit2, service: service, asOf: monthsAgo(6), context: context)
 
         // MARK: Группа «Иностранные» — валютные счета (~10 400 $ + немного €, 2 счёта до общих 10)
         let foreignGroup = AccountGroup(name: "Иностранные")
@@ -136,24 +140,6 @@ enum AccountsCoreSeeder {
 
         try context.save()
         return true
-    }
-
-    /// Упрощённое ежемесячное начисление % (простой процент от principal/12) — полигон для UI,
-    /// НЕ расчётный движок вклада (капитализация/сложный процент — предмет Фазы 3).
-    private static func appendMonthlyInterest(
-        to account: Account,
-        principal: Decimal,
-        annualRate: Decimal,
-        months: Int,
-        context: ModelContext,
-        calendar: Calendar,
-        now: Date
-    ) {
-        let monthlyInterest = principal * annualRate / 100 / 12
-        for monthsBack in stride(from: months, through: 1, by: -1) {
-            guard let date = calendar.date(byAdding: .month, value: -monthsBack, to: now) else { continue }
-            context.insert(AccountEvent(account: account, date: date, type: .interest, amount: monthlyInterest))
-        }
     }
 }
 #endif

@@ -37,6 +37,7 @@ final class AccountsCoreService {
         openingBalance: Decimal,
         group: AccountGroup? = nil,
         cardMeta: CardMeta? = nil,
+        depositMeta: DepositMeta? = nil,
         loanMeta: LoanMeta? = nil,
         debtMeta: DebtMeta? = nil,
         note: String? = nil,
@@ -45,6 +46,7 @@ final class AccountsCoreService {
         let account = Account(name: name, kind: kind, currency: currency, createdAt: date)
         account.group = group
         account.cardMeta = cardMeta
+        account.depositMeta = depositMeta
         account.loanMeta = loanMeta
         account.debtMeta = debtMeta
         account.note = note
@@ -188,6 +190,98 @@ final class AccountsCoreService {
         )
         guard let event = try modelContext.fetch(descriptor).first else { return }
         try deleteEvent(event)
+    }
+
+    // MARK: - Проценты по вкладу (Фаза 3): идемпотентная запись отдельно от upsertEvent
+
+    /// Идемпотентная запись/обновление interest-события генератора (`DepositInterestScheduler`) по
+    /// `sourceTransactionID`. Отдельно от `upsertEvent` (тот ограничен income/expense/adjustment —
+    /// мост Cashflow), т.к. проценты вклада порождаются генератором расписания, а не транзакцией Cashflow.
+    @discardableResult
+    func upsertInterestEvent(
+        sourceTransactionID: String,
+        account: Account,
+        amount: Decimal,
+        date: Date
+    ) throws -> AccountEvent {
+        let descriptor = FetchDescriptor<AccountEvent>(
+            predicate: #Predicate<AccountEvent> { $0.sourceTransactionID == sourceTransactionID }
+        )
+        let existing = try? modelContext.fetch(descriptor).first
+
+        let event: AccountEvent
+        if let existing {
+            existing.account = account
+            existing.typeRaw = AccountEventType.interest.rawValue
+            existing.amount = amount
+            existing.setDate(date)
+            event = existing
+        } else {
+            event = AccountEvent(account: account, date: date, type: .interest, amount: amount, sourceTransactionID: sourceTransactionID)
+            modelContext.insert(event)
+        }
+        invalidateCache(for: account, from: date)
+        try modelContext.save()
+        return event
+    }
+
+    /// Точка входа для внешних генераторов событий (`DepositInterestScheduler`), которые правят ленту
+    /// НАПРЯМУЮ через `ModelContext` (удаление будущих сгенерированных interest-событий), минуя
+    /// `recordEvent`/`upsertEvent`. Не делает save — вызывающий код сам решает, когда сохранять пачку.
+    func invalidateSnapshotCache(for account: Account, from date: Date) {
+        invalidateCache(for: account, from: date)
+    }
+
+    /// Досрочное закрытие вклада (спека §2.7 п.5, брифинг Фазы 3, п.3): НЕ удаление — последовательность
+    /// событий + архивация (AC7), история сохраняется. Если предусмотрен `earlyClosePenalty` — сторно-событие
+    /// `.fee` на долю начисленных % (0…1, см. докстринг `DepositMeta.earlyClosePenalty`); остаток переводится
+    /// на `destination` (двуногий transfer); будущие сгенерированные interest-события удаляются (вклад закрыт,
+    /// им больше не наступить); в конце — архивация счёта.
+    @discardableResult
+    func earlyCloseDeposit(
+        _ account: Account,
+        transferTo destination: Account,
+        on date: Date = Date()
+    ) throws -> AccountEvent? {
+        guard account.kind == .deposit else {
+            throw AccountsCoreServiceError.unsupportedEventType(.adjustment)
+        }
+
+        invalidateCache(for: account, from: date)
+        try DepositInterestScheduler.deleteGeneratedInterestEvents(for: account, after: date, context: modelContext)
+
+        // ВАЖНО: читаем ленту ЯВНЫМ фетчем, не через `account.events` — в пределах одной несохранённой
+        // транзакции relationship-массив ненадёжен (эмпирически: два последовательных чтения
+        // `account.events` в этом же методе давали РАЗНЫЙ состав). Один фетч в начале + ручной
+        // append только что созданного penalty-события — детерминированно.
+        let accountID = account.id
+        let eventsDescriptor = FetchDescriptor<AccountEvent>(
+            predicate: #Predicate<AccountEvent> { $0.account?.id == accountID }
+        )
+        var currentEvents = (try? modelContext.fetch(eventsDescriptor)) ?? (account.events ?? [])
+
+        var penaltyEvent: AccountEvent?
+        if let penaltyShare = account.depositMeta?.earlyClosePenalty, penaltyShare > 0 {
+            let accruedInterest = currentEvents
+                .filter { $0.type == .interest && $0.date <= date }
+                .reduce(Decimal(0)) { $0 + ($1.amount ?? 0) }
+            let penaltyAmount = accruedInterest * penaltyShare
+            if penaltyAmount > 0 {
+                let event = AccountEvent(account: account, date: date, type: .fee, amount: penaltyAmount, note: "early_close_penalty")
+                modelContext.insert(event)
+                currentEvents.append(event)
+                penaltyEvent = event
+            }
+        }
+
+        let balanceBeforeTransfer = AccountBalanceEngine.balanceAt(events: currentEvents, kind: .deposit, on: date)
+
+        if balanceBeforeTransfer > 0 {
+            _ = try transfer(from: account, to: destination, amountInSourceCurrency: balanceBeforeTransfer, date: date, note: "early_close_transfer")
+        }
+
+        try archiveAccount(account, on: date)
+        return penaltyEvent
     }
 
     // MARK: - Перевод между счетами

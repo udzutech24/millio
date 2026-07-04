@@ -19,20 +19,24 @@ struct CardMeta: Codable, Equatable {
 
 /// Капитализация процентов по вкладу.
 /// Префикс Account* — во избежание конфликта с `DepositCapitalization` в старом Investment.swift (то ядро не трогаем).
-enum AccountDepositCapitalization: String, Codable {
+enum AccountDepositCapitalization: String, Codable, Hashable, CaseIterable {
     case none
     case monthly
     case quarterly
 }
 
-/// Метаданные вклада.
+/// Метаданные вклада. `termEnd == nil` — накопительный счёт (тот же движок B, без срока, Фаза 3):
+/// НЕ отдельный пресет-экран, а переключатель «без срока» в форме вклада.
 struct DepositMeta: Codable, Equatable {
+    /// Процент годовых, ЧИСЛОМ-ПРОЦЕНТОМ (12 = 12%), как и `LoanMeta.rate` — не доля.
     var rate: Decimal
     var capitalization: AccountDepositCapitalization
     var termEnd: Date?
     var payoutDay: Int?
     var allowsTopUp: Bool
     var allowsEarlyClose: Bool
+    /// Доля УДЕРЖАНИЯ начисленных % при досрочном закрытии, 0…1 (0.5 = банк забирает 50% начисленного) —
+    /// в отличие от `rate` это ДОЛЯ, не процент (решение брифинга Фазы 3, во избежание двойной конвенции).
     var earlyClosePenalty: Decimal?
     var remindEnd: Bool
     var autoRollover: Bool

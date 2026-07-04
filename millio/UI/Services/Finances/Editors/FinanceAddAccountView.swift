@@ -68,6 +68,8 @@ struct FinanceAddAccountView: View {
     @State private var cardData: Card?
     @State private var creditData: (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)?
     @State private var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?
+    /// Данные формы «Вклад»/«Накопительный счёт» нового ядра (Фаза 3) — `nil` для остальных пресетов.
+    @State private var depositData: DepositFormData?
     @State private var selectedArchivedAccountID: String? = nil
     @State private var accountName: String = ""
     @FocusState private var isNameFieldFocused: Bool
@@ -585,7 +587,15 @@ struct FinanceAddAccountView: View {
                 }
             }
         case .investment:
-            if investmentViewModel == nil {
+            if selectedInvestmentPreset == .deposit, editingInvestment == nil {
+                // Вклад/накопительный счёт — новое ядро event-sourcing (Фаза 3), НЕ старый Investment(isDeposit:).
+                InlineDepositCreateForm(
+                    name: $accountName,
+                    onDepositDataChanged: { data in self.depositData = data }
+                ) {
+                    groupSection
+                }
+            } else if investmentViewModel == nil {
                 VStack(alignment: .leading, spacing: 10) {
                     FinancesSectionHeader(title: editingInvestment == nil ? L("finances.add_account.investment.create") : L("finances.add_account.investment.edit"))
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
@@ -1016,6 +1026,9 @@ struct FinanceAddAccountView: View {
         case .credit:
             return creditData != nil
         case .investment:
+            if selectedInvestmentPreset == .deposit, addAccountMode == .create, editingInvestment == nil {
+                return depositData != nil
+            }
             return investmentData != nil
         }
     }
@@ -1044,6 +1057,9 @@ struct FinanceAddAccountView: View {
             guard let creditData else { return false }
             return creditData.amount != 0
         case .investment:
+            if selectedInvestmentPreset == .deposit, editingInvestment == nil {
+                return (depositData?.amount ?? 0) != 0
+            }
             guard let investmentData else { return false }
             if selectedInvestmentCategory == .stocks || selectedInvestmentCategory == .crypto {
                 return (investmentData.marketData?.quantity ?? 0) != 0
@@ -1161,6 +1177,56 @@ struct FinanceAddAccountView: View {
         }
     }
 
+    /// kind нового ядра для пресета «Вклад»/«Накопительный счёт» (Фаза 3) — `nil` для остальных
+    /// пресетов и для режима редактирования (правка depositMeta — через `AccountDetailView`, не эту форму).
+    private var newCoreDepositKindForCurrentSelection: AccountKind? {
+        guard addAccountMode == .create, editingInvestment == nil else { return nil }
+        guard selectedAccountType == .investment, selectedInvestmentPreset == .deposit else { return nil }
+        return .deposit
+    }
+
+    /// Создание вклада/накопительного счёта на новом ядре (Фаза 3): создаёт счёт + сразу генерирует
+    /// БУДУЩИЕ interest-события по расписанию капитализации (`DepositInterestScheduler`) — карточка
+    /// счёта открывается уже с прогнозом «в месяц»/«за срок», без отдельного шага «посчитать».
+    private func createDepositAccountOnNewCore() {
+        guard let depositData else { return }
+        let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
+        let group = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: viewModel.modelContext)
+        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+
+        let meta = AccountsCoreAdditionBridge.depositMeta(
+            rate: Decimal(depositData.rate),
+            capitalization: depositData.capitalization,
+            termEnd: depositData.termEnd,
+            allowsTopUp: depositData.allowsTopUp,
+            allowsEarlyClose: depositData.allowsEarlyClose,
+            earlyClosePenaltyShare: Decimal(depositData.earlyClosePenaltyPercent / 100),
+            remindEnd: depositData.remindEnd,
+            autoRollover: depositData.autoRollover
+        )
+
+        do {
+            let account = try service.createAccount(
+                name: resolvedName,
+                kind: .deposit,
+                currency: depositData.currency,
+                openingBalance: Decimal(depositData.amount),
+                group: group,
+                depositMeta: meta,
+                note: depositData.comment.isEmpty ? nil : depositData.comment
+            )
+            try DepositInterestScheduler.regenerateFutureInterestEvents(
+                for: account,
+                service: service,
+                context: viewModel.modelContext
+            )
+            dismiss()
+        } catch {
+            AppLogger.log(.error, category: "AccountsCore", "Не удалось создать вклад нового ядра: \(error)")
+        }
+    }
+
     /// Создание денежного счёта («Карта»/«Счёт») на новом ядре event-sourcing (Фаза 1a-ui).
     /// Никогда не создаёт старый `Card`/`Investment` — единственная точка записи: `AccountsCoreService`.
     private func createMoneyAccountOnNewCore(kind: AccountKind) {
@@ -1258,6 +1324,11 @@ struct FinanceAddAccountView: View {
 
         if let newCoreKind = newCoreMoneyKindForCurrentSelection {
             createMoneyAccountOnNewCore(kind: newCoreKind)
+            return
+        }
+
+        if newCoreDepositKindForCurrentSelection != nil {
+            createDepositAccountOnNewCore()
             return
         }
 

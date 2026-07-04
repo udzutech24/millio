@@ -14,12 +14,17 @@ struct AccountDetailView: View {
     @State private var sheet: ActiveSheet?
     @State private var showArchiveConfirm = false
     @State private var errorMessage: String?
+    /// Предупреждение при попытке пополнить непополняемый вклад (брифинг Фазы 3, п.3) — НЕ жёсткий
+    /// запрет, alert с подтверждением («да, всё равно» открывает обычную форму дохода).
+    @State private var showTopUpWarning = false
+    @State private var showEarlyCloseConfirm = false
 
     private enum ActiveSheet: Identifiable {
         case income
         case expense
         case adjustBalance
         case transfer
+        case earlyClose
 
         var id: Int { hashValue }
     }
@@ -52,6 +57,9 @@ struct AccountDetailView: View {
                 VStack(alignment: .leading, spacing: AppSpacing.xl) {
                     header
                     actionsRow
+                    if account.kind == .deposit {
+                        depositForecastSection
+                    }
                     historySection
                 }
                 .padding(AppSpacing.l)
@@ -72,6 +80,28 @@ struct AccountDetailView: View {
             Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
         } message: {
             Text(L("accounts_core.detail.delete_confirm.message"))
+        }
+        .alert(
+            L("accounts_core.detail.deposit.top_up_warning.title"),
+            isPresented: $showTopUpWarning
+        ) {
+            Button(L("accounts_core.detail.deposit.top_up_warning.confirm")) {
+                sheet = .income
+            }
+            Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
+        } message: {
+            Text(L("accounts_core.detail.deposit.top_up_warning.message"))
+        }
+        .alert(
+            L("accounts_core.detail.deposit.early_close_confirm.title"),
+            isPresented: $showEarlyCloseConfirm
+        ) {
+            Button(L("accounts_core.detail.deposit.action.early_close"), role: .destructive) {
+                sheet = .earlyClose
+            }
+            Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
+        } message: {
+            Text(L("accounts_core.detail.deposit.early_close_confirm.message"))
         }
         .alert(
             L("accounts_core.detail.error.title"),
@@ -112,6 +142,12 @@ struct AccountDetailView: View {
             }
 
             ForEach(debtInfoLines ?? [], id: \.self) { line in
+                Text(line)
+                    .font(.millioCalloutRegular)
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+
+            ForEach(depositInfoLines ?? [], id: \.self) { line in
                 Text(line)
                     .font(.millioCalloutRegular)
                     .foregroundStyle(AppColors.textSecondary)
@@ -202,6 +238,92 @@ struct AccountDetailView: View {
         return .income
     }
 
+    // MARK: - Вклад (.deposit) — доп. инфо, прогнозы «чистыми», досрочное закрытие (Фаза 3)
+
+    private var depositInfoLines: [String]? {
+        guard let meta = account.depositMeta else { return nil }
+        var lines: [String] = []
+        lines.append(String(format: L("accounts_core.detail.deposit.rate_format"), NSDecimalNumber(decimal: meta.rate).doubleValue))
+        lines.append(meta.allowsTopUp ? L("accounts_core.detail.deposit.badge.top_up_allowed") : L("accounts_core.detail.deposit.badge.top_up_denied"))
+        if let termEnd = meta.termEnd {
+            let daysLeft = Calendar.current.dateComponents([.day], from: Date(), to: termEnd).day ?? 0
+            if daysLeft >= 0 {
+                lines.append(String(format: L("accounts_core.detail.deposit.days_left_format"), daysLeft))
+            } else {
+                lines.append(L("accounts_core.detail.deposit.term_ended"))
+            }
+        } else {
+            lines.append(L("accounts_core.detail.deposit.savings_badge"))
+        }
+        return lines
+    }
+
+    /// Начислено % всего (Σ interest ≤ сегодня) — не прогноз, факт.
+    private var accruedInterestTotal: Decimal {
+        (account.events ?? [])
+            .filter { $0.type == .interest && $0.date <= Date() }
+            .reduce(Decimal(0)) { $0 + ($1.amount ?? 0) }
+    }
+
+    /// Прогноз реплеем вперёд (AC: `balanceAt(futureDate)` — та же функция, что и для истории,
+    /// отдельного калькулятора прогнозов нет). `nil`, если счёт — не вклад/накопительный счёт.
+    private var monthlyForecastGross: Decimal? {
+        guard account.kind == .deposit else { return nil }
+        let today = Date()
+        guard let inMonth = Calendar.current.date(byAdding: .month, value: 1, to: today) else { return nil }
+        let balanceIn1Month = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .deposit, on: inMonth)
+        return max(0, balanceIn1Month - balanceToday)
+    }
+
+    private var termForecastGross: Decimal? {
+        guard account.kind == .deposit, let termEnd = account.depositMeta?.termEnd else { return nil }
+        let balanceAtTerm = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .deposit, on: termEnd)
+        return max(0, balanceAtTerm - balanceToday)
+    }
+
+    /// Эффективная ставка налога «чистыми» для ЭТОГО вклада за текущий календарный год (спека §2.8):
+    /// доля Σ interest всех вкладов владельца, отнесённая налогом на ЭТОТ счёт, делённая на его gross.
+    /// Приближение для прогноза (месяц/срок ещё не наступили — используем ставку текущего года).
+    /// TODO Фаза 3+: конвертация процентов валютных вкладов в ₽ курсом даты события (см. докстринг
+    /// `DepositTaxCalculator`) — сейчас берём amount как есть, корректно только для ₽-вкладов.
+    private var depositTaxAllocationForThisAccount: DepositTaxAllocation? {
+        guard account.kind == .deposit else { return nil }
+        let year = Calendar.current.component(.year, from: Date())
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.kindRaw == "deposit" })
+        guard let allDeposits = try? modelContext.fetch(descriptor) else { return nil }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        guard let yearStart = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
+              let yearEnd = calendar.date(from: DateComponents(year: year + 1, month: 1, day: 1)) else { return nil }
+
+        let inputs: [DepositTaxCalculator.InterestEventInput] = allDeposits.flatMap { deposit -> [DepositTaxCalculator.InterestEventInput] in
+            (deposit.events ?? [])
+                .filter { $0.type == .interest && $0.date >= yearStart && $0.date < yearEnd }
+                .map { DepositTaxCalculator.InterestEventInput(accountID: deposit.id, amountRUB: $0.amount ?? 0) }
+        }
+
+        let result = DepositTaxCalculator.calculate(interestEventsInRUB: inputs, year: year, settings: SettingsManager.shared.depositTaxSettings)
+        return result.perAccount.first(where: { $0.accountID == account.id })
+    }
+
+    /// Эффективная ставка налога «чистыми» для ЭТОГО вклада за текущий год — доля, применяемая
+    /// к ПРОГНОЗУ (месяц/срок ещё не наступили, точного расчёта для будущих сумм в этом году нет).
+    private var effectiveNetTaxRate: Decimal {
+        guard let allocation = depositTaxAllocationForThisAccount, allocation.grossInterestRUB > 0 else { return 0 }
+        return allocation.allocatedTaxRUB / allocation.grossInterestRUB
+    }
+
+    /// Налог за ТЕКУЩИЙ год, уже начисленный этому вкладу (спека §2.8: «налог за год ≈Z») — оценка,
+    /// не событие (не порождает expense, см. докстринг `DepositTaxCalculator`).
+    private var yearlyTaxEstimateForThisAccount: Decimal {
+        depositTaxAllocationForThisAccount?.allocatedTaxRUB ?? 0
+    }
+
+    private func netAmount(_ gross: Decimal) -> Decimal {
+        gross * (1 - effectiveNetTaxRate)
+    }
+
     private var formattedBalance: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -218,7 +340,7 @@ struct AccountDetailView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: AppSpacing.s) {
                 actionButton(incomeActionTitle, icon: "plus.circle.fill") {
-                    sheet = .income
+                    requestTopUpOrOpenIncomeSheet()
                 }
                 actionButton(expenseActionTitle, icon: "minus.circle.fill") {
                     sheet = .expense
@@ -229,10 +351,25 @@ struct AccountDetailView: View {
                 actionButton(L("accounts_core.detail.action.transfer"), icon: "arrow.left.arrow.right") {
                     sheet = .transfer
                 }
+                if account.kind == .deposit, account.depositMeta?.allowsEarlyClose == true {
+                    actionButton(L("accounts_core.detail.deposit.action.early_close"), icon: "xmark.circle.fill", isDestructive: true) {
+                        showEarlyCloseConfirm = true
+                    }
+                }
                 actionButton(L("accounts_core.detail.action.delete"), icon: "archivebox.fill", isDestructive: true) {
                     showArchiveConfirm = true
                 }
             }
+        }
+    }
+
+    /// Непополняемый вклад (Фаза 3, брифинг п.3): попытка пополнения — предупреждение с
+    /// подтверждением, НЕ жёсткий запрет («да, всё равно» открывает обычную форму дохода).
+    private func requestTopUpOrOpenIncomeSheet() {
+        if account.kind == .deposit, account.depositMeta?.allowsTopUp == false {
+            showTopUpWarning = true
+        } else {
+            sheet = .income
         }
     }
 
@@ -253,6 +390,62 @@ struct AccountDetailView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Прогноз вклада «грязными/чистыми» (Фаза 3)
+
+    private var depositForecastSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.m) {
+            Text(L("accounts_core.detail.deposit.forecast_title"))
+                .font(.millioCaption)
+                .foregroundStyle(AppColors.textTertiary)
+                .textCase(.uppercase)
+
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                forecastRow(L("accounts_core.detail.deposit.accrued_total"), amount: accruedInterestTotal)
+
+                if let monthlyGross = monthlyForecastGross {
+                    forecastRow(L("accounts_core.detail.deposit.per_month_gross"), amount: monthlyGross)
+                    forecastRow(L("accounts_core.detail.deposit.per_month_net"), amount: netAmount(monthlyGross))
+                }
+
+                if let termGross = termForecastGross {
+                    forecastRow(L("accounts_core.detail.deposit.per_term_gross"), amount: termGross)
+                    forecastRow(L("accounts_core.detail.deposit.per_term_net"), amount: netAmount(termGross))
+                }
+
+                Text(String(format: L("accounts_core.detail.deposit.tax_estimate_format"), "\(formattedAmount(yearlyTaxEstimateForThisAccount)) ₽"))
+                    .font(.millioCaptionRegular)
+                    .foregroundStyle(AppColors.textTertiary)
+            }
+            .padding(AppSpacing.m)
+            .background(
+                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                    .fill(AppColors.iconBackground)
+            )
+        }
+    }
+
+    private func forecastRow(_ title: String, amount: Decimal) -> some View {
+        HStack {
+            Text(title)
+                .font(.millioCalloutRegular)
+                .foregroundStyle(AppColors.textSecondary)
+            Spacer()
+            Text("\(formattedAmount(amount)) \(account.currency)")
+                .font(.millioBodySemibold)
+                .foregroundStyle(AppColors.textPrimary)
+        }
+    }
+
+    private func formattedAmount(_ amount: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = true
+        formatter.groupingSeparator = " "
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "0"
     }
 
     // MARK: - History
@@ -370,6 +563,26 @@ struct AccountDetailView: View {
                     perform { try service.transfer(from: account, to: destination, amountInSourceCurrency: amount) }
                 }
             )
+        case .earlyClose:
+            AccountEarlyCloseSheet(
+                source: account,
+                modelContext: modelContext,
+                onSave: { destination in
+                    performEarlyClose(transferTo: destination)
+                }
+            )
+        }
+    }
+
+    /// Досрочное закрытие вклада — отдельно от generic `perform` (успех архивирует счёт и закрывает
+    /// карточку, а не просто закрывает sheet — счёт больше не открыть, он ушёл в архив).
+    private func performEarlyClose(transferTo destination: Account) {
+        do {
+            try service.earlyCloseDeposit(account, transferTo: destination)
+            sheet = nil
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

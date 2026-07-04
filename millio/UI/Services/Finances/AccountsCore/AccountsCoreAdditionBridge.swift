@@ -63,4 +63,31 @@ enum AccountsCoreAdditionBridge {
     static func debtMeta(direction: DebtDirection) -> DebtMeta {
         DebtMeta(direction: direction, counterparty: nil, dueDate: nil, rate: nil)
     }
+
+    /// Мэппинг новой формы «Вклад»/«Накопительный счёт» (Фаза 3, `InlineDepositCreateForm`) →
+    /// `DepositMeta`. Накопительный счёт — тот же движок, `termEnd == nil` (переключатель «без срока»
+    /// в форме, НЕ отдельный пресет-экран, план §2.8). `earlyClosePenalty` собирается формой уже как
+    /// ДОЛЯ 0…1 (см. докстринг `DepositMeta.earlyClosePenalty`) — форма сама делит %-ввод на 100.
+    static func depositMeta(
+        rate: Decimal,
+        capitalization: AccountDepositCapitalization,
+        termEnd: Date?,
+        allowsTopUp: Bool,
+        allowsEarlyClose: Bool,
+        earlyClosePenaltyShare: Decimal?,
+        remindEnd: Bool,
+        autoRollover: Bool
+    ) -> DepositMeta {
+        DepositMeta(
+            rate: rate,
+            capitalization: capitalization,
+            termEnd: termEnd,
+            payoutDay: nil,
+            allowsTopUp: allowsTopUp,
+            allowsEarlyClose: allowsEarlyClose,
+            earlyClosePenalty: allowsEarlyClose ? earlyClosePenaltyShare : nil,
+            remindEnd: remindEnd,
+            autoRollover: autoRollover
+        )
+    }
 }

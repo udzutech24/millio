@@ -164,3 +164,66 @@ struct AccountTransferSheet: View {
         }
     }
 }
+
+/// Форма досрочного закрытия вклада (Фаза 3): выбор ТОЛЬКО счёта-получателя остатка — сумма не
+/// вводится (весь остаток переводится автоматически, `AccountsCoreService.earlyCloseDeposit`).
+/// Скоуп, как у `AccountTransferSheet`: получатель — счёт той же валюты.
+struct AccountEarlyCloseSheet: View {
+    let source: Account
+    let modelContext: ModelContext
+    let onSave: (Account) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedDestinationID: UUID?
+
+    private var candidates: [Account] {
+        let descriptor = FetchDescriptor<Account>()
+        guard let all = try? modelContext.fetch(descriptor) else { return [] }
+        let today = Date()
+        return all.filter {
+            $0.id != source.id && $0.currency == source.currency && $0.participates(on: today)
+        }
+    }
+
+    private var selectedDestination: Account? {
+        candidates.first { $0.id == selectedDestinationID }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if candidates.isEmpty {
+                    Text(L("accounts_core.detail.transfer.no_destinations"))
+                        .foregroundStyle(AppColors.textTertiary)
+                } else {
+                    Section {
+                        Picker(L("accounts_core.detail.sheet.transfer.destination"), selection: $selectedDestinationID) {
+                            ForEach(candidates, id: \.id) { account in
+                                Text(account.name).tag(Optional(account.id))
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(L("accounts_core.detail.deposit.action.early_close"))
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                if selectedDestinationID == nil {
+                    selectedDestinationID = candidates.first?.id
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("accounts_core.detail.sheet.cancel")) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("accounts_core.detail.sheet.save")) {
+                        guard let destination = selectedDestination else { return }
+                        onSave(destination)
+                    }
+                    .disabled(selectedDestination == nil)
+                }
+            }
+        }
+    }
+}

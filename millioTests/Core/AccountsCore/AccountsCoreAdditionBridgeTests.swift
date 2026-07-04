@@ -93,4 +93,44 @@ struct AccountsCoreAdditionBridgeTests {
         let owedByMe = AccountsCoreAdditionBridge.debtMeta(direction: .owedByMe)
         #expect(owedByMe.direction == .owedByMe)
     }
+
+    // MARK: - depositMeta (Фаза 3 — форма «Вклад»/«Накопительный счёт» → new-core meta)
+
+    @Test
+    func depositMetaMapsFormFieldsAndConvertsPenaltyToShare() {
+        let termEnd = Date(timeIntervalSince1970: 1_800_000_000)
+        let meta = AccountsCoreAdditionBridge.depositMeta(
+            rate: 12, capitalization: .monthly, termEnd: termEnd,
+            allowsTopUp: false, allowsEarlyClose: true, earlyClosePenaltyShare: 0.5,
+            remindEnd: true, autoRollover: false
+        )
+        #expect(meta.rate == 12)
+        #expect(meta.capitalization == .monthly)
+        #expect(meta.termEnd == termEnd)
+        #expect(meta.allowsTopUp == false)
+        #expect(meta.allowsEarlyClose == true)
+        #expect(meta.earlyClosePenalty == 0.5)
+        #expect(meta.remindEnd == true)
+        #expect(meta.autoRollover == false)
+    }
+
+    @Test
+    func depositMetaSavingsAccountHasNilTermEnd() {
+        let meta = AccountsCoreAdditionBridge.depositMeta(
+            rate: 8, capitalization: .monthly, termEnd: nil,
+            allowsTopUp: true, allowsEarlyClose: false, earlyClosePenaltyShare: nil,
+            remindEnd: false, autoRollover: false
+        )
+        #expect(meta.termEnd == nil) // накопительный счёт — без срока, тот же движок B
+    }
+
+    @Test
+    func depositMetaDropsPenaltyWhenEarlyCloseNotAllowed() {
+        // Если досрочное закрытие запрещено — penalty бессмысленен, даже если форма его собрала.
+        let meta = AccountsCoreAdditionBridge.depositMeta(
+            rate: 10, capitalization: .none, termEnd: Date(), allowsTopUp: false,
+            allowsEarlyClose: false, earlyClosePenaltyShare: 0.3, remindEnd: false, autoRollover: false
+        )
+        #expect(meta.earlyClosePenalty == nil)
+    }
 }

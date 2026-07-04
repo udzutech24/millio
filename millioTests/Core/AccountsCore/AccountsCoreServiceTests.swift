@@ -200,4 +200,61 @@ struct AccountsCoreServiceTests {
         try service.restoreAccount(account)
         #expect(account.participates(on: Date()))
     }
+
+    // MARK: - Фаза 3: earlyCloseDeposit — сторно % по penalty, перевод остатка, архивация
+
+    @Test
+    func earlyCloseDepositAppliesPenaltyTransfersRemainderAndArchives() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+
+        let deposit = try service.createAccount(name: "Вклад", kind: .deposit, currency: "RUB", openingBalance: 1_000_000)
+        deposit.depositMeta = DepositMeta(
+            rate: 12, capitalization: .monthly, termEnd: nil, payoutDay: nil,
+            allowsTopUp: false, allowsEarlyClose: true, earlyClosePenalty: 0.5, // 50% удержания
+            remindEnd: false, autoRollover: false
+        )
+        // Начислено 10 000 ₽ процентов (руками, без генератора — сценарий уже накопленного вклада).
+        ctx.insert(AccountEvent(account: deposit, date: Date(), type: .interest, amount: 10_000))
+        try ctx.save()
+
+        let destination = try service.createAccount(name: "Карта", kind: .cash, currency: "RUB", openingBalance: 0)
+
+        let balanceBeforeClose = AccountBalanceEngine.balanceAt(events: deposit.events ?? [], kind: .deposit, on: Date())
+        #expect(balanceBeforeClose == 1_010_000)
+
+        try service.earlyCloseDeposit(deposit, transferTo: destination)
+
+        // Сторно = 10 000 × 0.5 = 5 000 (fee), остаток переведён на destination.
+        let feeEvent = (deposit.events ?? []).first { $0.type == .fee }
+        #expect(feeEvent?.amount == 5_000)
+
+        let destinationBalance = AccountBalanceEngine.balanceAt(events: destination.events ?? [], kind: .cash, on: Date())
+        #expect(destinationBalance == 1_005_000) // 1 010 000 − 5 000 удержано
+
+        #expect(deposit.archivedAt != nil) // архивация — НЕ удаление, история сохранена (AC7)
+        #expect((deposit.events ?? []).count > 2) // opening + interest + fee + transferOut остались
+    }
+
+    @Test
+    func earlyCloseDepositWithoutPenaltyTransfersFullBalance() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+
+        let deposit = try service.createAccount(name: "Накопительный", kind: .deposit, currency: "RUB", openingBalance: 200_000)
+        deposit.depositMeta = DepositMeta(
+            rate: 8, capitalization: .monthly, termEnd: nil, payoutDay: nil,
+            allowsTopUp: true, allowsEarlyClose: true, earlyClosePenalty: nil, // без потери %
+            remindEnd: false, autoRollover: false
+        )
+        let destination = try service.createAccount(name: "Карта", kind: .cash, currency: "RUB", openingBalance: 0)
+
+        try service.earlyCloseDeposit(deposit, transferTo: destination)
+
+        let destinationBalance = AccountBalanceEngine.balanceAt(events: destination.events ?? [], kind: .cash, on: Date())
+        #expect(destinationBalance == 200_000) // без штрафа — весь остаток
+        #expect((deposit.events ?? []).first { $0.type == .fee } == nil)
+    }
 }
