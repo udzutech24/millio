@@ -130,7 +130,7 @@ VM-слой — нет. → UI-записи идут в guest мимо CloudKit-
 `EventBus.shared.publish(FinanceEvent.investmentsUpdated)` (подписка `FinanceViewModel.swift:882-909` уже есть,
 `removeAccountFromGroup` не публикует); `refreshToken` в AccountDetailView.
 
-- [x] **D1. Фикс.** РЕАЛИЗОВАН (коммит 87610e1). Легаси-путь: `FinanceAccountService.removeAccountFromGroup`
+- [x] **D1. Фикс.** РЕАЛИЗОВАН (коммит 20d05f6). Легаси-путь: `FinanceAccountService.removeAccountFromGroup`
   и `deleteAccountPermanently` (`:415-459`) теперь вызывают `onLoadAccounts()` первым в триплете (симметрично
   `addAccountToGroup`) — пересобирает `cardByID/creditByID/investmentByID`, единственное место фильтра
   `archivedAt`, до этого список и тотал группы («ОГ» из репорта) оставались устаревшими без перезапуска.
