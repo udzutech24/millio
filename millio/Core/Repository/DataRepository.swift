@@ -96,7 +96,10 @@ final class DataRepository: DataRepositoryProtocol {
         }
     }
     
-    static func importAllData(_ data: Data, into context: ModelContext) throws {
+    /// - Parameter save: по умолчанию `true` (поведение restore не меняется). Reconciliation (Track B)
+    ///   передаёт `false`: весь merge идёт в одном дочернем контексте с ЕДИНСТВЕННЫМ save в конце
+    ///   (митигация B1b №5) — промежуточный save здесь сломал бы атомарность.
+    static func importAllData(_ data: Data, into context: ModelContext, save: Bool = true) throws {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let modelsData = json["models"] as? [[String: Any]] else {
             throw AppError.backupCorrupted
@@ -146,8 +149,10 @@ final class DataRepository: DataRepositoryProtocol {
         for item in typedModels {
             try item.importer.`import`(from: item.data, context: context)
         }
-        
-        try context.save()
+
+        if save {
+            try context.save()
+        }
     }
     
     func clearAllData() throws {
