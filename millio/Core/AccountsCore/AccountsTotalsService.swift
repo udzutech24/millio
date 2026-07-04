@@ -16,10 +16,18 @@ final class AccountsTotalsService {
         self.rateService = rateService
     }
 
+    /// Быстрая проверка «есть ли хоть один счёт нового ядра» — дешёвый COUNT без загрузки объектов.
+    /// Все дорогие пути (`totalAt`/`seriesBetween`) выходят рано, пока новых счетов ещё нет
+    /// (Т2 в плане: не платим за реплей там, где платить не за что — критично для сосуществования
+    /// со старым миром в Фазе 1a-ui, где у подавляющего большинства ViewModel'ов новых счетов нет).
+    private func hasAnyAccounts() -> Bool {
+        ((try? modelContext.fetchCount(FetchDescriptor<Account>())) ?? 0) > 0
+    }
+
     /// Σ по счетам нового ядра: `balanceAt(счёт, date)` в валюте счёта × курс(валюта счёта → currency,
     /// НА ДАТУ `date`). Для сегодня — текущий курс, для прошлого — исторический (AC13).
     func totalAt(_ date: Date, in currency: String, participatingOnly: Bool = true) async -> Decimal {
-        guard let accounts = try? modelContext.fetch(FetchDescriptor<Account>()) else { return 0 }
+        guard hasAnyAccounts(), let accounts = try? modelContext.fetch(FetchDescriptor<Account>()) else { return 0 }
 
         var total: Decimal = 0
         for account in accounts {
@@ -35,7 +43,7 @@ final class AccountsTotalsService {
     /// Точки для графика: одна точка на календарный день между `start` и `end` включительно,
     /// каждая — курсом СВОЕЙ даты (AC13), не сегодняшним.
     func seriesBetween(start: Date, end: Date, currency: String) async -> [(Date, Decimal)] {
-        guard start <= end else { return [] }
+        guard start <= end, hasAnyAccounts() else { return [] }
         var result: [(Date, Decimal)] = []
         var cursor = start
         let calendar = Calendar(identifier: .gregorian)

@@ -248,7 +248,7 @@ struct FinanceGroupRow: View {
                 return (account: account, info: info, customIconName: iconInfo.iconName, customIconColor: iconInfo.iconColor)
             }
 
-            if displayAccounts.isEmpty {
+            if displayAccounts.isEmpty && newCoreAccounts.isEmpty {
                 Text(L("finances.main.empty_products.title"))
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
@@ -277,7 +277,7 @@ struct FinanceGroupRow: View {
                         }
                     )
 
-                    if index != displayAccounts.count - 1 {
+                    if index != displayAccounts.count - 1 || !newCoreAccounts.isEmpty {
                         Divider()
                             .background(Color.white.opacity(0.08))
                             .padding(.leading, expandedDividerLeadingInset)
@@ -286,8 +286,35 @@ struct FinanceGroupRow: View {
                 }
             }
 
+            // Счета нового ядра event-sourcing (Фаза 1a-ui) — сосуществуют со старым миром в той же
+            // группе (сопоставление по имени, см. `FinanceViewModel.newCoreAccounts(matching:)`).
+            ForEach(Array(newCoreAccounts.enumerated()), id: \.element.id) { index, account in
+                NavigationLink {
+                    AccountDetailView(account: account, modelContext: viewModel.modelContext)
+                } label: {
+                    NewCoreAccountRow(
+                        account: account,
+                        balance: viewModel.newCoreBalanceToday(account),
+                        isAmountHidden: viewModel.state.isAmountHidden
+                    )
+                    .padding(.leading, contentLeadingInset)
+                    .padding(.trailing, contentTrailingInset)
+                }
+                .buttonStyle(.plain)
+
+                if index != newCoreAccounts.count - 1 {
+                    Divider()
+                        .background(Color.white.opacity(0.08))
+                        .padding(.leading, expandedDividerLeadingInset)
+                        .padding(.trailing, contentTrailingInset)
+                }
+            }
         }
         .padding(.bottom, 10)
+    }
+
+    private var newCoreAccounts: [Account] {
+        viewModel.newCoreAccounts(matching: group)
     }
 
     private var dragChevron: some View {

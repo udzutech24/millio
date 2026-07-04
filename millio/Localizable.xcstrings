@@ -90184,6 +90184,238 @@
           }
         }
       }
+    },
+    "accounts_core.debug.seed_already_done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Demo portfolio already seeded" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Демо-портфель уже создан" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "演示投资组合已生成" } }
+      }
+    },
+    "accounts_core.debug.seed_confirm.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Accounts core seed" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Полигон ядра счетов" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "账户核心种子数据" } }
+      }
+    },
+    "accounts_core.debug.seed_success" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Demo portfolio created: 10 accounts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Демо-портфель создан: 10 счетов" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "演示投资组合已创建：10个账户" } }
+      }
+    },
+    "accounts_core.detail.action.add_expense" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Expense" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Расход" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "支出" } }
+      }
+    },
+    "accounts_core.detail.action.add_income" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Income" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Доход" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "收入" } }
+      }
+    },
+    "accounts_core.detail.action.adjust_balance" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Adjust balance" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменить баланс" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "调整余额" } }
+      }
+    },
+    "accounts_core.detail.action.delete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Удалить" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "删除" } }
+      }
+    },
+    "accounts_core.detail.action.transfer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Transfer" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перевод" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "转账" } }
+      }
+    },
+    "accounts_core.detail.delete_confirm.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The account will be closed, its history will be preserved." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Счёт закроется, история сохранится." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "账户将被关闭，历史记录会保留。" } }
+      }
+    },
+    "accounts_core.detail.delete_confirm.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Close this account?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Закрыть счёт?" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "关闭此账户？" } }
+      }
+    },
+    "accounts_core.detail.error.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Something went wrong" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Что-то пошло не так" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "出现问题" } }
+      }
+    },
+    "accounts_core.detail.event.adjustment" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Balance adjustment" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Корректировка баланса" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "余额调整" } }
+      }
+    },
+    "accounts_core.detail.event.expense" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Expense" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Расход" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "支出" } }
+      }
+    },
+    "accounts_core.detail.event.income" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Income" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Доход" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "收入" } }
+      }
+    },
+    "accounts_core.detail.event.opening_balance" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Opening balance" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Начальный баланс" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "期初余额" } }
+      }
+    },
+    "accounts_core.detail.event.transfer_in" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Transfer in" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перевод (получен)" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "转入" } }
+      }
+    },
+    "accounts_core.detail.event.transfer_out" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Transfer out" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перевод (отправлен)" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "转出" } }
+      }
+    },
+    "accounts_core.detail.history_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "History" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "История" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "历史记录" } }
+      }
+    },
+    "accounts_core.detail.no_events" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No operations yet" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Пока нет операций" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "暂无操作记录" } }
+      }
+    },
+    "accounts_core.detail.sheet.adjust.new_balance" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New balance" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Новый баланс" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "新余额" } }
+      }
+    },
+    "accounts_core.detail.sheet.adjust.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Adjust balance" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменить баланс" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "调整余额" } }
+      }
+    },
+    "accounts_core.detail.sheet.amount_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Amount" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сумма" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "金额" } }
+      }
+    },
+    "accounts_core.detail.sheet.cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отмена" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "取消" } }
+      }
+    },
+    "accounts_core.detail.sheet.date_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Date" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Дата" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "日期" } }
+      }
+    },
+    "accounts_core.detail.sheet.note_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Note" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Заметка" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "备注" } }
+      }
+    },
+    "accounts_core.detail.sheet.save" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранить" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "保存" } }
+      }
+    },
+    "accounts_core.detail.sheet.transfer.destination" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "To account" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "На счёт" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "转入账户" } }
+      }
+    },
+    "accounts_core.detail.sheet.transfer.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Transfer" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перевод" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "转账" } }
+      }
+    },
+    "accounts_core.detail.transfer.no_destinations" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No other accounts in the same currency yet" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Пока нет других счетов в этой валюте" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "暂无同币种的其他账户" } }
+      }
     }
   },
   "version" : "1.1"

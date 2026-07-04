@@ -315,6 +315,16 @@ final class FinanceViewModel: ViewModelProtocol {
 
     private static let manualStockRefreshCooldown: TimeInterval = 15
 
+    /// Тотал/график нового ядра event-sourcing (Фаза 1a-ui, AC2) — единая точка для Accounts- и
+    /// Analytics-тотала (см. `newCoreTotalProvider` в `totalsService` и `FinanceDynamicsViewModel`).
+    private(set) lazy var accountsTotalsService: AccountsTotalsService = {
+        AccountsTotalsService(
+            modelContext: self.modelContext,
+            rebuilder: AccountSnapshotRebuilder(modelContainer: self.modelContext.container),
+            rateService: self.currencyService
+        )
+    }()
+
     // MARK: - Services
     // totalsService использует lazy из-за замыканий на self
     private(set) lazy var totalsService: FinanceTotalsService = {
@@ -325,7 +335,11 @@ final class FinanceViewModel: ViewModelProtocol {
             secondaryDisplayCurrencyProvider: { [weak self] in self?.state.secondaryDisplayCurrency },
             cardByIDProvider: { [weak self] in self?.cardByID ?? [:] },
             creditByIDProvider: { [weak self] in self?.creditByID ?? [:] },
-            investmentByIDProvider: { [weak self] in self?.investmentByID ?? [:] }
+            investmentByIDProvider: { [weak self] in self?.investmentByID ?? [:] },
+            newCoreTotalProvider: { [weak self] currency in
+                guard let self else { return 0 }
+                return await self.accountsTotalsService.totalAt(Date(), in: currency)
+            }
         )
     }()
 
@@ -1108,6 +1122,42 @@ final class FinanceViewModel: ViewModelProtocol {
             nameResolver: { [weak self] account in
                 self?.getAccountInfo(account: account)?.name ?? ""
             }
+        )
+    }
+
+    // MARK: - Новое ядро event-sourcing (Фаза 1a-ui) — сосуществование со старым миром
+
+    /// Счета нового ядра, сопоставленные со старой `FinanceGroup` ПО ИМЕНИ (временный мост до
+    /// Фазы 6, см. `AccountsCoreAdditionBridge`). Ungrouped — счета БЕЗ `AccountGroup`
+    /// (`account.group == nil`), а не реальная группа с именем "Ungrouped".
+    /// Только участвующие сегодня (`participates(on:)`) — архивные скрыты, как у старых счетов.
+    func newCoreAccounts(matching group: FinanceGroup) -> [Account] {
+        let descriptor: FetchDescriptor<Account>
+        if group.name == FinanceSystemGroups.ungroupedName {
+            descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.group == nil })
+        } else {
+            let targetName = group.name
+            descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.group?.name == targetName })
+        }
+        guard let accounts = try? modelContext.fetch(descriptor) else { return [] }
+
+        let today = nowProvider()
+        return accounts
+            .filter { $0.participates(on: today) }
+            .sorted { lhs, rhs in
+                lhs.order != rhs.order ? lhs.order < rhs.order : lhs.createdAt < rhs.createdAt
+            }
+    }
+
+    /// Баланс счёта нового ядра «сейчас» — прямой синхронный реплей событий (список короткий,
+    /// см. Т2 в плане; async-кэш через `AccountsTotalsService` подключается там, где важна
+    /// производительность на длинной истории — тотал/график).
+    func newCoreBalanceToday(_ account: Account) -> Decimal {
+        AccountBalanceEngine.balanceAt(
+            events: account.events ?? [],
+            kind: account.kind,
+            on: nowProvider(),
+            marketMeta: account.marketMeta
         )
     }
 

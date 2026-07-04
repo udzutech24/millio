@@ -30,6 +30,10 @@ final class FinanceTotalsService {
     private let cardByIDProvider: () -> [String: Card]
     private let creditByIDProvider: () -> [String: Credit]
     private let investmentByIDProvider: () -> [String: Investment]
+    /// Вклад нового ядра event-sourcing (Фаза 1a-ui, AC2) — `AccountsTotalsService.totalAt(date, in:)`,
+    /// та же функция, что использует Analytics-тотал (`FinanceDynamicsViewModel.calculateTotalForAllGroups`),
+    /// поэтому Accounts-тотал и Analytics-тотал совпадают до копейки по построению, а не по совпадению.
+    private let newCoreTotalProvider: (String) async -> Decimal
 
     // MARK: - Init
 
@@ -40,7 +44,8 @@ final class FinanceTotalsService {
         secondaryDisplayCurrencyProvider: @escaping () -> String?,
         cardByIDProvider: @escaping () -> [String: Card],
         creditByIDProvider: @escaping () -> [String: Credit],
-        investmentByIDProvider: @escaping () -> [String: Investment]
+        investmentByIDProvider: @escaping () -> [String: Investment],
+        newCoreTotalProvider: @escaping (String) async -> Decimal = { _ in 0 }
     ) {
         self.currencyService = currencyService
         self.groupsProvider = groupsProvider
@@ -49,6 +54,7 @@ final class FinanceTotalsService {
         self.cardByIDProvider = cardByIDProvider
         self.creditByIDProvider = creditByIDProvider
         self.investmentByIDProvider = investmentByIDProvider
+        self.newCoreTotalProvider = newCoreTotalProvider
     }
 
     // MARK: - Public: Расчёт общего баланса
@@ -119,6 +125,13 @@ final class FinanceTotalsService {
                     }
                 }
             }
+        }
+
+        // Вклад нового ядра (AC2) — добавляется В ТУ ЖЕ сумму, поверх старого мира, единой функцией.
+        let newCoreTotal = NSDecimalNumber(decimal: await newCoreTotalProvider(displayCurrency)).doubleValue
+        total += newCoreTotal
+        if let secondaryCurrency = secondaryDisplayCurrencyProvider() {
+            secondaryTotal += NSDecimalNumber(decimal: await newCoreTotalProvider(secondaryCurrency)).doubleValue
         }
 
         return FinanceTotalsSnapshot(

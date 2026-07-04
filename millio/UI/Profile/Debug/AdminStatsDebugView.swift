@@ -1,5 +1,6 @@
 #if DEBUG
 import SwiftUI
+import SwiftData
 
 struct AdminStatsDebugView: View {
     @Environment(AppState.self) private var appState
@@ -8,6 +9,8 @@ struct AdminStatsDebugView: View {
 
     @State private var viewModel: AdminStatsDebugViewModel?
     @State private var bootstrapErrorMessage: String?
+    @State private var seedResultMessage: String?
+    @State private var showSeedResult = false
 
     private var locale: Locale {
         AppLocalization.currentAppLocale
@@ -58,6 +61,25 @@ struct AdminStatsDebugView: View {
                     .tint(AppColors.textPrimary)
                 }
             }
+            // Полигон нового ядра счетов (Фаза 1a-ui, П4 в плане) — скрытая DEBUG-кнопка,
+            // доступна только с этого уже DEBUG+admin-гейтованного экрана (см. ProfileView.shouldDisplayMenuItem).
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    seedAccountsCoreDemo()
+                } label: {
+                    Image(systemName: "shippingbox.fill")
+                }
+                .tint(AppColors.textPrimary)
+                .accessibilityIdentifier("profile.adminStats.seedAccountsCoreButton")
+            }
+        }
+        .alert(
+            AppLocalization.string("accounts_core.debug.seed_confirm.title", locale: locale),
+            isPresented: $showSeedResult
+        ) {
+            Button(AppLocalization.string("accounts_core.detail.sheet.cancel", locale: locale)) {}
+        } message: {
+            Text(seedResultMessage ?? "")
         }
         .task {
             guard viewModel == nil else { return }
@@ -80,6 +102,26 @@ struct AdminStatsDebugView: View {
             viewModel = loadedViewModel
             await loadedViewModel.loadIfNeeded()
         }
+    }
+
+    /// Прогоняет `AccountsCoreSeeder.seedDemoPortfolio` (Фаза 1a-ui, П4) — единственный способ
+    /// вызвать полигон из UI, без нового пункта меню Profile (минимально-инвазивно, см. бриф).
+    private func seedAccountsCoreDemo() {
+        guard let diContainer else {
+            seedResultMessage = "Debug dependencies are not available in this app session."
+            showSeedResult = true
+            return
+        }
+        let context = diContainer.modelContainer.mainContext
+        do {
+            let didSeed = try AccountsCoreSeeder.seedDemoPortfolio(context: context)
+            seedResultMessage = didSeed
+                ? AppLocalization.string("accounts_core.debug.seed_success", locale: locale)
+                : AppLocalization.string("accounts_core.debug.seed_already_done", locale: locale)
+        } catch {
+            seedResultMessage = error.localizedDescription
+        }
+        showSeedResult = true
     }
 
     private var loadingCard: some View {

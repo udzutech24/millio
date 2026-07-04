@@ -1132,8 +1132,71 @@ struct FinanceAddAccountView: View {
         }
     }
     
+    /// kind нового ядра для текущего выбора пресета «Карта»/«Счёт» — `nil` для остальных 9
+    /// пресетов (кредит/вклад/долг/инвестиции/…, они пока идут старым путём, см. `AccountsCoreAdditionBridge`)
+    /// и для режима редактирования (у new-core счетов редактирование — через `AccountDetailView`, не эту форму).
+    private var newCoreMoneyKindForCurrentSelection: AccountKind? {
+        guard addAccountMode == .create else { return nil }
+        switch selectedAccountType {
+        case .card:
+            return AccountsCoreAdditionBridge.cardKind(bank: cardData?.bank ?? .other)
+        case .investment where selectedInvestmentPreset == .account:
+            return .bankAccount
+        default:
+            return nil
+        }
+    }
+
+    /// Создание денежного счёта («Карта»/«Счёт») на новом ядре event-sourcing (Фаза 1a-ui).
+    /// Никогда не создаёт старый `Card`/`Investment` — единственная точка записи: `AccountsCoreService`.
+    private func createMoneyAccountOnNewCore(kind: AccountKind) {
+        let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
+
+        let currency: String
+        let openingBalance: Decimal
+        var cardMeta: CardMeta?
+
+        switch kind {
+        case .cash, .debitCard:
+            guard let cardData else { return }
+            currency = cardData.currency
+            openingBalance = Decimal(cardData.balance)
+            cardMeta = CardMeta(
+                bank: cardData.bank == .other ? nil : cardData.bank.rawValue,
+                last4: cardData.cardNumber.isEmpty ? nil : cardData.cardNumber,
+                creditLimit: cardData.cardType == .credit ? cardData.creditLimit.map { Decimal($0) } : nil
+            )
+        default: // .bankAccount
+            guard let investmentData else { return }
+            currency = investmentData.currency
+            openingBalance = Decimal(investmentData.amount)
+        }
+
+        let group = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: viewModel.modelContext)
+        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+        do {
+            try service.createAccount(
+                name: resolvedName,
+                kind: kind,
+                currency: currency,
+                openingBalance: openingBalance,
+                group: group,
+                cardMeta: cardMeta
+            )
+            dismiss()
+        } catch {
+            AppLogger.log(.error, category: "AccountsCore", "Не удалось создать денежный счёт нового ядра: \(error)")
+        }
+    }
+
     private func addAccount() {
         guard validateEntitlementsForSave() else { return }
+
+        if let newCoreKind = newCoreMoneyKindForCurrentSelection {
+            createMoneyAccountOnNewCore(kind: newCoreKind)
+            return
+        }
 
         switch selectedAccountType {
         case .card:
