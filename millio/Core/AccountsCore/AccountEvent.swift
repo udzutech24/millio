@@ -37,6 +37,11 @@ final class AccountEvent {
     /// Связывает две ноги перевода между счетами (AC12: Σ переводов = 0).
     var transferID: UUID?
 
+    /// Связывает событие с породившей его `CashflowTransaction.uniqueID` (мост Cashflow → новое
+    /// ядро, Фаза 1b). Обеспечивает идемпотентность: одна tx = максимум один комплект событий,
+    /// повторный вызов (правка/пересчёт recurring) обновляет существующее, не плодит дубликаты.
+    var sourceTransactionID: String?
+
     /// Если оплата была в другой валюте, чем валюта счёта — оригинальная сумма/валюта (для отображения).
     var originalAmount: Decimal?
     var originalCurrency: String?
@@ -64,6 +69,7 @@ final class AccountEvent {
         categoryID: String? = nil,
         note: String? = nil,
         transferID: UUID? = nil,
+        sourceTransactionID: String? = nil,
         originalAmount: Decimal? = nil,
         originalCurrency: String? = nil,
         redenomRate: Decimal? = nil,
@@ -83,6 +89,7 @@ final class AccountEvent {
         self.categoryID = categoryID
         self.note = note
         self.transferID = transferID
+        self.sourceTransactionID = sourceTransactionID
         self.originalAmount = originalAmount
         self.originalCurrency = originalCurrency
         self.redenomRate = redenomRate

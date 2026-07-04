@@ -929,20 +929,28 @@ struct CashflowTransactionEditorView: View {
             : L("cashflow.editor.card")
     }
 
-    private var selectedTransferSourceCard: Card? {
+    // Валюта счёта-источника/получателя перевода — учитывает и легаси-карты, и Account нового
+    // ядра (Фаза 1b, задача 7): без этого cross-currency перевод с/на новый счёт не определялся бы.
+    private var selectedTransferSourceCurrency: String? {
         guard let selectedCardID else { return nil }
-        return viewModel.state.availableCards.first(where: { $0.cardUniqueID == selectedCardID })
+        if let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == selectedCardID }) {
+            return card.currency
+        }
+        return viewModel.newCoreAccountsForCashflowPicker().first(where: { $0.id.uuidString == selectedCardID })?.currency
     }
 
-    private var selectedTransferDestinationCard: Card? {
+    private var selectedTransferDestinationCurrency: String? {
         guard let selectedToCardID else { return nil }
-        return viewModel.state.availableCards.first(where: { $0.cardUniqueID == selectedToCardID })
+        if let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == selectedToCardID }) {
+            return card.currency
+        }
+        return viewModel.newCoreAccountsForCashflowPicker().first(where: { $0.id.uuidString == selectedToCardID })?.currency
     }
 
     private var isCrossCurrencyTransfer: Bool {
         Self.shouldOfferTransferExchangeRate(
-            sourceCurrency: selectedTransferSourceCard?.currency,
-            destinationCurrency: selectedTransferDestinationCard?.currency
+            sourceCurrency: selectedTransferSourceCurrency,
+            destinationCurrency: selectedTransferDestinationCurrency
         )
     }
 
@@ -984,8 +992,8 @@ struct CashflowTransactionEditorView: View {
 
     private var transferRateQuoteText: String? {
         guard isCrossCurrencyTransfer,
-              let sourceCurrency = Self.normalizedCurrencyCode(selectedTransferSourceCard?.currency),
-              let targetCurrency = Self.normalizedCurrencyCode(selectedTransferDestinationCard?.currency),
+              let sourceCurrency = Self.normalizedCurrencyCode(selectedTransferSourceCurrency),
+              let targetCurrency = Self.normalizedCurrencyCode(selectedTransferDestinationCurrency),
               let rate = resolvedTransferExchangeRate else {
             return nil
         }
@@ -1004,7 +1012,7 @@ struct CashflowTransactionEditorView: View {
     private var transferReceivePreviewText: String? {
         guard let amount = parseAmount(),
               amount > 0,
-              let targetCurrency = Self.normalizedCurrencyCode(selectedTransferDestinationCard?.currency),
+              let targetCurrency = Self.normalizedCurrencyCode(selectedTransferDestinationCurrency),
               let receivedAmount = Self.transferReceivedAmount(
                 sourceAmount: amount,
                 exchangeRate: resolvedTransferExchangeRate
@@ -1349,7 +1357,8 @@ struct CashflowTransactionEditorView: View {
             investments: viewModel.state.availableInvestments,
             linkedInvestmentIDs: viewModel.state.linkedInvestmentIDs,
             transactionType: selectedTransactionType,
-            currency: selectedCurrency
+            currency: selectedCurrency,
+            newCoreAccounts: viewModel.newCoreAccountsForCashflowPicker()
         )
     }
 
@@ -1369,7 +1378,8 @@ struct CashflowTransactionEditorView: View {
             investments: [],
             linkedInvestmentIDs: [],
             transactionType: .transfer,
-            currency: selectedCurrency
+            currency: selectedCurrency,
+            newCoreAccounts: viewModel.newCoreAccountsForCashflowPicker()
         )
     }
 
@@ -1556,7 +1566,7 @@ struct CashflowTransactionEditorView: View {
 
         if selectedTransactionType == .transfer,
            isCrossCurrencyTransfer,
-           let targetCurrency = Self.normalizedCurrencyCode(selectedTransferDestinationCard?.currency),
+           let targetCurrency = Self.normalizedCurrencyCode(selectedTransferDestinationCurrency),
            let resolvedTransferExchangeRate {
             transaction.exchangeRate = resolvedTransferExchangeRate
             transaction.exchangeRateCurrency = targetCurrency
@@ -1747,7 +1757,7 @@ struct CashflowTransactionEditorView: View {
     private func synchronizeTransferCurrencies() {
         guard selectedTransactionType == .transfer else { return }
 
-        if let sourceCurrency = Self.normalizedCurrencyCode(selectedTransferSourceCard?.currency),
+        if let sourceCurrency = Self.normalizedCurrencyCode(selectedTransferSourceCurrency),
            selectedCurrency != sourceCurrency {
             selectedCurrency = sourceCurrency
         }
@@ -1763,8 +1773,8 @@ struct CashflowTransactionEditorView: View {
             return
         }
 
-        guard let sourceCurrency = Self.normalizedCurrencyCode(selectedTransferSourceCard?.currency),
-              let targetCurrency = Self.normalizedCurrencyCode(selectedTransferDestinationCard?.currency) else {
+        guard let sourceCurrency = Self.normalizedCurrencyCode(selectedTransferSourceCurrency),
+              let targetCurrency = Self.normalizedCurrencyCode(selectedTransferDestinationCurrency) else {
             suggestedTransferRate = nil
             suggestedTransferRateDate = nil
             isLoadingSuggestedTransferRate = false
@@ -1894,14 +1904,16 @@ extension CashflowTransactionEditorView {
         investments: [Investment],
         linkedInvestmentIDs: Set<String> = [],
         transactionType: CashflowTransactionType,
-        currency: String
+        currency: String,
+        newCoreAccounts: [Account] = []
     ) -> [CashflowSelectableAccount] {
         CashflowSelectableAccountResolver.options(
             cards: cards,
             investments: investments,
             linkedInvestmentIDs: linkedInvestmentIDs,
             transactionType: transactionType,
-            currency: currency
+            currency: currency,
+            newCoreAccounts: newCoreAccounts
         )
     }
 }

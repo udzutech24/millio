@@ -106,12 +106,21 @@ final class CashflowViewModel: ViewModelProtocol {
             }
         )
     }()
+    // Мост в новое ядро счетов (event-sourcing, Фаза 1b) — lazy ради единого modelContext.
+    private(set) lazy var accountsCoreCashflowBridge: AccountsCoreCashflowBridge = {
+        AccountsCoreCashflowBridge(
+            modelContext: self.modelContext,
+            accountsCoreService: AccountsCoreService(modelContext: self.modelContext),
+            historicalRateStore: self.historicalRateStore
+        )
+    }()
     // persistenceService использует lazy из-за замыканий на self
     private(set) lazy var persistenceService: CashflowPersistenceService = {
         CashflowPersistenceService(
             modelContext: self.modelContext,
             now: self.now,
             currencyService: self.currencyService,
+            accountsCoreCashflowBridge: self.accountsCoreCashflowBridge,
             cardProvider: { [weak self] cardID in self?.card(for: cardID) },
             investmentProvider: { [weak self] investmentID in self?.investment(for: investmentID) },
             transactionsProvider: { [weak self] in self?.state.transactions ?? [] },

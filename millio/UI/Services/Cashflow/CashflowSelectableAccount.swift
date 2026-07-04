@@ -48,7 +48,8 @@ enum CashflowSelectableAccountResolver {
         investments: [Investment],
         linkedInvestmentIDs: Set<String>,
         transactionType: CashflowTransactionType,
-        currency: String
+        currency: String,
+        newCoreAccounts: [Account] = []
     ) -> [CashflowSelectableAccount] {
         let normalizedCurrency = currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let restrictInvestmentsToFinances = !linkedInvestmentIDs.isEmpty
@@ -63,6 +64,20 @@ enum CashflowSelectableAccountResolver {
                 updatedAt: $0.updatedAt
             )
         }
+        // Счета нового ядра event-sourcing (Фаза 1a) — та же `.card`-ветка `Kind` (cardID у
+        // транзакции = account.id.uuidString, см. AccountsCoreCashflowBridge.resolveNewCoreAccount),
+        // без собственного picker-favorite/priority — сортируются по order/createdAt как остальные.
+        let newCoreOptions = newCoreAccounts.map {
+            CashflowSelectableAccount(
+                kind: .card(cardID: $0.id.uuidString),
+                title: $0.name,
+                currency: $0.currency,
+                isFavorite: false,
+                prioritySortOrder: $0.order,
+                updatedAt: $0.createdAt
+            )
+        }
+        let cardOptionsCombined = cardOptions + newCoreOptions
 
         let investmentOptions = investments
             .filter(\.isCashflowAccount)
@@ -84,11 +99,11 @@ enum CashflowSelectableAccountResolver {
         let combinedOptions: [CashflowSelectableAccount]
         switch transactionType {
         case .income:
-            combinedOptions = cardOptions + investmentOptions
+            combinedOptions = cardOptionsCombined + investmentOptions
         case .expense:
-            combinedOptions = cardOptions + investmentOptions
+            combinedOptions = cardOptionsCombined + investmentOptions
         case .transfer:
-            combinedOptions = cardOptions
+            combinedOptions = cardOptionsCombined
         case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
             combinedOptions = []
         }

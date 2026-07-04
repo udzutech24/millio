@@ -107,6 +107,85 @@ final class AccountsCoreService {
         return event
     }
 
+    // MARK: - Мост Cashflow (Фаза 1b): идемпотентная запись по sourceTransactionID
+
+    /// Идемпотентная запись income/expense/adjustment по `sourceTransactionID` (мост Cashflow →
+    /// новое ядро, спека §2.5): если событие с этим `sourceTransactionID` уже есть — обновляет
+    /// его на месте, иначе создаёт новое. Повторный вызов с теми же данными не плодит дубликаты
+    /// (нужно для правки транзакции задним числом и для повторного запуска recurring-генератора).
+    @discardableResult
+    func upsertEvent(
+        sourceTransactionID: String,
+        account: Account,
+        type: AccountEventType,
+        amount: Decimal,
+        date: Date,
+        categoryID: String? = nil,
+        note: String? = nil,
+        originalAmount: Decimal? = nil,
+        originalCurrency: String? = nil,
+        fxRateUsed: Decimal? = nil,
+        fxProvisional: Bool = false
+    ) throws -> AccountEvent {
+        guard type == .income || type == .expense || type == .adjustment else {
+            throw AccountsCoreServiceError.unsupportedEventType(type)
+        }
+
+        let descriptor = FetchDescriptor<AccountEvent>(
+            predicate: #Predicate<AccountEvent> { $0.sourceTransactionID == sourceTransactionID }
+        )
+        let existing = try? modelContext.fetch(descriptor).first
+
+        let event: AccountEvent
+        let earliestDate: Date
+        if let existing {
+            earliestDate = min(existing.date, date)
+            existing.account = account
+            existing.typeRaw = type.rawValue
+            existing.amount = amount
+            existing.setDate(date)
+            existing.categoryID = categoryID
+            existing.note = note
+            existing.originalAmount = originalAmount
+            existing.originalCurrency = originalCurrency
+            existing.fxRateToBase = fxRateUsed
+            existing.fxProvisional = fxProvisional
+            event = existing
+        } else {
+            earliestDate = date
+            event = AccountEvent(
+                account: account,
+                date: date,
+                type: type,
+                amount: amount,
+                fxRateToBase: fxRateUsed,
+                fxProvisional: fxProvisional,
+                categoryID: categoryID,
+                note: note,
+                sourceTransactionID: sourceTransactionID,
+                originalAmount: originalAmount,
+                originalCurrency: originalCurrency
+            )
+            modelContext.insert(event)
+        }
+
+        invalidateCache(for: account, from: earliestDate)
+        try modelContext.save()
+        return event
+    }
+
+    /// Удаляет событие(я), связанное(ые) с легаси-транзакцией Cashflow по `sourceTransactionID`.
+    /// Перевод (обе ноги делят один `sourceTransactionID`) удаляется целиком через каскад
+    /// `deleteEvent` по `transferID` — фетчим ОДНУ ногу, остальное берёт на себя `deleteEvent`.
+    /// Нет связанного события — no-op (частый случай: транзакция никогда не целилась в новый мир).
+    func deleteEvents(bySourceTransactionID sourceTransactionID: String) throws {
+        let descriptor = FetchDescriptor<AccountEvent>(
+            predicate: #Predicate<AccountEvent> { $0.sourceTransactionID == sourceTransactionID }
+        )
+        guard let event = try modelContext.fetch(descriptor).first else { return }
+        try deleteEvent(event)
+    }
+
     // MARK: - Перевод между счетами
 
     /// Перевод — ДВЕ ноги (`transferOut` на источнике + `transferIn` на получателе) с общим `transferID`,
@@ -120,7 +199,8 @@ final class AccountsCoreService {
         amountInSourceCurrency: Decimal,
         date: Date = Date(),
         fxRate: Decimal? = nil,
-        note: String? = nil
+        note: String? = nil,
+        sourceTransactionID: String? = nil
     ) throws -> (out: AccountEvent, in: AccountEvent) {
         guard source.id != destination.id else {
             throw AccountsCoreServiceError.sameAccountTransfer
@@ -141,11 +221,13 @@ final class AccountsCoreService {
 
         let outEvent = AccountEvent(
             account: source, date: date, createdAt: now, type: .transferOut,
-            amount: amountInSourceCurrency, fxRateToBase: fxRate, note: note, transferID: transferID
+            amount: amountInSourceCurrency, fxRateToBase: fxRate, note: note, transferID: transferID,
+            sourceTransactionID: sourceTransactionID
         )
         let inEvent = AccountEvent(
             account: destination, date: date, createdAt: now, type: .transferIn,
-            amount: amountInDestinationCurrency, fxRateToBase: fxRate, note: note, transferID: transferID
+            amount: amountInDestinationCurrency, fxRateToBase: fxRate, note: note, transferID: transferID,
+            sourceTransactionID: sourceTransactionID
         )
 
         modelContext.insert(outEvent)
