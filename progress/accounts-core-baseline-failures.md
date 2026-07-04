@@ -26,3 +26,22 @@ archive-policy. Большинство, вероятно, чинятся на fe
 
 Также починено для компиляции тест-таргета: DataIntegrityCleanerMigrationTests — добавлен
 обязательный аргумент scopeIdentifier: "test" (сигнатура изменилась в 729eec5, тесты в develop не обновили).
+
+## Дополнение по итогам фаз 0–6a (2026-07-04, вечер)
+
+**Flaky-класс «LanguageManager.shared race»** (НЕ регрессии; каждый проверен зелёным
+в изолированном прогоне): под параллельной нагрузкой полного millioTests любой тест,
+читающий `L()` без пина языка, может словить чужой язык. Замеченные жертвы:
+- ConverterViewModelTests/testShareAndLastUpdatedUseSelectedAppLanguage (мутирует язык без лока, строки ~467-480)
+- CashflowCategoryHelpContentTests/*
+- CashflowTransactionEditorViewLayoutTests/*
+- FinanceOverviewLedgerStyleTests/* (починен пином языка, b41d02a)
+- FinanceDynamicsViewModelTests/testDeleteGroupPreservesArchivedLinkForHistoricalCalculation
+Системное лечение (отдельная задача): все прямые мутации LanguageManager.shared в
+тестах → через AppLanguageTestSupport.withLanguage.
+
+**Финальный прогон 2026-07-04 (после 6a):** 1576 passed / 20 failed, из них 14 —
+baseline выше (2 baseline-теста прошли), 6 — flaky-класс выше. Одна реальная
+регрессия найдена и разобрана отдельно: CashflowViewModelTests/
+testIncomeBudgetSummaryUsesIncomePlanConfiguration (порядок categorySnapshots,
+см. фикс-коммит в истории ветки).
