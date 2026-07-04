@@ -3048,6 +3048,86 @@ struct FinanceViewModelTests {
         #expect(updatedInvestment.archivedAt != nil)
     }
 
+    // MARK: - Track D1 (2026-07-04): удаление актива не обновляло список/тотал без перезапуска
+
+    @Test("Track D1: removeAccountFromGroup сразу скрывает актив из списка и уменьшает тотал группы")
+    func testRemoveAccountFromGroupHidesFromListAndTotalWithoutRestart() async throws {
+        let modelContext = try createTestModelContext()
+        let currencyService = MockCurrencyRateService()
+
+        let group = FinanceGroup(name: "Test Group")
+        let investment = Investment(name: "Актив на удаление", category: .other, amount: 500, currency: "RUB")
+        let accountLink = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        accountLink.group = group
+
+        modelContext.insert(group)
+        modelContext.insert(investment)
+        modelContext.insert(accountLink)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: currencyService,
+            marketDataClient: MockMarketDataClient(),
+            skipInitialLoad: false
+        )
+        _ = await waitForAsyncStatePropagation(until: { !viewModel.state.groups.isEmpty })
+
+        // До удаления актив виден и учтён в тотале группы.
+        #expect(viewModel.getAccountInfo(account: accountLink) != nil)
+        let totalBefore = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        #expect(totalBefore == 500.0)
+
+        viewModel.handle(.removeAccountFromGroup(accountLink))
+
+        // Регрессия Track D1: до фикса investmentByID не пересобирался здесь (только в
+        // addAccountToGroup/restoreArchivedAccountToGroup) — getAccountInfo продолжал находить
+        // архивированный актив по устаревшему кэшу, и он «висел» в списке и тотале до перезапуска.
+        #expect(
+            viewModel.getAccountInfo(account: accountLink) == nil,
+            "После removeAccountFromGroup актив должен сразу пропасть из списка без повторного loadAccounts"
+        )
+        let totalAfter = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        #expect(totalAfter == 0.0, "После removeAccountFromGroup тотал группы должен сразу исключить архивированный актив")
+    }
+
+    @Test("Track D1: deleteAccountPermanently сразу скрывает актив из списка и уменьшает тотал группы")
+    func testDeleteAccountPermanentlyHidesFromListAndTotalWithoutRestart() async throws {
+        let modelContext = try createTestModelContext()
+        let currencyService = MockCurrencyRateService()
+
+        let group = FinanceGroup(name: "Test Group")
+        let investment = Investment(name: "Актив на полное удаление", category: .other, amount: 300, currency: "RUB")
+        let accountLink = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        accountLink.group = group
+
+        modelContext.insert(group)
+        modelContext.insert(investment)
+        modelContext.insert(accountLink)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: currencyService,
+            marketDataClient: MockMarketDataClient(),
+            skipInitialLoad: false
+        )
+        _ = await waitForAsyncStatePropagation(until: { !viewModel.state.groups.isEmpty })
+
+        #expect(viewModel.getAccountInfo(account: accountLink) != nil)
+        let totalBefore = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        #expect(totalBefore == 300.0)
+
+        viewModel.handle(.deleteAccountPermanently(accountLink))
+
+        #expect(
+            viewModel.getAccountInfo(account: accountLink) == nil,
+            "После deleteAccountPermanently актив должен сразу пропасть из списка без повторного loadAccounts"
+        )
+        let totalAfter = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        #expect(totalAfter == 0.0, "После deleteAccountPermanently тотал группы должен сразу исключить архивированный актив")
+    }
+
     // MARK: - cardByID staleness fix (2026-05-17)
 
     @Test("cardByID обновляется после повторного loadAccounts — баг stale balance после QuickAudit")

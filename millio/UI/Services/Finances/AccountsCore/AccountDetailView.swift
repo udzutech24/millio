@@ -816,6 +816,12 @@ struct AccountDetailView: View {
     private func archiveAccount() {
         do {
             try service.archiveAccount(account)
+            // Track D1: этот экран не хранит ссылку на FinanceViewModel — без события список
+            // счетов и «Общий баланс» на экране Счетов не пересчитываются до перезапуска приложения
+            // (FinanceViewModel.state.totalAmount обновляется только явным calculateTotalAmount(),
+            // а сюда его никто не позвал бы). investmentsUpdated — уже существующий канал,
+            // подписка есть в FinanceViewModel.subscribeToFinanceEvents().
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

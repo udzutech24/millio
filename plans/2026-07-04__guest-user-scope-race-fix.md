@@ -130,9 +130,35 @@ VM-слой — нет. → UI-записи идут в guest мимо CloudKit-
 `EventBus.shared.publish(FinanceEvent.investmentsUpdated)` (подписка `FinanceViewModel.swift:882-909` уже есть,
 `removeAccountFromGroup` не публикует); `refreshToken` в AccountDetailView.
 
-- [ ] **D1. Фикс:** дополнить `removeAccountFromGroup` и `deleteAccountPermanently` вызовом `onLoadAccounts()`
-  (или публикацией `investmentsUpdated`), проверить archiveAccount нового ядра; регрессионный тест
-  «архивация → счёт исчез из списка и тотала без перезапуска». Реализация — по команде владельца, рядом с A2.
+- [x] **D1. Фикс.** РЕАЛИЗОВАН (коммит 87610e1). Легаси-путь: `FinanceAccountService.removeAccountFromGroup`
+  и `deleteAccountPermanently` (`:415-459`) теперь вызывают `onLoadAccounts()` первым в триплете (симметрично
+  `addAccountToGroup`) — пересобирает `cardByID/creditByID/investmentByID`, единственное место фильтра
+  `archivedAt`, до этого список и тотал группы («ОГ» из репорта) оставались устаревшими без перезапуска.
+  Новое ядро: **воспроизведено, не «уже работает»** — `AccountDetailView.archiveAccount()` (`:816-825`)
+  не хранит ссылку на `FinanceViewModel` (только `modelContext`), поэтому `state.totalAmount`
+  (пересчитывается лишь явным `calculateTotalAmount()`) никогда не обновлялся после архивации нового
+  ядра; список счетов ядра (`newCoreAccounts(matching:)`, живой fetch без @Query/кэша) мог случайно
+  «подхватывать» изменение при навигационном re-render, но тотал — гарантированно нет. Фикс: одна строка
+  `EventBus.shared.publish(FinanceEvent.investmentsUpdated)` после `service.archiveAccount(account)` —
+  переиспользует существующий канал (`FinanceViewModel.subscribeToFinanceEvents`, уже дергает
+  `loadAccounts()` + `refreshGroupTotalsAndAmounts()` → `calculateTotalAmountAsync()` → `newCoreTotalProvider`
+  → `accountsTotalsService.totalAt`, которая уже фильтрует `participates(on:)`); EventBus-паблиш в
+  `AccountsCoreService` (Core-слой) сознательно НЕ добавлен — сервис остаётся независим от UI-шины
+  (комментарий в `AccountsTotalsService`: «не трогает старый FinanceTotalsService»), паблиш — в UI-слое
+  (`AccountDetailView`), единственная точка вызова `archiveAccount` в UI (grep подтвердил).
+  **Тесты:** 2 новых регрессионных в `FinanceViewModelTests.swift` (легаси-путь: `getAccountInfo == nil`
+  + `calculateGroupTotal == 0` сразу после `.removeAccountFromGroup`/`.deleteAccountPermanently`, без
+  повторного `loadAccounts`). Новое ядро отдельным тестом не покрыто — приватный метод SwiftUI View,
+  смешение схем (легаси-контейнер теста без `Account`/`AccountEvent`) сделало бы тест хрупким ради
+  однострочного side-effect; корректность канала (`investmentsUpdated`→пересчёт тоталов) уже покрыта
+  существующим `testEventBusCardsUpdatedTriggersLoadAccountsAndUpdatesInfo`. Рекомендация: подтвердить
+  на симуляторе/устройстве при следующей ручной прогонке (как незакрытые пункты Track A).
+  **Гейты:** build 0 ошибок ✅; `FinanceViewModelTests`/`FinanceAccountArchivePolicyTests`/
+  `FinanceGroupServiceAccountsCoreTests`/`FinanceInvestmentOrderServiceTests` — все зелёные, кроме
+  `FinanceAccountArchivePolicyTests.exactThresholdTriggerWarning()` — **предсуществующий, не связанный
+  дефект** (`FinanceDynamicsView.shouldShowBalanceWarning` = `abs(balance) > 0.01`, детерминированно
+  не совпадает с тестовым `== true` на границе 0.01; файл не менялся в этой сессии, `git status` чист) —
+  вне скоупа D1, не трогали.
 
 ## 4. Порядок и релизный гейт
 
