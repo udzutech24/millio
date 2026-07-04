@@ -798,7 +798,7 @@ struct CashflowCategoryTransactionSheet: View {
     private func categoryCard(for option: CashflowCategoryOption) -> some View {
         let summary = categoryBudgetSummary(for: option)
         let cardHasBudgetDetails = summary != nil
-        let metrics = CashflowCategoryGridLayout.cardMetrics(
+        _ = CashflowCategoryGridLayout.cardMetrics(
             showsBudgetDetails: cardHasBudgetDetails
         )
         let isHighlighted = highlightedCategoryRaw == option.rawValue
