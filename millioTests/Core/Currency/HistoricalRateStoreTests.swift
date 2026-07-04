@@ -262,4 +262,31 @@ struct HistoricalRateStoreTests {
         #expect(third.rate == 13.0)
         #expect(mockService.historicalCalls == 2)
     }
+
+    @Test("AC10: курс прошлой даты фиксируется навсегда — уточнение источника задним числом его не меняет")
+    func testPastRateIsFrozenOnceStored() async throws {
+        let modelContext = try createTestModelContext()
+        let mockService = MockHistoricalRateService()
+        mockService.historicalRate = 90.0
+
+        let store = HistoricalRateStore(modelContext: modelContext, currencyService: mockService)
+        let pastDate = Calendar.current.startOfDay(for: Date().addingTimeInterval(-30 * 86400))
+
+        let first = await store.getRate(on: pastDate, from: "USD", to: "RUB")
+        #expect(first.rate == 90.0)
+        #expect(first.resolution == .exact)
+
+        // Источник «уточнил» курс задним числом — зафиксированная запись не должна плыть (R4)
+        mockService.historicalRate = 95.0
+        store.resetUnavailableRequestCache()
+        await store.prefetchExactRates(on: [pastDate], pairs: [(from: "USD", to: "RUB")])
+
+        let second = await store.getRate(on: pastDate, from: "USD", to: "RUB")
+        #expect(second.rate == 90.0)
+        #expect(second.resolution == .exact)
+
+        let rates = (try? modelContext.fetch(FetchDescriptor<HistoricalRate>())) ?? []
+        #expect(rates.count == 1)
+        #expect(rates.first?.rate == 90.0)
+    }
 }
