@@ -3775,6 +3775,29 @@
         }
       }
     },
+    "app.scope.switching" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switching profile…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переключение профиля…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在切换账户…"
+          }
+        }
+      }
+    },
     "auth.error.apple_credentials" : {
       "comment" : "Invalid Apple credentials toast",
       "extractionState" : "extracted_with_value",
