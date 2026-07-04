@@ -316,6 +316,9 @@ Group (@Model) — ярлык-контейнер: name, colorHex, displayCurrenc
 7. Quick Entry / Bulk Import пикеры не показывают новые счета (Ф1b note).
 8. Системная чистка LanguageManager-гонок в тестах (см. progress/accounts-core-baseline-failures.md).
 9. ~~Регрессия testIncomeBudgetSummary…~~ — бисект доказал: НЕ регрессия rebuild'а (падало и на пре-Phase-0 базе; локале-зависимая сортировка tie-break). Починено пином en_US_POSIX, коммит 6cbe610.
+10. **🔴 Race guest→user (сим-проверка 2026-07-04 вечер):** `RootTabView.ensureFinanceViewModel()` создаёт VM один раз из environment-контекста; при холодном старте это guest-контейнер, после auth скоуп меняется на user, но VM остаётся на guest → UI не видит счета нового ядра (сид записан в user store — sqlite-подтверждено), «Общий баланс» их не включает; в guest/user сторах идентичные 34 legacy-счёта. Детали в handoff §Сим-проверка. Кандидат на фикс ДО 6b — касается и прод-пользователей (записи мимо бэкапируемого стора).
+11. **🟡 Миграция V4 in-place (HistoricalAssetPrice):** на устройстве владельца воспроизведён `Cannot use staged migration with an unknown model version` → no-plan fallback. До мержа: честная V5 или пересоздание дев-сторов.
+12. Alert сида: «создан: 10 счетов» при фактических 12 (косметика текста AdminStatsDebugView/сидера).
 
 ### Гейты сессии
 - Каждая фаза: build 0 ошибок + millioTests «не хуже baseline» (16 унаследованных падений зафиксированы до старта) + grep-гейт мутаций.

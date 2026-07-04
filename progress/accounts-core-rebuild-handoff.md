@@ -1,6 +1,6 @@
 # Handoff: перестройка ядра счетов — фазы 0–6a РЕАЛИЗОВАНЫ
 
-**Дата:** 2026-07-04 (обновлён после автономной сессии) · **Было:** старт реализации · **Стало:** фазы 0–5 + 6a готовы
+**Дата:** 2026-07-04 (обновлён после сессии сим-проверки, вечер) · **Было:** старт реализации · **Стало:** фазы 0–5 + 6a готовы; сим-проверка частично пройдена, найдены 2 серьёзные проблемы (см. §Сим-проверка)
 
 ## Состояние
 - Ветка **`feature/accounts-core`** (от develop), НЕ мержено, НЕ запушено — ждёт команды владельца.
@@ -29,6 +29,43 @@ AccountMarketPriceService + HistoricalAssetPrice (append-only цены), Account
    затем `/stress-test` UI-флоу перед мержем в develop.
 4. Хвосты: StockBulkImport на ядро, UI редоминации, тест AC14, налог для валютных вкладов,
    пикеры Quick Entry/Bulk Import, LanguageManager-гонки в тестах.
+
+## Сим-проверка 2026-07-04 (вечер) — итоги и находки
+
+Прогон: iPhone 17 Pro (3EC86784), Debug-сборка BUILD SUCCEEDED, сид залит через
+DEBUG-кнопку AdminStatsDebugView (12 счетов + маркер, 45 событий в ZACCOUNT/ZACCOUNTEVENT
+user-стора — подтверждено sqlite). Тест-гейт: 17 падений, ВСЕ из baseline/flaky-класса
+(из baseline 2 прошли, включая починенный testIncomeBudgetSummary… 6cbe610) — «не хуже baseline» ПРОЙДЕН.
+
+**🔴 Находка 1 — UI живёт на guest-сторе после холодного старта (race guest→user).**
+Сид записан в `millio_user_ffb…store` (13 ZACCOUNT), но UI (Счета/Дашборд) сид-счета НЕ видит
+даже после перезапуска. Причина по коду: `RootTabView.ensureFinanceViewModel()` создаёт
+`FinanceViewModel` ОДИН раз (`guard financeViewModel == nil`) из `@Environment(\.modelContext)`;
+при холодном старте первым биндится guest-контейнер, auth восстанавливается позже и
+`activeModelContainer` меняется на user, но @State-виджмодель остаётся на guest-контексте
+(`.id(appState.languageRefreshToken)` пересоздаёт дерево только при смене языка).
+Симптомы, которые это объясняет: (а) сид не виден; (б) «Общий баланс» не изменился после сида;
+(в) оба стора содержат ИДЕНТИЧНЫЕ 34 legacy-счёта (ZFINANCEACCOUNT 34/34 — пользовательские
+записи, вероятно, годами шли в guest). Файлы: `RootTabView.swift:330-333`, `millioApp.swift:396-397`.
+НЕ починено — нужен фикс класса «пересоздание VM при смене скоупа» (решение владельца).
+
+**🟡 Находка 2 — миграционный риск V4 in-place подтверждён на устройстве владельца.**
+`HistoricalAssetPrice` добавлен в АppSchemaV4.models задним числом (комментарий в
+AppSchemaVersions.swift:90-91). Лог реального устройства: `Cannot use staged migration with an
+unknown model version` → no-plan fallback («data may be partially readable») для ОБОИХ сторов.
+В DEBUG-ветке fallback идёт через rebuildStorePreservingData (.bak.store виден на симе Pro Max).
+До мержа: оформить V5 или пересоздать дев-сторы.
+
+**🟢 Починено в этой сессии:** стрей-текст `plotFrame` в `AccountBalanceChartView.swift:288`
+(валил компиляцию всей цепочки chartSection — «opaque return type…», «Cannot find plotFrame»).
+
+**⚪ Мелочь:** alert сида пишет «Демо-портфель создан: 10 счетов», фактически создаётся 12.
+
+**Скриншоты прогона:** scratchpad сессии (step*.png); финальные 4 экрана с сид-данными — НЕ сняты
+(экран Mac заблокировался, cliclick недоступен; и без Находки 1 сид в UI всё равно не виден).
+Гостевой стор: перед экспериментом сделан бэкап `millio_guest.backup.store` в scratchpad;
+в guest-стор скопированы 13 ZACCOUNT + 6 ZACCOUNTGROUP из user (для проверки Находки 1 —
+результат проверить после разблокировки экрана; откат: восстановить из бэкапа).
 
 ## Правила (без изменений)
 Bulletproof — только через суб-агента; не пушить/не мержить без запроса; симулятор iPhone 17 Pro;
