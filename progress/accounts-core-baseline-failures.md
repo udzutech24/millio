@@ -41,7 +41,9 @@ archive-policy. Большинство, вероятно, чинятся на fe
 тестах → через AppLanguageTestSupport.withLanguage.
 
 **Финальный прогон 2026-07-04 (после 6a):** 1576 passed / 20 failed, из них 14 —
-baseline выше (2 baseline-теста прошли), 6 — flaky-класс выше. Одна реальная
-регрессия найдена и разобрана отдельно: CashflowViewModelTests/
-testIncomeBudgetSummaryUsesIncomePlanConfiguration (порядок categorySnapshots,
-см. фикс-коммит в истории ветки).
+baseline выше (2 baseline-теста прошли), 6 — flaky-класс выше. Отдельно разобран CashflowViewModelTests/
+testIncomeBudgetSummaryUsesIncomePlanConfiguration (порядок categorySnapshots):
+бисект доказал, что это НЕ регрессия rebuild'а — падение воспроизводится на
+пре-Phase-0 базе; причина — сортировка tie-break через localizedCaseInsensitiveCompare
+зависела от системной локали симулятора (zh-Hans → пиньинь-коллация). Починено
+пином локали en_US_POSIX (коммит 6cbe610).

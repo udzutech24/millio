@@ -315,7 +315,7 @@ Group (@Model) — ярлык-контейнер: name, colorHex, displayCurrenc
 6. Recurring: батч-инвалидация кэша (риск №4 стресс-теста 1b) — смягчено идемпотентностью.
 7. Quick Entry / Bulk Import пикеры не показывают новые счета (Ф1b note).
 8. Системная чистка LanguageManager-гонок в тестах (см. progress/accounts-core-baseline-failures.md).
-9. Регрессия testIncomeBudgetSummary… (порядок categorySnapshots) — бисект/фикс, см. коммит после 37a774b.
+9. ~~Регрессия testIncomeBudgetSummary…~~ — бисект доказал: НЕ регрессия rebuild'а (падало и на пре-Phase-0 базе; локале-зависимая сортировка tie-break). Починено пином en_US_POSIX, коммит 6cbe610.
 
 ### Гейты сессии
 - Каждая фаза: build 0 ошибок + millioTests «не хуже baseline» (16 унаследованных падений зафиксированы до старта) + grep-гейт мутаций.
