@@ -90233,6 +90233,38 @@
         "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "调整余额" } }
       }
     },
+    "accounts_core.detail.action.increase" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Increase" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Увеличить" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "增加" } }
+      }
+    },
+    "accounts_core.detail.action.increase_debt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Increase debt" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Увеличить долг" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "增加债务" } }
+      }
+    },
+    "accounts_core.detail.action.payment" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Payment" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Платёж" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "还款" } }
+      }
+    },
+    "accounts_core.detail.action.repay" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Repayment" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Погашение" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "偿还" } }
+      }
+    },
     "accounts_core.detail.action.delete" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -90289,6 +90321,30 @@
         "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "支出" } }
       }
     },
+    "accounts_core.detail.event.extra_payment" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Extra payment" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Досрочное погашение" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "提前还款" } }
+      }
+    },
+    "accounts_core.detail.event.fee" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Fee" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Комиссия" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "手续费" } }
+      }
+    },
+    "accounts_core.detail.event.interest" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Interest" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Начисленный процент" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "利息" } }
+      }
+    },
     "accounts_core.detail.event.income" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -90319,6 +90375,62 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Transfer out" } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перевод (отправлен)" } },
         "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "转出" } }
+      }
+    },
+    "accounts_core.detail.debt.counterparty_format" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Counterparty: %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Контрагент: %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "对方：%@" } }
+      }
+    },
+    "accounts_core.detail.debt.direction.owed_by_me" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "I owe" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Я должен" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "我欠款" } }
+      }
+    },
+    "accounts_core.detail.debt.direction.owed_to_me" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Owed to me" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Мне должны" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "别人欠我" } }
+      }
+    },
+    "accounts_core.detail.debt.due_date_format" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Due date: %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Срок возврата: %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "还款期限：%@" } }
+      }
+    },
+    "accounts_core.detail.loan.monthly_payment_format" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Monthly payment: %.0f %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ежемесячный платёж: %.0f %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "每月还款：%.0f %@" } }
+      }
+    },
+    "accounts_core.detail.loan.rate_format" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rate: %.1f%%" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ставка: %.1f%%" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "利率：%.1f%%" } }
+      }
+    },
+    "accounts_core.detail.loan.term_end_format" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Term end: %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Срок окончания: %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "到期日：%@" } }
       }
     },
     "accounts_core.detail.history_title" : {

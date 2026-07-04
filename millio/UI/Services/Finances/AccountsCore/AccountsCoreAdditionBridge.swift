@@ -1,10 +1,10 @@
 import Foundation
 import SwiftData
 
-/// Мост «старый флоу добавления счёта → новое ядро event-sourcing» (Фаза 1a-ui).
-/// Пресеты «Карта» и «Счёт» создают `Account` нового ядра вместо `Card`/`Investment`.
-/// Остальные 9 пресетов (вклад/кредит/долг/акции/крипта/недвижимость/бизнес/…) остаются
-/// на старом пути — их перенос запланирован в фазах 2–4 (план `2026-07-04__accounts-core-rebuild-plan.md`).
+/// Мост «старый флоу добавления счёта → новое ядро event-sourcing» (Фаза 1a-ui, 2).
+/// Пресеты «Карта»/«Счёт» (Фаза 1a) и «Кредит»/«Долг» (Фаза 2) создают `Account` нового ядра
+/// вместо `Card`/`Credit`/`Investment`. Остальные 7 пресетов (вклад/акции/крипта/недвижимость/
+/// бизнес/…) остаются на старом пути — перенос запланирован в фазах 3–4 (план `2026-07-04__accounts-core-rebuild-plan.md`).
 enum AccountsCoreAdditionBridge {
 
     /// kind для денежного пресета «Карта»: пустой/невыбранный банк (`.other`) трактуется как
@@ -32,5 +32,35 @@ enum AccountsCoreAdditionBridge {
         let newGroup = AccountGroup(name: targetName, colorHex: financeGroup.colorHex)
         modelContext.insert(newGroup)
         return newGroup
+    }
+
+    /// Мэппинг формы «Кредит» старого мира → `LoanMeta` (Фаза 2). Старая форма НЕ собирает
+    /// процентную ставку (`Credit.interestRate` всегда 0 при создании, см. `CreditViewModel.updateCredit`) —
+    /// сохраняем этот же пробел (0), а не придумываем поле задним числом: schedule/rate UI — Фаза 3.
+    /// `scheduleType` тоже не собирается формой — дефолт `.annuity` не используется расчётами в скоупе M
+    /// (график погашения — вне скоупа), это просто безопасное значение по умолчанию.
+    static func loanMeta(
+        principal: Decimal,
+        monthlyPayment: Decimal?,
+        paymentDay: Int?,
+        termEnd: Date?
+    ) -> LoanMeta {
+        LoanMeta(
+            principal: principal,
+            rate: 0,
+            monthlyPayment: monthlyPayment,
+            paymentDay: paymentDay,
+            termEnd: termEnd,
+            scheduleType: .annuity,
+            insurance: nil
+        )
+    }
+
+    /// Мэппинг формы «Долг» старого мира (Investment.category == .debt) → `DebtMeta`. Направление
+    /// берётся из существующего `InvestmentType` (.positive = мне должны, .negative = я должен) —
+    /// это ЕДИНСТВЕННОЕ поле направления, которое собирает старая форма. Контрагент/срок возврата
+    /// старая форма не собирает вовсе (нет UI-поля) — оставляем nil, а не редизайним форму (вне скоупа).
+    static func debtMeta(direction: DebtDirection) -> DebtMeta {
+        DebtMeta(direction: direction, counterparty: nil, dueDate: nil, rate: nil)
     }
 }

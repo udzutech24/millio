@@ -1132,8 +1132,8 @@ struct FinanceAddAccountView: View {
         }
     }
     
-    /// kind нового ядра для текущего выбора пресета «Карта»/«Счёт» — `nil` для остальных 9
-    /// пресетов (кредит/вклад/долг/инвестиции/…, они пока идут старым путём, см. `AccountsCoreAdditionBridge`)
+    /// kind нового ядра для текущего выбора пресета «Карта»/«Счёт» — `nil` для остальных
+    /// пресетов (вклад/инвестиции/…, они пока идут старым путём, см. `AccountsCoreAdditionBridge`)
     /// и для режима редактирования (у new-core счетов редактирование — через `AccountDetailView`, не эту форму).
     private var newCoreMoneyKindForCurrentSelection: AccountKind? {
         guard addAccountMode == .create else { return nil }
@@ -1142,6 +1142,20 @@ struct FinanceAddAccountView: View {
             return AccountsCoreAdditionBridge.cardKind(bank: cardData?.bank ?? .other)
         case .investment where selectedInvestmentPreset == .account:
             return .bankAccount
+        default:
+            return nil
+        }
+    }
+
+    /// kind нового ядра для пресетов «Кредит»/«Долг» (Фаза 2) — `nil` для остальных пресетов
+    /// и для режима редактирования (редактирование new-core обязательств — через `AccountDetailView`).
+    private var newCoreObligationKindForCurrentSelection: AccountKind? {
+        guard addAccountMode == .create else { return nil }
+        switch selectedAccountType {
+        case .credit:
+            return .loan
+        case .investment where selectedInvestmentCategory == .debt:
+            return .debt
         default:
             return nil
         }
@@ -1190,11 +1204,65 @@ struct FinanceAddAccountView: View {
         }
     }
 
+    /// Создание обязательства («Кредит»/«Долг») на новом ядре event-sourcing (Фаза 2).
+    /// Никогда не создаёт старый `Credit`/`Investment(debt)` — единственная точка записи: `AccountsCoreService`.
+    private func createObligationAccountOnNewCore(kind: AccountKind) {
+        let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
+        let group = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: viewModel.modelContext)
+        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+
+        do {
+            switch kind {
+            case .loan:
+                guard let creditData else { return }
+                let meta = AccountsCoreAdditionBridge.loanMeta(
+                    principal: Decimal(creditData.amount),
+                    monthlyPayment: creditData.monthlyPayment > 0 ? Decimal(creditData.monthlyPayment) : nil,
+                    paymentDay: creditData.paymentDayOfMonth,
+                    termEnd: creditData.endDate
+                )
+                // openingBalance — ТЕКУЩИЙ остаток долга (remainingAmount), не первоначальная сумма
+                // (principal хранится отдельно в loanMeta для отображения) — движок C сам сделает знак минус.
+                try service.createAccount(
+                    name: resolvedName,
+                    kind: .loan,
+                    currency: creditData.currency,
+                    openingBalance: Decimal(creditData.remainingAmount),
+                    group: group,
+                    loanMeta: meta
+                )
+            case .debt:
+                guard let investmentData else { return }
+                let direction: DebtDirection = investmentData.investmentType == .positive ? .owedToMe : .owedByMe
+                let signedOpening = direction == .owedToMe ? Decimal(investmentData.amount) : -Decimal(investmentData.amount)
+                try service.createAccount(
+                    name: resolvedName,
+                    kind: .debt,
+                    currency: investmentData.currency,
+                    openingBalance: signedOpening,
+                    group: group,
+                    debtMeta: AccountsCoreAdditionBridge.debtMeta(direction: direction)
+                )
+            default:
+                return
+            }
+            dismiss()
+        } catch {
+            AppLogger.log(.error, category: "AccountsCore", "Не удалось создать обязательство нового ядра: \(error)")
+        }
+    }
+
     private func addAccount() {
         guard validateEntitlementsForSave() else { return }
 
         if let newCoreKind = newCoreMoneyKindForCurrentSelection {
             createMoneyAccountOnNewCore(kind: newCoreKind)
+            return
+        }
+
+        if let newCoreObligationKind = newCoreObligationKindForCurrentSelection {
+            createObligationAccountOnNewCore(kind: newCoreObligationKind)
             return
         }
 

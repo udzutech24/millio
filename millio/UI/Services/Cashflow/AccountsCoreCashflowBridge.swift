@@ -48,13 +48,14 @@ final class AccountsCoreCashflowBridge {
     /// как легаси-путь (или его отсутствие) уже обработан — здесь мы только пишем в новый мир.
     func sync(for transaction: CashflowTransaction) async throws {
         switch transaction.transactionType {
-        case .income, .expense, .balanceAdjustment, .cardBalanceAdjustment:
+        case .income, .expense, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+            // creditDebtAdjustment, нацеленная на new-core счёт (.loan/.debt) — тот же `adjustment`,
+            // что и balanceAdjustment/cardBalanceAdjustment: дельта, знак хранит создатель события
+            // (Фаза 2 — реализовано; раньше это была молчаливая no-op-ветка, транзакция «сохранялась»,
+            // но баланс кредита/долга не менялся вовсе).
             try await syncSimpleEvent(for: transaction)
         case .transfer:
             try await syncTransfer(for: transaction)
-        case .creditDebtAdjustment:
-            // Кредит/долг нового ядра (kind .loan/.debt) — Фаза 2, вне скоупа 1b.
-            return
         }
     }
 
@@ -83,7 +84,7 @@ final class AccountsCoreCashflowBridge {
         case .expense:
             eventType = .expense
             categoryID = transaction.expenseCategoryRaw
-        case .balanceAdjustment, .cardBalanceAdjustment:
+        case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
             eventType = .adjustment
             categoryID = nil
         default:

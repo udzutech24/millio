@@ -92,6 +92,29 @@ struct AccountBalanceEngineTests {
         #expect(balance == 0)
     }
 
+    /// Фаза 2, брифинг п.2: «платёж переводом с карты уменьшает долг» — transferIn ведёт себя
+    /// как income (это входящая нога перевода карта→кредит, `AccountsCoreService.transfer`).
+    @Test
+    func engineC_transferInPaymentReducesDebt() {
+        let events = [
+            event(date: day1, type: .openingBalance, amount: 100_000),
+            event(date: day2, type: .transferIn, amount: 30_000),
+        ]
+        let balance = AccountBalanceEngine.balanceAt(events: events, kind: .loan, on: day2)
+        #expect(balance == -70_000)
+    }
+
+    /// Фаза 2, брифинг п.2: «интерес увеличивает долг» — проценты капают на остаток обязательства.
+    @Test
+    func engineC_interestIncreasesDebt() {
+        let events = [
+            event(date: day1, type: .openingBalance, amount: 100_000),
+            event(date: day2, type: .interest, amount: 5_000),
+        ]
+        let balance = AccountBalanceEngine.balanceAt(events: events, kind: .loan, on: day2)
+        #expect(balance == -105_000)
+    }
+
     // MARK: - D: debt — знак направления задаёт создатель событий
 
     @Test
@@ -112,6 +135,21 @@ struct AccountBalanceEngineTests {
         ]
         let balance = AccountBalanceEngine.balanceAt(events: events, kind: .debt, on: day1)
         #expect(balance == 3000)
+    }
+
+    /// Фаза 2, брифинг п.2: «долг owedToMe уменьшается при получении погашения». Т.к. .debt
+    /// использует генерик cashLikeSignMap (не loanSignMap), получение погашения ПОЛОЖИТЕЛЬНОГО
+    /// (owedToMe) баланса требует типа `.expense` (сигн -1) — иначе баланс рос бы, а не падал
+    /// (см. `AccountDetailView.incomeSheetEventType/expenseSheetEventType`, которые делают этот выбор
+    /// за пользователя автоматически в зависимости от направления).
+    @Test
+    func engineD_owedToMeReducedByRepaymentReceived() {
+        let events = [
+            event(date: day1, type: .openingBalance, amount: 3000),
+            event(date: day2, type: .expense, amount: 1000), // получено погашение 1000
+        ]
+        let balance = AccountBalanceEngine.balanceAt(events: events, kind: .debt, on: day2)
+        #expect(balance == 2000)
     }
 
     // MARK: - E: marketInvestment — buy/sell × цена, mock-провайдер и fallback

@@ -90,6 +90,34 @@ struct AccountsCoreCashflowBridgeTests {
         #expect(balance == 700)
     }
 
+    // MARK: - Фаза 2: creditDebtAdjustment на new-core .loan → adjustment-событие (раньше был no-op)
+
+    @Test
+    func creditDebtAdjustmentOnNewCoreLoanCreatesAdjustmentEventAndReducesDebt() async throws {
+        let (container, ctx, service, bridge) = try makeContext()
+        _ = container
+        // openingBalance для .loan — МАГНИТУДА (движок C сам вычитает через loanSignMap).
+        let loan = try service.createAccount(name: "Кредит", kind: .loan, currency: "RUB", openingBalance: 100_000)
+
+        // Положительная сумма = уменьшение долга (та же конвенция, что у quick-edit в FinanceViewModel).
+        let tx = makeTransaction(type: .creditDebtAdjustment, amount: 20_000, cardID: loan.id.uuidString)
+        ctx.insert(tx)
+        try ctx.save()
+        let txID = tx.uniqueID
+
+        try await bridge.sync(for: tx)
+
+        let events = try ctx.fetch(FetchDescriptor<AccountEvent>(
+            predicate: #Predicate<AccountEvent> { $0.sourceTransactionID == txID }
+        ))
+        #expect(events.count == 1)
+        #expect(events.first?.type == .adjustment)
+        #expect(events.first?.amount == 20_000)
+
+        let balance = AccountBalanceEngine.balanceAt(events: loan.events ?? [], kind: loan.kind, on: Date())
+        #expect(balance == -80_000)
+    }
+
     // MARK: - Задача 9, пункт 2: чужая валюта фиксирует original + курс
 
     @Test

@@ -54,6 +54,40 @@ struct AccountsCoreServiceTests {
         #expect(balance == -400)
     }
 
+    // MARK: - Фаза 2: createAccount принимает loanMeta/debtMeta и создаёт корректную openingBalance
+
+    @Test
+    func createAccountWithLoanMetaStoresMetaAndNegativeOpeningBalance() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+
+        let meta = LoanMeta(principal: 100_000, rate: 9.5, monthlyPayment: 5_000, paymentDay: 5, termEnd: nil, scheduleType: .annuity, insurance: nil)
+        let account = try service.createAccount(
+            name: "Кредит", kind: .loan, currency: "RUB", openingBalance: 100_000, loanMeta: meta
+        )
+
+        #expect(account.loanMeta?.principal == 100_000)
+        let balance = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: account.kind, on: Date())
+        #expect(balance == -100_000) // движок C сам делает знак минус из openingBalance
+    }
+
+    @Test
+    func createAccountWithDebtMetaStoresDirection() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+
+        let meta = DebtMeta(direction: .owedByMe, counterparty: "Пётр", dueDate: nil, rate: nil)
+        let account = try service.createAccount(
+            name: "Долг", kind: .debt, currency: "RUB", openingBalance: -3000, debtMeta: meta
+        )
+
+        #expect(account.debtMeta?.direction == .owedByMe)
+        let balance = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: account.kind, on: Date())
+        #expect(balance == -3000)
+    }
+
     // MARK: - AC12: перевод — две ноги с общим transferID, Σ = 0 (в валюте источника), отмена — обеих ног
 
     @Test

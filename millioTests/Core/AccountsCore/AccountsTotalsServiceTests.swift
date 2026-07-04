@@ -98,6 +98,48 @@ struct AccountsTotalsServiceTests {
         #expect(afterArchival == 0)
     }
 
+    // MARK: - Фаза 2, брифинг п.4: тотал и знак — кредит входит отрицательным
+
+    @Test @MainActor
+    func totalAtIncludesLoanAsNegativeContribution() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+
+        // openingBalance для .loan — МАГНИТУДА (движок C сам вычитает через loanSignMap), не итоговый
+        // знак — см. регрессию, найденную и исправленную в AccountsCoreSeeder (Фаза 2).
+        _ = try service.createAccount(name: "Карта", kind: .cash, currency: "RUB", openingBalance: 5000)
+        _ = try service.createAccount(name: "Кредит", kind: .loan, currency: "RUB", openingBalance: 2000)
+
+        let totals = AccountsTotalsService(modelContext: ctx, rebuilder: rebuilder, rateService: rateService)
+        let total = await totals.totalAt(Date(), in: "RUB")
+        #expect(total == 3000) // 5000 − 2000, тотал МЕНЬШЕ ровно на сумму кредита
+    }
+
+    /// AC7/AC6: архивный `.loan` без группы (Ungrouped) не «утекает» в сегодняшний тотал —
+    /// его отрицательный вклад исчезает с даты архивации, но история ДО неё не меняется задним числом.
+    @Test @MainActor
+    func archivedUngroupedLoanDoesNotLeakIntoTodayTotalButRemainsInPastTotal() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+
+        let loan = try service.createAccount(name: "Кредит", kind: .loan, currency: "RUB", openingBalance: 2000, date: day(0))
+        #expect(loan.group == nil) // Ungrouped по умолчанию
+        let archivedAt = day(5)
+        try service.archiveAccount(loan, on: archivedAt)
+
+        let totals = AccountsTotalsService(modelContext: ctx, rebuilder: rebuilder, rateService: rateService)
+        let beforeArchival = await totals.totalAt(day(3), in: "RUB")
+        let afterArchival = await totals.totalAt(day(6), in: "RUB")
+        #expect(beforeArchival == -2000) // история не переписана — кредит виден со своим минусом
+        #expect(afterArchival == 0)      // «сегодня» (после архивации) — не участвует, минус не утекает
+    }
+
     // MARK: - Т2: бенчмарк — 5 счетов × 3 года × 5к событий, тёплый кэш, totalAt(today) < 300мс
 
     @Test @MainActor

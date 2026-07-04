@@ -37,12 +37,16 @@ final class AccountsCoreService {
         openingBalance: Decimal,
         group: AccountGroup? = nil,
         cardMeta: CardMeta? = nil,
+        loanMeta: LoanMeta? = nil,
+        debtMeta: DebtMeta? = nil,
         note: String? = nil,
         date: Date = Date()
     ) throws -> Account {
         let account = Account(name: name, kind: kind, currency: currency, createdAt: date)
         account.group = group
         account.cardMeta = cardMeta
+        account.loanMeta = loanMeta
+        account.debtMeta = debtMeta
         account.note = note
         modelContext.insert(account)
 

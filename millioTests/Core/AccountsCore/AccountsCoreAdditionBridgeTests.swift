@@ -66,4 +66,31 @@ struct AccountsCoreAdditionBridgeTests {
         let allGroups = try ctx.fetch(descriptor)
         #expect(allGroups.count == 1) // не задублировали
     }
+
+    // MARK: - loanMeta/debtMeta (Фаза 2 — формы «Кредит»/«Долг» → new-core meta)
+
+    @Test
+    func loanMetaMapsFormFieldsAndDefaultsRateToZero() {
+        let termEnd = Date(timeIntervalSince1970: 1_800_000_000)
+        let meta = AccountsCoreAdditionBridge.loanMeta(
+            principal: 500_000, monthlyPayment: 15_000, paymentDay: 10, termEnd: termEnd
+        )
+        #expect(meta.principal == 500_000)
+        #expect(meta.rate == 0) // старая форма не собирает ставку — сохраняем этот же пробел
+        #expect(meta.monthlyPayment == 15_000)
+        #expect(meta.paymentDay == 10)
+        #expect(meta.termEnd == termEnd)
+        #expect(meta.scheduleType == .annuity)
+    }
+
+    @Test
+    func debtMetaCarriesDirectionOnly() {
+        let owedToMe = AccountsCoreAdditionBridge.debtMeta(direction: .owedToMe)
+        #expect(owedToMe.direction == .owedToMe)
+        #expect(owedToMe.counterparty == nil)
+        #expect(owedToMe.dueDate == nil)
+
+        let owedByMe = AccountsCoreAdditionBridge.debtMeta(direction: .owedByMe)
+        #expect(owedByMe.direction == .owedByMe)
+    }
 }

@@ -105,6 +105,18 @@ struct AccountDetailView: View {
                     .foregroundStyle(AppColors.textSecondary)
             }
 
+            ForEach(loanInfoLines ?? [], id: \.self) { line in
+                Text(line)
+                    .font(.millioCalloutRegular)
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+
+            ForEach(debtInfoLines ?? [], id: \.self) { line in
+                Text(line)
+                    .font(.millioCalloutRegular)
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+
             if let note = account.note, !note.isEmpty {
                 Text(note)
                     .font(.millioCalloutRegular)
@@ -125,6 +137,71 @@ struct AccountDetailView: View {
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
+    // MARK: - Обязательства (.loan/.debt) — доп. инфо и кастомные действия (Фаза 2)
+
+    private var loanInfoLines: [String]? {
+        guard let meta = account.loanMeta else { return nil }
+        var lines: [String] = []
+        if meta.rate > 0 {
+            lines.append(String(format: L("accounts_core.detail.loan.rate_format"), NSDecimalNumber(decimal: meta.rate).doubleValue))
+        }
+        if let payment = meta.monthlyPayment {
+            lines.append(String(format: L("accounts_core.detail.loan.monthly_payment_format"), NSDecimalNumber(decimal: payment).doubleValue, account.currency))
+        }
+        if let termEnd = meta.termEnd {
+            lines.append(String(format: L("accounts_core.detail.loan.term_end_format"), termEnd.formatted(date: .abbreviated, time: .omitted)))
+        }
+        return lines.isEmpty ? nil : lines
+    }
+
+    private var debtInfoLines: [String]? {
+        guard let meta = account.debtMeta else { return nil }
+        var lines: [String] = [
+            meta.direction == .owedToMe
+                ? L("accounts_core.detail.debt.direction.owed_to_me")
+                : L("accounts_core.detail.debt.direction.owed_by_me")
+        ]
+        if let counterparty = meta.counterparty, !counterparty.isEmpty {
+            lines.append(String(format: L("accounts_core.detail.debt.counterparty_format"), counterparty))
+        }
+        if let dueDate = meta.dueDate {
+            lines.append(String(format: L("accounts_core.detail.debt.due_date_format"), dueDate.formatted(date: .abbreviated, time: .omitted)))
+        }
+        return lines
+    }
+
+    /// Заголовок кнопки «доход»-слота — для обязательств это «Платёж»/«Погашение», не «Доход».
+    private var incomeActionTitle: String {
+        switch account.kind {
+        case .loan: return L("accounts_core.detail.action.payment")
+        case .debt: return L("accounts_core.detail.action.repay")
+        default: return L("accounts_core.detail.action.add_income")
+        }
+    }
+
+    /// Заголовок кнопки «расход»-слота — для обязательств это «Увеличить долг»/«Увеличить».
+    private var expenseActionTitle: String {
+        switch account.kind {
+        case .loan: return L("accounts_core.detail.action.increase_debt")
+        case .debt: return L("accounts_core.detail.action.increase")
+        default: return L("accounts_core.detail.action.add_expense")
+        }
+    }
+
+    /// `.loan` использует собственный движок (loanSignMap) — income ВСЕГДА уменьшает долг,
+    /// вне зависимости от направления. `.debt` использует ленту генерик-движка (как cash) —
+    /// направление знака зависит от того, кому должны: owedToMe требует ПРОТИВОПОЛОЖНОГО типа
+    /// события, чтобы «погашение» всегда уменьшало |баланс| (см. брифинг Фазы 2, п.2).
+    private var incomeSheetEventType: AccountEventType {
+        guard account.kind == .debt, account.debtMeta?.direction == .owedToMe else { return .income }
+        return .expense
+    }
+
+    private var expenseSheetEventType: AccountEventType {
+        guard account.kind == .debt, account.debtMeta?.direction == .owedToMe else { return .expense }
+        return .income
+    }
+
     private var formattedBalance: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -140,10 +217,10 @@ struct AccountDetailView: View {
     private var actionsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: AppSpacing.s) {
-                actionButton(L("accounts_core.detail.action.add_income"), icon: "plus.circle.fill") {
+                actionButton(incomeActionTitle, icon: "plus.circle.fill") {
                     sheet = .income
                 }
-                actionButton(L("accounts_core.detail.action.add_expense"), icon: "minus.circle.fill") {
+                actionButton(expenseActionTitle, icon: "minus.circle.fill") {
                     sheet = .expense
                 }
                 actionButton(L("accounts_core.detail.action.adjust_balance"), icon: "slider.horizontal.3") {
@@ -248,6 +325,9 @@ struct AccountDetailView: View {
         case .transferOut: return L("accounts_core.detail.event.transfer_out")
         case .transferIn: return L("accounts_core.detail.event.transfer_in")
         case .adjustment: return L("accounts_core.detail.event.adjustment")
+        case .interest: return L("accounts_core.detail.event.interest")
+        case .fee: return L("accounts_core.detail.event.fee")
+        case .extraPayment: return L("accounts_core.detail.event.extra_payment")
         default: return type.rawValue
         }
     }
@@ -259,16 +339,20 @@ struct AccountDetailView: View {
         switch sheet {
         case .income:
             AccountEventEntrySheet(
-                title: L("accounts_core.detail.action.add_income"),
+                title: incomeActionTitle,
                 onSave: { amount, date, note in
-                    perform { try service.recordEvent(account: account, type: .income, amount: amount, date: date, note: note) }
+                    perform { try service.recordEvent(account: account, type: incomeSheetEventType, amount: amount, date: date, note: note) }
                 }
             )
         case .expense:
+            // ВАЖНО: amount передаётся МАГНИТУДОЙ (положительным числом) — движок сам применяет
+            // знак по типу события (cashLikeSignMap(.expense) == -1). Ранее здесь стояло `-amount`,
+            // что давало ДВОЙНОЕ отрицание и увеличивало баланс вместо уменьшения (найдено при
+            // разборе Фазы 2 — см. регрессионный тест engineA_expenseSignConventionMatchesRecordEvent).
             AccountEventEntrySheet(
-                title: L("accounts_core.detail.action.add_expense"),
+                title: expenseActionTitle,
                 onSave: { amount, date, note in
-                    perform { try service.recordEvent(account: account, type: .expense, amount: -amount, date: date, note: note) }
+                    perform { try service.recordEvent(account: account, type: expenseSheetEventType, amount: amount, date: date, note: note) }
                 }
             )
         case .adjustBalance:
