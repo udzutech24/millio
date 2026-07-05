@@ -72,7 +72,7 @@ struct DataIntegrityCleanerMigrationTests {
         try ctx.save()
 
         // Запускаем патч
-        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx)
+        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx, scopeIdentifier: UUID().uuidString)
 
         // Проверяем результат
         let all = try ctx.fetch(FetchDescriptor<Investment>())
@@ -98,7 +98,7 @@ struct DataIntegrityCleanerMigrationTests {
         ctx.insert(alreadyArchived)
         try ctx.save()
 
-        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx)
+        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx, scopeIdentifier: UUID().uuidString)
 
         // Уже архивированные не попадают в fetch (#Predicate archivedAt == nil)
         // значит дата не должна измениться
@@ -117,7 +117,7 @@ struct DataIntegrityCleanerMigrationTests {
         try ctx.save()
 
         // Первый запуск — должен сработать
-        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx)
+        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx, scopeIdentifier: UUID().uuidString)
         #expect(sold.archivedAt != nil, "После первого запуска archivedAt выставлен")
 
         // Сбрасываем archivedAt вручную — симулируем "незапрошенный" повторный запуск
@@ -125,7 +125,7 @@ struct DataIntegrityCleanerMigrationTests {
         try ctx.save()
 
         // Второй запуск — флаг уже установлен, ничего не должно измениться
-        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx)
+        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx, scopeIdentifier: UUID().uuidString)
         #expect(sold.archivedAt == nil, "Повторный запуск заблокирован флагом UserDefaults")
     }
 
@@ -134,6 +134,6 @@ struct DataIntegrityCleanerMigrationTests {
         resetMigrationFlag()
         let ctx = try makeContext()
         // Просто не должен бросить
-        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx)
+        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx, scopeIdentifier: UUID().uuidString)
     }
 }
