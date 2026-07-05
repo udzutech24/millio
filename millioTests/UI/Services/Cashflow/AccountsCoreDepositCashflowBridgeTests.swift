@@ -1,0 +1,254 @@
+//
+//  AccountsCoreDepositCashflowBridgeTests.swift
+//  millioTests
+//
+//  Тесты моста AccountsCore → Cashflow для вкладов (Фаза 0 плана
+//  `2026-07-05__cashflow-add-transaction-redesign.md`, §1.8/§4). Покрывает acceptance criteria:
+//  видимость due-процентов в дату, идемпотентность, catch-up пропущенных дат, продление горизонта
+//  бессрочного вклада, отсутствие влияния на баланс карты/архивные счета.
+//
+
+import Foundation
+import SwiftData
+import Testing
+@testable import millio
+
+@Suite("AccountsCoreDepositCashflowBridge")
+@MainActor
+struct AccountsCoreDepositCashflowBridgeTests {
+
+    private func makeContext() throws -> (container: ModelContainer, context: ModelContext, service: AccountsCoreService) {
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let ctx = container.mainContext
+        return (container, ctx, AccountsCoreService(modelContext: ctx))
+    }
+
+    private var calendar: Calendar {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal
+    }
+
+    private func fetchInterestTransactions(_ ctx: ModelContext) throws -> [CashflowTransaction] {
+        let sourceTag = AccountsCoreDepositCashflowBridge.interestImportSource
+        let descriptor = FetchDescriptor<CashflowTransaction>(
+            predicate: #Predicate<CashflowTransaction> { $0.importSourceRaw == sourceTag }
+        )
+        return try ctx.fetch(descriptor)
+    }
+
+    // MARK: - Acceptance: due-проценты появляются доходной транзакцией на верную дату/сумму
+
+    @Test
+    func dueInterestEventMaterializesAsVisibleIncomeTransaction() throws {
+        let (container, ctx, service) = try makeContext()
+        _ = container
+
+        let opening = calendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+        let termEnd = calendar.date(byAdding: .month, value: 3, to: opening)!
+        let account = try service.createAccount(
+            name: "Тинькофф Вклад", kind: .deposit, currency: "RUB", openingBalance: 100_000, date: opening
+        )
+        account.depositMeta = DepositMeta(
+            rate: 12, capitalization: .monthly, termEnd: termEnd, payoutDay: nil,
+            allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: nil,
+            remindEnd: false, autoRollover: false
+        )
+        try DepositInterestScheduler.regenerateFutureInterestEvents(
+            for: account, service: service, asOf: opening, calendar: calendar, context: ctx
+        )
+
+        // "Сегодня" — ровно дата первой выплаты процентов (конец месяца 1), не раньше и не позже.
+        let firstPayoutDate = calendar.date(byAdding: .month, value: 1, to: opening)!
+        let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { firstPayoutDate }, calendar: calendar)
+
+        let didMaterialize = bridge.materializeDueInterestIncome()
+        #expect(didMaterialize)
+
+        let transactions = try fetchInterestTransactions(ctx)
+        #expect(transactions.count == 1) // только 1-й период due, 2-й и 3-й ещё не наступили
+        let tx = try #require(transactions.first)
+        #expect(tx.transactionType == .income)
+        #expect(tx.incomeCategory == .interest)
+        #expect(tx.currency == "RUB")
+        #expect(calendar.isDate(tx.transactionDate, inSameDayAs: firstPayoutDate))
+        #expect(tx.amount == 1_000) // 100 000 * 12% / 12 = 1000.00
+        #expect(tx.note == "Тинькофф Вклад")
+        // Баланс вклада уже отражён в AccountsCore самим AccountEvent — материализованная строка
+        // не должна ещё раз трогать баланс карты (иначе двойной учёт).
+        #expect(tx.affectsCardBalance == false)
+        #expect(tx.cardID == nil)
+    }
+
+    // MARK: - Идемпотентность: повторный вызов не плодит дубликаты
+
+    @Test
+    func repeatedCallsDoNotDuplicateMaterializedTransactions() throws {
+        let (container, ctx, service) = try makeContext()
+        _ = container
+
+        let opening = calendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+        let termEnd = calendar.date(byAdding: .month, value: 2, to: opening)!
+        let account = try service.createAccount(
+            name: "Накопительный", kind: .deposit, currency: "RUB", openingBalance: 50_000, date: opening
+        )
+        account.depositMeta = DepositMeta(
+            rate: 10, capitalization: .monthly, termEnd: termEnd, payoutDay: nil,
+            allowsTopUp: true, allowsEarlyClose: false, earlyClosePenalty: nil,
+            remindEnd: false, autoRollover: false
+        )
+        try DepositInterestScheduler.regenerateFutureInterestEvents(
+            for: account, service: service, asOf: opening, calendar: calendar, context: ctx
+        )
+
+        let asOf = calendar.date(byAdding: .month, value: 2, to: opening)!
+        let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { asOf }, calendar: calendar)
+
+        #expect(bridge.materializeDueInterestIncome() == true)
+        #expect(bridge.materializeDueInterestIncome() == false) // нечего материализовывать повторно
+
+        let transactions = try fetchInterestTransactions(ctx)
+        #expect(transactions.count == 2) // ровно 2 периода, не 4
+    }
+
+    // MARK: - Будущие (ещё не наступившие) события не показываются раньше срока
+
+    @Test
+    func notYetDueInterestIsNotMaterializedEarly() throws {
+        let (container, ctx, service) = try makeContext()
+        _ = container
+
+        let opening = calendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+        let termEnd = calendar.date(byAdding: .month, value: 6, to: opening)!
+        let account = try service.createAccount(
+            name: "Вклад", kind: .deposit, currency: "RUB", openingBalance: 200_000, date: opening
+        )
+        account.depositMeta = DepositMeta(
+            rate: 15, capitalization: .monthly, termEnd: termEnd, payoutDay: nil,
+            allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: nil,
+            remindEnd: false, autoRollover: false
+        )
+        try DepositInterestScheduler.regenerateFutureInterestEvents(
+            for: account, service: service, asOf: opening, calendar: calendar, context: ctx
+        )
+
+        // "Сегодня" — день открытия, ни один период ещё не наступил.
+        let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { opening }, calendar: calendar)
+        #expect(bridge.materializeDueInterestIncome() == false)
+        #expect(try fetchInterestTransactions(ctx).isEmpty)
+    }
+
+    // MARK: - Catch-up: приложение не открывали несколько месяцев — все пропущенные периоды
+
+    @Test
+    func catchUpMaterializesAllMissedPeriodsWithHistoricalDatesAtOnce() throws {
+        let (container, ctx, service) = try makeContext()
+        _ = container
+
+        let opening = calendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+        let termEnd = calendar.date(byAdding: .month, value: 6, to: opening)!
+        let account = try service.createAccount(
+            name: "Вклад «Надёжный»", kind: .deposit, currency: "RUB", openingBalance: 1_000_000, date: opening
+        )
+        account.depositMeta = DepositMeta(
+            rate: 12, capitalization: .monthly, termEnd: termEnd, payoutDay: nil,
+            allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: nil,
+            remindEnd: false, autoRollover: false
+        )
+        try DepositInterestScheduler.regenerateFutureInterestEvents(
+            for: account, service: service, asOf: opening, calendar: calendar, context: ctx
+        )
+
+        // Пользователь не открывал приложение с даты создания до конца 4-го месяца — 4 периода
+        // должны материализоваться ОДНИМ вызовом с их исторически верными датами.
+        let asOf = calendar.date(byAdding: .month, value: 4, to: opening)!
+        let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { asOf }, calendar: calendar)
+
+        #expect(bridge.materializeDueInterestIncome() == true)
+
+        let transactions = try fetchInterestTransactions(ctx).sorted { $0.transactionDate < $1.transactionDate }
+        #expect(transactions.count == 4)
+        for (index, tx) in transactions.enumerated() {
+            let expectedDate = calendar.date(byAdding: .month, value: index + 1, to: opening)!
+            #expect(calendar.isDate(tx.transactionDate, inSameDayAs: expectedDate))
+        }
+
+        // Повторный запуск (следующее открытие приложения в тот же день) — без дублей.
+        #expect(bridge.materializeDueInterestIncome() == false)
+        #expect(try fetchInterestTransactions(ctx).count == 4)
+    }
+
+    // MARK: - Продление горизонта: бессрочный вклад старше исходных 12 месяцев продолжает начислять
+
+    @Test
+    func syncExtendsHorizonForPerpetualDepositBeyondOriginalWindow() throws {
+        let (container, ctx, service) = try makeContext()
+        _ = container
+
+        let opening = calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!
+        let account = try service.createAccount(
+            name: "Накопительный без срока", kind: .deposit, currency: "RUB", openingBalance: 100_000, date: opening
+        )
+        account.depositMeta = DepositMeta(
+            rate: 6, capitalization: .monthly, termEnd: nil, payoutDay: nil,
+            allowsTopUp: true, allowsEarlyClose: true, earlyClosePenalty: nil,
+            remindEnd: false, autoRollover: false
+        )
+        // Изначальная генерация (как при создании счёта) — горизонт 12 месяцев от opening.
+        try DepositInterestScheduler.regenerateFutureInterestEvents(
+            for: account, service: service, asOf: opening, calendar: calendar, context: ctx
+        )
+        let eventsBefore = try ctx.fetch(FetchDescriptor<AccountEvent>()).filter {
+            $0.account?.id == account.id && $0.type == .interest
+        }
+        #expect(eventsBefore.count == 12)
+
+        // Прошло чуть больше 13 месяцев без единого открытия экрана правки вклада — старый горизонт
+        // исчерпан. +1 день после ровной границы периода — реалистичный сценарий (пользователь открыл
+        // приложение НЕ в тот же миг начисления, `DepositInterestScheduler.generate` считает период
+        // «прошедшим» строго по `date > asOf`, поэтому проверка ровно на границе периода — не наш кейс).
+        let asOf = calendar.date(byAdding: .day, value: 1, to: calendar.date(byAdding: .month, value: 13, to: opening)!)!
+        let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { asOf }, calendar: calendar)
+        let didMaterialize = bridge.syncDepositInterestLedger()
+        #expect(didMaterialize) // горизонт продлился → появился due-период 13 месяца → материализован
+
+        let eventsAfter = try ctx.fetch(FetchDescriptor<AccountEvent>()).filter {
+            $0.account?.id == account.id && $0.type == .interest
+        }
+        #expect(eventsAfter.count > 12) // горизонт продлён за пределы исходных 12 периодов
+
+        let transactions = try fetchInterestTransactions(ctx)
+        #expect(transactions.count == 13) // все 13 due-периодов видимы в Cashflow, включая новый
+    }
+
+    // MARK: - Архивный (закрытый) вклад не продлевает горизонт, но прошлые due-события материализуются
+
+    @Test
+    func archivedDepositIsExcludedFromHorizonExtensionButPastDueEventsStillMaterialize() throws {
+        let (container, ctx, service) = try makeContext()
+        _ = container
+
+        let opening = calendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+        let termEnd = calendar.date(byAdding: .month, value: 3, to: opening)!
+        let account = try service.createAccount(
+            name: "Закрытый вклад", kind: .deposit, currency: "RUB", openingBalance: 100_000, date: opening
+        )
+        account.depositMeta = DepositMeta(
+            rate: 12, capitalization: .monthly, termEnd: termEnd, payoutDay: nil,
+            allowsTopUp: false, allowsEarlyClose: true, earlyClosePenalty: nil,
+            remindEnd: false, autoRollover: false
+        )
+        try DepositInterestScheduler.regenerateFutureInterestEvents(
+            for: account, service: service, asOf: opening, calendar: calendar, context: ctx
+        )
+        account.archivedAt = calendar.date(byAdding: .month, value: 1, to: opening)
+
+        let asOf = calendar.date(byAdding: .month, value: 1, to: opening)!
+        let generatedByExtension = DepositInterestScheduler.extendActiveDepositHorizons(context: ctx, asOf: asOf)
+        #expect(generatedByExtension == 0) // архивный счёт исключён из продления горизонта
+
+        let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { asOf }, calendar: calendar)
+        #expect(bridge.materializeDueInterestIncome() == true) // но уже сгенерированный 1-й период всё равно виден
+        #expect(try fetchInterestTransactions(ctx).count == 1)
+    }
+}
