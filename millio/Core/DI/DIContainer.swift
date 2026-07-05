@@ -49,6 +49,7 @@ final class DIContainer {
         let modelContext = modelContainer.mainContext
         do {
             try DataIntegrityCleaner.runIfNeeded(modelContext: modelContext)
+            try DataIntegrityCleaner.dedupeCashflowCustomCategoriesIfNeeded(modelContext: modelContext)
         } catch {
             AppLogger.log(.error, category: "Integrity", "Data integrity cleanup failed: \(error.localizedDescription)")
         }

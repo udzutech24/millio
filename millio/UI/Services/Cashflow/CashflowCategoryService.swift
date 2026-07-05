@@ -546,6 +546,31 @@ final class CashflowCategoryService {
         return String(rawValue.dropFirst(CashflowTransaction.customCategoryPrefix.count))
     }
 
+    /// Defense-in-depth: схлопывает дубли `CashflowCustomCategory` с одинаковым `categoryID`
+    /// до того, как они превратятся в `CashflowCategoryOption`. `id` у `CashflowCategoryOption` —
+    /// это `rawValue` ("custom:<categoryID>"), поэтому два объекта с одним `categoryID` дают
+    /// одинаковый `id` и валят `ForEach`/`LazyVGrid` (`Fatal error: Duplicate values for key`).
+    /// `DataIntegrityCleaner` должен вычищать такие дубли из стора при старте приложения — это
+    /// последний рубеж на случай, если дубль всё же просочился в текущую сессию (например,
+    /// CloudKit merge случился уже после того, как одноразовый патч отработал).
+    /// Побеждает объект с более поздним `updatedAt` — то же правило, что в `DataIntegrityCleaner`.
+    static func dedupedCustomCategories(_ categories: [CashflowCustomCategory]) -> [CashflowCustomCategory] {
+        var winners: [String: CashflowCustomCategory] = [:]
+        var order: [String] = []
+        for category in categories {
+            if let existing = winners[category.categoryID] {
+                if category.updatedAt >= existing.updatedAt {
+                    winners[category.categoryID] = category
+                }
+                AppLogger.log(.warning, category: "Cashflow", "Duplicate CashflowCustomCategory categoryID=\(category.categoryID) обнаружен в customCategoryOptions — оставлен один экземпляр")
+            } else {
+                winners[category.categoryID] = category
+                order.append(category.categoryID)
+            }
+        }
+        return order.compactMap { winners[$0] }
+    }
+
     // MARK: - Private: System Categories
 
     private func systemCategoryRaws(for kind: CashflowCategoryKind) -> [String] {
@@ -607,8 +632,8 @@ final class CashflowCategoryService {
 
     private func customCategoryOptions(for kind: CashflowCategoryKind, includeHidden: Bool = false) -> [CashflowCategoryOption] {
         let hiddenRaws = includeHidden ? Set<String>() : customCategoryVisibilityPrefs.hiddenRawValues(for: kind)
-        return customCategoriesProvider()
-            .filter { $0.kind == kind }
+        let deduped = Self.dedupedCustomCategories(customCategoriesProvider().filter { $0.kind == kind })
+        return deduped
             .sorted { $0.createdAt < $1.createdAt }
             .compactMap {
                 let raw = Self.customRawValue(from: $0.categoryID)
