@@ -53,16 +53,20 @@ struct DataIntegrityCleanerMigrationTests {
         resetMigrationFlag()
         let ctx = try makeContext()
 
-        // Создаём три позиции: две "проданных" и одну активную
+        // Создаём три позиции: две "проданных" и одну активную.
+        // Патч архивирует только рыночные активы (isMarketPriced: stocks/crypto).
         let soldA = Investment(name: "AAPL", amount: 0)
+        soldA.category = .stocks
         soldA.marketQuantity = 0.0
         soldA.archivedAt = nil
 
         let soldB = Investment(name: "BTC", amount: 0)
+        soldB.category = .crypto
         soldB.marketQuantity = nil   // nil тоже считается нулём (аналогично executeInvestmentOrder)
         soldB.archivedAt = nil
 
         let active = Investment(name: "TSLA", amount: 5000)
+        active.category = .stocks
         active.marketQuantity = 5.0
         active.archivedAt = nil
 
@@ -111,21 +115,24 @@ struct DataIntegrityCleanerMigrationTests {
         let ctx = try makeContext()
 
         let sold = Investment(name: "ETH", amount: 0)
+        sold.category = .crypto
         sold.marketQuantity = 0.0
         sold.archivedAt = nil
         ctx.insert(sold)
         try ctx.save()
 
-        // Первый запуск — должен сработать
-        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx, scopeIdentifier: UUID().uuidString)
+        // Первый запуск — должен сработать. Один scope на оба вызова:
+        // one-shot ключ UserDefaults намеренно общий, идемпотентность per-scope.
+        let scope = UUID().uuidString
+        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx, scopeIdentifier: scope)
         #expect(sold.archivedAt != nil, "После первого запуска archivedAt выставлен")
 
         // Сбрасываем archivedAt вручную — симулируем "незапрошенный" повторный запуск
         sold.archivedAt = nil
         try ctx.save()
 
-        // Второй запуск — флаг уже установлен, ничего не должно измениться
-        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx, scopeIdentifier: UUID().uuidString)
+        // Второй запуск с тем же scope — флаг уже установлен, ничего не должно измениться
+        try DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded(modelContext: ctx, scopeIdentifier: scope)
         #expect(sold.archivedAt == nil, "Повторный запуск заблокирован флагом UserDefaults")
     }
 
