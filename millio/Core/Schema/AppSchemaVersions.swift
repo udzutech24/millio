@@ -79,6 +79,14 @@ enum AppSchemaV3: VersionedSchema {
 // MARK: - V4 (добавлено ядро счетов event-sourcing: Account/AccountEvent/AccountGroup/AccountDailySnapshot)
 // Новые таблицы, старые (Card/Credit/Investment/FinanceAccount) НЕ трогаются — оба ядра
 // сосуществуют на время миграции UI (см. specs/2026-07-04-accounts-core.md, Scope).
+// Не изменять: HistoricalAssetPrice был дописан сюда задним числом (Фаза 4, S9/AC10) уже
+// после того как на dev-устройствах существовали сторы под идентификатором 4.0.0 без этой
+// таблицы — SwiftData видел расхождение факт/декларация и падал с "Cannot use staged
+// migration with an unknown model version" → no-plan fallback стирал данные (Находка 2,
+// plans/2026-07-04__accounts-core-rebuild-plan.md). V4 зафиксирован как было изначально,
+// HistoricalAssetPrice переехал в честную V5 ниже. Впредь: новые @Model — только в новую
+// версию, никогда не редактировать models уже выпущенной (или уже физически существующей
+// на дисках) версии.
 
 enum AppSchemaV4: VersionedSchema {
     static var versionIdentifier = Schema.Version(4, 0, 0)
@@ -87,8 +95,17 @@ enum AppSchemaV4: VersionedSchema {
         AccountEvent.self,
         AccountGroup.self,
         AccountDailySnapshot.self,
-        // Фаза 4: append-only кэш рыночных цен (S9/AC10) — V4 ещё не выпущена, правим in-place,
-        // как sourceTransactionID в Фазе 1b (см. AppMigrationPlan ниже, комментарий не меняется).
+    ]
+}
+
+// MARK: - V5 (HistoricalAssetPrice — append-only кэш рыночных цен, Фаза 4 S9/AC10)
+// Честная версия для типа, ошибочно дописанного в V4 задним числом (см. комментарий V4 выше).
+// V4 никогда не публиковался (ветка feature/accounts-core не смержена в develop) — риск
+// расхождения ограничен dev/sim-сторами разработчика.
+
+enum AppSchemaV5: VersionedSchema {
+    static var versionIdentifier = Schema.Version(5, 0, 0)
+    static var models: [any PersistentModel.Type] = AppSchemaV4.models + [
         HistoricalAssetPrice.self,
     ]
 }
@@ -100,7 +117,10 @@ enum AppSchemaV4: VersionedSchema {
 //   2. Добавить lightweight stage V{N}→V{N+1} в AppMigrationPlan.stages
 //   3. Обновить этот typealias на AppSchemaV{N+1}
 //   4. Запустить SchemaConsistencyTests — должны быть зелёными
-typealias AppSchemaCurrent = AppSchemaV4
+// ВАЖНО: models уже выпущенной версии (или версии, под идентификатором которой уже
+// существуют сторы на дисках — dev/sim в том числе) — не редактировать задним числом.
+// Это ломает staged migration (см. комментарий V4 выше, Находка 2).
+typealias AppSchemaCurrent = AppSchemaV5
 
 // MARK: - План миграции
 
@@ -111,12 +131,14 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         AppSchemaV2.self,
         AppSchemaV3.self,
         AppSchemaV4.self,
+        AppSchemaV5.self,
     ]
 
     static var stages: [MigrationStage] = [
         .lightweight(fromVersion: AppSchemaV1.self, toVersion: AppSchemaV2.self),
         .lightweight(fromVersion: AppSchemaV2.self, toVersion: AppSchemaV3.self),
         .lightweight(fromVersion: AppSchemaV3.self, toVersion: AppSchemaV4.self),
+        .lightweight(fromVersion: AppSchemaV4.self, toVersion: AppSchemaV5.self),
     ]
 }
 

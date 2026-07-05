@@ -317,7 +317,7 @@ Group (@Model) — ярлык-контейнер: name, colorHex, displayCurrenc
 8. Системная чистка LanguageManager-гонок в тестах (см. progress/accounts-core-baseline-failures.md).
 9. ~~Регрессия testIncomeBudgetSummary…~~ — бисект доказал: НЕ регрессия rebuild'а (падало и на пре-Phase-0 базе; локале-зависимая сортировка tie-break). Починено пином en_US_POSIX, коммит 6cbe610.
 10. **🔴 Race guest→user (сим-проверка 2026-07-04 вечер):** `RootTabView.ensureFinanceViewModel()` создаёт VM один раз из environment-контекста; при холодном старте это guest-контейнер, после auth скоуп меняется на user, но VM остаётся на guest → UI не видит счета нового ядра (сид записан в user store — sqlite-подтверждено), «Общий баланс» их не включает; в guest/user сторах идентичные 34 legacy-счёта. Детали в handoff §Сим-проверка. Кандидат на фикс ДО 6b — касается и прод-пользователей (записи мимо бэкапируемого стора). **→ План фикса готов (research millio-audit + /stress-test 10 рисков): `plans/2026-07-04__guest-user-scope-race-fix.md` (Track A фикс + Track B reconciliation + Track C конвертация легаси). Ждёт утверждения владельца.**
-11. **🟡 Миграция V4 in-place (HistoricalAssetPrice):** на устройстве владельца воспроизведён `Cannot use staged migration with an unknown model version` → no-plan fallback. До мержа: честная V5 или пересоздание дев-сторов.
+11. **✅ ЗАКРЫТО 2026-07-05 (Вариант B) — Миграция V4 in-place (HistoricalAssetPrice):** на устройстве владельца воспроизводился `Cannot use staged migration with an unknown model version` → no-plan fallback. Владелец выбрал Вариант B (честная V5) через `AskUserQuestion`. Реализация: `AppSchemaV4.models` вернули к исходному набору (Account/AccountEvent/AccountGroup/AccountDailySnapshot, без `HistoricalAssetPrice`); создана `AppSchemaV5` с `HistoricalAssetPrice`; `AppMigrationPlan` получил стадию `.lightweight(fromVersion: AppSchemaV4, toVersion: AppSchemaV5)`; `AppSchemaCurrent = AppSchemaV5`. Добавлены guard-тесты `v4IsSupersetOfV3`/`v5IsSupersetOfV4` в `SchemaConsistencyTests` — тот же класс бага (задним числом отредактированная уже выпущенная версия) теперь ловится тестом. Подробности и поведение на «грязных» dev-сторах — см. §9 ниже.
 12. Alert сида: «создан: 10 счетов» при фактических 12 (косметика текста AdminStatsDebugView/сидера).
 13. **Конвертация легаси-счетов в новое ядро (вводная владельца 2026-07-04, 22:25):** легаси-счета с Ф6a read-only — ни удалить, ни изменить (пример: счёт «ОГ»). Нужен per-account выход «Перевести в новое ядро». Дизайн — Track C плана `plans/2026-07-04__guest-user-scope-race-fix.md`; строго ПОСЛЕ фикса race (№10), иначе конвертация пишет в guest-стор.
 14. **🟡 Удаление счёта не обновляет список до перезапуска (репорт владельца 2026-07-04, 22:38, сим):** «Удалить актив» в деталке — счёт («ОГ», группа «Вклады») остаётся в списке Счетов и в тоталах; после перезапуска приложения открывается уже без него. Гипотеза: delete идёт в modelContext, но кэш/массивы FinanceViewModel не инвалидируются (нет @Query/нотификации). Класс отличен от race №10 (оба экрана в одном дереве = один контекст). Research не делался — отдельный хвост.
@@ -326,3 +326,41 @@ Group (@Model) — ярлык-контейнер: name, colorHex, displayCurrenc
 - Каждая фаза: build 0 ошибок + millioTests «не хуже baseline» (16 унаследованных падений зафиксированы до старта) + grep-гейт мутаций.
 - Финальный прогон после 6a: 1576 passed / 20 failed = 14 baseline + 6 flaky (каждый проверен изоляцией лично оркестратором).
 - /stress-test прогнан перед Ф1b (10 рисков → митигации в реализацию: смешанные переводы, смена мира при правке, пикер, идемпотентность recurring, offline-курс fxProvisional).
+
+## 9. Находка 2 — закрытие Вариантом B (честная V5), 2026-07-05
+
+**Решение владельца:** Вариант B — вернуть V4 к исходному набору моделей, `HistoricalAssetPrice`
+перенести в новую `AppSchemaV5` с честной lightweight-миграцией V4→V5. (Вариант A — заморозить
+V4 как есть с HistoricalAssetPrice + guard-тест — отклонён: закреплял бы задним-числом-отредактированную
+версию как «нормальную», а не как признанную ошибку.)
+
+**Реализация** (`millio/Core/Schema/AppSchemaVersions.swift`):
+- `AppSchemaV4.models` = `AppSchemaV3.models + [Account, AccountEvent, AccountGroup, AccountDailySnapshot]`
+  (исходный набор, каким он был до задней правки).
+- Новая `AppSchemaV5.models` = `AppSchemaV4.models + [HistoricalAssetPrice]`.
+- `AppMigrationPlan.schemas` += `AppSchemaV5`; `stages` += `.lightweight(fromVersion: V4, toVersion: V5)`.
+- `AppSchemaCurrent = AppSchemaV5`.
+- `makeContainer`/`makeInMemoryContainer` (variadic-список типов для CloudKit-совместимой формы
+  `ModelContainer(for:...)`) не менялись — это плоский список всех типов вне зависимости от разбивки
+  по версиям, `HistoricalAssetPrice` там уже был.
+- Guard-тесты `SchemaConsistencyTests.v4IsSupersetOfV3` / `.v5IsSupersetOfV4` — страхуют именно от
+  повторения этого класса бага (редактирование `models` уже выпущенной/физически существующей версии).
+
+**Что происходит с «грязными» V4-сторами на dev/sim (существовавшими ДО этого фикса, где физически
+уже создана таблица `HistoricalAssetPrice` под идентификатором версии 4.0.0):**
+Такой стор при открытии через `AppMigrationPlan` (теперь ожидающий «чистую» V4 без этой таблицы под
+идентификатором 4.0.0) снова не совпадёт по декларации — это ожидаемо и неизбежно: задним числом
+исправить физическую идентичность уже созданного стора нельзя, можно только не плодить новых таких
+сторов. Дальше срабатывает **уже существующий и задокументированный** DEBUG-путь в
+`millioApp.swift` (`makeModelContainer` → `rebuildStorePreservingData`, строки ~638-643, ~734-754):
+старый файл переименовывается в `<store>.bak.store`, создаётся пустой стор по актуальной схеме (V5),
+приложение стартует без краша. Данные не теряются физически (файл на диске сохранён), но обнуляются
+в приложении до ручного восстановления (`.bak`→переименовать обратно, либо iCloud-backup/restore).
+Это **DEBUG-only** ветка (`#if DEBUG`) — в Release при существующем сторе идёт другой путь (no-plan
+fallback → при неудаче `.corrupt` + fresh store), но V4 никогда не публиковался, поэтому Release-ветка
+здесь не применима ни к одному реальному пользователю. Итог: поведение на «грязных» dev/sim-сторах
+предсказуемо (тихий rebuild с `.bak`-бэкапом), losses ограничены dev-окружением, задокументировано —
+пересоздание такого стора на машине разработчика/симуляторе допустимо и ожидаемо.
+
+**Тесты:** прогнан полный `millioTests` — см. §Тест-гейт в `progress/accounts-core-rebuild-handoff.md`
+(секция обновлена 2026-07-05, после фикса схемы). Гейт «не хуже baseline» пройден.

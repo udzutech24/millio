@@ -1,9 +1,11 @@
 # Handoff: перестройка ядра счетов — фазы 0–6a РЕАЛИЗОВАНЫ
 
-**Дата:** 2026-07-05 (обновлён после сессии «добить Track B2 + закрыть находки») · **Было:** Track B2 в работе,
-2 находки открыты · **Стало:** Track B2 подтверждён завершённым (был реализован ранее в ночной сессии); Находка 1
-(race guest→user) закрыта проверкой — уже была исправлена Track A+B, документация была неактуальна; Находка 2
-(V4 in-place) требует решения владельца — эскалирована, код НЕ трогали; мелочь (текст «10 счетов») починена.
+**Дата:** 2026-07-05 (обновлён после сессии «закрыть Находку 2 — Вариант B, честная V5») · **Было:**
+Находка 2 (V4 in-place) эскалирована владельцу, код не трогали · **Стало:** владелец выбрал Вариант B
+через `AskUserQuestion`; `AppSchemaV4.models` возвращён к исходному набору (без `HistoricalAssetPrice`),
+создана `AppSchemaV5` с `HistoricalAssetPrice` + lightweight-миграция V4→V5, `AppSchemaCurrent = AppSchemaV5`,
+добавлены guard-тесты `v4IsSupersetOfV3`/`v5IsSupersetOfV4`. Находка 2 ЗАКРЫТА. Детали и поведение на
+«грязных» dev V4-сторах — `plans/2026-07-04__accounts-core-rebuild-plan.md` §9.
 Тест-гейт прогнан, сверен с baseline (см. §Тест-гейт 2026-07-05 ниже).
 
 ## Состояние
@@ -20,7 +22,8 @@
 AccountBalanceEngine (6 движков, детерминизм, redenomination), AccountsCoreService (единственная
 точка записи), AccountSnapshotRebuilder (@ModelActor, инкрементальный кэш), AccountsTotalsService
 (totalAt/seriesBetween, курс на дату точки), DepositInterestScheduler, DepositTaxCalculator,
-AccountMarketPriceService + HistoricalAssetPrice (append-only цены), AccountArchivePolicy, сид-полигон
+AccountMarketPriceService + HistoricalAssetPrice (append-only цены, честная схема V5 — см. §Находка 2
+ниже), AccountArchivePolicy, сид-полигон
 (11 счетов, DEBUG-кнопка в AdminStatsDebugView). UI: AccountDetailView (+sheets), ArchivedAccountsView,
 мосты AccountsCoreAdditionBridge / AccountsCoreCashflowBridge. Все 11 пресетов добавления создают
 счета нового ядра. Grep-гейт: `scripts/check-balance-mutations.sh`.
@@ -35,7 +38,8 @@ AccountMarketPriceService + HistoricalAssetPrice (append-only цены), Account
    e9a812d/466805a/4dacba9/56402e1/dc440ed), 26 reconciliation-тестов, все 8 митигаций B1b встроены;
    ✅ Находка 1 (race guest→user, документация была неактуальна) — закрыта проверкой 2026-07-05,
    код уже чинил Track A+B, см. §Сим-проверка выше;
-   🟡 Находка 2 (V4 in-place, миграционный риск) — РЕШЕНИЕ ЭСКАЛИРОВАНО ВЛАДЕЛЬЦУ, код не трогали;
+   ✅ Находка 2 (V4 in-place, миграционный риск) — ЗАКРЫТА 2026-07-05 Вариантом B (честная V5),
+   см. §Находка 2 ниже;
    ✅ мелочь «10 счетов»→«12 счетов» починена.
    🔴 Известный релиз-блокер (не в скоупе этой сессии): new-core модели НЕ в ModelTypeRegistry →
    CloudKit-бэкап/export их не переносит.
@@ -80,18 +84,23 @@ force-signout на устройстве — недоступна в этой с�
 пункт ещё в Track A A4 (см. план, не новый блокер). Fix отдельно кодом не переделывался — он уже
 был на branch до этой сессии, находка была задокументирована с опозданием (см. журнал плана 2026-07-05).
 
-**🟡 Находка 2 — миграционный риск V4 in-place — РЕШЕНИЕ НУЖНО, эскалировано владельцу
-(см. отчёт этой сессии).** `HistoricalAssetPrice` добавлен в AppSchemaV4.models задним числом,
-после того как реальный V4-стор с ДРУГИМ набором таблиц уже существовал на dev-устройстве
-владельца → SwiftData не находит совпадения по версии → в DEBUG уходит в
-`rebuildStorePreservingData` (переименовывает стор в `.bak`, создаёт пустой; данные не теряются
-физически, но обнуляются в приложении до восстановления из `.bak`/iCloud). V4 НИКОГДА не
-попадал ни в TestFlight, ни в App Store (ветка не смержена/не запушена) — риск ограничен
-dev/sim-окружениями, где схема правилась итеративно. Варианты (детали и рекомендация — в
-plans/2026-07-04__accounts-core-rebuild-plan.md §Журнал 2026-07-05): (A) заморозить V4 как
-финальную + guard-тест на список типов; (B) оформить честный V5 (вернуть V4 к исходному
-набору без HistoricalAssetPrice, перенести его в новый V5 через lightweight-стадию). Ждём
-решения владельца — без него схему не трогаем.
+**✅ Находка 2 — ЗАКРЫТА 2026-07-05, Вариант B (честная V5).** Была: `HistoricalAssetPrice` добавлен
+в `AppSchemaV4.models` задним числом, после того как реальный V4-стор с ДРУГИМ набором таблиц уже
+существовал на dev-устройстве владельца → SwiftData не находил совпадения по версии → в DEBUG уходило
+в `rebuildStorePreservingData` (переименовывает стор в `.bak`, создаёт пустой). V4 никогда не попадал
+ни в TestFlight, ни в App Store — риск был ограничен dev/sim-окружениями. Владелец выбрал Вариант B
+через `AskUserQuestion` (не Вариант A «заморозить V4 как есть» — это закрепило бы задне-числом-правку
+как норму). Реализация (`millio/Core/Schema/AppSchemaVersions.swift`): `AppSchemaV4.models` вернули
+к исходному набору (Account/AccountEvent/AccountGroup/AccountDailySnapshot, без HistoricalAssetPrice);
+новая `AppSchemaV5.models = AppSchemaV4.models + [HistoricalAssetPrice]`; `AppMigrationPlan` — стадия
+`.lightweight(V4→V5)`; `AppSchemaCurrent = AppSchemaV5`. Guard-тесты `SchemaConsistencyTests.
+v4IsSupersetOfV3`/`.v5IsSupersetOfV4` добавлены — ловят повторение этого класса бага.
+**Поведение на «грязных» dev/sim-сторах** (созданных ДО фикса, физически уже содержащих
+`HistoricalAssetPrice` под версией 4.0.0): при открытии они снова не совпадут по декларации (это
+неизбежно — нельзя задним числом исправить уже созданный физический стор), сработает тот же
+DEBUG-путь `rebuildStorePreservingData` — `.bak`-переименование + пустой стор на V5. Losses ограничены
+dev-окружением разработчика, поведение предсказуемо и задокументировано в плане §9. Полная запись
+решения — `plans/2026-07-04__accounts-core-rebuild-plan.md` §9.
 
 **🟢 Починено ранее:** стрей-текст `plotFrame` в `AccountBalanceChartView.swift:288`.
 
