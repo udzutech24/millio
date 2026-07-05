@@ -1,6 +1,6 @@
 # План: фикс race guest→user + конвертация легаси-счетов
 
-**Дата:** 2026-07-04 · **Статус: В РАБОТЕ** (Track A A1–A4 ✅, Track C C1–C3 ✅, Track D D1 ✅; Track B B2 не начат)
+**Дата:** 2026-07-04 · **Статус: В РАБОТЕ** (Track A A1–A4 ✅, Track B B1–B2 ✅, Track C C1–C3 ✅, Track D D1 ✅)
 **Ветка:** feature/accounts-core (поверх фаз 0–6a rebuild'а) · **Родитель:** `plans/2026-07-04__accounts-core-rebuild-plan.md` §8, хвост №10
 **Research:** millio-audit 2026-07-04 (карта ниже) · **Handoff:** `progress/accounts-core-rebuild-handoff.md` §Сим-проверка
 
@@ -87,8 +87,37 @@ VM-слой — нет. → UI-записи идут в guest мимо CloudKit-
   с progress-UI (watchdog); блокировка бэкапа флагом «merge в процессе»; sanity-abort + .premerge.bak.
   **Дефолты в отсутствие владельца:** guest после merge не трогаем; одна краткая сводка пользователю;
   регистрация new-core в ModelTypeRegistry — отдельный релиз-блокер, не в ночном скоупе; LWW принят.
-- [ ] **B2. Реализация + прогон на копиях реальных сторов владельца** (guest/user с устройства, наход. 2 учтена).
-  Строго с митигациями B1b. Открытые вопросы владельцу — в утреннем отчёте (§ спеки «Открытые вопросы»).
+- [x] **B2. Реализация + прогон на копиях реальных сторов** РЕАЛИЗОВАН (коммиты e9a812d/466805a/4dacba9/56402e1,
+  feature/accounts-core, НЕ мержено/пушено). Разбит на под-фазы (каждый коммит = build зелёный):
+  - **B2a** `e9a812d` — чистое ядро без SwiftData: `DivergenceDetector` (count+max updatedAt),
+    `ScopeLineageChecker` (митигация №1), `MultisetReconciler` (митигация №3, max-count + LWW). 20 тестов.
+  - **B2b** `466805a` — `ScopeGuestReader`/`ScopeMergeWorker` (@ModelActor, off-main, митигация №7):
+    легаси через exportAllData→importAllData(save:false)+дедуп (транзакции MULTISET, keyless — LWW по
+    export-fingerprint, группы — ре-парентинг, митигация №4); new-core — прямая копия по id (dayKey сохранён);
+    ЕДИНСТВЕННЫЙ save (митигация №5) + sanity-abort (митигация №7); `ScopeStoreBackup` .premerge.bak
+    store+wal+shm (митигация №7). `DataRepository.importAllData(save:)` — restore не затронут. 6 тестов.
+  - **B2c** `4dacba9` — `ScopeReconciliationService` (детектор→lineage→бэкап→merge→rebuildAllAccounts→маркер);
+    `ScopeMergeMarker` (done по scope; needsConfirmation для чужого guest; storeReport без done для
+    partially-readable — митигация №6); `ScopeMergeLock` (блокировка бэкапа, митигация №7 + guard в
+    BackupManager); `ScopeStoreOpenTracker` (fallback-open). Интеграция в `millioApp.synchronizeDataScope`
+    (после swap+`.ready`, до restore-флоу; на .merged — бамп scopeIdentityToken + локализованный тост-summary);
+    overlay «Восстанавливаю данные…»; L10n RU/EN/zh-Hans. 4 сервис-теста.
+  - **B2d** `56402e1` — прогон на КОПИЯХ реальных сторов сим 49601B0B (~183 tx, 43 cashback, 43 счёта,
+    15 карт, 38 инвестиций; оригиналы не тронуты). user⊇guest → merge no-op (+0, без дублей, sanity ✓,
+    идемпотентно); дельта (−5 tx из user) → восстановлено +5, база НЕ задвоена (183, не 361), keyless
+    стабильны. Тест env-гейтед (в CI no-op).
+  **Отклонения от спеки (обоснованы):** (1) §3 предлагал двухфазный save (легаси-done/core-done) —
+  заменено ЕДИНСТВЕННЫМ save легаси+core в одном контексте (митигация №5 приоритетнее; атомарнее,
+  идемпотентность держит повтор). (2) Дедуп вынесен в отдельный `ScopeMergeDedup` (nonisolated), а не в
+  `DataIntegrityCleaner.dedupeAll` (@MainActor, сохраняет сам) — merge идёт off-main с single-save +
+  multiset для транзакций, которого в restore-дедупе быть не должно. (3) FinanceAccount/FinanceGroup
+  импортёры UPSERT (само-дедуп) — подтверждено чтением; дедуп для них оставлен как no-op-страховка.
+  (4) Cashback/UserSubscription/Budget*/категории/overrides — blind INSERT без `*UniqueID` → дедуп по
+  export-fingerprint (single-collapse LWW); теоретические легитимные дубли этих keyless-моделей могут
+  схлопнуться — known limitation (мультисет только для транзакций, где bulk-импорт реален, митигация №3).
+  **Открыто:** ручная UI-проверка cold-start/runtime-login на устройстве с Apple-логином (нет в среде);
+  new-core в ModelTypeRegistry (отдельный релиз-блокер, вне скоупа B2); confirmation-UI для foreignGuest
+  (сейчас — тихий defer с флагом). Открытые вопросы владельцу — § спеки «Открытые вопросы».
 
 ### Track C — конвертация легаси-счетов в новое ядро (вводная владельца 2026-07-04)
 
@@ -222,3 +251,14 @@ D — после мини-research, удобно паровозом с A2 (об�
   (маппинг). Тесты: 9 конвертер/инвариант + 8 маппинг — зелёные. Build ✅ 0 w, grep ✅, Finance*/Account* ✅
   (кроме предсуществующего `exactThresholdTriggerWarning`). **Открыто:** UI-прокрутка конвертации вручную
   (сидер сеет только new-core; нужен Apple-login + ручной легаси-счёт) — логика доказана юнит-тестами.
+- 2026-07-05: **Track B B2 реализован** по команде владельца (feature/accounts-core, НЕ мержено/пушено).
+  Под-фазы B2a–B2d, коммиты `e9a812d`/`466805a`/`4dacba9`/`56402e1` (каждый = build зелёный). Все 8
+  митигаций B1b встроены. Новый модуль `Core/Reconciliation/` (9 файлов): чистое ядро (детектор/lineage/
+  multiset) + off-main @ModelActor worker'ы (single-save, sanity-abort) + оркестратор + маркер/lock +
+  .premerge.bak. Интеграция в `millioApp.synchronizeDataScope` (после swap+`.ready`, до restore-флоу),
+  progress-overlay, локализованная сводка. `DataRepository.importAllData(save:)` и BackupManager-guard —
+  минимальные additive-правки (Track A не тронут). 30 unit-тестов (20 ядро + 6 worker + 4 сервис) +
+  env-гейтед прогон на копиях реальных сторов (перенос дельты +5 tx без задвоения базы, sanity ✓).
+  **Гейты:** build ✅ 0 ошибок на каждом коммите; grep ✅; целевые сьюты зелёные; полный millioTests —
+  за оркестратором. **Отклонения** — см. чеклист B2 выше. **Открыто:** ручная UI-проверка cold-start/
+  runtime-login (нужен Apple-login); new-core в ModelTypeRegistry (отдельный релиз-блокер).
