@@ -112,7 +112,15 @@ actor BackupManager: BackupManagerProtocol {
 
     private func performBackup(passphrase: String?, isPinned: Bool) async throws {
         logger.info("Starting backup...")
-        
+
+        // Блокировка бэкапа во время reconciliation (Track B, митигация B1b №7): пока merge
+        // guest→user не завершён, стор в промежуточном состоянии — бэкап мог бы зафиксировать
+        // частичный набор. Флаг in-memory, снимается в defer сервиса merge.
+        if ScopeMergeLock.shared.isMergeInProgress {
+            logger.info("Backup отложен: идёт reconciliation данных")
+            throw AppError.backupFailed("reconciliation in progress")
+        }
+
         let dataRepository = self.dataRepository
         let encryption = resolvedEncryption()
         let cloudStore = self.cloudStore

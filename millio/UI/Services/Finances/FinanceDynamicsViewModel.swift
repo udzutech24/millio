@@ -136,6 +136,27 @@ struct ChartDataPoint: Identifiable, Equatable {
     static func == (lhs: ChartDataPoint, rhs: ChartDataPoint) -> Bool {
         lhs.id == rhs.id && lhs.date == rhs.date && lhs.value == rhs.value
     }
+
+    /// Поточечно добавляет к точкам старого мира вклад нового ядра event-sourcing (Фаза 1a-ui, AC3).
+    /// Для каждой точки `points` берётся значение `newCoreSeries` на СОВПАДАЮЩИЙ или ближайший
+    /// ПРЕДЫДУЩИЙ календарный день (forward-fill того же дня — у нового ядра дырок нет by design,
+    /// т.к. `AccountsTotalsService.seriesBetween` строит одну точку на каждый календарный день).
+    /// Пустой `newCoreSeries` (нет ни одного нового счёта) не меняет `points` — no-op.
+    static func mergingNewCoreSeries(_ points: [ChartDataPoint], newCoreSeries: [(Date, Decimal)]) -> [ChartDataPoint] {
+        guard !newCoreSeries.isEmpty else { return points }
+        let calendar = Calendar(identifier: .gregorian)
+        let sorted = newCoreSeries.sorted { $0.0 < $1.0 }
+
+        return points.map { point in
+            guard let match = sorted.last(where: {
+                calendar.isDate($0.0, inSameDayAs: point.date) || $0.0 < point.date
+            }) else {
+                return point
+            }
+            let addition = NSDecimalNumber(decimal: match.1).doubleValue
+            return ChartDataPoint(date: point.date, value: point.value + addition, label: point.label)
+        }
+    }
 }
 
 // MARK: - Dynamics Mode
@@ -1299,7 +1320,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 && !isAccountArchived(chartAccounts[0])
                 ? await liveConvertedBalance(for: chartAccounts[0], displayCurrency: state.displayCurrency, at: period.end)
                 : nil
-            let chartData = await buildTimeSeriesData(
+            var chartData = await buildTimeSeriesData(
                 accounts: chartAccounts,
                 startDate: period.start,
                 endDate: period.end,
@@ -1307,6 +1328,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 debtAsNegative: useNetTotals,
                 liveEndBalance: liveEndBalanceAggr
             )
+            // Вклад нового ядра event-sourcing (Фаза 1a-ui, AC3) — только для агрегированного
+            // "тотал-графика"; в byAccounts/singleAccount новые счета появятся в 1b вместе с
+            // переносом их выбора в общий список счетов Dynamics.
+            let newCoreSeries = await financeViewModel.accountsTotalsService.seriesBetween(
+                start: period.start, end: period.end, currency: state.displayCurrency
+            )
+            chartData = ChartDataPoint.mergingNewCoreSeries(chartData, newCoreSeries: newCoreSeries)
             guard isCurrentChartUpdateRevision(revision) else { return }
             state.chartData = chartData
 
@@ -2300,6 +2328,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         for group in state.groups {
             total += await calculateGroupTotal(group: group)
         }
+        // Вклад нового ядра event-sourcing (Фаза 1a-ui, AC2) — ТА ЖЕ функция
+        // (`financeViewModel.accountsTotalsService.totalAt`), что использует Accounts-тотал
+        // в `FinanceTotalsService.calculateTotalsSnapshot`, поэтому суммы совпадают по построению.
+        let newCoreTotal = await financeViewModel.accountsTotalsService.totalAt(Date(), in: state.displayCurrency)
+        total += NSDecimalNumber(decimal: newCoreTotal).doubleValue
         return total
     }
     

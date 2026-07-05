@@ -10,7 +10,7 @@
 		777D081E2F2CF1C9004777D8 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 777D081D2F2CF1C9004777D8 /* GoogleService-Info.plist */; };
 		777D08212F2D1234004777D8 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 777D08202F2D1234004777D8 /* FirebaseCrashlytics */; };
 		77B22ECF2F146CDC005146C6 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77B22ECE2F146CDC005146C6 /* StoreKit.framework */; };
-		78A100022F50000200A10001 /* millioCurrencyWidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 78A100012F50000100A10001 /* millioCurrencyWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		78A100022F50000200A10001 /* millioCurrencyWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 78A100012F50000100A10001 /* millioCurrencyWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -38,15 +38,15 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		78A1000D2F50000D00A10001 /* Embed App Extensions */ = {
+		78A1000D2F50000D00A10001 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				78A100022F50000200A10001 /* millioCurrencyWidgetExtension.appex in Embed App Extensions */,
+				78A100022F50000200A10001 /* millioCurrencyWidgetExtension.appex in Embed Foundation Extensions */,
 			);
-			name = "Embed App Extensions";
+			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -66,6 +66,9 @@
 		77AD825C2F1313D4006E2305 /* Exceptions for "millio" folder in "millio" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Config/Debug.xcconfig,
+				Config/Release.xcconfig,
+				Config/Secrets.local.xcconfig,
 				Info.plist,
 			);
 			target = 772BE51C2F12DBED00193DE9 /* millio */;
@@ -192,7 +195,7 @@
 				772BE5192F12DBED00193DE9 /* Sources */,
 				772BE51A2F12DBED00193DE9 /* Frameworks */,
 				772BE51B2F12DBED00193DE9 /* Resources */,
-				78A1000D2F50000D00A10001 /* Embed App Extensions */,
+				78A1000D2F50000D00A10001 /* Embed Foundation Extensions */,
 				777D08222F2D1234004777D8 /* Firebase Crashlytics */,
 			);
 			buildRules = (
@@ -289,7 +292,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2620;
-				LastUpgradeCheck = 2630;
+				LastUpgradeCheck = 2660;
 				TargetAttributes = {
 					772BE51C2F12DBED00193DE9 = {
 						CreatedOnToolsVersion = 26.2;
@@ -453,6 +456,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -507,6 +511,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -517,6 +522,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -564,6 +570,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};

@@ -422,6 +422,10 @@ final class FinanceAccountService {
 
         do {
             try modelContext.save()
+            // Track D1: без onLoadAccounts() кэши cardByID/creditByID/investmentByID (единственное
+            // место фильтрации archivedAt) оставались устаревшими — счёт «висел» в списке и тотале
+            // до перезапуска приложения. Симметрично addAccountToGroup (см. выше).
+            onLoadAccounts()
             onLoadGroups()
             onCalculateTotal()
             if let groupID = accountGroup?.groupUniqueID {
@@ -442,6 +446,8 @@ final class FinanceAccountService {
 
         do {
             try modelContext.save()
+            // Track D1: тот же дефект, что и в removeAccountFromGroup выше.
+            onLoadAccounts()
             onLoadGroups()
             onCalculateTotal()
             if let groupID = accountGroup?.groupUniqueID {

@@ -174,6 +174,58 @@ struct AuthManagerTests {
         #expect(callbackArgument == nil)
     }
 
+    // A3: явный logout должен забыть кэш user-скоупа, иначе resilience-блок
+    // synchronizeDataScope переоткроет user-стор при следующем switch.
+    @Test("logout clears cached user scope so app rebinds to guest")
+    func testLogoutClearsScopeCache() async {
+        let service = LogoutTrackingAuthService()
+        let manager = AuthManager(service: service, toastCenter: ToastCenter())
+        ScopeCache.save(.user(id: "user-logout"))
+        manager.status = .authenticated
+        manager.currentUser = .fixture
+
+        var callbackArgument: AuthUser? = .fixture
+        manager.configure(onSessionChanged: { user in
+            callbackArgument = user
+        })
+
+        await manager.logout()
+
+        #expect(callbackArgument == nil)
+        #expect(ScopeCache.lastKnownUserID() == nil)
+
+        ScopeCache.clearUserID()
+    }
+
+    // A3 (security-баг 2026-06-16): 401 на /me в рантайме = терминальный force-signout.
+    // Должен вызвать onSessionChanged(nil) (ребинд на guest) + очистить кэш user-скоупа,
+    // иначе данные прежнего пользователя остаются видимы после «continue as guest».
+    @Test("unauthorized on reload performs terminal sign-out")
+    func testUnauthorizedReloadTriggersTerminalSignOut() async {
+        let service = FailingAuthService(restoreError: AuthServiceError.unauthorized(requestId: "backend-401"))
+        let manager = AuthManager(service: service, toastCenter: ToastCenter())
+        ScopeCache.save(.user(id: "user-401"))
+        manager.status = .authenticated
+        manager.currentUser = .fixture
+
+        var callbackArgument: AuthUser? = .fixture
+        var callbackCalls = 0
+        manager.configure(onSessionChanged: { user in
+            callbackCalls += 1
+            callbackArgument = user
+        })
+
+        await manager.reloadCurrentUser()
+
+        #expect(callbackCalls == 1)
+        #expect(callbackArgument == nil)
+        #expect(manager.status == .signedOut)
+        #expect(manager.currentUser == nil)
+        #expect(ScopeCache.lastKnownUserID() == nil)
+
+        ScopeCache.clearUserID()
+    }
+
     @Test("logout proceeds while busy if session is authenticated")
     func testLogoutProceedsWhenBusyAuthenticated() async {
         let service = LogoutTrackingAuthService()

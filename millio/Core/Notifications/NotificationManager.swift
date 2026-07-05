@@ -303,7 +303,7 @@ final class NotificationManager: NotificationManagerProtocol {
         language: Language,
         locale: Locale
     ) -> String {
-        let dateText = formattedDate(reminderDate, locale: locale)
+        _ = formattedDate(reminderDate, locale: locale)
         let amountText = formattedAmount(transaction.amount, currency: transaction.currency, locale: locale)
         let noteSuffix = transaction.note.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
             .map { " · \($0)" } ?? ""

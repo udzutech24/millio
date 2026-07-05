@@ -217,6 +217,7 @@ private struct FinanceDynamicsContentView: View {
     @State private var overviewEntriesByGranularity: [FinanceOverviewGranularity: [FinanceOverviewPeriodEntry]] = [:]
     @State private var isOverviewChartLoading: Bool = false
     @State private var showDeleteAccountConfirmation: Bool = false
+    @State private var showConvertToCoreConfirmation: Bool = false
     @State private var showDeleteGroupConfirmation: Bool = false
     @State private var showArchiveBalanceWarning: Bool = false
     @State private var archiveBalanceWarningAmount: Double = 0
@@ -338,6 +339,16 @@ private struct FinanceDynamicsContentView: View {
                     cancelTitle: L("finances.common.cancel"),
                     onConfirm: confirmDeleteAccount,
                     onCancel: { showDeleteAccountConfirmation = false }
+                )
+
+                FinancesDestructiveConfirmationOverlay(
+                    isPresented: showConvertToCoreConfirmation,
+                    title: L("finances.convert_to_core.confirm.title"),
+                    message: L("finances.convert_to_core.confirm.message"),
+                    confirmTitle: L("finances.convert_to_core.confirm.action"),
+                    cancelTitle: L("finances.common.cancel"),
+                    onConfirm: confirmConvertToCore,
+                    onCancel: { showConvertToCoreConfirmation = false }
                 )
 
                 FinancesDestructiveConfirmationOverlay(
@@ -544,6 +555,7 @@ private struct FinanceDynamicsContentView: View {
                     }
 
                     if shouldShowDeleteAccountFooter, let account = initialAccount {
+                        convertToCoreFooterButton(account: account)
                         deleteAccountFooterButton(account: account)
                     }
                 }
@@ -668,6 +680,7 @@ private struct FinanceDynamicsContentView: View {
                     }
 
                     if shouldShowDeleteMarketInvestmentFooter, let account = initialAccount {
+                        convertToCoreFooterButton(account: account)
                         deleteAccountFooterButton(account: account)
                     }
                 }
@@ -2219,6 +2232,40 @@ private struct FinanceDynamicsContentView: View {
             isHidden: false
         )
         return FinancesL10n.format("finances.archive.balance_warning.message", formatted)
+    }
+
+    /// Track C: «Перевести в новое ядро» — рядом с «Удалить актив» в деталке одиночного счёта.
+    private func convertToCoreFooterButton(account: FinanceAccount) -> some View {
+        Button {
+            showConvertToCoreConfirmation = true
+        } label: {
+            HStack(spacing: AppSpacing.s) {
+                Image(systemName: "arrow.up.forward.square")
+                Text(L("finances.convert_to_core.action"))
+            }
+            .font(.millioCalloutSemibold)
+            .foregroundStyle(AppColors.textPrimary.opacity(0.9))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppSpacing.ml)
+        }
+        .buttonStyle(.plain)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
+                )
+        }
+        .padding(.bottom, AppSpacing.s)
+        .accessibilityIdentifier("finances.convert_to_core.button")
+    }
+
+    private func confirmConvertToCore() {
+        guard let account = initialAccount else { return }
+        showConvertToCoreConfirmation = false
+        financeViewModel.handle(.convertAccountToCore(account))
+        dismiss()
     }
 
     private func deleteAccountFooterButton(account: FinanceAccount) -> some View {

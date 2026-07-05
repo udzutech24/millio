@@ -1,0 +1,50 @@
+import Foundation
+
+/// Реестр соответствий «легаси-счёт → счёт нового ядра» для отката конвертации (Track C).
+///
+/// Хранится в UserDefaults, а НЕ полем в @Model. Причина: добавление поля в SwiftData-модель =
+/// изменение схемы (риск №11 плана — V4 in-place уже хрупкая), которого сознательно избегаем.
+/// Реестр device-local (бэкапом не переносится): при его утере откат конвертации недоступен, но
+/// легаси остаётся `archivedAt`-скрытым — double-count в тотале НЕ возникает (инвариант держится
+/// хранимым `archivedAt`, а не реестром). Ключ — легаси `uniqueID` (== `FinanceAccount.accountID`).
+@MainActor
+final class LegacyConversionRegistry {
+    static let shared = LegacyConversionRegistry()
+
+    private let defaults: UserDefaults
+    private let storageKey = "legacy_account_conversions_v1"
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    private func load() -> [String: String] {
+        defaults.dictionary(forKey: storageKey) as? [String: String] ?? [:]
+    }
+
+    private func store(_ map: [String: String]) {
+        defaults.set(map, forKey: storageKey)
+    }
+
+    /// UUID созданного core-двойника для легаси-счёта, либо nil, если конвертации не было.
+    func coreAccountID(forLegacyUniqueID legacyUniqueID: String) -> UUID? {
+        guard let raw = load()[legacyUniqueID] else { return nil }
+        return UUID(uuidString: raw)
+    }
+
+    func isConverted(legacyUniqueID: String) -> Bool {
+        coreAccountID(forLegacyUniqueID: legacyUniqueID) != nil
+    }
+
+    func record(legacyUniqueID: String, coreAccountID: UUID) {
+        var map = load()
+        map[legacyUniqueID] = coreAccountID.uuidString
+        store(map)
+    }
+
+    func remove(legacyUniqueID: String) {
+        var map = load()
+        map.removeValue(forKey: legacyUniqueID)
+        store(map)
+    }
+}

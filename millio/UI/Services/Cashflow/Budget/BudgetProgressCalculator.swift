@@ -45,7 +45,19 @@ enum BudgetProgressCalculator {
                 if $0.status != $1.status {
                     return severity(for: $0.status) > severity(for: $1.status)
                 }
-                let titleOrder = $0.title.localizedCaseInsensitiveCompare($1.title)
+                // Пин locale на en_US_POSIX: `localizedCaseInsensitiveCompare` использует
+                // NSLocale.current (locale устройства/симулятора, а не выбранный язык приложения).
+                // Для Han-строк (zh-Hans) системная коллация сортирует по пиньиню, что даёт
+                // другой порядок tie-break при одинаковом severity двух категорий, чем ожидает
+                // остальной код (canonical Unicode-порядок). POSIX-локаль убирает эту
+                // недетерминированность — сравнение всегда по кодовым точкам, независимо от
+                // языка/региона устройства.
+                let titleOrder = $0.title.compare(
+                    $1.title,
+                    options: [.caseInsensitive],
+                    range: nil,
+                    locale: Locale(identifier: "en_US_POSIX")
+                )
                 if titleOrder != .orderedSame {
                     return titleOrder == .orderedAscending
                 }

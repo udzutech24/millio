@@ -687,6 +687,11 @@ struct CashflowCategoryOption: Identifiable, Hashable {
 final class CashflowTransaction: Persistable {
     static let customCategoryPrefix = "custom:"
 
+    /// Стабильный идентификатор транзакции, независимый от `persistentModelID` SwiftData.
+    /// Нужен как `sourceTransactionID` для идемпотентной связи с `AccountEvent` нового ядра
+    /// счетов (мост Cashflow → ядро, Фаза 1b) — persistentModelID нельзя хранить как строку.
+    var uniqueID: String = UUID().uuidString
+
     /// Тип транзакции
     var transactionTypeRaw: String = "expense"
     

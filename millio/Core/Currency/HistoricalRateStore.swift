@@ -149,6 +149,12 @@ final class HistoricalRateStore {
     
     private func upsertRate(base: String, quote: String, rate: Double, date: Date, source: String) {
         if let existing = fetchExactRate(base: base, quote: quote, date: date) {
+            // Append-only для прошлых дат (AC10, фикс R4 «плывущей» аналитики):
+            // однажды зафиксированный курс закрытого дня не перезаписывается —
+            // исторические точки графика детерминированы. Обновлять можно только
+            // курс СЕГОДНЯШНЕГО дня (внутридневное уточнение до закрытия дня).
+            // Тот же паттерн, что в HistoricalAssetPrice (Фаза 4).
+            guard Calendar.current.isDateInToday(existing.rateDate) else { return }
             existing.rate = rate
             existing.source = source
             existing.fetchedAt = Date()

@@ -12,16 +12,24 @@ import Testing
 struct FinanceOverviewLedgerStyleTests {
     @Test("Style helper собирает строку количества групп и счетов")
     func countsTextBuildsExpectedCopy() {
-        #expect(
-            FinanceOverviewLedgerStyle.countsText(groups: 3, accounts: 4) == "3 групп · 4 счетов"
-        )
+        // Swift Testing параллелит тесты внутри таргета: без явной фиксации языка
+        // тест зависит от ambient LanguageManager.shared, который другие l10n-тесты
+        // временно переключают (withLanguage). Пиним язык, как это делают остальные
+        // l10n-тесты в проекте (см. AppLanguageTestSupport).
+        AppLanguageTestSupport.withLanguage(.russian) {
+            #expect(
+                FinanceOverviewLedgerStyle.countsText(groups: 3, accounts: 4) == "3 групп · 4 счетов"
+            )
+        }
     }
 
     @Test("Style helper собирает компактную строку для плотной карточки")
     func compactCountsTextBuildsExpectedCopy() {
-        #expect(
-            FinanceOverviewLedgerStyle.compactCountsText(groups: 3, accounts: 4) == "3 гр. · 4 сч."
-        )
+        AppLanguageTestSupport.withLanguage(.russian) {
+            #expect(
+                FinanceOverviewLedgerStyle.compactCountsText(groups: 3, accounts: 4) == "3 гр. · 4 сч."
+            )
+        }
     }
 
     @Test("Style helper нормализует отрицательные суммы в кредит")

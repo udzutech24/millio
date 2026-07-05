@@ -49,6 +49,8 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     private let appFirstLaunchDateKey = "appFirstLaunchDate"
     private let hasRatedAppKey = "hasRatedApp"
     private let dashboardDeltaPeriodDaysKey = "dashboardDeltaPeriodDays"
+    private let depositTaxNdflRatePercentKey = "depositTaxNdflRatePercent"
+    private let depositTaxKeyRateForYearKey = "depositTaxKeyRateForYear"
     private static let legacyDefaultProfileDisplayNames: Set<String> = ["Гость", "Guest"]
     private let defaults: UserDefaults
 
@@ -423,6 +425,31 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
         set { defaults.set(newValue, forKey: dashboardDeltaPeriodDaysKey) }
     }
 
+    /// Ставка НДФЛ на проценты по вкладам (13 или 15%) — план §2.8, брифинг Фазы 3. Хранится
+    /// числом-процентом (13), не долей — конвенция как у `DepositMeta.rate`.
+    var depositTaxNdflRatePercent: Decimal {
+        get {
+            let stored = defaults.double(forKey: depositTaxNdflRatePercentKey)
+            return stored > 0 ? Decimal(stored) : DepositTaxSettings.default.ndflRatePercent
+        }
+        set { defaults.set(NSDecimalNumber(decimal: newValue).doubleValue, forKey: depositTaxNdflRatePercentKey) }
+    }
+
+    /// Максимальная ключевая ставка ЦБ за календарный год — ДОЛЯ (0.16 = 16%), задаётся вручную
+    /// (нет авто-источника курса в Фазе 3, см. `DepositTaxSettings.keyRateForYear`).
+    var depositTaxKeyRateForYear: Decimal {
+        get {
+            let stored = defaults.double(forKey: depositTaxKeyRateForYearKey)
+            return stored > 0 ? Decimal(stored) : DepositTaxSettings.default.keyRateForYear
+        }
+        set { defaults.set(NSDecimalNumber(decimal: newValue).doubleValue, forKey: depositTaxKeyRateForYearKey) }
+    }
+
+    /// Собранные настройки налога «чистыми» для `DepositTaxCalculator` (удобная точка доступа).
+    var depositTaxSettings: DepositTaxSettings {
+        DepositTaxSettings(ndflRatePercent: depositTaxNdflRatePercent, keyRateForYear: depositTaxKeyRateForYear)
+    }
+
     /// Возвращает пользовательские настройки к безопасным дефолтам приложения.
     func resetToDefaults() {
         isBackupEnabled = false
@@ -445,6 +472,9 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
         lastLaunchSplashShownAt = nil
         isGuestModeEnabled = false
         isDebugMenuUnlocked = false
+
+        defaults.removeObject(forKey: depositTaxNdflRatePercentKey)
+        defaults.removeObject(forKey: depositTaxKeyRateForYearKey)
 
         // Модульные display-валюты и прочие временные UX-флаги.
         defaults.removeObject(forKey: "card_display_currency")

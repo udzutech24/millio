@@ -271,7 +271,9 @@ struct AccountBalanceChartView: View {
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
-                                let x = value.location.x - geo[proxy.plotAreaFrame].origin.x
+                                // plotAreaFrame устарел с iOS 17 — используем plotFrame (Optional).
+                                guard let plotAnchor = proxy.plotFrame else { return }
+                                let x = value.location.x - geo[plotAnchor].origin.x
                                 guard let date: Date = proxy.value(atX: x) else { return }
                                 selectedPoint = allPoints.min(by: {
                                     abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))

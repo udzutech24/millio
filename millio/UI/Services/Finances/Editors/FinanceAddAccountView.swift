@@ -68,6 +68,8 @@ struct FinanceAddAccountView: View {
     @State private var cardData: Card?
     @State private var creditData: (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)?
     @State private var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?
+    /// Данные формы «Вклад»/«Накопительный счёт» нового ядра (Фаза 3) — `nil` для остальных пресетов.
+    @State private var depositData: DepositFormData?
     @State private var selectedArchivedAccountID: String? = nil
     @State private var accountName: String = ""
     @FocusState private var isNameFieldFocused: Bool
@@ -585,7 +587,15 @@ struct FinanceAddAccountView: View {
                 }
             }
         case .investment:
-            if investmentViewModel == nil {
+            if selectedInvestmentPreset == .deposit, editingInvestment == nil {
+                // Вклад/накопительный счёт — новое ядро event-sourcing (Фаза 3), НЕ старый Investment(isDeposit:).
+                InlineDepositCreateForm(
+                    name: $accountName,
+                    onDepositDataChanged: { data in self.depositData = data }
+                ) {
+                    groupSection
+                }
+            } else if investmentViewModel == nil {
                 VStack(alignment: .leading, spacing: 10) {
                     FinancesSectionHeader(title: editingInvestment == nil ? L("finances.add_account.investment.create") : L("finances.add_account.investment.edit"))
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
@@ -1016,6 +1026,9 @@ struct FinanceAddAccountView: View {
         case .credit:
             return creditData != nil
         case .investment:
+            if selectedInvestmentPreset == .deposit, addAccountMode == .create, editingInvestment == nil {
+                return depositData != nil
+            }
             return investmentData != nil
         }
     }
@@ -1044,6 +1057,9 @@ struct FinanceAddAccountView: View {
             guard let creditData else { return false }
             return creditData.amount != 0
         case .investment:
+            if selectedInvestmentPreset == .deposit, editingInvestment == nil {
+                return (depositData?.amount ?? 0) != 0
+            }
             guard let investmentData else { return false }
             if selectedInvestmentCategory == .stocks || selectedInvestmentCategory == .crypto {
                 return (investmentData.marketData?.quantity ?? 0) != 0
@@ -1132,8 +1148,263 @@ struct FinanceAddAccountView: View {
         }
     }
     
+    /// kind нового ядра для текущего выбора пресета «Карта»/«Счёт» — `nil` для остальных
+    /// пресетов (вклад/инвестиции/…, они пока идут старым путём, см. `AccountsCoreAdditionBridge`)
+    /// и для режима редактирования (`isEditingMode` — правка СУЩЕСТВУЮЩЕЙ легаси `Card`/`Investment`,
+    /// у new-core счетов редактирование — через `AccountDetailView`, не эту форму). Фикс Фазы 6a:
+    /// без `isEditingMode` правка легаси-карты создавала счёт-дубликат нового ядра вместо обновления —
+    /// см. докстринг `AccountsCoreAdditionBridge.moneyKind`.
+    private var newCoreMoneyKindForCurrentSelection: AccountKind? {
+        guard addAccountMode == .create else { return nil }
+        return AccountsCoreAdditionBridge.moneyKind(
+            accountType: selectedAccountType,
+            investmentPreset: selectedInvestmentPreset,
+            bank: cardData?.bank ?? .other,
+            isEditingLegacy: isEditingMode
+        )
+    }
+
+    /// kind нового ядра для пресетов «Кредит»/«Долг» (Фаза 2) — `nil` для остальных пресетов
+    /// и для режима редактирования (та же причина и фикс Фазы 6a, см. `newCoreMoneyKindForCurrentSelection`).
+    private var newCoreObligationKindForCurrentSelection: AccountKind? {
+        guard addAccountMode == .create else { return nil }
+        return AccountsCoreAdditionBridge.obligationKind(
+            accountType: selectedAccountType,
+            investmentCategory: selectedInvestmentCategory,
+            isEditingLegacy: isEditingMode
+        )
+    }
+
+    /// kind нового ядра для пресета «Вклад»/«Накопительный счёт» (Фаза 3) — `nil` для остальных
+    /// пресетов и для режима редактирования (правка depositMeta — через `AccountDetailView`, не эту форму).
+    private var newCoreDepositKindForCurrentSelection: AccountKind? {
+        guard addAccountMode == .create else { return nil }
+        return AccountsCoreAdditionBridge.depositKind(
+            accountType: selectedAccountType,
+            investmentPreset: selectedInvestmentPreset,
+            isEditingLegacy: isEditingMode
+        )
+    }
+
+    /// kind нового ядра для пресетов «Акции»/«Крипта»/«Недвижимость»/«Бизнес»/«Другое»/«Инвестиция»
+    /// (Фаза 4) — `nil` для остальных пресетов (карта/счёт/вклад/кредит/долг — уже обработаны выше)
+    /// и для режима редактирования. «Долг» сюда НЕ попадает — обработан `newCoreObligationKindForCurrentSelection`.
+    private var newCoreAssetKindForCurrentSelection: AccountKind? {
+        guard addAccountMode == .create else { return nil }
+        let hasTicker = investmentData?.marketData?.symbol?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        return AccountsCoreAdditionBridge.assetKind(
+            accountType: selectedAccountType,
+            investmentCategory: selectedInvestmentCategory,
+            investmentPreset: selectedInvestmentPreset,
+            hasTicker: hasTicker,
+            isEditingLegacy: isEditingMode
+        )
+    }
+
+    /// Создание вклада/накопительного счёта на новом ядре (Фаза 3): создаёт счёт + сразу генерирует
+    /// БУДУЩИЕ interest-события по расписанию капитализации (`DepositInterestScheduler`) — карточка
+    /// счёта открывается уже с прогнозом «в месяц»/«за срок», без отдельного шага «посчитать».
+    private func createDepositAccountOnNewCore() {
+        guard let depositData else { return }
+        let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
+        let group = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: viewModel.modelContext)
+        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+
+        let meta = AccountsCoreAdditionBridge.depositMeta(
+            rate: Decimal(depositData.rate),
+            capitalization: depositData.capitalization,
+            termEnd: depositData.termEnd,
+            allowsTopUp: depositData.allowsTopUp,
+            allowsEarlyClose: depositData.allowsEarlyClose,
+            earlyClosePenaltyShare: Decimal(depositData.earlyClosePenaltyPercent / 100),
+            remindEnd: depositData.remindEnd,
+            autoRollover: depositData.autoRollover
+        )
+
+        do {
+            let account = try service.createAccount(
+                name: resolvedName,
+                kind: .deposit,
+                currency: depositData.currency,
+                openingBalance: Decimal(depositData.amount),
+                group: group,
+                depositMeta: meta,
+                note: depositData.comment.isEmpty ? nil : depositData.comment
+            )
+            try DepositInterestScheduler.regenerateFutureInterestEvents(
+                for: account,
+                service: service,
+                context: viewModel.modelContext
+            )
+            dismiss()
+        } catch {
+            AppLogger.log(.error, category: "AccountsCore", "Не удалось создать вклад нового ядра: \(error)")
+        }
+    }
+
+    /// Создание денежного счёта («Карта»/«Счёт») на новом ядре event-sourcing (Фаза 1a-ui).
+    /// Никогда не создаёт старый `Card`/`Investment` — единственная точка записи: `AccountsCoreService`.
+    private func createMoneyAccountOnNewCore(kind: AccountKind) {
+        let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
+
+        let currency: String
+        let openingBalance: Decimal
+        var cardMeta: CardMeta?
+
+        switch kind {
+        case .cash, .debitCard:
+            guard let cardData else { return }
+            currency = cardData.currency
+            openingBalance = Decimal(cardData.balance)
+            cardMeta = CardMeta(
+                bank: cardData.bank == .other ? nil : cardData.bank.rawValue,
+                last4: cardData.cardNumber.isEmpty ? nil : cardData.cardNumber,
+                creditLimit: cardData.cardType == .credit ? cardData.creditLimit.map { Decimal($0) } : nil
+            )
+        default: // .bankAccount
+            guard let investmentData else { return }
+            currency = investmentData.currency
+            openingBalance = Decimal(investmentData.amount)
+        }
+
+        let group = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: viewModel.modelContext)
+        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+        do {
+            try service.createAccount(
+                name: resolvedName,
+                kind: kind,
+                currency: currency,
+                openingBalance: openingBalance,
+                group: group,
+                cardMeta: cardMeta
+            )
+            dismiss()
+        } catch {
+            AppLogger.log(.error, category: "AccountsCore", "Не удалось создать денежный счёт нового ядра: \(error)")
+        }
+    }
+
+    /// Создание обязательства («Кредит»/«Долг») на новом ядре event-sourcing (Фаза 2).
+    /// Никогда не создаёт старый `Credit`/`Investment(debt)` — единственная точка записи: `AccountsCoreService`.
+    private func createObligationAccountOnNewCore(kind: AccountKind) {
+        let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
+        let group = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: viewModel.modelContext)
+        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+
+        do {
+            switch kind {
+            case .loan:
+                guard let creditData else { return }
+                let meta = AccountsCoreAdditionBridge.loanMeta(
+                    principal: Decimal(creditData.amount),
+                    monthlyPayment: creditData.monthlyPayment > 0 ? Decimal(creditData.monthlyPayment) : nil,
+                    paymentDay: creditData.paymentDayOfMonth,
+                    termEnd: creditData.endDate
+                )
+                // openingBalance — ТЕКУЩИЙ остаток долга (remainingAmount), не первоначальная сумма
+                // (principal хранится отдельно в loanMeta для отображения) — движок C сам сделает знак минус.
+                try service.createAccount(
+                    name: resolvedName,
+                    kind: .loan,
+                    currency: creditData.currency,
+                    openingBalance: Decimal(creditData.remainingAmount),
+                    group: group,
+                    loanMeta: meta
+                )
+            case .debt:
+                guard let investmentData else { return }
+                let direction: DebtDirection = investmentData.investmentType == .positive ? .owedToMe : .owedByMe
+                let signedOpening = direction == .owedToMe ? Decimal(investmentData.amount) : -Decimal(investmentData.amount)
+                try service.createAccount(
+                    name: resolvedName,
+                    kind: .debt,
+                    currency: investmentData.currency,
+                    openingBalance: signedOpening,
+                    group: group,
+                    debtMeta: AccountsCoreAdditionBridge.debtMeta(direction: direction)
+                )
+            default:
+                return
+            }
+            dismiss()
+        } catch {
+            AppLogger.log(.error, category: "AccountsCore", "Не удалось создать обязательство нового ядра: \(error)")
+        }
+    }
+
+    /// Создание рыночного/ручного актива на новом ядре event-sourcing (Фаза 4). Никогда не создаёт
+    /// старый `Investment` — единственная точка записи: `AccountsCoreService`.
+    private func createAssetAccountOnNewCore(kind: AccountKind) {
+        guard let investmentData else { return }
+        let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
+        let group = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: viewModel.modelContext)
+        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+
+        do {
+            switch kind {
+            case .marketInvestment:
+                guard let marketData = investmentData.marketData,
+                      let symbol = marketData.symbol?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !symbol.isEmpty,
+                      let quantity = marketData.quantity else { return }
+                // Цена ПОКУПКИ — приоритет `purchaseUnitPrice` (пользователь ввёл вручную), иначе
+                // последняя известная рыночная цена на момент выбора тикера (брифинг Фазы 4, задача 1).
+                let unitPrice = Decimal(marketData.purchaseUnitPrice ?? marketData.unitPrice ?? 0)
+                let currency = (marketData.currency?.isEmpty == false) ? marketData.currency! : investmentData.currency
+                let meta = AccountsCoreAdditionBridge.marketMeta(symbol: symbol, category: selectedInvestmentCategory)
+                let account = try service.createAccount(
+                    name: resolvedName,
+                    kind: .marketInvestment,
+                    currency: currency,
+                    openingBalance: 0, // движок E игнорирует opening — баланс считает только buy/sell
+                    group: group,
+                    marketMeta: meta
+                )
+                try service.buy(account: account, quantity: Decimal(quantity), unitPrice: unitPrice)
+            case .manualAsset:
+                try service.createAccount(
+                    name: resolvedName,
+                    kind: .manualAsset,
+                    currency: investmentData.currency,
+                    openingBalance: Decimal(investmentData.amount),
+                    group: group,
+                    manualAssetMeta: AccountsCoreAdditionBridge.manualAssetMeta()
+                )
+            default:
+                return
+            }
+            dismiss()
+        } catch {
+            AppLogger.log(.error, category: "AccountsCore", "Не удалось создать актив нового ядра: \(error)")
+        }
+    }
+
     private func addAccount() {
         guard validateEntitlementsForSave() else { return }
+
+        if let newCoreKind = newCoreMoneyKindForCurrentSelection {
+            createMoneyAccountOnNewCore(kind: newCoreKind)
+            return
+        }
+
+        if newCoreDepositKindForCurrentSelection != nil {
+            createDepositAccountOnNewCore()
+            return
+        }
+
+        if let newCoreObligationKind = newCoreObligationKindForCurrentSelection {
+            createObligationAccountOnNewCore(kind: newCoreObligationKind)
+            return
+        }
+
+        if let newCoreAssetKind = newCoreAssetKindForCurrentSelection {
+            createAssetAccountOnNewCore(kind: newCoreAssetKind)
+            return
+        }
 
         switch selectedAccountType {
         case .card:

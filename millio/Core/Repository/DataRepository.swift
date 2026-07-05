@@ -42,18 +42,26 @@ final class DataRepository: DataRepositoryProtocol {
         return try await worker.exportAllData()
     }
     
-    static func exportAllData(from context: ModelContext) throws -> Data {
+    /// - Parameter excludedTypeNames: типы, исключаемые из экспорта (по умолчанию — ни одного,
+    ///   поведение полного backup не меняется). Единственный вызывающий с непустым значением —
+    ///   `ScopeMergeReader.readGuestInput` (Track B reconciliation): new-core типы (Account/
+    ///   AccountEvent/AccountGroup/AccountDailySnapshot) имеют свой выделенный merge-путь
+    ///   (`ScopeMergeDedup.copyNewCore`) и не должны попадать сюда — иначе reconciliation
+    ///   импортирует их дважды двумя независимыми путями (см. `ScopeMergeReader.newCoreTypeNames`).
+    static func exportAllData(from context: ModelContext, excluding excludedTypeNames: Set<String> = []) throws -> Data {
         let metadata = BackupMetadata(
             version: .current,
             timestamp: Date(),
             schemaVersion: BackupMetadata.currentSchemaVersion,
             modelCount: 0
         )
-        
+
         var modelsData: [[String: Any]] = []
         let registeredTypes = ModelTypeRegistry.shared.getExportableTypes()
-        let typeNames = registeredTypes.keys.sorted()
-        
+        let typeNames = registeredTypes.keys
+            .filter { !excludedTypeNames.contains($0) }
+            .sorted()
+
         for typeName in typeNames {
             guard let exporter = ModelTypeRegistry.shared.getBackupExporter(for: typeName) else { continue }
             modelsData.append(contentsOf: try exporter(context))
@@ -103,7 +111,10 @@ final class DataRepository: DataRepositoryProtocol {
         }
     }
     
-    static func importAllData(_ data: Data, into context: ModelContext) throws {
+    /// - Parameter save: по умолчанию `true` (поведение restore не меняется). Reconciliation (Track B)
+    ///   передаёт `false`: весь merge идёт в одном дочернем контексте с ЕДИНСТВЕННЫМ save в конце
+    ///   (митигация B1b №5) — промежуточный save здесь сломал бы атомарность.
+    static func importAllData(_ data: Data, into context: ModelContext, save: Bool = true) throws {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let modelsData = json["models"] as? [[String: Any]] else {
             throw AppError.backupCorrupted
@@ -153,8 +164,10 @@ final class DataRepository: DataRepositoryProtocol {
         for item in typedModels {
             try item.importer.`import`(from: item.data, context: context)
         }
-        
-        try context.save()
+
+        if save {
+            try context.save()
+        }
     }
     
     func clearAllData() throws {

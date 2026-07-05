@@ -24,6 +24,9 @@ final class CashflowPersistenceService {
     private let modelContext: ModelContext
     private let now: () -> Date
     private let currencyService: CashflowCurrencyService
+    // Мост в новое ядро счетов (event-sourcing, Фаза 1b) — обрабатывает ТОЛЬКО транзакции,
+    // целящиеся в Account нового мира; легаси Card/Investment ниже этот мост не задевает.
+    private let accountsCoreCashflowBridge: AccountsCoreCashflowBridge
 
     // Провайдеры данных
     private let cardProvider: (String) -> Card?
@@ -51,6 +54,7 @@ final class CashflowPersistenceService {
         modelContext: ModelContext,
         now: @escaping () -> Date,
         currencyService: CashflowCurrencyService,
+        accountsCoreCashflowBridge: AccountsCoreCashflowBridge,
         cardProvider: @escaping (String) -> Card?,
         investmentProvider: @escaping (String) -> Investment?,
         transactionsProvider: @escaping () -> [CashflowTransaction],
@@ -70,6 +74,7 @@ final class CashflowPersistenceService {
         self.modelContext = modelContext
         self.now = now
         self.currencyService = currencyService
+        self.accountsCoreCashflowBridge = accountsCoreCashflowBridge
         self.cardProvider = cardProvider
         self.investmentProvider = investmentProvider
         self.transactionsProvider = transactionsProvider
@@ -122,6 +127,13 @@ final class CashflowPersistenceService {
         }
 
         for transactionToDelete in transactionsToDelete {
+            // Для новых счетов «удаление без пересчёта» не существует — событие ядра удаляется
+            // всегда, независимо от флага `recalculate` (риск №7, легаси-поведение карт не меняем).
+            do {
+                try accountsCoreCashflowBridge.deleteEvents(for: transactionToDelete)
+            } catch {
+                AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge delete failed: \(error.localizedDescription)")
+            }
             modelContext.delete(transactionToDelete)
         }
 
@@ -141,6 +153,11 @@ final class CashflowPersistenceService {
 
     func deleteTransactionWithoutRecalculation(_ transaction: CashflowTransaction) {
         let preservedBalances = preservedAccountBalances(for: transaction)
+        do {
+            try accountsCoreCashflowBridge.deleteEvents(for: transaction)
+        } catch {
+            AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge delete failed: \(error.localizedDescription)")
+        }
         modelContext.delete(transaction)
 
         do {
@@ -226,6 +243,10 @@ final class CashflowPersistenceService {
             return false
         }
 
+        // Ссылка на итоговую сохранённую сущность (existing либо только что созданная) — нужна,
+        // чтобы после легаси-эффекта синхронизировать событие нового ядра (Фаза 1b).
+        let persistedTransaction: CashflowTransaction
+
         if let existing = existingTransaction {
             do {
                 if persistedBalanceEffectWasApplied(for: existing) {
@@ -265,6 +286,7 @@ final class CashflowPersistenceService {
             existing.exchangeRateDate = exchangeInfo.rateDate
             existing.exchangeRateCurrency = exchangeInfo.rateCurrency
             existing.updatedAt = nowDate
+            persistedTransaction = existing
         } else {
             // Создаём новую транзакцию
             let newTransaction = CashflowTransaction(
@@ -300,6 +322,15 @@ final class CashflowPersistenceService {
                 modelContext.delete(newTransaction)
                 return false
             }
+            persistedTransaction = newTransaction
+        }
+
+        do {
+            try await accountsCoreCashflowBridge.sync(for: persistedTransaction)
+        } catch {
+            // Не блокируем сохранение легаси-транзакции (источник истины ленты/бюджетов) —
+            // событие нового ядра можно досинхронизировать следующей правкой (риск №8: offline).
+            AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge sync failed: \(error.localizedDescription)")
         }
 
         do {
@@ -383,6 +414,16 @@ final class CashflowPersistenceService {
     // MARK: - Internal: Применение/откат баланса (вызывается из scheduledService-колбэков VM)
 
     func applyRecurringTransactionToCardBalance(_ transaction: CashflowTransaction) async {
+        // Сгенерированный recurring-инстанс (Фаза 1b, задача 6): идемпотентно по
+        // transaction.uniqueID — генератор (generateRecurringTransactionsIfNeeded) уже не создаёт
+        // второй CashflowTransaction для той же даты серии, так что эта ветка выполняется ровно
+        // один раз на инстанс; повторный запуск генератора дубликат события не создаёт.
+        do {
+            try await accountsCoreCashflowBridge.sync(for: transaction)
+        } catch {
+            AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge recurring sync failed: \(error.localizedDescription)")
+        }
+
         guard transaction.affectsCardBalance, let cardID = transaction.cardID else { return }
 
         let descriptor = FetchDescriptor<Card>()

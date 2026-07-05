@@ -43,6 +43,13 @@ enum AppWidgetDeepLinkHandler {
     }
 }
 
+/// Идентичность корневого дерева: меняется при смене языка ИЛИ скоупа данных.
+/// Смена любой компоненты пересоздаёт RootTabView и его VM на актуальном modelContext.
+private struct RootSceneIdentity: Hashable {
+    let language: UUID
+    let scope: Int
+}
+
 @main
 struct millioApp: App {
     private struct AppDependencyBinding {
@@ -63,6 +70,16 @@ struct millioApp: App {
     @State private var activeDataScope: DataScope = .guest
     @State private var activeModelContainer: ModelContainer?
     @State private var activeScopeStoreExistedBeforeBinding = false
+    // A2 (фикс race guest→user): токен скоупа входит в .id корневого дерева.
+    // Бампится в rebindDataScope ПОСЛЕ свопа контейнера → SwiftUI пересоздаёт RootTabView
+    // и его FinanceViewModel/CashflowViewModel на новом modelContext (иначе VM навсегда
+    // остаются на guest-контейнере, снятом в let при первом монтировании).
+    @State private var scopeIdentityToken: Int = 0
+    // Оверлей «Переключение профиля…» на время рантайм-смены скоупа (login/logout/force-signout).
+    @State private var isSwitchingScope = false
+    // Track B: оверлей «Восстанавливаю данные…» на время merge guest→user (reconciliation).
+    @State private var isReconciling = false
+    @State private var scopeReconciliationService = ScopeReconciliationService()
     @State private var backendRuntime: BackendSessionRuntime?
     @State private var startupCoordinator = StartupCoordinator(initialScope: .guest)
     @State private var appRefreshCoordinator = AppRefreshCoordinator()
@@ -121,8 +138,21 @@ struct millioApp: App {
                         GlobalToastHost()
                             .zIndex(2)
                     }
+                    // .id внутри ZStack: при бампе scopeIdentityToken пересоздаётся только
+                    // контентная группа (на новом modelContainer), а оверлей-sibling переживает
+                    // пересоздание и продолжает перекрывать мигание данных.
+                    .id(RootSceneIdentity(language: appState.languageRefreshToken, scope: scopeIdentityToken))
+
+                    if isSwitchingScope {
+                        ScopeSwitchOverlayView()
+                            .zIndex(10)
+                    }
+
+                    if isReconciling {
+                        ScopeSwitchOverlayView(messageKey: "reconciliation.overlay.restoring")
+                            .zIndex(11)
+                    }
                 }
-                .id(appState.languageRefreshToken)
                 .preferredColorScheme(.dark)
                 .environment(appState)
                 .environment(authManager)
@@ -211,10 +241,18 @@ struct millioApp: App {
         
         self.lifecycleUseCase = useCase
         let initStart = DispatchTime.now()
-        await useCase.initialize()
+        // A1 (фикс race guest→user): сессия восстанавливается и скоуп синхронизируется
+        // ДО перевода приложения в .ready. lifecycle = .ready выставляется внутри
+        // useCase.initialize() из замыкания onScopeResolved — уже ПОСЛЕ свопа контейнера,
+        // поэтому RootTabView (и его FinanceViewModel/CashflowViewModel) монтируется сразу
+        // на финальном (user) контейнере, а не на guest с последующим пересозданием.
+        // presentRestoreFlow по-прежнему выполняется последним и видит lifecycle == .ready
+        // (LaunchRecoveryPolicy требует .ready) — порядок restore-флоу сохранён (риск №5).
         await authManager.restoreSession()
         AppLogger.log(.info, category: "App", "Auth restored — isAuthenticated=\(authManager.isAuthenticated) userID=\(authManager.currentUser?.id ?? "nil")")
-        await synchronizeDataScope(with: authManager.currentUser)
+        await synchronizeDataScope(with: authManager.currentUser) {
+            await useCase.initialize()
+        }
         AppLogger.log(.info, category: "App", "Active scope after sync: \(activeDataScope.storeConfigurationName), storeExisted=\(activeScopeStoreExistedBeforeBinding)")
         logger.info("AppLifecycleUseCase.initialize finished in \(Double(DispatchTime.now().uptimeNanoseconds - initStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         logger.info("initializeColdStart finished in \(Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
@@ -324,7 +362,10 @@ struct millioApp: App {
     }
 
     @MainActor
-    private func synchronizeDataScope(with user: AuthUser?) async {
+    private func synchronizeDataScope(
+        with user: AuthUser?,
+        onScopeResolved: (@MainActor () async -> Void)? = nil
+    ) async {
         if authManager.isAuthenticated && appState.isGuestModeEnabled {
             appState.isGuestModeEnabled = false
         }
@@ -361,12 +402,84 @@ struct millioApp: App {
             }
             return switched
         }
+        // Cold start: помечаем .ready только когда контейнер уже свопнут (RootTabView
+        // смонтируется на финальном контейнере), но ДО presentRestoreFlow — политике
+        // восстановления нужен lifecycle == .ready. В рантайме (login/logout) onScopeResolved
+        // == nil, порядок не меняется.
+        await onScopeResolved?()
+        // Track B: reconciliation guest→user ПОСЛЕ свопа контейнера и .ready, но ДО restore-флоу —
+        // чтобы restore видел уже слитый (непустой) user-стор. Не блокирует .ready (идёт off-main,
+        // детектор-скрининг дёшев при отсутствии расхождения).
+        await reconcileScopeIfNeeded(resolvedScope: resolvedScope)
         await presentRestoreFlowIfNeeded()
+    }
+
+    /// Track B: сливает данные, записанные в guest-стор после first-login, в канонический user-стор.
+    /// Идемпотентно (done-маркер по scope), дёшево при отсутствии расхождения (детектор-скрининг).
+    @MainActor
+    private func reconcileScopeIfNeeded(resolvedScope: DataScope) async {
+        guard case .user = resolvedScope else { return }
+        guard !ScopeMergeMarker.isDone(userScopeKey: resolvedScope.storeConfigurationName) else { return }
+        guard let userContainer = activeModelContainer else { return }
+        // Гость — источник merge. Нет гостевого стора → мержить нечего.
+        guard Self.storeExists(for: .guest), let guestContainer = Self.makeModelContainer(for: .guest) else { return }
+
+        let usedFallback = ScopeStoreOpenTracker.shared.usedFallback(resolvedScope.storeConfigurationName)
+            || ScopeStoreOpenTracker.shared.usedFallback(DataScope.guest.storeConfigurationName)
+
+        // Watchdog (митигация B1b №7): если merge аномально затянулся, снимаем оверлей, чтобы
+        // пользователь не завис на «Восстанавливаю данные…». Сам merge (off-main) при этом
+        // продолжается и корректно завершится/выставит маркер — на данные watchdog не влияет.
+        let watchdog = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Self.reconcileWatchdogSeconds))
+            if isReconciling { withAnimation(AppAnimation.easeOut) { isReconciling = false } }
+        }
+
+        let outcome = await scopeReconciliationService.reconcile(
+            userContainer: userContainer,
+            userScope: resolvedScope,
+            guestContainer: guestContainer,
+            userStoreURL: Self.storeURL(for: resolvedScope),
+            guestStoreURL: Self.storeURL(for: .guest),
+            usedFallbackOpen: usedFallback,
+            onWillMerge: { withAnimation(AppAnimation.standard) { isReconciling = true } }
+        )
+        watchdog.cancel()
+
+        if case .merged(let report) = outcome {
+            // Пересоздаём дерево на слитых данных: FinanceViewModel/CashflowViewModel перечитают user-стор.
+            scopeIdentityToken &+= 1
+            if report.accountsAdded + report.transactionsAdded > 0 {
+                let message = String(
+                    format: L("reconciliation.summary.restored",
+                              defaultValue: "Data restored: %1$lld accounts, %2$lld transactions"),
+                    report.accountsAdded, report.transactionsAdded
+                )
+                toastCenter.show(message: message)
+            }
+            // Оверлей «висит» ещё кадр, пока пересоздаётся дерево, затем гаснет (как ScopeSwitch).
+            if isReconciling {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(Self.scopeSwitchOverlayLingerMilliseconds))
+                    withAnimation(AppAnimation.easeOut) { isReconciling = false }
+                }
+            }
+        } else if isReconciling {
+            withAnimation(AppAnimation.easeOut) { isReconciling = false }
+        }
     }
 
     @MainActor
     private func rebindDataScope(to targetScope: DataScope) async -> Bool {
         guard targetScope != activeDataScope else { return false }
+
+        // Рантайм-смена скоупа (login/logout/force-signout) идёт с уже смонтированным
+        // RootTabView — показываем переходный оверлей, пока пересоздаётся дерево (риск №7).
+        // На cold start lifecycle ещё .launching (A1) → оверлей не нужен, виден splash.
+        let isRuntimeSwap = appState.lifecycle == .ready
+        if isRuntimeSwap {
+            withAnimation(AppAnimation.standard) { isSwitchingScope = true }
+        }
 
         let didTargetStoreExistBeforeBinding = Self.storeExists(for: targetScope)
         let targetContainer = Self.makeModelContainer(for: targetScope)
@@ -378,7 +491,10 @@ struct millioApp: App {
             )
         }
 
-        guard !Task.isCancelled else { return false }
+        guard !Task.isCancelled else {
+            if isRuntimeSwap { isSwitchingScope = false }
+            return false
+        }
 
         let binding: AppDependencyBinding?
         if let backendRuntime, let targetContainer {
@@ -387,7 +503,10 @@ struct millioApp: App {
                 backendRuntime: backendRuntime,
                 scopeIdentifier: targetScope.storeConfigurationName
             )
-            guard !Task.isCancelled else { return false }
+            guard !Task.isCancelled else {
+                if isRuntimeSwap { isSwitchingScope = false }
+                return false
+            }
             binding = preparedBinding
         } else {
             binding = nil
@@ -407,8 +526,28 @@ struct millioApp: App {
         if let backendRuntime, let binding {
             applyDependencyBinding(binding, backendRuntime: backendRuntime)
         }
+
+        // Бамп ПОСЛЕ свопа контейнера и применения зависимостей: .id меняется →
+        // RootTabView и его FinanceViewModel/CashflowViewModel пересоздаются на новом
+        // modelContext. Отмена in-flight задач старых VM происходит в их deinit при
+        // teardown старого дерева (риск №3); старый контейнер жив по ARC до дезаллокации VM.
+        scopeIdentityToken &+= 1
+
+        if isRuntimeSwap {
+            // Даём кадр новому дереву на первичный рендер, затем снимаем оверлей.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(Self.scopeSwitchOverlayLingerMilliseconds))
+                withAnimation(AppAnimation.easeOut) { isSwitchingScope = false }
+            }
+        }
         return true
     }
+
+    // Задержка снятия оверлея смены профиля: даёт пересозданному дереву кадр на рендер,
+    // чтобы не мигнуть пустым экраном между teardown старого RootTabView и рендером нового.
+    private static let scopeSwitchOverlayLingerMilliseconds = 350
+    /// Watchdog reconciliation (Track B): максимальная длительность оверлея «Восстанавливаю данные…».
+    private static let reconcileWatchdogSeconds = 20
 
     @MainActor
     private func runPostStartupRefreshes() async {
@@ -459,6 +598,7 @@ struct millioApp: App {
         FinanceFeatureRegistration.register()
         CashflowFeatureRegistration.register()
         UserSubscriptionsFeatureRegistration.register()
+        AccountsCoreFeatureRegistration.register()
     }
 
     private static func makeModelContainer(for scope: DataScope) -> ModelContainer? {
@@ -498,6 +638,8 @@ struct millioApp: App {
             if storeAlreadyExists {
                 #if DEBUG
                 let schema = AppSchema.create()
+                // Track B (митигация B1b №6): стор пересоздан → reconciliation не фиксирует done.
+                ScopeStoreOpenTracker.shared.markFallback(scope.storeConfigurationName)
                 return Self.rebuildStorePreservingData(at: storeURL, schema: schema, scope: scope)
                 #else
                 // Migration plan failed on an existing store (e.g. schema version mismatch after
@@ -514,6 +656,8 @@ struct millioApp: App {
                 )
                 if let fallback = try? ModelContainer(for: AppSchema.create(), configurations: [fallbackConfig]) {
                     AppLogger.log(.warning, category: "App", "Opened store without migration plan — data may be partially readable")
+                    // Track B (митигация B1b №6): partially readable → reconciliation не фиксирует done.
+                    ScopeStoreOpenTracker.shared.markFallback(scope.storeConfigurationName)
                     return fallback
                 }
                 // Store is unrecoverable: rename to .corrupt and create fresh so the user can at
