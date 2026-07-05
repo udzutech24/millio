@@ -83,7 +83,14 @@ struct QuickSetupApplier {
 
         let customDescriptor = FetchDescriptor<CashflowCustomCategory>()
         let existingCustom = try modelContext.fetch(customDescriptor).filter { $0.kind == .expense }
-        let existingByNormalizedName = Dictionary(uniqueKeysWithValues: existingCustom.map { ($0.normalizedName, $0) })
+        // Defense-in-depth: два CashflowCustomCategory с одинаковым normalizedName (например, после
+        // импорта старого бэкапа с дублями — см. DataIntegrityCleaner.dedupeCashflowCustomCategoriesOnLaunch)
+        // валят Dictionary(uniqueKeysWithValues:) с Fatal error: Duplicate values for key прямо на
+        // онбординге. uniquingKeysWith берёт запись с более поздним updatedAt — краш недопустим здесь.
+        let existingByNormalizedName = Dictionary(
+            existingCustom.map { ($0.normalizedName, $0) },
+            uniquingKeysWith: { current, candidate in candidate.updatedAt >= current.updatedAt ? candidate : current }
+        )
 
         for preset in selectedCustomPresets {
             let normalized = CashflowCustomCategory.normalize(preset.displayName)

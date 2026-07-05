@@ -196,8 +196,9 @@ extension CashflowViewModel {
             return (nil, nil, [:])
         }
 
-        let limits = fetchBudgetCategoryLimits(for: plan.budgetID)
-            .filter { $0.categoryKind == categoryKind }
+        let limits = BudgetCategoryLimit.dedupedByCategoryRawValue(
+            fetchBudgetCategoryLimits(for: plan.budgetID).filter { $0.categoryKind == categoryKind }
+        )
         let categoryLimits = Dictionary(uniqueKeysWithValues: limits.map { ($0.categoryRawValue, $0.limitAmount) })
         let totals = await monthlyCategoryTotals(for: categoryKind, month: month, in: targetCurrency)
         let totalAmount = totals.values.reduce(0, +)
@@ -248,8 +249,9 @@ extension CashflowViewModel {
         let descriptor = monthlyBudgetPeriodDescriptor(for: previousMonth, calendar: calendar)
         guard let plan = fetchBudgetPlan(matching: descriptor, categoryKind: categoryKind) else { return nil }
 
-        let limits = fetchBudgetCategoryLimits(for: plan.budgetID)
-            .filter { $0.categoryKind == categoryKind }
+        let limits = BudgetCategoryLimit.dedupedByCategoryRawValue(
+            fetchBudgetCategoryLimits(for: plan.budgetID).filter { $0.categoryKind == categoryKind }
+        )
         let categoryLimits = Dictionary(uniqueKeysWithValues: limits.map { ($0.categoryRawValue, $0.limitAmount) })
 
         return BudgetRepeatSuggestion(
@@ -328,7 +330,7 @@ extension CashflowViewModel {
             isCategoryBudgetingEnabled: !normalizedCategoryLimits.isEmpty
         )
 
-        let existingLimits = fetchBudgetCategoryLimits(for: plan.budgetID)
+        let existingLimits = BudgetCategoryLimit.dedupedByCategoryRawValue(fetchBudgetCategoryLimits(for: plan.budgetID))
         let existingByRaw = Dictionary(uniqueKeysWithValues: existingLimits.map { ($0.categoryRawValue, $0) })
 
         for limit in existingLimits where normalizedCategoryLimits[limit.categoryRawValue] == nil {

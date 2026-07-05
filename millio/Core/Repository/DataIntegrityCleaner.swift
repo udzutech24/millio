@@ -131,6 +131,32 @@ enum DataIntegrityCleaner {
         }
     }
 
+    /// Однократный патч (архитектурно — на каждый запуск, без флага): устраняет дубли
+    /// `BudgetCategoryLimit` с одинаковым ключом `(budgetID, categoryRawValue)`. `BudgetPlan.budgetID`
+    /// генерируется как `UUID().uuidString` без `@Attribute(.unique)`, а сам `BudgetCategoryLimit`
+    /// не имеет уникального ограничения вовсе — CloudKit-merge/восстановление бэкапа может создать
+    /// два лимита на одну и ту же категорию внутри одного бюджетного плана. Такие дубли роняют
+    /// `Dictionary(uniqueKeysWithValues:)` в `CashflowViewModel+History.swift`
+    /// (`monthlyBudgetSummary`, `previousMonthlyBudgetSuggestion`, `saveBudgetConfiguration`) с тем же
+    /// `Fatal error: Duplicate values for key`, что уже чинили для custom-категорий.
+    ///
+    /// Ключ уникальности — `(budgetID, categoryRawValue)`, а не просто `categoryRawValue`: один и тот
+    /// же raw value категории существует независимо в разных бюджетных планах (разные месяцы/периоды
+    /// и expense/income — у каждого своя запись `BudgetPlan` со своим `budgetID`), это не дубли.
+    /// `categoryKindRaw` в ключ не добавляем — он не самостоятельная сущность, а атрибут самого
+    /// `BudgetPlan` (`fetchBudgetCategoryLimits(for:)` уже отбирает лимиты одного `budgetID`, значит
+    /// внутри группы kind у всех дублей совпадает по построению).
+    ///
+    /// Намеренно БЕЗ одноразового флага — по той же причине, что и у Cashflow/Cashback-версий:
+    /// холодный старт создаёт первый `DIContainer` на guest-сторе ДО restoreSession, общий флаг
+    /// сгорел бы там и реальный user-стор никогда бы не дочищался.
+    static func dedupeBudgetCategoryLimitsOnLaunch(modelContext: ModelContext) throws {
+        try dedupeBudgetCategoryLimits(modelContext: modelContext)
+        if modelContext.hasChanges {
+            try modelContext.save()
+        }
+    }
+
     static func dedupeAll(modelContext: ModelContext) throws {
         try dedupeCards(modelContext: modelContext)
         try dedupeCredits(modelContext: modelContext)
@@ -138,6 +164,7 @@ enum DataIntegrityCleaner {
         try dedupeFinanceGroups(modelContext: modelContext)
         try dedupeCashflowCustomCategories(modelContext: modelContext)
         try dedupeCashbackCustomCategories(modelContext: modelContext)
+        try dedupeBudgetCategoryLimits(modelContext: modelContext)
 
         if modelContext.hasChanges {
             try modelContext.save()
@@ -313,6 +340,36 @@ enum DataIntegrityCleaner {
                 AppLogger.log(.warning, category: "Integrity", "Дубликат CashbackCustomCategory categoryID=\(id) удалён (оставлен updatedAt=\(keep.updatedAt))")
             } else {
                 byID[id] = category
+            }
+        }
+    }
+
+    // Ключ (budgetID, categoryRawValue) — см. комментарий на dedupeBudgetCategoryLimitsOnLaunch.
+    // Релинковка не нужна: транзакции ссылаются на категорию по её собственному rawValue
+    // (CashflowCategoryService/CashbackViewModel customRawValue), а не через связь на BudgetCategoryLimit.
+    private static func dedupeBudgetCategoryLimits(modelContext: ModelContext) throws {
+        let limits = try modelContext.fetch(FetchDescriptor<BudgetCategoryLimit>())
+        var byKey: [String: BudgetCategoryLimit] = [:]
+
+        for limit in limits {
+            guard !limit.budgetID.isEmpty, !limit.categoryRawValue.isEmpty else { continue }
+            let key = "\(limit.budgetID)|\(limit.categoryRawValue)"
+
+            if let existing = byKey[key] {
+                let keep: BudgetCategoryLimit
+                let remove: BudgetCategoryLimit
+                if limit.updatedAt >= existing.updatedAt {
+                    keep = limit
+                    remove = existing
+                } else {
+                    keep = existing
+                    remove = limit
+                }
+                byKey[key] = keep
+                modelContext.delete(remove)
+                AppLogger.log(.warning, category: "Integrity", "Дубликат BudgetCategoryLimit budgetID=\(limit.budgetID) categoryRawValue=\(limit.categoryRawValue) удалён (оставлен updatedAt=\(keep.updatedAt))")
+            } else {
+                byKey[key] = limit
             }
         }
     }

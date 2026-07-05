@@ -64,4 +64,31 @@ final class BudgetCategoryLimit: Persistable {
             throw AppError.backupCorrupted
         }
     }
+
+    /// Defense-in-depth: схлопывает дубли `BudgetCategoryLimit` с одинаковым `(budgetID,
+    /// categoryRawValue)` до того, как они превратятся в `Dictionary(uniqueKeysWithValues:)`
+    /// по `categoryRawValue` в `CashflowViewModel+History.swift`. Без `@Attribute(.unique)` на
+    /// `BudgetCategoryLimit` CloudKit-merge/восстановление бэкапа может создать два лимита на
+    /// одну категорию внутри одного бюджетного плана — `Dictionary(uniqueKeysWithValues:)` на
+    /// таком массиве роняет приложение с `Fatal error: Duplicate values for key`.
+    /// `DataIntegrityCleaner.dedupeBudgetCategoryLimitsOnLaunch` вычищает дубли из стора при
+    /// старте — это последний рубеж на случай дубля, просочившегося в текущую сессию.
+    /// Побеждает объект с более поздним `updatedAt` — то же правило, что в `DataIntegrityCleaner`.
+    static func dedupedByCategoryRawValue(_ limits: [BudgetCategoryLimit]) -> [BudgetCategoryLimit] {
+        var winners: [String: BudgetCategoryLimit] = [:]
+        var order: [String] = []
+        for limit in limits {
+            let key = "\(limit.budgetID)|\(limit.categoryRawValue)"
+            if let existing = winners[key] {
+                if limit.updatedAt >= existing.updatedAt {
+                    winners[key] = limit
+                }
+                AppLogger.log(.warning, category: "Cashflow", "Duplicate BudgetCategoryLimit budgetID=\(limit.budgetID) categoryRawValue=\(limit.categoryRawValue) обнаружен в рантайме — оставлен один экземпляр")
+            } else {
+                winners[key] = limit
+                order.append(key)
+            }
+        }
+        return order.compactMap { winners[$0] }
+    }
 }

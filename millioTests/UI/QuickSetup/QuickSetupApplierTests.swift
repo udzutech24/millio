@@ -415,4 +415,53 @@ final class QuickSetupApplierTests: XCTestCase {
         let customCategories = try context.fetch(FetchDescriptor<CashflowCustomCategory>())
         XCTAssertTrue(customCategories.isEmpty)
     }
+
+    /// Регрессия: два CashflowCustomCategory с одинаковым normalizedName (например, после импорта
+    /// старого бэкапа с дублями — см. DataIntegrityCleaner.dedupeCashflowCustomCategoriesOnLaunch)
+    /// раньше валили Dictionary(uniqueKeysWithValues:) в applyExpenseCategories с Fatal error:
+    /// Duplicate values for key прямо на онбординге. Краш должен воспроизводиться до фикса и
+    /// не воспроизводиться после — проверяем, что apply не падает и остаются обе записи
+    /// (дедуп дублей — забота DataIntegrityCleaner, а не QuickSetupApplier).
+    func testApplyDoesNotCrashOnDuplicateNormalizedNameInExistingCustomCategories() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let appState = AppState()
+        let applier = QuickSetupApplier(modelContext: context, appState: appState)
+
+        let older = CashflowCustomCategory(kind: .expense, name: "Такси")
+        older.updatedAt = Date(timeIntervalSince1970: 1_000)
+        let duplicate = CashflowCustomCategory(kind: .expense, name: "Такси")
+        duplicate.updatedAt = Date(timeIntervalSince1970: 2_000)
+        context.insert(older)
+        context.insert(duplicate)
+        try context.save()
+
+        let previousQuickSetupCompleted = SettingsManager.shared.isQuickSetupCompleted
+        let previousBannerHidden = SettingsManager.shared.isQuickSetupBannerHidden
+        let previousFavoriteCurrencies = SettingsManager.shared.favoriteCurrencyCodes
+        let previousQuickSetupCategories = SettingsManager.shared.quickSetupExpenseCategoryIDs
+        let previousBackupEnabled = SettingsManager.shared.isBackupEnabled
+        defer {
+            SettingsManager.shared.isQuickSetupCompleted = previousQuickSetupCompleted
+            SettingsManager.shared.isQuickSetupBannerHidden = previousBannerHidden
+            SettingsManager.shared.favoriteCurrencyCodes = previousFavoriteCurrencies
+            SettingsManager.shared.quickSetupExpenseCategoryIDs = previousQuickSetupCategories
+            SettingsManager.shared.isBackupEnabled = previousBackupEnabled
+        }
+
+        let selection = QuickSetupSelection(
+            language: .russian,
+            primaryCurrencyCode: "RUB",
+            favoriteCurrencyCodes: ["USD"],
+            selectedExpenseCategoryIDs: [ExpenseCategory.other.rawValue],
+            groups: [],
+            products: [],
+            backupPreference: .localOnly
+        )
+
+        XCTAssertNoThrow(try applier.apply(selection))
+
+        let customCategories = try context.fetch(FetchDescriptor<CashflowCustomCategory>())
+        XCTAssertEqual(customCategories.count, 2, "QuickSetupApplier не должен удалять существующие дубли — это зона ответственности DataIntegrityCleaner")
+    }
 }
