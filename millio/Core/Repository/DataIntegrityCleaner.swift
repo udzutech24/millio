@@ -113,12 +113,31 @@ enum DataIntegrityCleaner {
         }
     }
 
+    /// Однократный патч (архитектурно — на каждый запуск, без флага): устраняет дубли
+    /// `CashbackCustomCategory` с одинаковым `categoryID`. Идентичная уязвимость
+    /// `CashflowCustomCategory` (см. `dedupeCashflowCustomCategoriesOnLaunch` выше) —
+    /// `categoryID` генерируется как `UUID().uuidString` без `@Attribute(.unique)`,
+    /// SwiftData/CloudKit не гарантирует уникальность при merge/restore. Ломает
+    /// `ForEach`/`LazyVGrid` по `[CashbackCategoryOption]` (`id == rawValue ==
+    /// "custom:<categoryID>"`) тем же `Fatal error: Duplicate values for key`.
+    ///
+    /// Намеренно БЕЗ одноразового флага — по той же причине, что и у Cashflow-версии:
+    /// холодный старт создаёт первый `DIContainer` на guest-сторе ДО restoreSession,
+    /// общий флаг сгорел бы там и реальный user-стор никогда бы не дочищался.
+    static func dedupeCashbackCustomCategoriesOnLaunch(modelContext: ModelContext) throws {
+        try dedupeCashbackCustomCategories(modelContext: modelContext)
+        if modelContext.hasChanges {
+            try modelContext.save()
+        }
+    }
+
     static func dedupeAll(modelContext: ModelContext) throws {
         try dedupeCards(modelContext: modelContext)
         try dedupeCredits(modelContext: modelContext)
         try dedupeInvestments(modelContext: modelContext)
         try dedupeFinanceGroups(modelContext: modelContext)
         try dedupeCashflowCustomCategories(modelContext: modelContext)
+        try dedupeCashbackCustomCategories(modelContext: modelContext)
 
         if modelContext.hasChanges {
             try modelContext.save()
@@ -261,6 +280,37 @@ enum DataIntegrityCleaner {
                 byID[id] = keep
                 modelContext.delete(remove)
                 AppLogger.log(.warning, category: "Integrity", "Дубликат CashflowCustomCategory categoryID=\(id) удалён (оставлен updatedAt=\(keep.updatedAt))")
+            } else {
+                byID[id] = category
+            }
+        }
+    }
+
+    // Транзакции хранят категорию как строку `"custom:<categoryID>"` (см.
+    // CashbackViewModel.customRawValue), а не как SwiftData-связь на объект
+    // CashbackCustomCategory. Релинковка не нужна по той же причине, что и у
+    // dedupeCashflowCustomCategories — оба дубля имеют одинаковый categoryID.
+    private static func dedupeCashbackCustomCategories(modelContext: ModelContext) throws {
+        let categories = try modelContext.fetch(FetchDescriptor<CashbackCustomCategory>())
+        var byID: [String: CashbackCustomCategory] = [:]
+
+        for category in categories {
+            let id = category.categoryID
+            guard !id.isEmpty else { continue }
+
+            if let existing = byID[id] {
+                let keep: CashbackCustomCategory
+                let remove: CashbackCustomCategory
+                if category.updatedAt >= existing.updatedAt {
+                    keep = category
+                    remove = existing
+                } else {
+                    keep = existing
+                    remove = category
+                }
+                byID[id] = keep
+                modelContext.delete(remove)
+                AppLogger.log(.warning, category: "Integrity", "Дубликат CashbackCustomCategory categoryID=\(id) удалён (оставлен updatedAt=\(keep.updatedAt))")
             } else {
                 byID[id] = category
             }

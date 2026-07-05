@@ -777,6 +777,31 @@ final class CashbackViewModel: ViewModelProtocol {
         return String(rawValue.dropFirst(Cashback.customCategoryPrefix.count))
     }
 
+    /// Defense-in-depth против дублей `CashbackCustomCategory.categoryID` (та же уязвимость,
+    /// что была у `CashflowCustomCategory`, см. `CashflowCategoryService.dedupedCustomCategories`).
+    /// `id` у `CashbackCategoryOption` — это `rawValue` ("custom:<categoryID>"), поэтому два
+    /// объекта с одним `categoryID` дают одинаковый `id` и валят `ForEach`/`LazyVGrid`
+    /// (`Fatal error: Duplicate values for key`). `DataIntegrityCleaner` вычищает такие дубли
+    /// из стора при старте — это последний рубеж на случай, если дубль всё же просочился в
+    /// текущую сессию (например, CloudKit merge случился уже после того, как патч отработал).
+    /// Побеждает объект с более поздним `updatedAt` — то же правило, что в `DataIntegrityCleaner`.
+    static func dedupedCustomCategories(_ categories: [CashbackCustomCategory]) -> [CashbackCustomCategory] {
+        var winners: [String: CashbackCustomCategory] = [:]
+        var order: [String] = []
+        for category in categories {
+            if let existing = winners[category.categoryID] {
+                if category.updatedAt >= existing.updatedAt {
+                    winners[category.categoryID] = category
+                }
+                AppLogger.log(.warning, category: "Cashback", "Duplicate CashbackCustomCategory categoryID=\(category.categoryID) обнаружен в customCategoryOptions — оставлен один экземпляр")
+            } else {
+                winners[category.categoryID] = category
+                order.append(category.categoryID)
+            }
+        }
+        return order.compactMap { winners[$0] }
+    }
+
     private var systemCategoryOptions: [CashbackCategoryOption] {
         CashbackCategory.allCases.map {
             CashbackCategoryOption(
@@ -789,7 +814,7 @@ final class CashbackViewModel: ViewModelProtocol {
     }
 
     private var customCategoryOptions: [CashbackCategoryOption] {
-        state.customCategories.map {
+        Self.dedupedCustomCategories(state.customCategories).map {
             CashbackCategoryOption(
                 rawValue: Self.customRawValue(from: $0.categoryID),
                 displayName: $0.name,
