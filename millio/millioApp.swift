@@ -56,6 +56,7 @@ struct millioApp: App {
         let container: DIContainer
         let financeWarmupUseCase: FinanceStartupWarmupUseCase
         let portfolioSymbolsSyncService: PortfolioSymbolsSyncService
+        let accountSnapshotBackfillCoordinator: AccountSnapshotBackfillCoordinator
     }
 
     @UIApplicationDelegateAdaptor(FirebaseAppDelegate.self) private var firebaseDelegate
@@ -64,6 +65,7 @@ struct millioApp: App {
     @State private var lifecycleUseCase: AppLifecycleUseCase?
     @State private var financeStartupWarmupUseCase: FinanceStartupWarmupUseCase?
     @State private var portfolioSymbolsSyncService: PortfolioSymbolsSyncService?
+    @State private var accountSnapshotBackfillCoordinator: AccountSnapshotBackfillCoordinator?
     @State private var authManager = AuthManager()
     @State private var toastCenter = ToastCenter()
     @State private var isBiometricUnlockInProgress = false
@@ -295,12 +297,16 @@ struct millioApp: App {
         let financeWarmupUseCase = FinanceStartupWarmupUseCase(
             modelContext: modelContainer.mainContext
         )
+        let accountSnapshotBackfillCoordinator = AccountSnapshotBackfillCoordinator(
+            modelContainer: modelContainer
+        )
 
         logger.info("DIContainer.create finished in \(Double(DispatchTime.now().uptimeNanoseconds - diStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         return AppDependencyBinding(
             container: container,
             financeWarmupUseCase: financeWarmupUseCase,
-            portfolioSymbolsSyncService: portfolioSymbolsSyncService
+            portfolioSymbolsSyncService: portfolioSymbolsSyncService,
+            accountSnapshotBackfillCoordinator: accountSnapshotBackfillCoordinator
         )
     }
 
@@ -313,6 +319,7 @@ struct millioApp: App {
         diContainer = binding.container
         financeStartupWarmupUseCase = binding.financeWarmupUseCase
         portfolioSymbolsSyncService = binding.portfolioSymbolsSyncService
+        accountSnapshotBackfillCoordinator = binding.accountSnapshotBackfillCoordinator
         portfolioSymbolsSyncService?.start()
         authManager.configure(service: binding.container.authService)
         authManager.configure(toastCenter: toastCenter)
@@ -563,6 +570,14 @@ struct millioApp: App {
         )
 
         await financeStartupWarmupUseCase?.warmupIfNeeded()
+
+        // Fire-and-forget: бэкфилл снапшотов — фоновая пересборка потенциально длинной истории
+        // (годы событий на счёт), не должна задерживать остальные пост-старт шаги. Партиальный
+        // прогресс безопасен (см. batched save в AccountSnapshotRebuilder), поэтому не ждём завершения.
+        if let coordinator = accountSnapshotBackfillCoordinator {
+            let scopeIdentifier = activeDataScope.storeConfigurationName
+            Task { await coordinator.backfillIfNeeded(scopeIdentifier: scopeIdentifier) }
+        }
     }
 
     @MainActor
