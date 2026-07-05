@@ -85,12 +85,41 @@ enum DataIntegrityCleaner {
         }
     }
     
+    /// Однократный патч: устраняет дубли `CashflowCustomCategory` с одинаковым `categoryID`.
+    /// `categoryID` генерируется как `UUID().uuidString` без `@Attribute(.unique)` — SwiftData/
+    /// CloudKit не гарантирует уникальность при merge, из-за чего в сторе оказываются два разных
+    /// объекта с одним `categoryID`. Это ломает `ForEach`/`LazyVGrid` по `[CashflowCategoryOption]`
+    /// (`id == rawValue == "custom:<categoryID>"`) с `Fatal error: Duplicate values for key`.
+    ///
+    /// Намеренно НЕ добавляем `@Attribute(.unique)` в этом же релизе: пока в сторах пользователей
+    /// есть дубли, лайтвейт-миграция с unique-constraint не сможет открыть контейнер вообще —
+    /// краш на КАЖДОМ запуске вместо краша в конкретном экране (см. известный SwiftData-баг:
+    /// добавление .unique при существующих дублях ломает автоматическую миграцию). Эта версия
+    /// сначала лечит данные, unique-constraint — отдельный релиз позже, когда патч гарантированно
+    /// прогонится на подавляющем большинстве установленных копий.
+    ///
+    /// Намеренно БЕЗ одноразового флага (в отличие от `runIfNeeded`/`archiveZeroQuantity...`):
+    /// холодный старт всегда создаёт первый `DIContainer` на guest-сторе (`initialScope = .guest`
+    /// в `millioApp`, ДО `restoreSession`/`synchronizeDataScope`), и только потом — второй
+    /// `DIContainer` на реальном user-сторе через `rebindDataScope`. Общий на весь app флаг сгорал
+    /// бы на почти пустом guest-сторе и реальный user-стор никогда бы не дочищался. Фетч + группировка
+    /// по `categoryID` дешёвы при отсутствии дублей, поэтому безопаснее и проще (KISS) гонять патч
+    /// на КАЖДОМ `DIContainer.create()` для любого стора, чем плюмбить per-scope идентификатор через
+    /// весь путь создания контейнера.
+    static func dedupeCashflowCustomCategoriesOnLaunch(modelContext: ModelContext) throws {
+        try dedupeCashflowCustomCategories(modelContext: modelContext)
+        if modelContext.hasChanges {
+            try modelContext.save()
+        }
+    }
+
     static func dedupeAll(modelContext: ModelContext) throws {
         try dedupeCards(modelContext: modelContext)
         try dedupeCredits(modelContext: modelContext)
         try dedupeInvestments(modelContext: modelContext)
         try dedupeFinanceGroups(modelContext: modelContext)
-        
+        try dedupeCashflowCustomCategories(modelContext: modelContext)
+
         if modelContext.hasChanges {
             try modelContext.save()
         }
@@ -197,11 +226,43 @@ enum DataIntegrityCleaner {
                 for account in accounts where account.group?.persistentModelID == remove.persistentModelID {
                     account.group = keep
                 }
-                
+
                 byID[id] = keep
                 modelContext.delete(remove)
             } else {
                 byID[id] = group
+            }
+        }
+    }
+
+    // Транзакции хранят категорию как строку `"custom:<categoryID>"` (см.
+    // CashflowCategoryService.customRawValue), а не как SwiftData-связь на объект
+    // CashflowCustomCategory. Поэтому в отличие от dedupeFinanceGroups здесь НЕ нужно
+    // перелинковывать транзакции на выжившую категорию — оба дубля имеют одинаковый
+    // categoryID, значит их rawValue идентичен и остаётся валидным после удаления любого из них.
+    private static func dedupeCashflowCustomCategories(modelContext: ModelContext) throws {
+        let categories = try modelContext.fetch(FetchDescriptor<CashflowCustomCategory>())
+        var byID: [String: CashflowCustomCategory] = [:]
+
+        for category in categories {
+            let id = category.categoryID
+            guard !id.isEmpty else { continue }
+
+            if let existing = byID[id] {
+                let keep: CashflowCustomCategory
+                let remove: CashflowCustomCategory
+                if category.updatedAt >= existing.updatedAt {
+                    keep = category
+                    remove = existing
+                } else {
+                    keep = existing
+                    remove = category
+                }
+                byID[id] = keep
+                modelContext.delete(remove)
+                AppLogger.log(.warning, category: "Integrity", "Дубликат CashflowCustomCategory categoryID=\(id) удалён (оставлен updatedAt=\(keep.updatedAt))")
+            } else {
+                byID[id] = category
             }
         }
     }
