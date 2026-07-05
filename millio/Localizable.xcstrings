@@ -5971,19 +5971,19 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Demo portfolio created: 10 accounts"
+            "value": "Demo portfolio created: 12 accounts"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Демо-портфель создан: 10 счетов"
+            "value": "Демо-портфель создан: 12 счетов"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "演示投资组合已创建：10个账户"
+            "value": "演示投资组合已创建：12个账户"
           }
         }
       }

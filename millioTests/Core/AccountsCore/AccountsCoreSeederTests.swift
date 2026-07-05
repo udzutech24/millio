@@ -3,7 +3,7 @@ import SwiftData
 import Testing
 @testable import millio
 
-/// Тесты сид-полигона (план, риск П4): 10 счетов владельца, идемпотентность, ненулевой тотал.
+/// Тесты сид-полигона (план, риск П4): 12 счетов владельца, идемпотентность, ненулевой тотал.
 @Suite("AccountsCoreSeeder")
 struct AccountsCoreSeederTests {
 
@@ -12,7 +12,7 @@ struct AccountsCoreSeederTests {
     }
 
     @Test @MainActor
-    func seedCreatesTenRealAccounts() throws {
+    func seedCreatesTwelveRealAccounts() throws {
         let container = try makeContainer()
         let ctx = container.mainContext
 
