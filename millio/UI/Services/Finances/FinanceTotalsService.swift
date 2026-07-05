@@ -30,9 +30,11 @@ final class FinanceTotalsService {
     private let cardByIDProvider: () -> [String: Card]
     private let creditByIDProvider: () -> [String: Credit]
     private let investmentByIDProvider: () -> [String: Investment]
-    /// Вклад нового ядра event-sourcing (Фаза 1a-ui, AC2) — `AccountsTotalsService.totalAt(date, in:)`,
-    /// та же функция, что использует Analytics-тотал (`FinanceDynamicsViewModel.calculateTotalForAllGroups`),
-    /// поэтому Accounts-тотал и Analytics-тотал совпадают до копейки по построению, а не по совпадению.
+    /// Вклад нового ядра event-sourcing (Фаза 1a-ui, AC2) — `AccountsTotalsService.totalAt(date, in:)`.
+    /// ВНИМАНИЕ: заголовок «Динамика» (`FinanceDynamicsViewModel.updateCurrentBalanceAndDelta`) этот
+    /// вклад пока НЕ добавляет — интеграция туда сознательно отложена (см.
+    /// plans/2026-07-05__unified-totals.md, Фаза 4). Не путать с удалённым мёртвым кодом
+    /// `calculateTotalForAllGroups`, который никогда не вызывался и вводил в заблуждение.
     private let newCoreTotalProvider: (String) async -> Decimal
 
     // MARK: - Init
@@ -272,25 +274,33 @@ final class FinanceTotalsService {
     // MARK: - Private: Сумма счёта
 
     private func getAccountAmount(account: FinanceAccount) async -> (value: Double, currency: String) {
+        // Дата всегда "сейчас" — TotalsService считает ТЕКУЩЕЕ состояние (Дашборд/Счета),
+        // в отличие от FinanceDynamicsViewModel, который умеет считать на произвольную
+        // историческую дату. Фильтр — тот же `AccountTotalPolicy`, что и там (см.
+        // plans/2026-07-05__unified-totals.md), иначе архивные/выключенные счета "зависают"
+        // в тотале Дашборда навсегда, хотя в Динамике корректно пропадают.
+        let now = Date()
         let displayCurrency = displayCurrencyProvider()
         switch account.accountType {
         case .card:
-            if let card = cardByIDProvider()[account.accountID] {
+            if let card = cardByIDProvider()[account.accountID],
+               AccountTotalPolicy.isActive(includeInTotal: card.includeInTotal, archivedAt: card.archivedAt, at: now) {
                 let snapshot = CardSnapshotFactory.make(from: card)
                 return (snapshot.netWorthAmount, snapshot.currency)
             }
 
         case .credit:
-            if let credit = creditByIDProvider()[account.accountID] {
-                return (-credit.remainingAmount, credit.currency)
+            if let credit = creditByIDProvider()[account.accountID],
+               AccountTotalPolicy.isActive(includeInTotal: credit.includeInTotal, archivedAt: credit.archivedAt, at: now) {
+                let value = AccountTotalPolicy.signedContribution(credit.remainingAmount, isLiability: true, debtAsNegative: true)
+                return (value, credit.currency)
             }
 
         case .investment:
-            if let investment = investmentByIDProvider()[account.accountID] {
-                if investment.includeInTotal {
-                    let value = investment.investmentType == .positive ? investment.amount : -investment.amount
-                    return (value, resolvedInvestmentCurrency(investment, displayCurrency: displayCurrency))
-                }
+            if let investment = investmentByIDProvider()[account.accountID],
+               AccountTotalPolicy.isActive(includeInTotal: investment.includeInTotal, archivedAt: investment.archivedAt, at: now) {
+                let value = investment.investmentType == .positive ? investment.amount : -investment.amount
+                return (value, resolvedInvestmentCurrency(investment, displayCurrency: displayCurrency))
             }
         }
 
