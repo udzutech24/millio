@@ -22,6 +22,59 @@ enum DepositInterestScheduler {
         "deposit-interest:\(accountID.uuidString):"
     }
 
+    /// Роллинг-догенерация горизонта ДЛЯ ВСЕХ активных вкладов (план `2026-07-05__cashflow-add-transaction-redesign.md`,
+    /// Фаза 0). До этого метода `regenerateFutureInterestEvents` вызывался ТОЛЬКО при создании/правке
+    /// счёта — бессрочный вклад (`termEnd == nil`) получал события лишь на первые `perpetualHorizonMonths`
+    /// от даты создания и НИКОГДА больше, если пользователь не открывал экран правки счёта. Через год
+    /// начисления молча прекратились бы — тот же класс бага «доход невидим», что чинит эта фаза, просто
+    /// отложенно. Вызывается из Cashflow-моста при каждой загрузке таба.
+    /// Архивные (закрытые) счета исключены — досрочно закрытому вкладу новые проценты не начисляются.
+    @discardableResult
+    @MainActor
+    static func extendActiveDepositHorizons(
+        context: ModelContext,
+        asOf: Date = Date(),
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) -> Int {
+        let depositKindRaw = AccountKind.deposit.rawValue
+        let descriptor = FetchDescriptor<Account>(
+            predicate: #Predicate<Account> { $0.kindRaw == depositKindRaw && $0.archivedAt == nil }
+        )
+        guard let accounts = try? context.fetch(descriptor), !accounts.isEmpty else { return 0 }
+
+        // Один фетч всех interest-событий вместо запроса на каждый счёт в цикле.
+        let allInterestEvents = ((try? context.fetch(FetchDescriptor<AccountEvent>())) ?? [])
+            .filter { $0.type == .interest }
+
+        let service = AccountsCoreService(modelContext: context)
+        var totalGenerated = 0
+        for account in accounts {
+            let latestGeneratedDate = allInterestEvents
+                .filter { $0.account?.id == account.id }
+                .map(\.date)
+                .max()
+
+            // Горизонт ещё «здоровый» (последнее уже сгенерированное событие — в будущем относительно
+            // `asOf`) — продлевать нечего, обычный случай почти на каждой загрузке таба. Резюмируем
+            // регенерацию ТОЛЬКО когда горизонт исчерпан, и именно ОТ ТОЧКИ ПОСЛЕДНЕГО события, а не
+            // от `asOf`: `regenerateFutureInterestEvents` считает всё `<= asOf` «уже случившимся» и
+            // молча пропускает такие периоды — если резюмировать от `asOf`, а не от последнего известного
+            // события, периоды, попавшие в разрыв между исчерпанным горизонтом и текущей датой (когда
+            // `asOf` шагнул вперёд больше, чем на один горизонт разом), никогда не будут сгенерированы.
+            guard latestGeneratedDate == nil || latestGeneratedDate! < asOf else { continue }
+            let resumePoint = latestGeneratedDate ?? account.createdAt
+
+            do {
+                totalGenerated += try regenerateFutureInterestEvents(
+                    for: account, service: service, asOf: resumePoint, calendar: calendar, context: context
+                )
+            } catch {
+                AppLogger.log(.error, category: "AccountsCore", "Не удалось продлить горизонт вклада \(account.id): \(error)")
+            }
+        }
+        return totalGenerated
+    }
+
     /// Генерирует (при создании счёта) ИЛИ регенерирует (при правке ставки/срока/капитализации)
     /// БУДУЩИЕ interest-события вклада начиная строго ПОСЛЕ `asOf` — прошлые (≤ asOf) события НЕ
     /// трогает, они уже зафиксированы в реальной ленте (брифинг Фазы 3, п.2: «прошедшие ≤today не трогаются»).
