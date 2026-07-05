@@ -244,6 +244,15 @@ private func loadAccounts() {
 - Скрытая системная категория не считается удаленной: если она встречается в ручной операции или массовом импорте со скриншота, она автоматически возвращается в общий список.
 - Удаление системной категории работает как soft-delete: категория скрывается в UI, а связанные транзакции мигрируют в `other`.
 - Fallback-категория `other` не удаляется, но поддерживает редактирование имени и иконки.
+- **Целостность `categoryID`:** `categoryID` не защищён `@Attribute(.unique)` — SwiftData/CloudKit не гарантирует
+  уникальность при merge, из-за чего в сторе могли появляться два `CashflowCustomCategory` с одинаковым `categoryID`
+  (краш `Fatal error: Duplicate values for key: 'custom:<UUID>'` в `ForEach`/`LazyVGrid`). Защита в два слоя:
+  `DataIntegrityCleaner.dedupeCashflowCustomCategoriesIfNeeded` чистит дубли в сторе при старте (и в `dedupeAll`
+  при restore), `CashflowCategoryService.dedupedCustomCategories` — defense-in-depth в `customCategoryOptions`.
+  Оба слоя оставляют объект с более поздним `updatedAt`, релинковка транзакций не нужна — оба дубля имеют
+  одинаковый `categoryID`, значит и одинаковый raw-ключ `custom:<categoryID>`. `@Attribute(.unique)` сознательно
+  не добавлен: пока в сторах пользователей остаются дубли, лайтвейт-миграция с unique-constraint не откроет
+  контейнер вообще (см. известный SwiftData-баг) — сначала чистим данные, constraint — отдельный релиз позже.
 
 ### Ежемесячный автоповтор доходов/расходов
 
