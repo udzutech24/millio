@@ -85,10 +85,17 @@ final class DataRepository: DataRepositoryProtocol {
         return dict
     }
     
+    // @MainActor: единственный вызывающий (millioApp.migrateExistingStoresIfNeeded) сам
+    // @MainActor — dedupeAll ниже MainActor-изолирован (SwiftData modelContext).
+    @MainActor
     func importAllData(_ data: Data) throws {
         try Self.importAllData(data, into: modelContext)
+        // Синхронный путь используется, в частности, legacy→scope миграцией
+        // (millioApp.migrateExistingStoresIfNeeded → importAllData) — без этого вызова
+        // дубли CashflowCustomCategory из старого стора копируются в новый без очистки.
+        try DataIntegrityCleaner.dedupeAll(modelContext: modelContext)
     }
-    
+
     func importAllDataAsync(_ data: Data) async throws {
         try await MainActor.run {
             try Self.importAllData(data, into: modelContext)

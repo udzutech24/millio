@@ -49,7 +49,9 @@ final class DIContainer {
         let modelContext = modelContainer.mainContext
         do {
             try DataIntegrityCleaner.runIfNeeded(modelContext: modelContext)
-            try DataIntegrityCleaner.dedupeCashflowCustomCategoriesIfNeeded(modelContext: modelContext)
+            // Без одноразового флага — гоняется на каждом create() (guest и user scope,
+            // на каждый rebindDataScope), см. комментарий на dedupeCashflowCustomCategoriesOnLaunch.
+            try DataIntegrityCleaner.dedupeCashflowCustomCategoriesOnLaunch(modelContext: modelContext)
         } catch {
             AppLogger.log(.error, category: "Integrity", "Data integrity cleanup failed: \(error.localizedDescription)")
         }

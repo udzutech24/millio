@@ -25,18 +25,19 @@ enum DataIntegrityCleaner {
     /// сначала лечит данные, unique-constraint — отдельный релиз позже, когда патч гарантированно
     /// прогонится на подавляющем большинстве установленных копий.
     ///
-    /// Отдельная (не через `dedupeAll`/`runIfNeeded`) точка входа нужна, потому что
-    /// `runIfNeeded` уже отработал и выставил свой флаг для существующих установок —
-    /// без собственного флага это исправление никогда бы не выполнилось для них повторно.
-    static func dedupeCashflowCustomCategoriesIfNeeded(modelContext: ModelContext) throws {
-        let key = "migration.dedupeCashflowCustomCategories.v1"
-        guard !UserDefaults.standard.bool(forKey: key) else { return }
-
+    /// Намеренно БЕЗ одноразового флага (в отличие от `runIfNeeded`/`archiveZeroQuantity...`):
+    /// холодный старт всегда создаёт первый `DIContainer` на guest-сторе (`initialScope = .guest`
+    /// в `millioApp`, ДО `restoreSession`/`synchronizeDataScope`), и только потом — второй
+    /// `DIContainer` на реальном user-сторе через `rebindDataScope`. Общий на весь app флаг сгорал
+    /// бы на почти пустом guest-сторе и реальный user-стор никогда бы не дочищался. Фетч + группировка
+    /// по `categoryID` дешёвы при отсутствии дублей, поэтому безопаснее и проще (KISS) гонять патч
+    /// на КАЖДОМ `DIContainer.create()` для любого стора, чем плюмбить per-scope идентификатор через
+    /// весь путь создания контейнера.
+    static func dedupeCashflowCustomCategoriesOnLaunch(modelContext: ModelContext) throws {
         try dedupeCashflowCustomCategories(modelContext: modelContext)
         if modelContext.hasChanges {
             try modelContext.save()
         }
-        UserDefaults.standard.set(true, forKey: key)
     }
 
     static func dedupeAll(modelContext: ModelContext) throws {
