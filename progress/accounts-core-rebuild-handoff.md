@@ -22,13 +22,22 @@ AccountMarketPriceService + HistoricalAssetPrice (append-only цены), Account
 счета нового ядра. Grep-гейт: `scripts/check-balance-mutations.sh`.
 
 ## Следующие шаги (по приоритету)
-1. Дождаться фикса регрессии testIncomeBudgetSummary… (бисект был запущен; см. последние коммиты ветки).
+1. **Ночная сессия 2026-07-04→05 (скоуп утверждён владельцем: всё включая B2).**
+   План: `plans/2026-07-04__guest-user-scope-race-fix.md`. Статус:
+   ✅ Track A (race-фикс) — A1–A4 реализованы (коммиты f17a799…c6c0728), тесты 1583/17 лучше baseline;
+   ✅ Track D1 (удаление не обновляло список/тоталы) — оба слоя, коммиты 20d05f6/4ddad7b;
+   ✅ Track C (конвертация легаси→ядро, MVP opening balance) — коммит 457f3bb, 17 тестов;
+   ✅ B1+B1b (дизайн reconciliation + стресс-тест) — спека specs/2026-07-04-guest-user-reconciliation.md;
+   🔄 B2 (реализация reconciliation) — в работе, под-фазы B2a–B2d с коммитом каждая;
+   ⏳ чистка кода (без сноса 6b) → финальный полный тест-прогон → утренний отчёт.
+   🔴 НОВЫЙ релиз-блокер: new-core модели НЕ в ModelTypeRegistry → CloudKit-бэкап/export их не переносит.
+   Ручные проверки утром: runtime login/logout/force-signout, fresh install+iCloud, UI-конвертация легаси.
 2. **Решение владельца по 6b** — физический снос Card/Credit/Investment/FinanceAccount (~90 файлов,
-   backup-реестр, схема V5). До решения легаси живёт read-only.
+   backup-реестр, схема V5). До решения легаси живёт read-only. Строго после Track A–C.
 3. Ручная проверка на симуляторе: сид → Accounts/Analytics/Dashboard/Cashflow (сверка чисел),
    затем `/stress-test` UI-флоу перед мержем в develop.
 4. Хвосты: StockBulkImport на ядро, UI редоминации, тест AC14, налог для валютных вкладов,
-   пикеры Quick Entry/Bulk Import, LanguageManager-гонки в тестах.
+   пикеры Quick Entry/Bulk Import, LanguageManager-гонки в тестах (план §8, хвосты 1–14).
 
 ## Сим-проверка 2026-07-04 (вечер) — итоги и находки
 
