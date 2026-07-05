@@ -93,31 +93,52 @@ actor AccountSnapshotRebuilder {
         var byKey: [String: AccountDailySnapshot] = [:]
         for snapshot in existing { byKey[snapshot.dayKey] = snapshot }
 
+        // Батчинг сохранений (задача snapshot-backfill: 5-летняя история ≈ 1800 checkpoint-ов на счёт).
+        // Без промежуточных save() большая пересборка — ОДНА SwiftData-транзакция целиком: уход
+        // приложения в бэкграунд/снятие системой посреди реплея откатывает ВСЮ проделанную работу,
+        // и следующий запуск стартует с нуля заново. Периодический save() каждые `saveBatchSize`
+        // обработанных дней делает частичный прогресс валидным — повторный вызов просто продолжит
+        // с последнего РЕАЛЬНО сохранённого checkpoint-а (`lastValidKey` выше пересчитывается с диска).
+        // `autoreleasepool` — тот же цикл строит `Decimal`/`Date` на каждой итерации; без периодического
+        // дренажа промежуточные объекты живут до конца всего вызова вместо конца пачки.
+        var processedSinceSave = 0
+
         for dayKey in dayKeysToBuild {
             // Курсор дня = дата ПОСЛЕДНЕГО события этого dayKey — гарантирует, что balanceAt(≤cursor)
             // включает все события дня независимо от разброса времени внутри дня (события с одним
             // dayKey группируются по локальному календарю на момент создания, см. AccountEvent.dayKey).
             guard let cursor = events.filter({ $0.dayKey == dayKey }).map(\.date).max() else { continue }
 
-            let balance = AccountBalanceEngine.balanceAt(
-                events: events,
-                kind: account.kind,
-                on: cursor,
-                priceProvider: priceProvider,
-                marketMeta: account.marketMeta
-            )
-            let isClosed = !account.participates(on: cursor)
+            autoreleasepool {
+                let balance = AccountBalanceEngine.balanceAt(
+                    events: events,
+                    kind: account.kind,
+                    on: cursor,
+                    priceProvider: priceProvider,
+                    marketMeta: account.marketMeta
+                )
+                let isClosed = !account.participates(on: cursor)
 
-            if let existingSnapshot = byKey[dayKey] {
-                existingSnapshot.balance = balance
-                existingSnapshot.isClosed = isClosed
-                existingSnapshot.updatedAt = Date()
-            } else {
-                let snapshot = AccountDailySnapshot(account: account, dayKey: dayKey, balance: balance, isClosed: isClosed)
-                modelContext.insert(snapshot)
+                if let existingSnapshot = byKey[dayKey] {
+                    existingSnapshot.balance = balance
+                    existingSnapshot.isClosed = isClosed
+                    existingSnapshot.updatedAt = Date()
+                } else {
+                    let snapshot = AccountDailySnapshot(account: account, dayKey: dayKey, balance: balance, isClosed: isClosed)
+                    modelContext.insert(snapshot)
+                }
+            }
+
+            processedSinceSave += 1
+            if processedSinceSave >= Self.saveBatchSize {
+                try modelContext.save()
+                processedSinceSave = 0
             }
         }
 
         try modelContext.save()
     }
+
+    /// Размер пачки перед промежуточным `save()` при большой пересборке (см. комментарий выше).
+    private static let saveBatchSize = 200
 }
