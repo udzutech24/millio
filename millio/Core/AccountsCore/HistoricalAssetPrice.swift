@@ -10,7 +10,7 @@ import SwiftData
 /// использовании приложения) таблица органически накапливает реальную историю закрытий БЕЗ единого
 /// платного бэкфилла (S9: не жечь квоту котировок на историю).
 @Model
-final class HistoricalAssetPrice {
+final class HistoricalAssetPrice: Persistable {
     var id: UUID = UUID()
     /// Символ тикера, ВСЕГДА в верхнем регистре (сравнение с `MarketMeta.symbol.uppercased()`).
     var symbol: String = ""
@@ -41,5 +41,28 @@ final class HistoricalAssetPrice {
         self.price = price
         self.source = source
         self.fetchedAt = fetchedAt
+    }
+
+    // MARK: - Backup export/import
+    //
+    // В отличие от Account/AccountEvent/AccountGroup/AccountDailySnapshot, это НЕ часть event-sourcing
+    // core reconciliation (нет выделенного merge-пути в ScopeMergeDedup) — участвует в общем
+    // legacyData-экспорте reconciliation наравне с HistoricalRate (upsert по symbol+dayKey у импортёра).
+
+    func export() throws -> Data {
+        let dict: [String: Any] = [
+            "type": "HistoricalAssetPrice",
+            "symbol": symbol,
+            "assetClassRaw": assetClassRaw,
+            "dayKey": dayKey,
+            "price": "\(price)",
+            "source": source,
+            "fetchedAt": fetchedAt.timeIntervalSince1970
+        ]
+        return try JSONSerialization.data(withJSONObject: dict)
+    }
+
+    static func `import`(_ data: Data) throws {
+        // Импорт выполняется через ModelContext в HistoricalAssetPriceImporter (AccountsCoreFeatureRegistration).
     }
 }

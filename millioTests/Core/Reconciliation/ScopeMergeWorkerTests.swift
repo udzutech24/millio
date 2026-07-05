@@ -24,6 +24,10 @@ struct ScopeMergeWorkerTests {
         InvestmentFeatureRegistration.register()
         CashbackFeatureRegistration.register()
         UserSubscriptionsFeatureRegistration.register()
+        // Регистрируем core-модели в ModelTypeRegistry (нужны для полного CloudKit backup) —
+        // тесты ниже (особенно newCore_copiedByIdAndIdempotent) доказывают, что это НЕ приводит
+        // к двойному импорту через legacyData: `ScopeMergeReader.readGuestInput` их исключает.
+        AccountsCoreFeatureRegistration.register()
     }
 
     private let fixedDate = Date(timeIntervalSince1970: 1_700_000_000)

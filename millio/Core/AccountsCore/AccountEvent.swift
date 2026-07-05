@@ -4,7 +4,7 @@ import SwiftData
 /// Единственная сущность операции по счёту (event-sourcing). Любое изменение баланса —
 /// это вставка AccountEvent, никогда прямая мутация числового поля (AC1, AC9).
 @Model
-final class AccountEvent {
+final class AccountEvent: Persistable {
     // Без @Attribute(.unique) — см. комментарий в Account.swift (CloudKit-конфигурация не поддерживает unique).
     var id: UUID = UUID()
 
@@ -116,5 +116,37 @@ final class AccountEvent {
     func setDate(_ newDate: Date) {
         date = newDate
         dayKey = Self.makeDayKey(from: newDate)
+    }
+
+    // MARK: - Backup export/import (полный CloudKit backup, спека §0.4 — НЕ путь reconciliation)
+
+    func export() throws -> Data {
+        var dict: [String: Any] = [
+            "type": "AccountEvent",
+            "id": id.uuidString,
+            "date": date.timeIntervalSince1970,
+            "createdAt": createdAt.timeIntervalSince1970,
+            "dayKey": dayKey,
+            "typeRaw": typeRaw,
+            "fxProvisional": fxProvisional
+        ]
+        if let accountID = account?.id { dict["accountID"] = accountID.uuidString }
+        if let amount { dict["amount"] = "\(amount)" }
+        if let quantity { dict["quantity"] = "\(quantity)" }
+        if let unitPrice { dict["unitPrice"] = "\(unitPrice)" }
+        if let fxRateToBase { dict["fxRateToBase"] = "\(fxRateToBase)" }
+        if let categoryID { dict["categoryID"] = categoryID }
+        if let note { dict["note"] = note }
+        if let transferID { dict["transferID"] = transferID.uuidString }
+        if let sourceTransactionID { dict["sourceTransactionID"] = sourceTransactionID }
+        if let originalAmount { dict["originalAmount"] = "\(originalAmount)" }
+        if let originalCurrency { dict["originalCurrency"] = originalCurrency }
+        if let redenomRate { dict["redenomRate"] = "\(redenomRate)" }
+        if let redenomFromCurrency { dict["redenomFromCurrency"] = redenomFromCurrency }
+        return try JSONSerialization.data(withJSONObject: dict)
+    }
+
+    static func `import`(_ data: Data) throws {
+        // Импорт выполняется через ModelContext в AccountEventImporter (AccountsCoreFeatureRegistration).
     }
 }

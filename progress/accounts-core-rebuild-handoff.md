@@ -1,11 +1,16 @@
 # Handoff: перестройка ядра счетов — фазы 0–6a РЕАЛИЗОВАНЫ
 
-**Дата:** 2026-07-05 (обновлён после сессии «закрыть Находку 2 — Вариант B, честная V5») · **Было:**
-Находка 2 (V4 in-place) эскалирована владельцу, код не трогали · **Стало:** владелец выбрал Вариант B
-через `AskUserQuestion`; `AppSchemaV4.models` возвращён к исходному набору (без `HistoricalAssetPrice`),
-создана `AppSchemaV5` с `HistoricalAssetPrice` + lightweight-миграция V4→V5, `AppSchemaCurrent = AppSchemaV5`,
-добавлены guard-тесты `v4IsSupersetOfV3`/`v5IsSupersetOfV4`. Находка 2 ЗАКРЫТА. Детали и поведение на
-«грязных» dev V4-сторах — `plans/2026-07-04__accounts-core-rebuild-plan.md` §9.
+**Дата:** 2026-07-05 (обновлён после закрытия релиз-блокера ModelTypeRegistry) · **Было:**
+🔴 new-core модели (Account/AccountEvent/AccountGroup/AccountDailySnapshot/HistoricalAssetPrice)
+не были зарегистрированы в `ModelTypeRegistry` → CloudKit-бэкап/export/restore их не переносили.
+**Стало:** блокер ЗАКРЫТ. Детали — §ModelTypeRegistry блокер ЗАКРЫТ ниже и план §10.
+
+Предыдущее обновление 2026-07-05 (закрытие Находки 2 — Вариант B, честная V5):
+владелец выбрал Вариант B через `AskUserQuestion`; `AppSchemaV4.models` возвращён к исходному набору
+(без `HistoricalAssetPrice`), создана `AppSchemaV5` с `HistoricalAssetPrice` + lightweight-миграция
+V4→V5, `AppSchemaCurrent = AppSchemaV5`, добавлены guard-тесты `v4IsSupersetOfV3`/`v5IsSupersetOfV4`.
+Находка 2 ЗАКРЫТА. Детали и поведение на «грязных» dev V4-сторах —
+`plans/2026-07-04__accounts-core-rebuild-plan.md` §9.
 Тест-гейт прогнан, сверен с baseline (см. §Тест-гейт 2026-07-05 ниже).
 
 ## Состояние
@@ -41,8 +46,9 @@ AccountMarketPriceService + HistoricalAssetPrice (append-only цены, чест
    ✅ Находка 2 (V4 in-place, миграционный риск) — ЗАКРЫТА 2026-07-05 Вариантом B (честная V5),
    см. §Находка 2 ниже;
    ✅ мелочь «10 счетов»→«12 счетов» починена.
-   🔴 Известный релиз-блокер (не в скоупе этой сессии): new-core модели НЕ в ModelTypeRegistry →
-   CloudKit-бэкап/export их не переносит.
+   ✅ **Релиз-блокер ModelTypeRegistry — ЗАКРЫТ 2026-07-05.** Все 5 моделей ядра зарегистрированы для
+   полного CloudKit backup/restore; reconciliation (Track B) явно исключает 4 из них из своего
+   legacyData, чтобы не задвоить merge с `copyNewCore`. Детали — §ModelTypeRegistry блокер ЗАКРЫТ ниже.
    Ручные проверки остаются: runtime login/logout/force-signout, fresh install+iCloud, UI-конвертация
    легаси — все требуют реального Apple ID, недоступного в этой среде. Следующий шаг по согласованной
    последовательности — `/stress-test` UI-флоу + эти ручные проверки владельцем (не часть этой сессии).
@@ -115,6 +121,61 @@ dev-окружением разработчика, поведение предс
 в guest-стор скопированы 13 ZACCOUNT + 6 ZACCOUNTGROUP из user (для проверки Находки 1 —
 результат проверить после разблокировки экрана; откат: восстановить из бэкапа).
 
+## ModelTypeRegistry блокер ЗАКРЫТ (2026-07-05)
+
+**Проблема:** Account/AccountEvent/AccountGroup/AccountDailySnapshot/HistoricalAssetPrice не были
+зарегистрированы в `ModelTypeRegistry` → CloudKit-бэкап/export/restore их не переносили. Пользователь
+нового ядра, сделавший backup и restore (напр. смена устройства), терял все счета/события ядра.
+
+**Мини-стресс-тест ДО реализации выявил реальный конфликт с Reconciliation (Track B):**
+`ScopeMergeReader.readGuestInput` строит `legacyData` через `DataRepository.exportAllData(from:)` —
+ту же функцию, что читает `ModelTypeRegistry`. Простая регистрация core-моделей привела бы к тому,
+что `ScopeMergeWorker.apply()` импортировал бы Account/AccountEvent/AccountGroup ДВАЖДЫ: один раз
+через новый generic-импортёр (внутри `legacyData`), второй раз — через существующий выделенный
+by-id merge `ScopeMergeDedup.copyNewCore` (спека §0.4). Риск — разъезд деталей реконструкции между
+двумя путями (например, `dayKey` у `AccountEvent`, риск Т5). Решение согласовано с владельцем
+(`AskUserQuestion` → «Да, расширить скоуп») и реализовано.
+
+**Реализация:**
+- `DataRepository.exportAllData(from:excluding:)` — новый опциональный параметр (по умолчанию пустой
+  набор, обратная совместимость для существующих вызовов, включая полный backup).
+- `ScopeMergeReader.newCoreTypeNames` = `{Account, AccountEvent, AccountGroup, AccountDailySnapshot}` —
+  исключаются из `legacyData` reconciliation; единственный merge-путь для них остаётся
+  `ScopeMergeDedup.copyNewCore` (Account/AccountEvent/AccountGroup) либо пересборка снапшотов после
+  merge (AccountDailySnapshot). `HistoricalAssetPrice` в исключение НЕ входит — у него нет
+  выделенного merge-пути, мержится через общий importer как `HistoricalRate` (upsert по symbol+dayKey).
+- Все 5 моделей получили `Persistable`-конформанс (`export()`/`import(_:)` stub) в своих файлах —
+  Decimal-поля (включая вложенные в 6 meta-структурах `AccountMeta.swift`) сериализуются СТРОКОЙ,
+  не JSON-числом: экспортируемый словарь дважды проходит через `JSONSerialization` (внутри
+  `ModelTypeRegistry.register` и в `DataRepository.exportAllData`), на этом пути `Decimal` бриджится
+  в `NSNumber`/`Double` и теряет точность; строка переживает оба прохода без искажений.
+- Новый файл `AccountsCoreFeatureRegistration.swift` — регистрация + 5 импортёров с приоритетом
+  импорта (AccountGroup=30 → Account=31 → AccountEvent/AccountDailySnapshot=32), чтобы связи
+  (group→id, account→id) резолвились корректно. `AccountEventImporter` явно восстанавливает `dayKey`
+  из бэкапа вместо пересчёта из `date` (риск Т5).
+- Вызов `AccountsCoreFeatureRegistration.register()` добавлен в `millioApp.registerFeatures()`.
+- Комментарий-инвариант в `ScopeMergeSnapshot.swift:8` обновлён: core теперь В реестре, но исключён
+  из reconciliation-пути (был: «НЕ в ModelTypeRegistry»).
+
+**Known-behavior (не регрессия, задокументировано, не в скоупе этой сессии):** если backup сделан на
+версии приложения С зарегистрированным ядром, а restore выполняется на СТАРОЙ версии (ядро ещё не
+зарегистрировано) — `DataRepository.importAllData` бросает `AppError.restoreFailed` на ВЕСЬ бэкап
+(«Неизвестные типы моделей в backup: ...», `DataRepository.swift:139-142`), а не игнорирует
+только неизвестные типы. Это существующее (до этой сессии) поведение — защита от тихой потери
+данных, действует для ЛЮБОГО когда-либо добавленного типа, не специфично для ядра счетов. На практике
+маловероятно (App Store не позволяет откатить версию), но стоит иметь в виду при откате/TestFlight.
+
+**Тесты (5 новых/изменённых, все зелёные):**
+- `AccountsCoreBackupTests.testFullRoundTripAllAccountKinds` — round-trip export→clear→import всех
+  8 kind Account + событие (dayKey сохранён) + группа + снапшот + HistoricalAssetPrice, данные идентичны.
+- `AccountsCoreBackupTests.testRestoringOldBackupWithoutCoreEntitiesSucceeds` — старый бэкап без ядра
+  восстанавливается без исключений на версии с зарегистрированным ядром.
+- `ScopeMergeReaderExclusionTests` (новый файл, 2 теста) — `exportAllData(excluding:)` и
+  `readGuestInput().legacyData` НИКОГДА не содержат new-core типы, даже когда те зарегистрированы.
+- `ScopeMergeWorkerTests.registerFeatures()` дополнен `AccountsCoreFeatureRegistration.register()` —
+  существующий `newCore_copiedByIdAndIdempotent` теперь реально проверяет отсутствие двойного импорта
+  (раньше core-модели не были в реестре тестового окружения и баг не мог проявиться) — прошёл.
+
 ## Тест-гейт 2026-07-05 (после B2-верификации + закрытия находок)
 
 Полный `millioTests` на iPhone 17 Pro, build ✅ 0 ошибок. Прогон 336 сек. Авторитетный summary-блок
@@ -126,6 +187,23 @@ xcodebuild («Failing tests:», с дедупом retry-попыток) — **19
   (`CashflowCategoryHelpContentTests.*`, `CashflowTransactionEditorViewLayoutTests.*`).
 
 **Новых регрессий — 0.** Гейт «не хуже baseline» пройден (по факту — на 1 тест лучше).
+
+## Тест-гейт 2026-07-05 (после закрытия блокера ModelTypeRegistry)
+
+Полный `millioTests` на iPhone 17 Pro, build ✅ 0 ошибок, прогон ~311 сек, 1632 passed. Авторитетный
+блок xcodebuild «Failing tests:» (дедуп по имени) — **19 уникальных падений, ИДЕНТИЧНО** предыдущему
+гейту сессии (см. выше):
+- 15 из 16 baseline (`progress/accounts-core-baseline-failures.md`) — точное совпадение по имени;
+- 1 baseline-тест (`CashflowViewModelTests.testPlannedExpenseAutoAppliesOnDueDate`) по-прежнему проходит;
+- 4 — задокументированный flaky-класс «LanguageManager.shared race»
+  (`CashflowCategoryHelpContentTests.*`, `CashflowTransactionEditorViewLayoutTests.*`).
+
+Прицельный прогон новых/изменённых тестов (`AccountsCoreBackupTests`, `ScopeMergeReaderExclusionTests`,
+`ScopeMergeWorkerTests`, `AccountSchemaTests`, `BackupRestoreIntegrityTests`) — все зелёные, включая
+регрессионный `ScopeMergeWorkerTests.newCore_copiedByIdAndIdempotent` (теперь с зарегистрированным
+ядром в `ModelTypeRegistry` тестового окружения — доказывает отсутствие двойного импорта).
+
+**Новых регрессий — 0.** Гейт «не хуже baseline» пройден (точное совпадение состава падений).
 
 ## Правила (без изменений)
 Bulletproof — только через суб-агента; не пушить/не мержить без запроса; симулятор iPhone 17 Pro;

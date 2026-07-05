@@ -364,3 +364,44 @@ fallback → при неудаче `.corrupt` + fresh store), но V4 никог
 
 **Тесты:** прогнан полный `millioTests` — см. §Тест-гейт в `progress/accounts-core-rebuild-handoff.md`
 (секция обновлена 2026-07-05, после фикса схемы). Гейт «не хуже baseline» пройден.
+
+## 10. Релиз-блокер ModelTypeRegistry — ЗАКРЫТ, 2026-07-05
+
+**Было (хвост №10 из §8):** Account/AccountEvent/AccountGroup/AccountDailySnapshot/HistoricalAssetPrice
+не зарегистрированы в `ModelTypeRegistry` → CloudKit backup/export/restore их не переносил. Пользователь
+нового ядра терял все счета/события при restore на другом устройстве.
+
+**Мини-стресс-тест ДО кода нашёл реальный конфликт с Reconciliation (Track B):** `ScopeMergeReader.
+readGuestInput` строит `legacyData` для guest→user merge через ту же `DataRepository.exportAllData`,
+что читает `ModelTypeRegistry`. Простая регистрация привела бы к ДВОЙНОМУ импорту new-core сущностей
+при логине (generic-импортёр внутри legacyData + существующий `ScopeMergeDedup.copyNewCore` по id,
+спека §0.4) — риск разъезда деталей реконструкции (например, `dayKey` у `AccountEvent`, риск Т5).
+Согласовано с владельцем (`AskUserQuestion` → «Да, расширить скоуп»).
+
+**Реализация:**
+1. `DataRepository.exportAllData(from:excluding:)` — новый опциональный параметр (default `[]`,
+   полный backup не меняется).
+2. `ScopeMergeReader.newCoreTypeNames` = `{Account, AccountEvent, AccountGroup, AccountDailySnapshot}` —
+   исключены из `legacyData` reconciliation; единственный merge-путь для них — `copyNewCore` (Account/
+   AccountEvent/AccountGroup) либо пересборка снапшотов (AccountDailySnapshot). `HistoricalAssetPrice`
+   НЕ исключён — нет выделенного merge-пути, мержится через общий importer как `HistoricalRate`.
+3. Все 5 моделей — `Persistable`-конформанс (`export()`/`import(_:)`) в своих файлах; Decimal-поля
+   (включая 6 meta-структур `AccountMeta.swift`) сериализуются СТРОКОЙ во избежание потери точности
+   через двойной проход `JSONSerialization`.
+4. Новый `AccountsCoreFeatureRegistration.swift` — регистрация + 5 импортёров, importPriority
+   AccountGroup=30 → Account=31 → AccountEvent/AccountDailySnapshot=32 (резолв связей по id).
+   `AccountEventImporter` восстанавливает `dayKey` из бэкапа, не пересчитывает (риск Т5).
+5. Вызов добавлен в `millioApp.registerFeatures()`. Комментарий-инвариант в `ScopeMergeSnapshot.swift:8`
+   обновлён (core теперь В реестре, но исключён из reconciliation-пути).
+
+**Known-behavior (не регрессия, не в скоупе):** restore бэкапа с ядром на СТАРОЙ версии приложения
+(core ещё не зарегистрирован) — `DataRepository.importAllData` бросает `AppError.restoreFailed` на
+ВЕСЬ бэкап (существующая защита от тихой потери данных для любого нового типа, не специфична для
+ядра счетов). Задокументировано в handoff.
+
+**Тесты:** `AccountsCoreBackupTests` (round-trip всех 8 kind + dayKey + HistoricalAssetPrice; restore
+старого бэкапа без ядра), `ScopeMergeReaderExclusionTests` (инвариант исключения), `ScopeMergeWorkerTests`
+(`registerFeatures()` дополнен регистрацией ядра — `newCore_copiedByIdAndIdempotent` подтверждает
+отсутствие двойного импорта). Полный гейт: 19 уникальных падений, идентично предыдущему прогону
+(0 новых регрессий) — см. `progress/accounts-core-rebuild-handoff.md` §Тест-гейт 2026-07-05 (после
+закрытия блокера ModelTypeRegistry).

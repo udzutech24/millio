@@ -4,7 +4,7 @@ import SwiftData
 /// Счёт нового ядра event-sourcing. Хранимых числовых полей баланса НЕТ —
 /// баланс всегда производная `AccountBalanceEngine.balanceAt(events:kind:on:)` (AC1, AC2, AC9).
 @Model
-final class Account {
+final class Account: Persistable {
     // Без @Attribute(.unique): CloudKit-конфигурация (используется по умолчанию, если не указано
     // cloudKitDatabase: .none) не поддерживает unique-констрейнты — контейнер падает с
     // loadIssueModelContainer. Ни одна модель в проекте .unique не использует (см. Card.uniqueID).
@@ -64,5 +64,34 @@ final class Account {
         guard includeInTotal else { return false }
         guard let archivedAt else { return true }
         return date < archivedAt
+    }
+
+    // MARK: - Backup export/import (полный CloudKit backup, спека §0.4 — НЕ путь reconciliation)
+
+    func export() throws -> Data {
+        var dict: [String: Any] = [
+            "type": "Account",
+            "id": id.uuidString,
+            "name": name,
+            "kindRaw": kindRaw,
+            "currency": currency,
+            "createdAt": createdAt.timeIntervalSince1970,
+            "includeInTotal": includeInTotal,
+            "order": order
+        ]
+        if let archivedAt { dict["archivedAt"] = archivedAt.timeIntervalSince1970 }
+        if let note { dict["note"] = note }
+        if let groupID = group?.id { dict["groupID"] = groupID.uuidString }
+        if let cardMeta { dict["cardMeta"] = cardMeta.exportDict() }
+        if let depositMeta { dict["depositMeta"] = depositMeta.exportDict() }
+        if let loanMeta { dict["loanMeta"] = loanMeta.exportDict() }
+        if let debtMeta { dict["debtMeta"] = debtMeta.exportDict() }
+        if let marketMeta { dict["marketMeta"] = marketMeta.exportDict() }
+        if let manualAssetMeta { dict["manualAssetMeta"] = manualAssetMeta.exportDict() }
+        return try JSONSerialization.data(withJSONObject: dict)
+    }
+
+    static func `import`(_ data: Data) throws {
+        // Импорт выполняется через ModelContext в AccountImporter (AccountsCoreFeatureRegistration).
     }
 }

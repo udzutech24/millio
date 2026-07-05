@@ -4,7 +4,7 @@ import SwiftData
 /// Производный кэш `balanceAt` по дням, в валюте САМОГО счёта (AC8).
 /// НЕ источник истины — может быть удалён и пересобран из событий в любой момент.
 @Model
-final class AccountDailySnapshot {
+final class AccountDailySnapshot: Persistable {
     // Без @Attribute(.unique) — см. комментарий в Account.swift (CloudKit-конфигурация не поддерживает unique).
     var id: UUID = UUID()
 
@@ -35,5 +35,28 @@ final class AccountDailySnapshot {
         self.quantity = quantity
         self.isClosed = isClosed
         self.updatedAt = updatedAt
+    }
+
+    // MARK: - Backup export/import (полный CloudKit backup, спека §0.4 — НЕ путь reconciliation.
+    // В отличие от reconciliation, где снапшоты сознательно НЕ копируются и пересобираются из событий
+    // (см. `ScopeMergeDedup.copyNewCore`), полный snapshot-бэкап их переносит — это ускоряет отображение
+    // сразу после restore, не дожидаясь фонового rebuild.)
+
+    func export() throws -> Data {
+        var dict: [String: Any] = [
+            "type": "AccountDailySnapshot",
+            "id": id.uuidString,
+            "dayKey": dayKey,
+            "balance": "\(balance)",
+            "isClosed": isClosed,
+            "updatedAt": updatedAt.timeIntervalSince1970
+        ]
+        if let accountID = account?.id { dict["accountID"] = accountID.uuidString }
+        if let quantity { dict["quantity"] = "\(quantity)" }
+        return try JSONSerialization.data(withJSONObject: dict)
+    }
+
+    static func `import`(_ data: Data) throws {
+        // Импорт выполняется через ModelContext в AccountDailySnapshotImporter (AccountsCoreFeatureRegistration).
     }
 }

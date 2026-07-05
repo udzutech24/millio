@@ -5,7 +5,13 @@ import SwiftData
 /// Guest читается в плоские значения ДО передачи в worker, чтобы merge шёл off-main
 /// (митигация B1b №7) и не таскал managed-объекты через границу актора.
 
-// MARK: - New-core DTO (new-core НЕ в ModelTypeRegistry — копируем напрямую по id, спека §0.4)
+// MARK: - New-core DTO
+//
+// New-core В ModelTypeRegistry (AccountsCoreFeatureRegistration) — но ТОЛЬКО ради полного CloudKit
+// backup/restore. Для reconciliation эти типы исключены из `legacyData`
+// (см. `ScopeMergeReader.newCoreTypeNames`) — здесь копируем напрямую по id, единственный merge-путь
+// (спека §0.4). Не регистрировать другой путь мержа для Account/AccountEvent/AccountGroup —
+// задвоит импорт (см. докстринг `AccountsCoreFeatureRegistration`).
 
 struct AccountGroupDTO: Sendable {
     let id: UUID

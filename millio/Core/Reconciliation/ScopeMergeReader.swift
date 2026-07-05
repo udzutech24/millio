@@ -23,7 +23,22 @@ enum ScopeMergeReader {
         static let account = "Account"
         static let accountEvent = "AccountEvent"
         static let accountGroup = "AccountGroup"
+        static let accountDailySnapshot = "AccountDailySnapshot"
     }
+
+    /// New-core типы, исключаемые из `legacyData` (ModelTypeRegistry-экспорта для reconciliation):
+    /// у Account/AccountEvent/AccountGroup единственный merge-путь — `ScopeMergeDedup.copyNewCore`
+    /// (копия по id, спека §0.4); у AccountDailySnapshot — пересборка из событий после merge
+    /// (снапшоты сознательно НЕ копируются, см. `ScopeMergeDedup.copyNewCore`). Регистрация этих
+    /// типов в `ModelTypeRegistry` (AccountsCoreFeatureRegistration) нужна ТОЛЬКО для полного
+    /// CloudKit backup/restore — без этого исключения `DataRepository.importAllData(legacyData...)`
+    /// импортировал бы их ещё раз, дублируя работу `copyNewCore` и рискуя разъехаться в деталях
+    /// реконструкции (например, `dayKey` у AccountEvent, риск Т5).
+    /// HistoricalAssetPrice сюда НЕ входит — у него нет выделенного merge-пути, он мержится через
+    /// общий importer как HistoricalRate (upsert по symbol+dayKey).
+    static let newCoreTypeNames: Set<String> = [
+        Model.account, Model.accountEvent, Model.accountGroup, Model.accountDailySnapshot
+    ]
 
     // MARK: - Снимок стороны (counts / watermarks / lineage / tx-fingerprints)
 
@@ -178,7 +193,7 @@ enum ScopeMergeReader {
     }
 
     static func readGuestInput(context: ModelContext) throws -> GuestMergeInput {
-        let legacyData = try DataRepository.exportAllData(from: context)
+        let legacyData = try DataRepository.exportAllData(from: context, excluding: newCoreTypeNames)
         let newCore = try readNewCore(context: context)
         let snap = try snapshot(context: context)
         return GuestMergeInput(legacyData: legacyData, newCore: newCore, snapshot: snap)

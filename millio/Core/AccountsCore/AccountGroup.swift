@@ -4,7 +4,7 @@ import SwiftData
 /// Группа счетов нового ядра — только ярлык, не участвует в расчёте баланса.
 /// Названа AccountGroup (не Group) — конфликт имени с SwiftUI.Group.
 @Model
-final class AccountGroup {
+final class AccountGroup: Persistable {
     // Без @Attribute(.unique) — см. комментарий в Account.swift (CloudKit-конфигурация не поддерживает unique).
     var id: UUID = UUID()
 
@@ -22,5 +22,23 @@ final class AccountGroup {
         self.colorHex = colorHex
         self.displayCurrency = displayCurrency
         self.order = order
+    }
+
+    // MARK: - Backup export/import (полный CloudKit backup, спека §0.4 — НЕ путь reconciliation)
+
+    func export() throws -> Data {
+        let dict: [String: Any] = [
+            "type": "AccountGroup",
+            "id": id.uuidString,
+            "name": name,
+            "colorHex": colorHex ?? NSNull(),
+            "displayCurrency": displayCurrency ?? NSNull(),
+            "order": order
+        ]
+        return try JSONSerialization.data(withJSONObject: dict)
+    }
+
+    static func `import`(_ data: Data) throws {
+        // Импорт выполняется через ModelContext в AccountGroupImporter (AccountsCoreFeatureRegistration).
     }
 }
