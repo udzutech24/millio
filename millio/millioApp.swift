@@ -427,6 +427,14 @@ struct millioApp: App {
         let usedFallback = ScopeStoreOpenTracker.shared.usedFallback(resolvedScope.storeConfigurationName)
             || ScopeStoreOpenTracker.shared.usedFallback(DataScope.guest.storeConfigurationName)
 
+        // Watchdog (митигация B1b №7): если merge аномально затянулся, снимаем оверлей, чтобы
+        // пользователь не завис на «Восстанавливаю данные…». Сам merge (off-main) при этом
+        // продолжается и корректно завершится/выставит маркер — на данные watchdog не влияет.
+        let watchdog = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Self.reconcileWatchdogSeconds))
+            if isReconciling { withAnimation(AppAnimation.easeOut) { isReconciling = false } }
+        }
+
         let outcome = await scopeReconciliationService.reconcile(
             userContainer: userContainer,
             userScope: resolvedScope,
@@ -436,6 +444,7 @@ struct millioApp: App {
             usedFallbackOpen: usedFallback,
             onWillMerge: { withAnimation(AppAnimation.standard) { isReconciling = true } }
         )
+        watchdog.cancel()
 
         if case .merged(let report) = outcome {
             // Пересоздаём дерево на слитых данных: FinanceViewModel/CashflowViewModel перечитают user-стор.
@@ -537,6 +546,8 @@ struct millioApp: App {
     // Задержка снятия оверлея смены профиля: даёт пересозданному дереву кадр на рендер,
     // чтобы не мигнуть пустым экраном между teardown старого RootTabView и рендером нового.
     private static let scopeSwitchOverlayLingerMilliseconds = 350
+    /// Watchdog reconciliation (Track B): максимальная длительность оверлея «Восстанавливаю данные…».
+    private static let reconcileWatchdogSeconds = 20
 
     @MainActor
     private func runPostStartupRefreshes() async {

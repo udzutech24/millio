@@ -99,12 +99,27 @@ enum ScopeMergeDedup {
         _ snapshot: NewCoreSnapshot,
         into context: ModelContext
     ) throws -> (accountsAdded: Int, eventsAdded: Int) {
-        var groupByID = try indexByID(context.fetch(FetchDescriptor<AccountGroup>()), id: \.id)
-        for dto in snapshot.groups where groupByID[dto.id] == nil {
-            let group = AccountGroup(id: dto.id, name: dto.name, colorHex: dto.colorHex,
-                                     displayCurrency: dto.displayCurrency, order: dto.order)
-            context.insert(group)
-            groupByID[dto.id] = group
+        let existingGroups = try context.fetch(FetchDescriptor<AccountGroup>())
+        var groupByID = indexByID(existingGroups, id: \.id)
+        // Индекс по имени для fallback-перецепки (митигация B1b №4): если guest-группы нет по id,
+        // но есть user-группа с тем же именем — счета цепляем к ней, а не плодим дубль-группу.
+        var groupByName: [String: AccountGroup] = [:]
+        for group in existingGroups { groupByName[group.name] = group }
+        // Разрешение guest-groupID → фактическая группа в user-сторе (по id или по имени).
+        var resolvedGroup: [UUID: AccountGroup] = [:]
+        for dto in snapshot.groups {
+            if let byID = groupByID[dto.id] {
+                resolvedGroup[dto.id] = byID
+            } else if let byName = groupByName[dto.name] {
+                resolvedGroup[dto.id] = byName // fallback по имени — без дубля
+            } else {
+                let group = AccountGroup(id: dto.id, name: dto.name, colorHex: dto.colorHex,
+                                         displayCurrency: dto.displayCurrency, order: dto.order)
+                context.insert(group)
+                groupByID[dto.id] = group
+                groupByName[dto.name] = group
+                resolvedGroup[dto.id] = group
+            }
         }
 
         var accountByID = try indexByID(context.fetch(FetchDescriptor<Account>()), id: \.id)
@@ -122,7 +137,7 @@ enum ScopeMergeDedup {
             account.debtMeta = dto.debtMeta
             account.marketMeta = dto.marketMeta
             account.manualAssetMeta = dto.manualAssetMeta
-            if let groupID = dto.groupID { account.group = groupByID[groupID] }
+            if let groupID = dto.groupID { account.group = resolvedGroup[groupID] ?? groupByID[groupID] }
             context.insert(account)
             accountByID[dto.id] = account
             accountsAdded += 1

@@ -144,6 +144,28 @@ struct ScopeMergeWorkerTests {
         }
     }
 
+    @Test func newCore_groupNameFallback_reCeptsAccountsWithoutDuplicateGroup() async throws {
+        try await withRegistry {
+            let guest = makeContainer(); let user = makeContainer()
+            // Одноимённая группа «Карты» в обоих сторах, но с РАЗНЫМИ id.
+            let userGroup = AccountGroup(id: UUID(), name: "Карты")
+            user.mainContext.insert(userGroup); save(user)
+
+            let guestGroup = AccountGroup(id: UUID(), name: "Карты")
+            let guestAccount = Account(id: UUID(), name: "Дебетовая", kind: .debitCard, currency: "RUB")
+            guestAccount.group = guestGroup
+            guest.mainContext.insert(guestGroup)
+            guest.mainContext.insert(guestAccount); save(guest)
+
+            _ = try await runMerge(guest: guest, user: user)
+            // Митигация B1b №4: без дубля группы — счёт перецеплен к существующей user-группе.
+            #expect(count(AccountGroup.self, in: user) == 1)
+            #expect(count(Account.self, in: user) == 1)
+            let acc = try ModelContext(user).fetch(FetchDescriptor<Account>()).first
+            #expect(acc?.group?.name == "Карты")
+        }
+    }
+
     @Test func newCore_copiedByIdAndIdempotent() async throws {
         try await withRegistry {
             let guest = makeContainer(); let user = makeContainer()
