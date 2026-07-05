@@ -1,0 +1,923 @@
+<title>Millio — прототип нового Cashflow</title>
+<style>
+  /* Осознанно single-theme: мокап приложения Dark Mode only */
+  :root{
+    --page:#0A0A0B;
+    --phone:#000000;
+    --card:#1A1A1C;
+    --card2:#26262A;
+    --line:rgba(255,255,255,.08);
+    --ink:#FFFFFF;
+    --ink2:#A1A1A8;
+    --ink3:#68686F;
+    --exp:#FF453A;
+    --inc:#30D158;
+    --trf:#0A84FF;
+    --gold:#C9CDD3; /* нейтральный акцент ссылок — в стилистике приложения */
+    --warn:#FF9F0A;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--page);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+    min-height:100vh;
+  }
+  /* dot-grid фон страницы — тёмная версия приёма CapWords */
+  .backdrop{
+    position:fixed;inset:0;pointer-events:none;
+    background-image:radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px);
+    background-size:26px 26px;
+  }
+  .wrap{position:relative;max-width:1060px;margin:0 auto;padding:40px 20px 80px;}
+  header.page{
+    text-align:center;margin-bottom:8px;
+  }
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);font-weight:600;}
+  h1{font-size:26px;font-weight:700;margin:8px 0 6px;letter-spacing:-.01em;}
+  .sub{color:var(--ink2);font-size:14px;max-width:60ch;margin:0 auto;}
+  .sub b{color:var(--ink);font-weight:600;}
+
+  .stage{
+    display:flex;gap:44px;justify-content:center;align-items:flex-start;
+    flex-wrap:wrap;margin-top:34px;
+  }
+  .col{display:flex;flex-direction:column;align-items:center;gap:14px;}
+  .caption{color:var(--ink3);font-size:12.5px;letter-spacing:.04em;text-align:center;}
+  .caption b{color:var(--ink2);font-weight:600;}
+
+  /* ================= PHONE CHROME ================= */
+  .phone{
+    width:375px;height:812px;background:var(--phone);
+    border-radius:44px;border:1px solid rgba(255,255,255,.09);
+    box-shadow:0 24px 60px rgba(0,0,0,.55), inset 0 0 0 6px #05070a;
+    overflow:hidden;position:relative;display:flex;flex-direction:column;
+  }
+  .statusbar{
+    height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;
+    padding:0 26px;font-size:13.5px;font-weight:600;color:var(--ink);
+  }
+  .statusbar .r{display:flex;gap:5px;align-items:center;font-size:12px;color:var(--ink2);}
+  .screen{flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 18px 18px;position:relative;scrollbar-width:none;}
+  .screen::-webkit-scrollbar{display:none;}
+  .homebar{flex:none;height:22px;display:flex;align-items:center;justify-content:center;}
+  .homebar i{display:block;width:120px;height:4px;border-radius:4px;background:rgba(255,255,255,.22);}
+
+  /* ================= ЭКРАН 1: CASHFLOW MAIN (структура сохранена) ================= */
+  .cf-head{display:flex;align-items:center;justify-content:space-between;margin:6px 2px 12px;gap:8px;}
+  .period{
+    font-size:13px;color:var(--ink);background:var(--card);border:1px solid var(--line);
+    border-radius:18px;padding:8px 14px;font-weight:600;
+  }
+  .curchip{
+    font-size:12px;color:var(--ink2);background:var(--card);border:1px solid var(--line);
+    border-radius:18px;padding:8px 14px;font-weight:800;letter-spacing:.04em;
+  }
+  .chartcard{
+    background:linear-gradient(160deg,#0D1119 0%,#08090C 70%,#060607 100%);
+    border:1px solid var(--line);border-radius:20px;height:150px;margin-bottom:12px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  }
+  .chartcard b{font-size:15px;font-weight:700;}
+  .prolock{
+    display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:8px 18px;
+    font-size:13px;font-weight:700;color:var(--ink);
+  }
+  .strow{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;padding:13px 2px;
+  }
+  .strow + .strow, .strow + .subrows, .subrows + .strow{border-top:1px solid var(--line);}
+  .strow .sl{font-size:15px;font-weight:500;color:var(--ink);}
+  .strow .sl .q{color:var(--ink3);font-size:13px;}
+  .strow .sv{display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums;font-weight:700;font-size:15.5px;}
+  .strow .plus{
+    width:24px;height:24px;border-radius:50%;border:1.5px solid var(--ink3);color:var(--ink2);
+    display:inline-flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;
+  }
+  .strow.total .sl{font-size:17px;font-weight:800;}
+  .strow.total .sv{font-size:17px;}
+  .strow .sv.neg{color:var(--exp);}
+  .strow .chevron{color:var(--ink3);font-size:11px;transition:transform .2s;}
+  .strow.open .chevron{transform:rotate(180deg);}
+  .subrows{padding:2px 0 6px 10px;}
+  .newlabel{
+    font-size:9.5px;font-weight:800;letter-spacing:.08em;color:var(--ink2);background:transparent;border:1px solid rgba(255,255,255,.28);
+    border-radius:6px;padding:2px 6px;vertical-align:2px;margin-left:8px;
+  }
+  .mcard{
+    background:var(--card);border:1px solid var(--line);border-radius:20px;
+    padding:16px;margin-bottom:12px;
+  }
+  .mcard .mtitle{
+    display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;
+    font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);font-weight:700;
+  }
+  .mtitle .link{color:var(--ink);cursor:pointer;font-weight:600;letter-spacing:0;text-transform:none;font-size:12.5px;}
+
+  .budget{display:flex;gap:16px;align-items:center;}
+  .ringbox{position:relative;width:96px;height:96px;flex:none;}
+  .ringbox svg{transform:rotate(-90deg);}
+  .ringbox .pct{
+    position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-variant-numeric:tabular-nums;
+  }
+  .ringbox .pct b{font-size:20px;font-weight:800;}
+  .ringbox .pct span{font-size:9.5px;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase;}
+  .bstats{flex:1;min-width:0;}
+  .brow{margin-bottom:10px;}
+  .brow .lbl{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink2);margin-bottom:5px;}
+  .brow .lbl b{color:var(--ink);font-variant-numeric:tabular-nums;font-weight:700;}
+  .bar{height:6px;border-radius:6px;background:rgba(255,255,255,.07);overflow:hidden;}
+  .bar i{display:block;height:100%;border-radius:6px;}
+  .bar .exp{width:28%;background:var(--exp);}
+  .bar .inc{width:76%;background:var(--inc);}
+  .bnote{font-size:11.5px;color:var(--ink3);margin-top:2px;}
+
+  .uprow{display:flex;align-items:center;gap:12px;padding:10px 2px;}
+  .uprow + .uprow{border-top:1px solid var(--line);}
+  .upic{
+    width:38px;height:38px;border-radius:12px;background:var(--card2);
+    display:flex;align-items:center;justify-content:center;font-size:18px;flex:none;
+  }
+  .upmain{flex:1;min-width:0;}
+  .upmain b{font-size:14px;font-weight:600;display:block;}
+  .upmain span{font-size:12px;color:var(--ink3);}
+  .upamt{font-variant-numeric:tabular-nums;font-weight:700;font-size:14.5px;}
+  .upamt.plus{color:var(--inc);}
+  .upamt.minus{color:var(--exp);}
+  .badge-auto{
+    font-size:9.5px;font-weight:700;letter-spacing:.06em;color:var(--ink2);
+    border:1px solid rgba(255,255,255,.22);border-radius:6px;padding:2px 5px;margin-left:6px;vertical-align:1px;
+  }
+
+  .cat3{display:flex;align-items:center;gap:10px;padding:9px 2px;}
+  .cat3 + .cat3{border-top:1px solid var(--line);}
+  .cdot{width:10px;height:10px;border-radius:4px;flex:none;}
+  .cat3 .nm{flex:1;font-size:14px;font-weight:500;}
+  .cat3 .vl{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;}
+  .cat3 .pc{font-size:11.5px;color:var(--ink3);width:38px;text-align:right;font-variant-numeric:tabular-nums;}
+  .showall{
+    display:block;text-align:center;padding:11px 0 3px;color:var(--ink);
+    font-size:13.5px;font-weight:600;cursor:pointer;
+  }
+
+  .actions{display:flex;gap:10px;margin-top:14px;}
+  .abtn{
+    flex:1;border-radius:18px;padding:13px 0;text-align:center;font-weight:700;font-size:14.5px;
+    background:var(--card);border:1px solid var(--line);cursor:pointer;transition:transform .12s ease;
+  }
+  .abtn:active{transform:scale(.96);}
+  .abtn.exp{color:var(--exp);border-color:rgba(255,122,89,.35);}
+  .abtn.inc{color:var(--inc);border-color:rgba(76,217,138,.3);}
+  .abtn.trf{color:var(--trf);border-color:rgba(110,168,255,.3);}
+
+  .tabbar{
+    display:flex;justify-content:space-around;align-items:center;
+    background:var(--card);border:1px solid var(--line);border-radius:30px;
+    padding:10px 12px;margin-top:16px;
+  }
+  .tabbar .t{
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    font-size:10px;color:var(--ink3);cursor:default;min-width:52px;
+  }
+  .tabbar .t i{font-style:normal;font-size:18px;}
+  .tabbar .t.on{color:var(--ink);}
+  .tabbar .fab{
+    width:52px;height:52px;border-radius:50%;background:var(--card2);
+    border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;
+    font-size:24px;font-weight:400;color:var(--ink);margin-top:-18px;
+    box-shadow:0 6px 18px rgba(0,0,0,.4);
+  }
+
+  /* ================= ЭКРАН 2: ЕДИНЫЙ ШИТ ================= */
+  .sheet{
+    display:flex;flex-direction:column;height:100%;
+    --acc:var(--exp);--accSoft:rgba(255,69,58,.13);
+  }
+  .sheet[data-tab="income"]{--acc:var(--inc);--accSoft:rgba(48,209,88,.12);}
+  .sheet[data-tab="transfer"]{--acc:var(--trf);--accSoft:rgba(10,132,255,.14);}
+  .grabber{width:44px;height:5px;border-radius:5px;background:rgba(255,255,255,.18);margin:2px auto 12px;flex:none;}
+
+  .segs{
+    display:flex;background:var(--card);border:1px solid var(--line);
+    border-radius:16px;padding:4px;position:relative;flex:none;margin:0 2px;
+  }
+  .segthumb{
+    position:absolute;top:4px;bottom:4px;width:calc((100% - 8px)/3);
+    background:var(--accSoft);border:1px solid var(--acc);border-radius:12px;
+    transition:transform .25s cubic-bezier(.3,.9,.3,1), background .25s, border-color .25s;
+  }
+  .seg{
+    flex:1;position:relative;z-index:1;text-align:center;padding:9px 0;font-size:13.5px;
+    font-weight:700;color:var(--ink3);cursor:pointer;transition:color .2s;user-select:none;
+  }
+  .seg.on{color:var(--acc);}
+
+  .amountzone{flex:none;text-align:center;padding:22px 0 6px;}
+  .amt{
+    font-size:56px;font-weight:800;letter-spacing:-.02em;line-height:1;
+    font-variant-numeric:tabular-nums;font-feature-settings:"tnum";
+    display:inline-flex;align-items:baseline;gap:8px;transition:transform .12s ease;
+  }
+  .amt.pop{transform:scale(1.035);}
+  .amt .cur{
+    font-size:26px;font-weight:700;color:var(--ink3);cursor:pointer;border-bottom:1.5px dashed var(--ink3);
+    padding-bottom:2px;
+  }
+  .amt .cur.override{color:var(--warn);border-color:var(--warn);}
+  .amt.zero .digits{color:var(--ink3);}
+  .fxnote{font-size:12px;color:var(--warn);margin-top:8px;min-height:16px;font-variant-numeric:tabular-nums;}
+
+  .accchip{
+    display:inline-flex;align-items:center;gap:8px;background:var(--card);
+    border:1px solid var(--line);border-radius:22px;padding:8px 14px;cursor:pointer;
+    font-size:13.5px;font-weight:600;margin-top:10px;transition:border-color .2s, transform .12s;
+  }
+  .accchip:active{transform:scale(.97);}
+  .accchip .ic{font-size:15px;}
+  .accchip .cb{
+    font-size:11px;font-weight:800;background:var(--card2);border-radius:8px;padding:2px 7px;
+    color:var(--ink2);font-variant-numeric:tabular-nums;
+  }
+  .accchip .chev{color:var(--ink3);font-size:11px;}
+
+  .catzone{flex:none;padding:16px 2px 4px;}
+  .cathead{
+    display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;
+  }
+  .cathead .h{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);font-weight:700;}
+  .cathead .all{font-size:12.5px;color:var(--ink);font-weight:600;cursor:pointer;}
+  .catgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .cat{
+    background:var(--card);border:1.5px solid var(--line);border-radius:16px;
+    padding:10px 4px 8px;text-align:center;cursor:pointer;
+    transition:border-color .15s, background .15s, transform .1s;user-select:none;
+  }
+  .cat:active{transform:scale(.94);}
+  .cat .e{font-size:21px;display:block;margin-bottom:4px;}
+  .cat .n{font-size:10.5px;color:var(--ink2);font-weight:600;display:block;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cat.sel{border-color:var(--acc);background:var(--accSoft);}
+  .cat.sel .n{color:var(--ink);}
+  .coach{
+    position:relative;background:var(--card2);border:1px solid var(--line);border-radius:12px;
+    padding:8px 30px 8px 12px;font-size:11.5px;color:var(--ink2);margin-top:10px;
+  }
+  .coach .x{position:absolute;right:9px;top:7px;color:var(--ink3);cursor:pointer;font-size:13px;}
+
+  .morep{
+    flex:none;text-align:center;padding:8px 0 2px;font-size:13px;color:var(--ink2);
+    font-weight:600;cursor:pointer;
+  }
+  .morep span{border-bottom:1px dashed var(--ink3);padding-bottom:1px;}
+  .moreopts{
+    display:none;gap:8px;padding:6px 2px 2px;
+  }
+  .moreopts.open{display:flex;}
+  .mo{
+    flex:1;background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:9px 0;text-align:center;font-size:12px;color:var(--ink2);font-weight:600;
+  }
+
+  .pad{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:12px 2px 8px;min-height:0;}
+  .key{
+    border-radius:16px;background:transparent;border:none;color:var(--ink);
+    font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:background .12s, transform .08s;font-family:inherit;
+  }
+  .key:active{background:var(--card2);transform:scale(.93);}
+  .key.aux{font-size:22px;color:var(--ink2);}
+
+  .savebtn{
+    flex:none;margin:4px 2px 6px;border:none;border-radius:22px;padding:16px 0;
+    font-size:16.5px;font-weight:800;font-family:inherit;cursor:pointer;
+    background:var(--acc);color:#0B0D10;transition:opacity .2s, transform .12s, background .25s;
+  }
+  .savebtn:active{transform:scale(.98);}
+  .savebtn:disabled{opacity:.35;cursor:default;}
+
+  .toast{
+    position:absolute;left:50%;top:60px;transform:translateX(-50%) translateY(-12px);
+    background:var(--card2);border:1px solid var(--line);border-radius:16px;
+    padding:10px 16px;font-size:13.5px;font-weight:600;opacity:0;pointer-events:none;
+    transition:opacity .25s, transform .25s;white-space:nowrap;z-index:5;
+    box-shadow:0 10px 28px rgba(0,0,0,.5);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .toast .ok{color:var(--inc);}
+
+  /* transfer page */
+  .trfform{flex:none;padding:14px 2px 0;display:none;flex-direction:column;gap:8px;}
+  .sheet[data-tab="transfer"] .trfform{display:flex;}
+  .sheet[data-tab="transfer"] .catzone,
+  .sheet[data-tab="transfer"] .accchip.main{display:none;}
+  .trow{
+    display:flex;align-items:center;gap:10px;background:var(--card);
+    border:1px solid var(--line);border-radius:16px;padding:12px 14px;cursor:pointer;
+  }
+  .trow .tl{font-size:11px;color:var(--ink3);width:64px;flex:none;text-transform:uppercase;letter-spacing:.06em;font-weight:700;}
+  .trow b{font-size:14px;font-weight:600;flex:1;}
+  .trow .cb{font-size:11px;font-weight:800;background:var(--card2);border-radius:8px;padding:2px 7px;color:var(--ink2);}
+  .trfnote{font-size:11.5px;color:var(--ink3);text-align:center;padding-top:2px;}
+
+  .legend{
+    max-width:820px;margin:40px auto 0;background:rgba(255,255,255,.03);
+    border:1px solid var(--line);border-radius:18px;padding:20px 24px;
+  }
+  .legend h3{margin:0 0 10px;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);}
+  .legend ul{margin:0;padding:0;list-style:none;columns:2;column-gap:32px;}
+  .legend li{font-size:13.5px;color:var(--ink2);padding:4px 0;break-inside:avoid;}
+  .legend li b{color:var(--ink);font-weight:600;}
+  @media(max-width:700px){.legend ul{columns:1;}}
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;animation:none !important;}
+  }
+</style>
+
+<div class="backdrop"></div>
+<div class="wrap">
+  <header class="page">
+    <div class="eyebrow">Millio · интерактивный прототип</div>
+    <h1>Новый Cashflow — как это будет выглядеть</h1>
+    <p class="sub">Правый экран — <b>живой</b>: вводите сумму на клавиатуре, переключайте Расход / Доход / Перевод, тапайте категории, счёт и валюту, жмите «Сохранить».</p>
+  </header>
+
+  <div class="stage">
+
+    <!-- ===================== PHONE A: MAIN ===================== -->
+    <div class="col">
+      <div class="phone">
+        <div class="statusbar"><span>9:41</span><span class="r">●●● ⏻ ▮▮▮</span></div>
+        <div class="screen">
+          <!-- существующая структура: НЕ меняется -->
+          <div class="cf-head">
+            <span class="period">01.07.2026 — 05.07.2026</span>
+            <span class="curchip">RUB</span>
+          </div>
+
+          <div class="chartcard">
+            <b>График доступен в PRO</b>
+            <span class="prolock">🔒 PRO</span>
+          </div>
+
+          <div class="mcard">
+            <div class="strow"><span class="sl">Активы на начало периода</span><span class="sv">1 284 500</span></div>
+            <div class="strow"><span class="sl">Доходы</span><span class="sv" style="color:var(--inc)">68 000 <span class="plus">+</span></span></div>
+            <div class="strow"><span class="sl">Изменение стоимости активов <span class="q">?</span></span><span class="sv">+4 120</span></div>
+            <div class="strow open"><span class="sl">Расходы <span class="chevron">▼</span></span><span class="sv neg">12 450 <span class="plus">+</span></span></div>
+            <!-- НОВОЕ (Фаза 4): при развороте строки — топ-3 вместо полного списка -->
+            <div class="subrows">
+              <div class="cat3"><i class="cdot" style="background:#FF453A"></i><span class="nm">Продукты</span><span class="vl">5 840</span><span class="pc">47%</span></div>
+              <div class="cat3"><i class="cdot" style="background:#FF9F0A"></i><span class="nm">Кафе</span><span class="vl">3 210</span><span class="pc">26%</span></div>
+              <div class="cat3"><i class="cdot" style="background:#0A84FF"></i><span class="nm">Транспорт</span><span class="vl">1 780</span><span class="pc">14%</span></div>
+              <span class="showall">Показать всё → История</span>
+            </div>
+            <div class="strow"><span class="sl">Активы на конец периода</span><span class="sv">1 344 170</span></div>
+            <div class="strow total"><span class="sl">Результат</span><span class="sv" style="color:var(--inc)">+59 670</span></div>
+          </div>
+
+          <!-- НОВОЕ: добавляется НИЖЕ существующей карточки, структура выше не тронута -->
+          <div class="mcard">
+            <div class="mtitle"><span>Бюджет · июль<span class="newlabel">NEW</span></span><span class="link">Настроить</span></div>
+            <div class="budget">
+              <div class="ringbox">
+                <svg width="96" height="96" viewBox="0 0 96 96">
+                  <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="9"/>
+                  <circle cx="48" cy="48" r="40" fill="none" stroke="#FF453A" stroke-width="9" stroke-linecap="round"
+                          stroke-dasharray="50 201.3" stroke-dashoffset="0"/>
+                  <circle cx="48" cy="48" r="40" fill="none" stroke="#FF9F0A" stroke-width="9" stroke-linecap="round"
+                          stroke-dasharray="16 235.3" stroke-dashoffset="-54"/>
+                  <circle cx="48" cy="48" r="40" fill="none" stroke="#0A84FF" stroke-width="9" stroke-linecap="round"
+                          stroke-dasharray="6 245.3" stroke-dashoffset="-74"/>
+                </svg>
+                <div class="pct"><b>28%</b><span>лимита</span></div>
+              </div>
+              <div class="bstats">
+                <div class="brow">
+                  <div class="lbl"><span>Расходы</span><b>12 450 / 45 000 ₽</b></div>
+                  <div class="bar"><i class="exp"></i></div>
+                </div>
+                <div class="brow">
+                  <div class="lbl"><span>Доходы</span><b>68 000 / 90 000 ₽</b></div>
+                  <div class="bar"><i class="inc"></i></div>
+                </div>
+                <div class="bnote">Осталось 32 550 ₽ · 26 дней</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mcard">
+            <div class="mtitle"><span>Предстоящие<span class="newlabel">NEW</span></span><span class="link">Все</span></div>
+            <div class="uprow">
+              <div class="upic" style="color:var(--ink2);font-weight:700;">%</div>
+              <div class="upmain"><b>Проценты · Вклад Альфа<span class="badge-auto">АВТО</span></b><span>15 июля · ежемесячно</span></div>
+              <div class="upamt plus">+1 250 ₽</div>
+            </div>
+            <div class="uprow">
+              <div class="upic" style="color:var(--ink2);font-weight:700;">⌂</div>
+              <div class="upmain"><b>Платёж · Ипотека<span class="badge-auto">АВТО</span></b><span>20 июля · ежемесячно</span></div>
+              <div class="upamt minus">−18 300 ₽</div>
+            </div>
+          </div>
+
+          <div class="tabbar">
+            <span class="t"><i>⌂</i>Дашборд</span>
+            <span class="t"><i>▤</i>Счета</span>
+            <span class="t fab">+</span>
+            <span class="t"><i>▥</i>Динамика</span>
+            <span class="t on"><i>⇄</i>Кэшфлоу</span>
+          </div>
+        </div>
+        <div class="homebar"><i></i></div>
+      </div>
+      <div class="caption"><b>Главный экран Cashflow — структура сохранена как сейчас.</b><br>Новое добавляется ниже: бюджет-ринг и «Предстоящие»; топ-3 — внутри разворота строки «Расходы»</div>
+    </div>
+
+    <!-- ===================== PHONE B: UNIFIED SHEET ===================== -->
+    <div class="col">
+      <div class="phone">
+        <div class="statusbar"><span>9:41</span><span class="r">●●● ⏻ ▮▮▮</span></div>
+        <div class="screen" style="display:flex;flex-direction:column;">
+          <div class="sheet" id="sheet" data-tab="expense">
+            <div class="toast" id="toast"><span class="ok">✓</span> <span id="toastTxt">Сохранено</span></div>
+            <div class="grabber"></div>
+
+            <div class="segs">
+              <div class="segthumb" id="thumb"></div>
+              <div class="seg on" data-t="expense">Расход</div>
+              <div class="seg" data-t="income">Доход</div>
+              <div class="seg" data-t="transfer">Перевод</div>
+            </div>
+
+            <div class="amountzone">
+              <div class="amt zero" id="amt">
+                <span class="digits" id="digits">0</span>
+                <span class="cur" id="cur" title="Тап — оверрайд валюты (мультивалютная карта)">₽</span>
+              </div>
+              <div class="fxnote" id="fxnote"></div>
+              <div class="accchip main" id="accchip">
+                <span class="ic">💳</span><span id="accname">Tinkoff Black</span>
+                <span class="cb" id="acccur">₽</span><span class="chev">▾</span>
+              </div>
+            </div>
+
+            <div class="trfform">
+              <div class="trow"><span class="tl">Со счёта</span><b>💳 Tinkoff Black</b><span class="cb">₽</span></div>
+              <div class="trow"><span class="tl">На счёт</span><b>🏦 Alfa Travel</b><span class="cb">$</span></div>
+              <div class="trfnote">Валюты различаются — курс 78,40 ₽/$ · изменить в «Ещё параметры»</div>
+            </div>
+
+            <div class="catzone">
+              <div class="cathead">
+                <span class="h" id="cathdr">Категория</span>
+                <span class="all" id="allbtn">Все категории →</span>
+              </div>
+              <div class="catgrid" id="catgrid"></div>
+              <div class="coach" id="coach">ⓘ Долгое нажатие на категорию — закрепить её в избранном<span class="x" id="coachx">✕</span></div>
+            </div>
+
+            <div class="morep" id="morebtn"><span>Ещё параметры</span></div>
+            <div class="moreopts" id="moreopts">
+              <div class="mo">📅 Сегодня</div><div class="mo">🔁 Повтор</div><div class="mo">📝 Заметка</div>
+            </div>
+
+            <div class="pad" id="pad"></div>
+
+            <button class="savebtn" id="save" disabled>Сохранить</button>
+          </div>
+        </div>
+        <div class="homebar"><i></i></div>
+      </div>
+      <div class="caption"><b>Единый шит добавления</b> — Фаза 3 (интерактивный):<br>сумма + категория + счёт/валюта на одном экране, без второго шита</div>
+    </div>
+  </div>
+
+  <style>
+    .map{max-width:1060px;margin:56px auto 0;}
+    .maphead{text-align:center;margin-bottom:26px;}
+    .maphead h2{font-size:21px;font-weight:700;margin:0 0 6px;}
+    .maphead p{color:var(--ink2);font-size:13.5px;margin:0;}
+    .tier{margin-bottom:34px;}
+    .tierhead{
+      display:flex;align-items:center;gap:12px;margin-bottom:16px;
+    }
+    .tierhead .tn{
+      flex:none;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+      color:var(--ink2);border:1px solid var(--line);border-radius:8px;padding:4px 10px;background:var(--card);
+    }
+    .tierhead .td{font-size:13px;color:var(--ink3);}
+    .tierhead::after{content:"";flex:1;height:1px;background:var(--line);}
+    .scrrow{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;}
+    .scrcol{display:flex;flex-direction:column;align-items:center;gap:10px;width:250px;}
+    .scr{
+      width:250px;height:440px;background:#000;border-radius:28px;
+      border:1px solid rgba(255,255,255,.1);overflow:hidden;
+      padding:14px 12px;display:flex;flex-direction:column;gap:9px;flex:none;
+      box-shadow:0 14px 34px rgba(0,0,0,.45);
+    }
+    .scr.short{height:330px;}
+    .scrbar{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 0;}
+    .scrbar b{font-size:13.5px;font-weight:700;}
+    .scrbar .ic{
+      width:26px;height:26px;border-radius:50%;background:var(--card);border:1px solid var(--line);
+      display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink2);
+    }
+    .entry{
+      font-size:11px;color:var(--ink2);background:var(--card);border:1px solid var(--line);
+      border-radius:14px;padding:5px 11px;text-align:center;line-height:1.45;
+    }
+    .entry b{color:var(--ink);font-weight:600;}
+    .scrname{font-size:12.5px;font-weight:600;color:var(--ink2);text-align:center;}
+    /* мелкие элементы мини-экранов */
+    .srch{
+      background:var(--card);border:1px solid var(--line);border-radius:12px;
+      padding:8px 10px;font-size:11.5px;color:var(--ink3);
+    }
+    .chips{display:flex;gap:6px;flex-wrap:wrap;}
+    .chip{
+      font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--card);
+      border:1px solid var(--line);border-radius:12px;padding:5px 10px;
+    }
+    .chip.on{color:#000;background:#fff;border-color:#fff;}
+    .lrow{display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px solid var(--line);}
+    .lrow:last-child{border-bottom:none;}
+    .lrow .li{
+      width:30px;height:30px;border-radius:10px;background:var(--card2);flex:none;
+      display:flex;align-items:center;justify-content:center;font-size:13px;
+    }
+    .lrow .lm{flex:1;min-width:0;}
+    .lrow .lm b{display:block;font-size:12px;font-weight:600;}
+    .lrow .lm span{font-size:10.5px;color:var(--ink3);}
+    .lrow .lv{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;}
+    .lrow .lv.p{color:var(--inc);}
+    .lrow .lv.m{color:var(--exp);}
+    .cal{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;}
+    .cal .cm{display:flex;justify-content:space-between;font-size:11.5px;font-weight:700;margin-bottom:8px;}
+    .cal .cg{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+    .cal .cd{
+      aspect-ratio:1;border-radius:7px;background:rgba(255,255,255,.05);
+      display:flex;align-items:center;justify-content:center;font-size:9.5px;color:var(--ink2);
+      position:relative;font-variant-numeric:tabular-nums;
+    }
+    .cal .cd.dot::after{content:"";position:absolute;bottom:2px;width:3px;height:3px;border-radius:50%;background:var(--inc);}
+    .cal .cd.dotr::after{content:"";position:absolute;bottom:2px;width:3px;height:3px;border-radius:50%;background:var(--exp);}
+    .cal .cd.today{border:1px solid var(--inc);}
+    .frow{
+      display:flex;justify-content:space-between;align-items:center;background:var(--card);
+      border:1px solid var(--line);border-radius:12px;padding:9px 11px;font-size:11.5px;
+    }
+    .frow b{font-weight:600;}
+    .frow span{color:var(--ink3);}
+    .tgl{width:32px;height:19px;border-radius:12px;background:var(--card2);position:relative;flex:none;}
+    .tgl.on{background:var(--inc);}
+    .tgl::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;}
+    .tgl.on::after{left:auto;right:2px;}
+    .impgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+    .impc{
+      background:var(--card);border:1px solid var(--line);border-radius:12px;
+      padding:9px 6px;text-align:center;
+    }
+    .impc .e{font-size:15px;display:block;margin-bottom:3px;}
+    .impc b{font-size:10.5px;font-weight:600;display:block;}
+    .impc span{font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums;}
+    .menuitem{
+      display:flex;align-items:center;gap:10px;background:var(--card);
+      border:1px solid var(--line);border-radius:13px;padding:11px 12px;font-size:12.5px;font-weight:600;
+    }
+    .menuitem span{color:var(--ink3);font-size:11px;font-weight:400;margin-left:auto;}
+    .savebar{
+      margin-top:auto;background:#fff;color:#000;border-radius:14px;text-align:center;
+      padding:10px 0;font-size:13px;font-weight:800;
+    }
+    .verdict{
+      max-width:820px;margin:44px auto 0;background:rgba(255,255,255,.03);
+      border:1px solid var(--line);border-radius:18px;padding:22px 26px;
+    }
+    .verdict h3{margin:0 0 12px;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);}
+    .verdict p{font-size:14px;color:var(--ink2);margin:0 0 10px;line-height:1.6;}
+    .verdict p b{color:var(--ink);}
+    .alt{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13px;}
+    .alt .vs{flex:none;font-size:10px;font-weight:800;letter-spacing:.06em;color:var(--exp);padding-top:2px;width:86px;text-transform:uppercase;}
+    .alt div{color:var(--ink2);}
+    .alt div b{color:var(--ink);font-weight:600;}
+  </style>
+
+  <div class="map">
+    <div class="maphead">
+      <h2>Карта всех экранов Cashflow — новая структура</h2>
+      <p>Два уровня вместо трёх-четырёх: частое — в один тап, редкое — за «⋯» и карточками. Ни один экран не удалён.</p>
+    </div>
+
+    <div class="tier">
+      <div class="tierhead"><span class="tn">Уровень 0</span><span class="td">главный экран таба — структура сохранена (см. телефон выше слева)</span></div>
+      <div class="scrrow">
+        <div class="scrcol">
+          <div class="scr short">
+            <div class="frow"><b>01.07 — 05.07.2026</b><span>RUB</span></div>
+            <div class="frow" style="justify-content:center;color:var(--ink3);">График · PRO</div>
+            <div class="lrow"><div class="lm"><b>Активы → Доходы → Расходы → Результат</b><span>таблица как сейчас · топ-3 внутри разворота</span></div></div>
+            <div class="lrow"><div class="li">◔</div><div class="lm"><b>Бюджет · июль <span style="color:var(--ink3)">NEW</span></b><span>ринг · расходы и доходы</span></div></div>
+            <div class="lrow"><div class="li">↻</div><div class="lm"><b>Предстоящие <span style="color:var(--ink3)">NEW</span></b><span>авто-платежи вкладов и кредитов</span></div></div>
+          </div>
+          <div class="scrname">Главный экран Cashflow</div>
+          <div class="entry">таб <b>Кэшфлоу</b> в таб-баре</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tier">
+      <div class="tierhead"><span class="tn">Уровень 1</span><span class="td">один тап с главного экрана — всё частое</span></div>
+      <div class="scrrow">
+        <div class="scrcol">
+          <div class="scr short" style="justify-content:flex-start;">
+            <div class="scrbar"><span class="ic">✕</span><b>Новая операция</b><span class="ic">⋯</span></div>
+            <div class="chips"><span class="chip on">Расход</span><span class="chip">Доход</span><span class="chip">Перевод</span></div>
+            <div style="text-align:center;font-size:30px;font-weight:800;padding:10px 0 2px;font-variant-numeric:tabular-nums;">450 <span style="font-size:15px;color:var(--ink3)">₽</span></div>
+            <div class="chips" style="justify-content:center;"><span class="chip">💳 Tinkoff Black · ₽ ▾</span></div>
+            <div class="impgrid" style="grid-template-columns:repeat(4,1fr);">
+              <div class="impc" style="border-color:var(--exp);"><span class="e">🛒</span><b>Продукты</b></div>
+              <div class="impc"><span class="e">🍽</span><b>Кафе</b></div>
+              <div class="impc"><span class="e">🚕</span><b>Такси</b></div>
+              <div class="impc"><span class="e">⛽️</span><b>Топливо</b></div>
+            </div>
+            <div class="savebar">Сохранить</div>
+          </div>
+          <div class="scrname">Единый шит добавления (живой — выше)</div>
+          <div class="entry">кнопка <b>«+»</b> / строки <b>Доходы·Расходы «+»</b></div>
+        </div>
+
+        <div class="scrcol">
+          <div class="scr short">
+            <div class="scrbar"><span class="ic">✕</span><b>История</b><span class="ic">🔍</span></div>
+            <div class="chips"><span class="chip on">Июль</span><span class="chip">Тип ▾</span><span class="chip">Счёт ▾</span></div>
+            <div class="lrow"><div class="li">🛒</div><div class="lm"><b>Продукты</b><span>сегодня · Tinkoff</span></div><span class="lv m">−450 ₽</span></div>
+            <div class="lrow"><div class="li">%</div><div class="lm"><b>Проценты · Вклад</b><span>вчера · авто</span></div><span class="lv p">+1 250 ₽</span></div>
+            <div class="lrow"><div class="li">💼</div><div class="lm"><b>Зарплата</b><span>1 июля</span></div><span class="lv p">+120 000 ₽</span></div>
+            <div class="lrow"><div class="li">🍽</div><div class="lm"><b>Кафе</b><span>1 июля</span></div><span class="lv m">−1 180 ₽</span></div>
+          </div>
+          <div class="scrname">История (без изменений)</div>
+          <div class="entry"><b>«Показать всё»</b> из топ-3 / кнопка Истории</div>
+        </div>
+
+        <div class="scrcol">
+          <div class="scr short">
+            <div class="scrbar"><span class="ic">✕</span><b>Планировщик</b><span class="ic">+</span></div>
+            <div class="chips"><span class="chip on">Календарь</span><span class="chip">Список</span></div>
+            <div class="cal">
+              <div class="cm"><span>‹</span><span>июль 2026</span><span>›</span></div>
+              <div class="cg">
+                <span class="cd">1</span><span class="cd">2</span><span class="cd">3</span><span class="cd">4</span><span class="cd today">5</span><span class="cd">6</span><span class="cd">7</span>
+                <span class="cd">8</span><span class="cd">9</span><span class="cd">10</span><span class="cd">11</span><span class="cd">12</span><span class="cd">13</span><span class="cd">14</span>
+                <span class="cd dot">15</span><span class="cd">16</span><span class="cd">17</span><span class="cd">18</span><span class="cd">19</span><span class="cd dotr">20</span><span class="cd">21</span>
+              </div>
+            </div>
+            <div class="lrow"><div class="li">%</div><div class="lm"><b>Вклад Альфа · АВТО</b><span>15 июля</span></div><span class="lv p">+1 250 ₽</span></div>
+            <div class="lrow"><div class="li">⌂</div><div class="lm"><b>Ипотека · АВТО</b><span>20 июля</span></div><span class="lv m">−18 300 ₽</span></div>
+          </div>
+          <div class="scrname">Планировщик + Регулярные (сохранён; Фаза 0 наполняет его АВТО-операциями)</div>
+          <div class="entry">карточка <b>«Предстоящие» → Все</b> / меню «⋯»</div>
+        </div>
+
+        <div class="scrcol">
+          <div class="scr short">
+            <div class="scrbar"><span class="ic">✕</span><b>План доходов</b><span class="ic">✓</span></div>
+            <div class="frow"><b>Включить общий план</b><span class="tgl on"></span></div>
+            <div class="lrow"><div class="li">💼</div><div class="lm"><b>Зарплата</b><span>план задан</span></div><span class="lv">120 000</span></div>
+            <div class="lrow"><div class="li">🔧</div><div class="lm"><b>Фриланс</b><span>план не задан</span></div><span class="lv" style="color:var(--ink3)">0</span></div>
+            <div class="lrow"><div class="li">%</div><div class="lm"><b>Проценты</b><span>план задан</span></div><span class="lv">1 250</span></div>
+            <div class="savebar">Сохранить</div>
+          </div>
+          <div class="scrname">План доходов / расходов (сохранён)</div>
+          <div class="entry">бюджет-карточка → <b>«Настроить»</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tier">
+      <div class="tierhead"><span class="tn">Уровень 2</span><span class="td">редкое — за «⋯» на шите и «Ещё параметры»</span></div>
+      <div class="scrrow">
+        <div class="scrcol">
+          <div class="scr short" style="justify-content:flex-end;gap:8px;">
+            <div class="menuitem">↻ Планировщик <span>регулярные · плановые</span></div>
+            <div class="menuitem">⇪ Массовый импорт <span>вручную · скриншот</span></div>
+            <div class="menuitem">▦ Настройка категорий <span>порядок · пины</span></div>
+            <div class="menuitem">◔ План доходов/расходов <span>лимиты</span></div>
+            <div class="menuitem" style="justify-content:center;color:var(--ink2);">Отмена</div>
+          </div>
+          <div class="scrname">Меню «⋯» на едином шите</div>
+          <div class="entry">кнопка <b>«⋯»</b> в шапке шита</div>
+        </div>
+
+        <div class="scrcol">
+          <div class="scr short">
+            <div class="scrbar"><span class="ic">‹</span><b>Ещё параметры</b><span class="ic"> </span></div>
+            <div class="frow"><b>Дата</b><span>5 июля 2026 ▾</span></div>
+            <div class="frow"><b>Повтор</b><span>нет ▾</span></div>
+            <div class="frow"><b>Заметка</b><span>добавить…</span></div>
+            <div class="frow"><b>Валюта · курс</b><span>USD · 78,40 ▾</span></div>
+            <div class="frow"><b>Влияет на баланс</b><span class="tgl on"></span></div>
+            <div class="savebar">Сохранить</div>
+          </div>
+          <div class="scrname">Полный редактор (сохранён, теперь опционален)</div>
+          <div class="entry"><b>«Ещё параметры»</b> на едином шите</div>
+        </div>
+
+        <div class="scrcol">
+          <div class="scr short">
+            <div class="scrbar"><span class="ic">✕</span><b>Массовый импорт</b><span class="ic">✓</span></div>
+            <div class="chips"><span class="chip on">Вручную</span><span class="chip">Скриншот 🔒</span></div>
+            <div class="frow"><b>Июль 2026</b><span>RUB · карта ▾</span></div>
+            <div class="impgrid">
+              <div class="impc"><span class="e">🛒</span><b>Продукты</b><span>12 400</span></div>
+              <div class="impc"><span class="e">🍽</span><b>Еда вне дома</b><span>3 200</span></div>
+              <div class="impc"><span class="e">🚇</span><b>Транспорт</b><span>0</span></div>
+              <div class="impc"><span class="e">🚕</span><b>Такси</b><span>1 780</span></div>
+            </div>
+            <div class="frow"><b>Итог</b><span>17 380 RUB</span></div>
+          </div>
+          <div class="scrname">Массовый импорт (сохранён без изменений)</div>
+          <div class="entry">меню <b>«⋯»</b> → Массовый импорт</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdict">
+      <h3>Это лучшее решение? Честный разбор</h3>
+      <p><b>Для вашего паттерна использования — да.</b> Принцип: глубина экрана = обратная частота использования. Записать трату (10× в день) — 1 тап и один экран. Посмотреть историю или план (1× в день) — 1 тап. Настроить импорт или лимиты (1× в месяц) — 2 тапа через «⋯». Сейчас же самое частое действие требует столько же шагов, сколько самое редкое — это и была главная проблема.</p>
+      <p>Альтернативы, которые я рассмотрел и отбросил:</p>
+      <div class="alt"><span class="vs">Отброшено</span><div><b>Всё на главном экране</b> (numpad прямо в табе, без шита) — быстрее на 1 тап, но главный экран перестаёт быть обзором и становится формой; конфликтует с вашим решением сохранить его структуру.</div></div>
+      <div class="alt"><span class="vs">Отброшено</span><div><b>Отдельный таб «Операции»</b> для планировщика и регулярных — виднее, но требует менять таб-бар, что исключено; и планировщик не заслуживает таба по частоте.</div></div>
+      <div class="alt"><span class="vs">Отброшено</span><div><b>Оставить как есть, только перекрасить</b> — не решает главное: 3–4 слоя до записи траты и валютную дыру быстрого ввода.</div></div>
+      <p style="margin-top:12px;">Оговорка: «лучшее» окончательно подтверждается только пальцами на устройстве. Поэтому в плане перед Фазой 3 стоит обязательный stress-test, а первый TestFlight-билд единого шита стоит погонять неделю до релиза.</p>
+    </div>
+  </div>
+
+  <div class="legend">
+    <h3>Что здесь из плана</h3>
+    <ul>
+      <li><b>Один экран вместо трёх слоёв</b> — сумма, категория, счёт и валюта видны сразу; «Ещё параметры» — опциональная ветка (§2.1.2)</li>
+      <li><b>Чип счёта</b> — тап переключает карту, валюта подтягивается за счётом автоматически (§2.1.1)</li>
+      <li><b>Оверрайд валюты</b> — тап по «₽» рядом с суммой: платёж в чужой валюте на ту же карту, появляется курс (§2.1.1)</li>
+      <li><b>8 избранных категорий</b> + «Все категории →», выбранная — обводка акцентом (§2.2 + CapWords selected-state)</li>
+      <li><b>Смена акцента по табу</b> — расход коралловый, доход зелёный, перевод синий; сегмент-пикер с ездящим ползунком (§2.5)</li>
+      <li><b>Перевод — своя страница</b> в том же контейнере: два счёта + курс, без категорий (§2.1)</li>
+      <li><b>Структура главного экрана сохранена</b> — период+валюта, график, таблица активов как сейчас; новое добавляется ниже (решение 7.1.5)</li>
+      <li><b>Бюджет-ринг</b> — сегментированный, по топ-категориям лимитов; и расходы, и доходы (решение 7.1.2 + CapWords)</li>
+      <li><b>«Предстоящие»</b> с бейджем АВТО — видимость авто-платежей вкладов/кредитов (Фаза 0, §1.8.D)</li>
+      <li><b>Топ-3 + «Показать всё → История»</b> — внутри разворота строк Доходы/Расходы, таблица не меняется (§2.4)</li>
+      <li><b>Coach-mark</b> — одноразовая подсказка про закрепление категорий (§7.5)</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(function(){
+  var CATS = {
+    expense: [
+      ['🛒','Продукты'],['🍽','Кафе'],['🚕','Транспорт'],['🏠','Дом'],
+      ['💊','Аптека'],['🎮','Досуг'],['👕','Одежда'],['⛽️','Авто']
+    ],
+    income: [
+      ['💼','Зарплата'],['🏦','Проценты'],['📈','Дивиденды'],['💳','Кэшбэк'],
+      ['🎁','Подарки'],['↩️','Возвраты'],['🧾','Фриланс'],['➕','Прочее']
+    ]
+  };
+  var EXTRA = {
+    expense: [['🎓','Учёба'],['✈️','Путешествия'],['🐾','Питомцы'],['💇','Красота'],['📱','Связь'],['🎗','Подписки'],['🔧','Ремонт'],['🎪','Дети']],
+    income:  [['🏢','Аренда'],['🪙','Крипто'],['📦','Продажи'],['🤝','Партнёрка'],['🏆','Бонусы'],['💹','Трейдинг'],['🧧','Переводы'],['➕','Другое']]
+  };
+  var ACCOUNTS = [
+    {ic:'💳', name:'Tinkoff Black', cur:'₽'},
+    {ic:'🏦', name:'Alfa Travel',   cur:'$'},
+    {ic:'💵', name:'Наличные',      cur:'₽'}
+  ];
+  var CURS = ['₽','$','€'];
+  var RATE = {'$':'78,40 ₽/$','€':'85,10 ₽/€'};
+
+  var state = { tab:'expense', amount:'', sel:{expense:null,income:null}, acc:0, curOverride:null, expanded:false };
+
+  var sheet=document.getElementById('sheet'), thumb=document.getElementById('thumb'),
+      digits=document.getElementById('digits'), amt=document.getElementById('amt'),
+      cur=document.getElementById('cur'), fxnote=document.getElementById('fxnote'),
+      accchip=document.getElementById('accchip'), accname=document.getElementById('accname'),
+      acccur=document.getElementById('acccur'), grid=document.getElementById('catgrid'),
+      allbtn=document.getElementById('allbtn'), save=document.getElementById('save'),
+      toast=document.getElementById('toast'), toastTxt=document.getElementById('toastTxt'),
+      pad=document.getElementById('pad'), morebtn=document.getElementById('morebtn'),
+      moreopts=document.getElementById('moreopts'), coach=document.getElementById('coach');
+
+  function fmt(s){
+    if(!s) return '0';
+    var p=s.split(','), i=p[0].replace(/^0+(?=\d)/,'');
+    i=i.replace(/\B(?=(\d{3})+(?!\d))/g,' ');
+    return p.length>1 ? i+','+p[1] : i;
+  }
+  function accCur(){ return ACCOUNTS[state.acc].cur; }
+  function effCur(){ return state.curOverride || accCur(); }
+
+  function renderAmount(pop){
+    digits.textContent = fmt(state.amount);
+    amt.classList.toggle('zero', !state.amount);
+    cur.textContent = effCur();
+    var ov = state.curOverride && state.curOverride !== accCur();
+    cur.classList.toggle('override', !!ov);
+    fxnote.textContent = ov ? ('Валюта ≠ счёту · курс '+(RATE[effCur()]||'по ЦБ')) : '';
+    if(pop){ amt.classList.add('pop'); setTimeout(function(){amt.classList.remove('pop');},130); }
+    updateSave();
+  }
+  function renderAccount(){
+    var a=ACCOUNTS[state.acc];
+    accname.textContent=a.name; acccur.textContent=a.cur;
+    accchip.querySelector('.ic').textContent=a.ic;
+    state.curOverride=null;
+    renderAmount(false);
+  }
+  function renderCats(){
+    if(state.tab==='transfer') return;
+    var list = CATS[state.tab].slice();
+    if(state.expanded) list=list.concat(EXTRA[state.tab]);
+    grid.innerHTML='';
+    list.forEach(function(c,idx){
+      var d=document.createElement('div');
+      d.className='cat'+(state.sel[state.tab]===idx?' sel':'');
+      d.innerHTML='<span class="e">'+c[0]+'</span><span class="n">'+c[1]+'</span>';
+      d.onclick=function(){ state.sel[state.tab]=idx; renderCats(); updateSave(); };
+      grid.appendChild(d);
+    });
+    allbtn.textContent = state.expanded ? 'Свернуть ↑' : 'Все категории →';
+  }
+  function updateSave(){
+    var ok;
+    if(state.tab==='transfer') ok = !!state.amount && state.amount!=='0';
+    else ok = !!state.amount && state.amount!=='0' && state.sel[state.tab]!==null;
+    save.disabled=!ok;
+    save.textContent = state.tab==='transfer' ? 'Перевести' : 'Сохранить';
+  }
+  function setTab(t){
+    state.tab=t;
+    sheet.dataset.tab=t;
+    var idx={expense:0,income:1,transfer:2}[t];
+    thumb.style.transform='translateX('+(idx*100)+'%)';
+    document.querySelectorAll('.seg').forEach(function(s){s.classList.toggle('on',s.dataset.t===t);});
+    renderCats(); updateSave();
+  }
+
+  document.querySelectorAll('.seg').forEach(function(s){
+    s.onclick=function(){ setTab(s.dataset.t); };
+  });
+
+  accchip.onclick=function(){ state.acc=(state.acc+1)%ACCOUNTS.length; renderAccount(); };
+  cur.onclick=function(){
+    var i=CURS.indexOf(effCur()); var next=CURS[(i+1)%CURS.length];
+    state.curOverride = (next===accCur()) ? null : next;
+    renderAmount(true);
+  };
+  allbtn.onclick=function(){ state.expanded=!state.expanded; renderCats(); };
+  morebtn.onclick=function(){ moreopts.classList.toggle('open'); };
+  document.getElementById('coachx').onclick=function(){ coach.style.display='none'; };
+
+  // numpad
+  var keys=['1','2','3','4','5','6','7','8','9',',','0','⌫'];
+  keys.forEach(function(k){
+    var b=document.createElement('button');
+    b.className='key'+(k===','||k==='⌫'?' aux':''); b.textContent=k;
+    b.onclick=function(){
+      if(k==='⌫'){ state.amount=state.amount.slice(0,-1); }
+      else if(k===','){ if(state.amount && state.amount.indexOf(',')<0) state.amount+=','; }
+      else{
+        var parts=state.amount.split(',');
+        if(parts.length>1 && parts[1].length>=2) return;
+        if(state.amount==='0') state.amount=k; else state.amount+=k;
+        if(state.amount.replace(',','').length>9) state.amount=state.amount.slice(0,-1);
+      }
+      renderAmount(true);
+    };
+    pad.appendChild(b);
+  });
+
+  save.onclick=function(){
+    if(save.disabled) return;
+    var label;
+    if(state.tab==='transfer'){ label='Перевод '+fmt(state.amount)+' '+effCur(); }
+    else{
+      var list = CATS[state.tab].concat(EXTRA[state.tab]);
+      var c=list[state.sel[state.tab]];
+      var sign = state.tab==='expense' ? '−' : '+';
+      label=(c?c[1]:'')+' '+sign+fmt(state.amount)+' '+effCur();
+    }
+    toastTxt.textContent='Сохранено: '+label;
+    toast.classList.add('show');
+    save.textContent='✓';
+    setTimeout(function(){
+      toast.classList.remove('show');
+      state.amount=''; state.sel[state.tab]=null;
+      renderAmount(false); renderCats(); updateSave();
+    },1400);
+  };
+
+  renderAccount(); renderCats(); setTab('expense'); renderAmount(false);
+})();
+</script>
