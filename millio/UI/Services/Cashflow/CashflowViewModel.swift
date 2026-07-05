@@ -114,6 +114,11 @@ final class CashflowViewModel: ViewModelProtocol {
             historicalRateStore: self.historicalRateStore
         )
     }()
+    // Обратный мост — АccountsCore → Cashflow (Фаза 0 плана cashflow-add-transaction-redesign):
+    // делает due-проценты вкладов нового ядра видимыми доходными записями в ленте.
+    private(set) lazy var accountsCoreDepositCashflowBridge: AccountsCoreDepositCashflowBridge = {
+        AccountsCoreDepositCashflowBridge(modelContext: self.modelContext, now: self.now)
+    }()
     // persistenceService использует lazy из-за замыканий на self
     private(set) lazy var persistenceService: CashflowPersistenceService = {
         CashflowPersistenceService(
@@ -358,6 +363,7 @@ final class CashflowViewModel: ViewModelProtocol {
         loadTransactionsSnapshot()
         scheduleDueAutoApplyIfNeeded()
         scheduleRecurringGeneration()
+        scheduleAccountsCoreDepositInterestSync()
     }
 
     private func loadTransactionsSnapshot() {
@@ -398,7 +404,14 @@ final class CashflowViewModel: ViewModelProtocol {
     private func scheduleDueAutoApplyIfNeeded() {
         scheduledService.scheduleDueAutoApplyIfNeeded()
     }
-    
+
+    /// Делает due-проценты вкладов нового ядра счетов видимыми в Cashflow (Фаза 0 плана
+    /// cashflow-add-transaction-redesign, §1.8.B) — без этого доход вклада начисляется
+    /// «в фоне» в AccountsCore и никогда не появляется в ленте Cashflow.
+    private func scheduleAccountsCoreDepositInterestSync() {
+        accountsCoreDepositCashflowBridge.scheduleSync { [weak self] in self?.loadTransactionsSnapshot() }
+    }
+
     func loadCards() {
         state.allCards = CardCatalog.fetchAll(in: modelContext)
         state.availableCards = state.allCards.filter { $0.archivedAt == nil }
