@@ -1814,14 +1814,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
-                if let archivedAt = card.archivedAt, date > archivedAt {
+                guard AccountTotalPolicy.isActive(
+                    includeInTotal: card.includeInTotal,
+                    archivedAt: card.archivedAt,
+                    at: date
+                ) else {
                     continue
                 }
-                
-                guard card.includeInTotal else {
-                    continue
-                }
-                
+
                 accountCurrency = card.currency
                 shouldInclude = true
                 
@@ -1956,14 +1956,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
-                if let archivedAt = credit.archivedAt, date > archivedAt {
+                guard AccountTotalPolicy.isActive(
+                    includeInTotal: credit.includeInTotal,
+                    archivedAt: credit.archivedAt,
+                    at: date
+                ) else {
                     continue
                 }
-                
-                guard credit.includeInTotal else {
-                    continue
-                }
-                
+
                 accountCurrency = credit.currency
                 shouldInclude = true
 
@@ -1982,12 +1982,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                                 to: state.displayCurrency,
                                 at: date
                             )
-                            let isLiability = debtAsNegative && isLiabilityAccount(account)
-                            if isLiability {
-                                totalBalance -= abs(converted)
-                            } else {
-                                totalBalance += converted
-                            }
+                            totalBalance += AccountTotalPolicy.signedContribution(
+                                converted,
+                                isLiability: isLiabilityAccount(account),
+                                debtAsNegative: debtAsNegative
+                            )
                         }
                     }
                     continue
@@ -2006,14 +2005,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
-                if let archivedAt = investment.archivedAt, date > archivedAt {
+                guard AccountTotalPolicy.isActive(
+                    includeInTotal: investment.includeInTotal,
+                    archivedAt: investment.archivedAt,
+                    at: date
+                ) else {
                     continue
                 }
-                
-                guard investment.includeInTotal else {
-                    continue
-                }
-                
+
                 accountCurrency = resolvedInvestmentCurrency(investment)
                 shouldInclude = true
                 let investmentSign = investment.investmentType == .positive ? 1.0 : -1.0
@@ -2101,15 +2100,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     to: state.displayCurrency,
                     at: date
                 )
-                let isLiability = debtAsNegative && isLiabilityAccount(account)
-                if isLiability {
-                    totalBalance -= abs(converted)
-                } else {
-                    totalBalance += converted
-                }
+                totalBalance += AccountTotalPolicy.signedContribution(
+                    converted,
+                    isLiability: isLiabilityAccount(account),
+                    debtAsNegative: debtAsNegative
+                )
             }
         }
-        
+
         // Сохраняем результат в кэш (ограничиваем размер кэша для экономии памяти)
         if balanceCache.count < 1000 {
             balanceCache[cacheKey] = totalBalance
@@ -2323,38 +2321,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return remainingAmount
     }
     
-    func calculateTotalForAllGroups() async -> Double {
-        var total: Double = 0.0
-        for group in state.groups {
-            total += await calculateGroupTotal(group: group)
-        }
-        // Вклад нового ядра event-sourcing (Фаза 1a-ui, AC2) — ТА ЖЕ функция
-        // (`financeViewModel.accountsTotalsService.totalAt`), что использует Accounts-тотал
-        // в `FinanceTotalsService.calculateTotalsSnapshot`, поэтому суммы совпадают по построению.
-        let newCoreTotal = await financeViewModel.accountsTotalsService.totalAt(Date(), in: state.displayCurrency)
-        total += NSDecimalNumber(decimal: newCoreTotal).doubleValue
-        return total
-    }
-    
-    func calculateGroupTotal(group: FinanceGroup) async -> Double {
-        var total: Double = 0.0
-        
-        guard let accounts = group.accounts else { return 0.0 }
-        
-        for account in accounts {
-            if let accountInfo = getAccountInfoForDynamics(account: account) {
-                let converted = await convertAmount(
-                    value: accountInfo.amount,
-                    from: accountInfo.currency,
-                    to: state.displayCurrency
-                )
-                total += converted
-            }
-        }
-        
-        return total
-    }
-
     func getAccountInfoForDynamics(account: FinanceAccount) -> (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)? {
         switch account.accountType {
         case .card:
