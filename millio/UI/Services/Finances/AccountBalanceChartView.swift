@@ -77,6 +77,10 @@ struct AccountBalanceChartView: View {
     let accountName: String
     let currency: String
     let accentColor: Color
+    /// Вызывается, когда пользователь хочет перейти в полноценную деталку счёта
+    /// (FinanceDynamicsView) — там есть Edit/Delete, которых нет в этом read-only sheet.
+    /// nil, если переход недоступен (например, вызов из виджета/превью).
+    var onOpenAccountDetail: (() -> Void)? = nil
 
     @State private var selectedPeriod: AccountBalancePeriod = .month
     @State private var selectedPoint: BalancePoint? = nil
@@ -150,6 +154,20 @@ struct AccountBalanceChartView: View {
                         Image(systemName: "xmark")
                             .foregroundColor(AppColors.textSecondary)
                             .font(.millioBody)
+                    }
+                }
+                // Read-only sheet без единого действия был багом для легаси-счетов
+                // (нет доступа к Edit/Delete) — кнопка ведёт в FinanceDynamicsView.
+                if let onOpenAccountDetail {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            onOpenAccountDetail()
+                        } label: {
+                            Image(systemName: "info.circle")
+                                .foregroundColor(AppColors.textSecondary)
+                                .font(.millioBody)
+                        }
+                        .accessibilityLabel(L("finances.balance_chart.open_account_accessibility"))
                     }
                 }
             }

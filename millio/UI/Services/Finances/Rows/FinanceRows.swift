@@ -469,6 +469,9 @@ private struct FinanceAccountRow: View {
     let onQuickEditAmount: () -> Void
 
     @State private var showBalanceChart = false
+    // Sheet-в-sheet напрямую SwiftUI не поддерживает (гонка presentation).
+    // Поэтому переход в деталку счёта откладываем до onDismiss текущего sheet.
+    @State private var shouldOpenAccountDetailAfterChartDismiss = false
 
     // Читаем баланс из viewModel в body — @ObservedObject FinanceAccountRow сам перерисуется
     // при objectWillChange, не завися от того, перерисует ли родитель FinanceGroupRow
@@ -564,12 +567,21 @@ private struct FinanceAccountRow: View {
         .onTapGesture {
             onEdit()
         }
-        .sheet(isPresented: $showBalanceChart) {
+        .sheet(isPresented: $showBalanceChart, onDismiss: {
+            if shouldOpenAccountDetailAfterChartDismiss {
+                shouldOpenAccountDetailAfterChartDismiss = false
+                onEdit()
+            }
+        }) {
             AccountBalanceChartView(
                 accountID: account.accountID,
                 accountName: name,
                 currency: currency,
-                accentColor: sparklineColor
+                accentColor: sparklineColor,
+                onOpenAccountDetail: {
+                    shouldOpenAccountDetailAfterChartDismiss = true
+                    showBalanceChart = false
+                }
             )
         }
     }
