@@ -52856,6 +52856,84 @@
         }
       }
     },
+    "finances.purge_legacy.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": { "state": "translated", "value": "Удалить навсегда" }
+        },
+        "en": {
+          "stringUnit": { "state": "translated", "value": "Delete permanently" }
+        },
+        "zh-Hans": {
+          "stringUnit": { "state": "translated", "value": "永久删除" }
+        },
+        "de": {
+          "stringUnit": { "state": "translated", "value": "Endgültig löschen" }
+        },
+        "es": {
+          "stringUnit": { "state": "translated", "value": "Eliminar permanentemente" }
+        },
+        "fr": {
+          "stringUnit": { "state": "translated", "value": "Supprimer définitivement" }
+        },
+        "tr": {
+          "stringUnit": { "state": "translated", "value": "Kalıcı olarak sil" }
+        }
+      }
+    },
+    "finances.purge_legacy.confirm.title_format": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": { "state": "translated", "value": "Удалить счёт «%@»?" }
+        },
+        "en": {
+          "stringUnit": { "state": "translated", "value": "Delete account “%@”?" }
+        },
+        "zh-Hans": {
+          "stringUnit": { "state": "translated", "value": "删除账户「%@」？" }
+        },
+        "de": {
+          "stringUnit": { "state": "translated", "value": "Konto „%@“ löschen?" }
+        },
+        "es": {
+          "stringUnit": { "state": "translated", "value": "¿Eliminar la cuenta «%@»?" }
+        },
+        "fr": {
+          "stringUnit": { "state": "translated", "value": "Supprimer le compte « %@ » ?" }
+        },
+        "tr": {
+          "stringUnit": { "state": "translated", "value": "“%@” hesabı silinsin mi?" }
+        }
+      }
+    },
+    "finances.purge_legacy.confirm.message_format": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": { "state": "translated", "value": "Счёт и связанные операции (%lld) будут удалены безвозвратно. Действие необратимо." }
+        },
+        "en": {
+          "stringUnit": { "state": "translated", "value": "The account and its related operations (%lld) will be permanently deleted. This cannot be undone." }
+        },
+        "zh-Hans": {
+          "stringUnit": { "state": "translated", "value": "账户及其相关操作（%lld 项）将被永久删除。此操作无法撤销。" }
+        },
+        "de": {
+          "stringUnit": { "state": "translated", "value": "Das Konto und die zugehörigen Vorgänge (%lld) werden endgültig gelöscht. Dies kann nicht rückgängig gemacht werden." }
+        },
+        "es": {
+          "stringUnit": { "state": "translated", "value": "La cuenta y sus operaciones relacionadas (%lld) se eliminarán de forma permanente. Esta acción no se puede deshacer." }
+        },
+        "fr": {
+          "stringUnit": { "state": "translated", "value": "Le compte et ses opérations associées (%lld) seront définitivement supprimés. Cette action est irréversible." }
+        },
+        "tr": {
+          "stringUnit": { "state": "translated", "value": "Hesap ve ilişkili işlemler (%lld) kalıcı olarak silinecek. Bu işlem geri alınamaz." }
+        }
+      }
+    },
     "finances.credit.payment_mode.day_of_month": {
       "extractionState": "manual",
       "localizations": {

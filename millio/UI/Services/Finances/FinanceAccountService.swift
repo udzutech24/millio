@@ -459,6 +459,74 @@ final class FinanceAccountService {
         return kind
     }
 
+    // MARK: - Legacy purge (ручная зачистка старых счетов)
+
+    /// Число операций Cashflow, привязанных к легаси-счёту (для подтверждения удаления).
+    /// Совпадение по любому из четырёх ID-полей: обе ноги перевода (cardID/toCardID) плюс
+    /// creditID/investmentID — у разных типов легаси-счёта операция ссылается своим полем,
+    /// но значение всегда равно uniqueID счёта, поэтому коллизий между типами нет (UUID).
+    func legacyRelatedTransactionCount(for account: FinanceAccount) -> Int {
+        relatedTransactions(forAccountID: account.accountID).count
+    }
+
+    private func relatedTransactions(forAccountID id: String) -> [CashflowTransaction] {
+        let all = (try? modelContext.fetch(FetchDescriptor<CashflowTransaction>())) ?? []
+        return all.filter { $0.cardID == id || $0.toCardID == id || $0.creditID == id || $0.investmentID == id }
+    }
+
+    /// Физически удаляет легаси-счёт (Card/Credit/Investment) вместе с junction FinanceAccount
+    /// и всеми связанными операциями Cashflow. Необратимо. Единственный путь ручной зачистки
+    /// старых счетов после Фазы 6a (легаси стали read-only для записи из UI; удаление — исключение).
+    /// Миграция в новое ядро идёт отдельным путём (convertAccountToCore), это не она.
+    @discardableResult
+    func physicallyDeleteLegacyAccount(_ account: FinanceAccount) -> (kind: UnderlyingAccountKind, deletedTransactions: Int) {
+        let accountGroup = groupsProvider().first { group in
+            group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
+        }
+        let accountID = account.accountID
+        let kind: UnderlyingAccountKind
+
+        // 1. Каскад операций (обе ноги перевода + связи кредита/инвестиции).
+        let related = relatedTransactions(forAccountID: accountID)
+        for tx in related { modelContext.delete(tx) }
+
+        // 2. Underlying-модель по типу счёта.
+        switch account.accountType {
+        case .card:
+            if let card = allCardByID[accountID] ?? ((try? modelContext.fetch(FetchDescriptor<Card>())) ?? []).first(where: { $0.cardUniqueID == accountID }) {
+                modelContext.delete(card)
+            }
+            kind = .card
+        case .credit:
+            if let credit = allCreditByID[accountID] ?? ((try? modelContext.fetch(FetchDescriptor<Credit>())) ?? []).first(where: { $0.creditUniqueID == accountID }) {
+                modelContext.delete(credit)
+            }
+            kind = .credit
+        case .investment:
+            if let investment = allInvestmentByID[accountID] ?? ((try? modelContext.fetch(FetchDescriptor<Investment>())) ?? []).first(where: { $0.investmentUniqueID == accountID }) {
+                modelContext.delete(investment)
+            }
+            kind = .investment
+        }
+
+        // 3. Junction group↔account.
+        modelContext.delete(account)
+
+        do {
+            try modelContext.save()
+            // Track D1: без перезагрузки кэшей удалённый счёт и его тотал «висят» до перезапуска.
+            onLoadAccounts()
+            onLoadGroups()
+            onCalculateTotal()
+            if let groupID = accountGroup?.groupUniqueID {
+                onScheduleGroupTotalRefresh(groupID)
+            }
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to physically delete legacy account: \(error.localizedDescription)")
+        }
+        return (kind, related.count)
+    }
+
     func restoreArchivedAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
         updateUnderlyingArchiveState(accountType: accountType, accountID: accountID, archivedAt: nil)
         addAccountToGroup(accountType: accountType, accountID: accountID, group: group)
