@@ -240,6 +240,8 @@ enum FinanceAction {
     case restoreArchivedAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?)
     case removeAccountFromGroup(FinanceAccount)
     case deleteAccountPermanently(FinanceAccount)
+    /// Ручная зачистка: физически удалить легаси-счёт + junction + связанные операции Cashflow. Необратимо.
+    case physicallyDeleteLegacyAccount(FinanceAccount)
     /// Track C: перевод легаси-счёта в новое ядро (создаёт core-двойник, скрывает легаси атомарно).
     case convertAccountToCore(FinanceAccount)
     case showCreateCardSheet
@@ -618,6 +620,8 @@ final class FinanceViewModel: ViewModelProtocol {
             removeAccountFromGroup(account)
         case .deleteAccountPermanently(let account):
             deleteAccountPermanently(account)
+        case .physicallyDeleteLegacyAccount(let account):
+            physicallyDeleteLegacyAccount(account)
         case .convertAccountToCore(let account):
             convertAccountToCore(account)
             
@@ -1503,6 +1507,24 @@ final class FinanceViewModel: ViewModelProtocol {
         let kind = accountService.deleteAccountPermanently(account)
         if kind == .card { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
         if kind == .credit { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
+    }
+
+    /// Кол-во операций Cashflow, привязанных к легаси-счёту (для алерта подтверждения удаления).
+    func legacyRelatedTransactionCount(for account: FinanceAccount) -> Int {
+        accountService.legacyRelatedTransactionCount(for: account)
+    }
+
+    /// Физическое удаление легаси-счёта: сам объект + junction + операции Cashflow. Необратимо.
+    private func physicallyDeleteLegacyAccount(_ account: FinanceAccount) {
+        let result = accountService.physicallyDeleteLegacyAccount(account)
+        switch result.kind {
+        case .card: EventBus.shared.publish(FinanceEvent.cardsUpdated)
+        case .credit: EventBus.shared.publish(FinanceEvent.creditsUpdated)
+        case .investment: EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+        case .none: break
+        }
+        // Каскад затронул операции — просим Cashflow перезагрузиться.
+        EventBus.shared.publish(FinanceEvent.transactionsUpdated)
     }
 
     @discardableResult

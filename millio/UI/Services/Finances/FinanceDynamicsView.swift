@@ -218,6 +218,8 @@ private struct FinanceDynamicsContentView: View {
     @State private var isOverviewChartLoading: Bool = false
     @State private var showDeleteAccountConfirmation: Bool = false
     @State private var showConvertToCoreConfirmation: Bool = false
+    @State private var showPurgeLegacyConfirmation: Bool = false
+    @State private var purgeLegacyTransactionCount: Int = 0
     @State private var showDeleteGroupConfirmation: Bool = false
     @State private var showArchiveBalanceWarning: Bool = false
     @State private var archiveBalanceWarningAmount: Double = 0
@@ -339,6 +341,16 @@ private struct FinanceDynamicsContentView: View {
                     cancelTitle: L("finances.common.cancel"),
                     onConfirm: confirmDeleteAccount,
                     onCancel: { showDeleteAccountConfirmation = false }
+                )
+
+                FinancesDestructiveConfirmationOverlay(
+                    isPresented: showPurgeLegacyConfirmation,
+                    title: purgeLegacyConfirmationTitle,
+                    message: purgeLegacyConfirmationMessage,
+                    confirmTitle: L("finances.common.delete"),
+                    cancelTitle: L("finances.common.cancel"),
+                    onConfirm: confirmPurgeLegacyAccount,
+                    onCancel: { showPurgeLegacyConfirmation = false }
                 )
 
                 FinancesDestructiveConfirmationOverlay(
@@ -557,6 +569,7 @@ private struct FinanceDynamicsContentView: View {
                     if shouldShowDeleteAccountFooter, let account = initialAccount {
                         convertToCoreFooterButton(account: account)
                         deleteAccountFooterButton(account: account)
+                        purgeLegacyAccountFooterButton(account: account)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -682,6 +695,7 @@ private struct FinanceDynamicsContentView: View {
                     if shouldShowDeleteMarketInvestmentFooter, let account = initialAccount {
                         convertToCoreFooterButton(account: account)
                         deleteAccountFooterButton(account: account)
+                        purgeLegacyAccountFooterButton(account: account)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -2303,6 +2317,48 @@ private struct FinanceDynamicsContentView: View {
         showDeleteAccountConfirmation = false
         financeViewModel.handle(.removeAccountFromGroup(account))
         dismiss()
+    }
+
+    /// Кнопка полного удаления легаси-счёта (в отличие от «Удалить» выше, которая архивирует).
+    /// Показывается только на деталке легаси-счёта (новое ядро использует свой AccountDetailView).
+    private func purgeLegacyAccountFooterButton(account: FinanceAccount) -> some View {
+        Button(role: .destructive) {
+            purgeLegacyTransactionCount = financeViewModel.legacyRelatedTransactionCount(for: account)
+            showPurgeLegacyConfirmation = true
+        } label: {
+            Text(L("finances.purge_legacy.action"))
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(AppColors.error)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+        }
+        .buttonStyle(.plain)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(AppColors.error.opacity(0.10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(AppColors.error.opacity(0.28), lineWidth: 0.8)
+                )
+        }
+        .accessibilityIdentifier("finances.purge_legacy_account.button")
+    }
+
+    private func confirmPurgeLegacyAccount() {
+        guard let account = initialAccount else { return }
+        showPurgeLegacyConfirmation = false
+        financeViewModel.handle(.physicallyDeleteLegacyAccount(account))
+        dismiss()
+    }
+
+    private var purgeLegacyConfirmationTitle: String {
+        let name = initialAccount.flatMap { financeViewModel.getAccountInfo(account: $0)?.name }
+            ?? L("finances.dynamics.chart.account_fallback")
+        return FinancesL10n.format("finances.purge_legacy.confirm.title_format", name)
+    }
+
+    private var purgeLegacyConfirmationMessage: String {
+        FinancesL10n.format("finances.purge_legacy.confirm.message_format", purgeLegacyTransactionCount)
     }
 
     // MARK: - Deposit Blocks (Phase 5, 6, 8)
