@@ -1,6 +1,6 @@
 # Редизайн flow добавления транзакции — таб Cashflow
 
-**Статус:** В РАБОТЕ (Фаза 0 — вклады реализованы и протестированы, кредиты сознательно отложены; Фаза 1 — бюджет-карточка на главном экране реализована 2026-07-07, см. секции ниже)
+**Статус:** В РАБОТЕ (Фаза 0 — вклады реализованы и протестированы, кредиты сознательно отложены; Фаза 1 — бюджет-карточка реализована 2026-07-07; Фаза 2 — cap избранных категорий реализована 2026-07-07; Фаза 4 — топ-3 в breakdown реализована 2026-07-07; Фаза 3 — самая рискованная, не начата, см. секции ниже)
 
 > **Гейт Ф3 пройден 2026-07-07:** базовый /stress-test выполнен (Fable), 10 рисков зафиксированы в `plans/2026-07-07__overnight-run.md`. Реализация Ф3 разрешена при 5 обязательных условиях: (1) черновики табов хранить в VM, не в `@State` вьюхи; (2) идемпотентность + anti-double-tap в `handle(.addTransaction)`; (3) перед стартом — baseline преэкзистентно-красных тестов, гейт = ноль НОВЫХ красных; (4) единый экран — новым файлом, `CashflowQuickEntrySheet` и категорийный шит удаляются, не комментируются (не раздувать `CashflowOperationSheets.swift`); (5) Ф3 НЕ мержится в develop до ручной проверки владельца — остаётся в feature-ветке.
 **Дата создания:** 2026-07-05
@@ -363,6 +363,20 @@
 - Поиск находит категории вне топ-8.
 - Pin/unpin через long-press работает без изменений в поведении.
 
+**Статус: РЕАЛИЗОВАНО (2026-07-07, ночной прогон).** Ветка `feature/cashflow-phase2-pinned-categories` от `develop` (41ebf1e). Не смёржена, не запушена. Коммит `184b21b`.
+
+#### Self-audit (2026-07-07)
+
+1. **[x] Без pinned видны 6-8 дефолтных плиток + "Все категории".** Cap-формула вынесена в чистую `CashflowCategoryCapPolicy.visibleCount(pinnedCount:totalCount:)` (не размазана по View) — 0 pinned → добор дефолтными до 6; ссылка "Все категории" появляется только когда `categories.count > categoryCapCount` (`showsCategoryExpandLink`).
+2. **[x] С pinned — pinned первыми (до 8), остальное по клику.** `orderedCategoryOptions` уже гарантирует pinned-first стабильную сортировку (проверено по коду `sortCategoryOptions`/`sortCategoryOptionsWithCustomOrder` — pinned всегда строгий префикс списка), поэтому `pinnedCategoryCount` считается через `prefix { isPinned }` без отдельной агрегации. R4 (жёсткий потолок 8 даже для pinned) — реализовано в `CashflowCategoryCapPolicy.maximumVisible`.
+3. **[x] Поиск находит категории вне топ-8 (R8).** `shouldCapCategories` явно снимает cap при непустом `searchText` — `visibleCategories` возвращает полный (уже отфильтрованный сервисом) список без обрезки.
+4. **[x] Pin/unpin через long-press без изменений.** `categoryCard(for:)`, `CashflowCategoryActionOverlay`, `togglePinned(for:)` не тронуты — cap работает только на уровне *какие* элементы попадают в `ForEach`, не меняя сам жест/`CashflowCategoryReorderSheet`.
+5. **[x] R6 (пустой каталог/pinned) не ломает сетку.** `CashflowCategoryCapPolicy.visibleCount` явно клэмпит на `totalCount` и возвращает 0 при пустом каталоге — покрыто тестами `emptyCatalogReturnsZero`, `catalogSmallerThanMinimumShowsEverything`.
+
+**Дополнение к плану:** coach-mark тултипы §7.5 реализованы НЕ как anchored-тултипы с указателями на конкретные элементы, а как один dismissible-баннер (переиспользован паттерн `CashflowCurrencySelectorView` — `@AppStorage`-флаг "seen once"), объединяющий обе подсказки ("Долгое нажатие — закрепить категорию" + "Все категории →"). Обоснование: отдельная позиционная coach-mark система (стрелки/anchors на конкретные UI-элементы) — абстракция, непропорциональная объёму фазы (KISS); текстовый баннер закрывает ту же задачу недискаверабельности за один show/dismiss.
+
+**Гейт тестов:** билд чистый (0 ошибок, 0 новых предупреждений в изменённых файлах). Полный `millioTests` прогнан на iPhone 17 Pro (derivedData `/private/tmp/xcodebuild-deriveddata-phase2`): 1681 passed / 17 failed. Все 17 — подмножество baseline (18 преэкзистентных, см. `progress/2026-07-07-overnight-baseline.md`); отсутствуют 2 из 18 (`CashflowViewModelTests.testFutureTransactionMutationsPublishTransactionsUpdatedWithoutCardsUpdated`, `ConverterViewModelTests.testShareAndLastUpdatedUseSelectedAppLanguage`) — не регрессия, а не воспроизвелись в этом прогоне (документированная locale/тест-порядок флакиность). Новый `FinanceDynamicsViewModelTests.testDeleteGroupPreservesArchivedLinkForHistoricalCalculation` (уже известная межсьютная утечка по Фазе 1) перепроверен изолированно (`-only-testing` на один тест) — TEST SUCCEEDED, зелёный. Ноль новых продуктовых красных. 8 новых тестов `CashflowCategoryCapPolicyTests` — все зелёные.
+
 ### Фаза 3 — Объединение Доход/Расход/Перевод в один экран, схлопывание мини-шит→большой-шит (idea #1, обязательные требования §2.1.1/§2.1.2/§2.5)
 **Почему третьей:** самая рискованная из четырёх — трогает точку входа (`CashflowView.swift` sheet-презентация), схлопывает два существующих `.sheet`-слоя в один и добавляет новый таб в контейнер. Делаем после того, как форма внутри (фазы 1-2) уже стабилизирована, чтобы не тестировать все изменения разом. **Это самая объёмная фаза** — фактически внутри неё 4 обязательных под-требования, не опциональных:
 
@@ -397,6 +411,16 @@
 - Развёрнутый блок "Доходы"/"Расходы" показывает максимум 3 категории + ссылку.
 - Ссылка открывает Историю с правильным фильтром (income/expense) и, если применимо, тем же периодом, что выбран на главном экране.
 - Пустой список (0 транзакций) не показывает ссылку "Показать всё" (нечего показывать).
+
+**Статус: РЕАЛИЗОВАНО (2026-07-07, ночной прогон).** Та же ветка `feature/cashflow-phase2-pinned-categories` (после Фазы 2). Не смёржена, не запушена. Коммит `0f2592a`.
+
+#### Self-audit (2026-07-07)
+
+1. **[x] Максимум 3 категории + ссылка.** Cap вынесен в чистую `CashflowBreakdownCapPolicy.visibleEntries(from:)` (top-3, `prefix`), таблица активов (`assetBreakdownSection`) и сама сортировка на сервисе не тронуты — сортировка по убыванию суммы уже была на `CashflowAnalyticsService.swift:225-230` (подтверждено чтением кода до реализации, §7.2), в фазе добавлен только cap.
+2. **[x] Ссылка открывает Историю с правильным фильтром и периодом.** Переиспользован существующий `openHistory(filter:)` (`CashflowView.swift`) — он уже читает `cashflowInsightsSelectedDateRange` (= `viewModel.currentDateRange()`, тот же период, что на главном экране) как дефолтный `dateRange`; новой навигационной логики не потребовалось, только `onShowAll: { openHistory(filter: .income) }` / `.expense` в двух местах вызова `breakdownList`.
+3. **[x] R6: пустой список не показывает ссылку.** `CashflowBreakdownCapPolicy.showsExpandLink(totalCount:)` возвращает `false` при `totalCount <= 3` (включая 0) — покрыто тестами `hidesExpandLinkWhenEmpty`, `hidesExpandLinkAtExactCap`.
+
+**Гейт тестов:** билд чистый (0 ошибок, 0 новых предупреждений в изменённых файлах). Полный `millioTests` прогнан на iPhone 17 Pro (derivedData `/private/tmp/xcodebuild-deriveddata-phase4`): 1689 passed / 15 failed. Все 15 — подмножество baseline (18 преэкзистентных); отсутствующие в этом прогоне (`FinanceLifecycleIntegrationTests`, `ConverterViewModelTests`, `CashflowViewModelTests.testFutureTransactionMutationsPublishTransactionsUpdatedWithoutCardsUpdated`) — та же документированная флакиность, не регрессия. Ноль новых продуктовых красных. 6 новых тестов `CashflowBreakdownCapPolicyTests` — все зелёные.
 
 ---
 
