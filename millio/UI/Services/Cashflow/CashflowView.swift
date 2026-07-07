@@ -178,6 +178,11 @@ private struct CashflowContentView: View {
     @State private var draftStartDate: Date = CashflowViewModel.defaultPeriodRange(referenceDate: Date()).start
     @State private var draftEndDate: Date = CashflowViewModel.defaultPeriodRange(referenceDate: Date()).end
     @State private var showAssetChangeInfoSheet: Bool = false
+    @State private var showBudgetSetupSheet: Bool = false
+    @State private var budgetSetupKind: CashflowCategoryKind = .expense
+    @State private var budgetSetupExistingAmount: Double? = nil
+    @State private var budgetSetupExistingCategoryLimits: [String: Double] = [:]
+    @State private var budgetSetupCategorySnapshots: [BudgetCategoryProgressSnapshot] = []
     @State private var showIncomeBreakdown: Bool = false
     @State private var showExpenseBreakdown: Bool = false
     @State private var showExpandedChart: Bool = false
@@ -215,6 +220,12 @@ private struct CashflowContentView: View {
 
                     // Сводка активов за период
                     assetBreakdownSection
+
+                    // Бюджет-карточка (Фаза 1 редизайна add-flow) — только для конкретного месяца,
+                    // бюджет считается помесячно и не применим к кварталу/году/произвольному периоду.
+                    if viewModel.state.chartPeriod == .specificMonth {
+                        budgetHeroSection
+                    }
 
                 }
                 .padding(.horizontal, 12)
@@ -277,6 +288,9 @@ private struct CashflowContentView: View {
         }
         .sheet(isPresented: $showAssetChangeInfoSheet) {
             assetChangeInfoSheet
+        }
+        .sheet(isPresented: $showBudgetSetupSheet) {
+            budgetSetupSheetContent
         }
         .fullScreenCover(isPresented: $showExpandedChart) {
             cashflowExpandedChartSheet
@@ -465,6 +479,69 @@ private struct CashflowContentView: View {
         .padding(16)
         .background(financeCardBackground(cornerRadius: panelCornerRadius))
         .animation(.spring(response: 0.22, dampingFraction: 0.86), value: viewModel.state.periodTotalChange)
+    }
+
+    // MARK: - Budget Hero Section (Фаза 1 редизайна add-flow)
+
+    private var budgetHeroSection: some View {
+        BudgetHeroCard(
+            expenseSnapshot: viewModel.state.dashboardExpenseBudgetSnapshot,
+            incomeSnapshot: viewModel.state.dashboardIncomeBudgetSnapshot,
+            currencyCode: cashflowCurrencyCodeLabel(viewModel.state.displayCurrency),
+            onTap: openBudgetSetup(for:)
+        )
+    }
+
+    private func openBudgetSetup(for kind: CashflowCategoryKind) {
+        let month = viewModel.state.selectedMonth
+        let currency = viewModel.state.displayCurrency
+        Task {
+            let summary = await viewModel.monthlyBudgetSummary(for: kind, month: month, in: currency)
+            budgetSetupKind = kind
+            budgetSetupExistingAmount = summary.plan?.totalLimitAmount
+            budgetSetupExistingCategoryLimits = summary.categoryLimits
+            budgetSetupCategorySnapshots = summary.snapshot?.categorySnapshots ?? []
+            showBudgetSetupSheet = true
+        }
+    }
+
+    private var budgetSetupPeriodTitle: String {
+        let formatter = DateFormatter()
+        formatter.locale = AppLocalization.currentAppLocale
+        formatter.dateFormat = "LLLL yyyy"
+        return formatter.string(from: viewModel.state.selectedMonth).localizedCapitalized
+    }
+
+    private var budgetSetupSheetContent: some View {
+        let kind = budgetSetupKind
+        let repeatSuggestion = viewModel.previousMonthlyBudgetSuggestion(
+            for: viewModel.state.selectedMonth,
+            categoryKind: kind
+        )
+        return BudgetSetupSheet(
+            categoryKind: kind,
+            periodTitle: budgetSetupPeriodTitle,
+            currencyCode: cashflowCurrencyCodeLabel(viewModel.state.displayCurrency),
+            existingAmount: budgetSetupExistingAmount,
+            categoryOptions: viewModel.categoryOptions(for: kind),
+            existingCategoryLimits: budgetSetupExistingCategoryLimits,
+            categorySnapshots: budgetSetupCategorySnapshots,
+            repeatSuggestion: repeatSuggestion,
+            isAutoRepeatEnabled: viewModel.isMonthlyBudgetAutoRepeatEnabled,
+            onSave: { amount, limits in
+                viewModel.saveMonthlyBudgetConfiguration(
+                    categoryKind: kind,
+                    month: viewModel.state.selectedMonth,
+                    totalAmount: amount,
+                    categoryLimits: limits,
+                    currency: viewModel.state.displayCurrency
+                )
+                viewModel.updateChartData()
+            },
+            onAutoRepeatChanged: { isEnabled in
+                viewModel.isMonthlyBudgetAutoRepeatEnabled = isEnabled
+            }
+        )
     }
 
     private func statRow(title: String, value: String, valueColor: Color) -> some View {

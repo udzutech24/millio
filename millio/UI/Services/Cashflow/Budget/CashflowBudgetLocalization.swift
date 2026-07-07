@@ -366,23 +366,6 @@ enum CashflowBudgetLocalization {
         }
     }
 
-    static func monthlyOverflow(for kind: CashflowCategoryTransactionSheetKind, amount: String) -> String {
-        switch kind {
-        case .expense:
-            return formatted(
-                "cashflow.budget.monthly_overflow.expense",
-                defaultValue: "Category limits exceed the total by %@",
-                amount
-            )
-        case .income:
-            return formatted(
-                "cashflow.budget.monthly_overflow.income",
-                defaultValue: "Category targets exceed the total by %@",
-                amount
-            )
-        }
-    }
-
     private static func formatted(_ key: String, defaultValue: String, _ arguments: CVarArg...) -> String {
         String(
             format: tr(key, fallback: defaultValue),

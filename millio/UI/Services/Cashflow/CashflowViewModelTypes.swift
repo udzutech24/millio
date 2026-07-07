@@ -212,6 +212,15 @@ struct CashflowState {
     /// Сводка прогресса бюджета для текущего периода.
     var budgetSnapshot: BudgetProgressSnapshot? = nil
 
+    /// Снапшот бюджета расходов для карточки на главном экране Cashflow (Фаза 1 редизайна add-flow).
+    /// В отличие от `budgetSnapshot` (привязан к `chartPeriod`, только expense), считается строго
+    /// по календарному месяцу через `monthlyBudgetSummary` и `nil`, если выбранный период — не
+    /// конкретный месяц (`chartPeriod != .specificMonth`) либо бюджет не настроен.
+    var dashboardExpenseBudgetSnapshot: BudgetProgressSnapshot? = nil
+
+    /// Аналогичный снапшот для доходного плана — доходы никогда не считались в `budgetSnapshot`.
+    var dashboardIncomeBudgetSnapshot: BudgetProgressSnapshot? = nil
+
     /// Флаг загрузки данных
     var isLoading: Bool = false
 }
