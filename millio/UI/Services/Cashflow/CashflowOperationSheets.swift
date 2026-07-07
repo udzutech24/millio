@@ -498,8 +498,6 @@ struct CashflowCategoryTransactionSheet: View {
                         .contentTransition(.numericText())
                         .shadow(color: kind.accentColor.opacity(0.45), radius: 12, x: 0, y: 0)
                 }
-
-                monthlyBudgetInlineSection
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -560,35 +558,6 @@ struct CashflowCategoryTransactionSheet: View {
                 RoundedRectangle(cornerRadius: innerCornerRadius, style: .continuous)
                     .stroke(kind.strokeGradient.opacity(0.60), lineWidth: 1)
             )
-    }
-
-    @ViewBuilder
-    private var monthlyBudgetInlineSection: some View {
-        if let snapshot = budgetSnapshot {
-            let style = budgetMonthlySummaryStyle(kind: kind, snapshot: snapshot)
-            VStack(alignment: .leading, spacing: 6) {
-                GeometryReader { proxy in
-                    let progress = min(max(snapshot.progress, 0), 1)
-                    ZStack(alignment: .leading) {
-                        Capsule(style: .continuous)
-                            .fill(Color.white.opacity(0.08))
-                        Capsule(style: .continuous)
-                            .fill(kind.strokeGradient)
-                            .frame(width: max(12, proxy.size.width * progress))
-                    }
-                }
-                .frame(height: 10)
-
-                if snapshot.categoriesLimitOverflow > 0.0000001 {
-                    Text(CashflowBudgetLocalization.monthlyOverflow(
-                        for: kind,
-                        amount: formattedAmount(snapshot.categoriesLimitOverflow)
-                    ))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(style.usageText.color)
-                }
-            }
-        }
     }
 
     private var managementSection: some View {
