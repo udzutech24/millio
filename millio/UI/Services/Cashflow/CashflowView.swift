@@ -400,7 +400,8 @@ private struct CashflowContentView: View {
                         hasAvailableCards: !viewModel.state.availableCards.isEmpty
                     ),
                     signedAmount: { $0 },
-                    valueColor: { positiveColor(for: $0) }
+                    valueColor: { positiveColor(for: $0) },
+                    onShowAll: { openHistory(filter: .income) }
                 )
             }
             rowDivider
@@ -446,7 +447,8 @@ private struct CashflowContentView: View {
                         hasAvailableCards: !viewModel.state.availableCards.isEmpty
                     ),
                     signedAmount: { -$0 },
-                    valueColor: { negativeColor(for: -$0) }
+                    valueColor: { negativeColor(for: -$0) },
+                    onShowAll: { openHistory(filter: .expense) }
                 )
             }
             rowDivider
@@ -601,13 +603,19 @@ private struct CashflowContentView: View {
         .padding(.vertical, 2)
     }
 
+    /// Фаза 4 редизайна add-flow (§2.4): развёрнутый блок Доходы/Расходы показывает
+    /// не весь список категорий, а топ-N + ссылку в полную Историю — сортировка по
+    /// убыванию суммы уже сделана на сервисе (`CashflowAnalyticsService`). Cap-формула
+    /// вынесена в `CashflowBreakdownCapPolicy` (юнит-тестируется без View-харнеса).
     private func breakdownList(
         entries: [CashflowCategoryBreakdownEntry],
         showNoCardsHint: Bool,
         signedAmount: @escaping (Double) -> Double,
-        valueColor: @escaping (Double) -> Color
+        valueColor: @escaping (Double) -> Color,
+        onShowAll: @escaping () -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let visibleEntries = CashflowBreakdownCapPolicy.visibleEntries(from: entries)
+        return VStack(alignment: .leading, spacing: 8) {
             if entries.isEmpty {
                 if showNoCardsHint {
                     VStack(alignment: .leading, spacing: 8) {
@@ -646,7 +654,7 @@ private struct CashflowContentView: View {
                         .foregroundStyle(primarySecondaryText)
                 }
             } else {
-                ForEach(entries) { entry in
+                ForEach(visibleEntries) { entry in
                     HStack(alignment: .firstTextBaseline) {
                         Text(entry.title)
                             .font(.system(size: 13, weight: .regular))
@@ -660,10 +668,30 @@ private struct CashflowContentView: View {
                             .lineLimit(1)
                     }
                 }
+
+                if CashflowBreakdownCapPolicy.showsExpandLink(totalCount: entries.count) {
+                    breakdownShowAllRow(action: onShowAll)
+                }
             }
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 2)
+    }
+
+    /// Ссылка "Показать всё → История" под топ-3 категориями (§2.4). Не появляется,
+    /// если весь список и так помещается в cap (R6: пустой список тоже не показывает).
+    private func breakdownShowAllRow(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: AppSpacing.xs) {
+                Text(L("cashflow.breakdown.show_all", defaultValue: "Show all"))
+                Image(systemName: "chevron.right")
+                    .font(.millioCaption2)
+            }
+            .font(.millioCalloutSemibold)
+            .foregroundStyle(AppColors.textSecondary)
+        }
+        .buttonStyle(.plain)
+        .padding(.top, AppSpacing.xs)
     }
 
     // MARK: - Period Selection Section

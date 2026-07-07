@@ -102,6 +102,10 @@ struct CashflowCategoryTransactionSheet: View {
     @State private var selectedCategory: CashflowCategoryOption?
     @State private var searchText: String = ""
     @State private var isSearchExpanded: Bool = false
+    // Фаза 2 редизайна add-flow (§2.2): cap избранных категорий в сетке по умолчанию.
+    @State private var showAllCategories: Bool = false
+    @AppStorage("cashflow_category_cap_coachmark_seen") private var hasSeenCategoryCapCoachMark: Bool = false
+    @State private var showCategoryCapCoachMark: Bool = false
     @State private var monthlyTotal: Double = 0
     @State private var categoryTotals: [String: Double] = [:]
     @State private var budgetSnapshot: BudgetProgressSnapshot?
@@ -176,6 +180,38 @@ struct CashflowCategoryTransactionSheet: View {
         )
     }
 
+    // MARK: - Cap избранных категорий (§2.2 плана редизайна add-flow, Фаза 2)
+    // Сама формула cap вынесена в `CashflowCategoryCapPolicy` (чистая функция, юнит-тестируется
+    // без View-харнеса) — здесь только адаптация к состоянию этого экрана (поиск/showAll/pin).
+
+    private var isCategorySearchActive: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// R8: активный поиск снимает cap полностью — иначе категория вне топа не найдётся.
+    private var shouldCapCategories: Bool {
+        !showAllCategories && !isCategorySearchActive
+    }
+
+    /// Сколько pinned-категорий в начале уже отсортированного списка (pinned всегда
+    /// идут первыми — инвариант `sortCategoryOptions`/`sortCategoryOptionsWithCustomOrder`).
+    private var pinnedCategoryCount: Int {
+        categories.prefix { viewModel.isCategoryPinned(rawValue: $0.rawValue, kind: kind.categoryKind) }.count
+    }
+
+    private var categoryCapCount: Int {
+        CashflowCategoryCapPolicy.visibleCount(pinnedCount: pinnedCategoryCount, totalCount: categories.count)
+    }
+
+    private var visibleCategories: [CashflowCategoryOption] {
+        guard shouldCapCategories else { return categories }
+        return Array(categories.prefix(categoryCapCount))
+    }
+
+    private var showsCategoryExpandLink: Bool {
+        shouldCapCategories && categories.count > categoryCapCount
+    }
+
     private var planButtonTitle: String {
         CashflowBudgetLocalization.planButtonTitle(for: kind, hasBudget: budgetSnapshot != nil)
     }
@@ -193,6 +229,7 @@ struct CashflowCategoryTransactionSheet: View {
                             monthlyTotalSection
                             managementSection
                             categoriesSectionHeader
+                            categoryCapCoachMarkBanner
                             categoriesSection
                         }
                         .padding(.horizontal, 16)
@@ -376,6 +413,10 @@ struct CashflowCategoryTransactionSheet: View {
             .onAppear {
                 CashflowCategorySheetBootstrap.prepare(viewModel: viewModel)
                 reloadMonthlyTotal()
+                if !hasSeenCategoryCapCoachMark {
+                    showCategoryCapCoachMark = true
+                    hasSeenCategoryCapCoachMark = true
+                }
             }
             .onChange(of: selectedMonth) { _, _ in
                 reloadMonthlyTotal()
@@ -725,7 +766,7 @@ struct CashflowCategoryTransactionSheet: View {
     private var categoriesSection: some View {
         VStack(spacing: 0) {
             LazyVGrid(columns: categoryColumns, spacing: 10) {
-                ForEach(categories) { option in
+                ForEach(visibleCategories) { option in
                     categoryCard(for: option)
                         .id(option.rawValue)
                 }
@@ -742,10 +783,79 @@ struct CashflowCategoryTransactionSheet: View {
                 }
             }
 
+            categoryExpandLink
+
             if hasCompletedInitialLoad && monthlyTotal == 0 {
                 cashflowEmptyMonthState
                     .padding(.top, 24)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var categoryExpandLink: some View {
+        if showsCategoryExpandLink {
+            Button {
+                withAnimation(AppAnimation.standard) {
+                    showAllCategories = true
+                }
+            } label: {
+                HStack(spacing: AppSpacing.xs) {
+                    Text(L("cashflow.category.show_all", defaultValue: "All categories"))
+                    Image(systemName: "chevron.down")
+                        .font(.millioCaption2)
+                }
+                .font(.millioCallout)
+                .foregroundStyle(AppColors.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.s)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, AppSpacing.xs)
+        }
+    }
+
+    /// Однократная подсказка (§7.5): закрывает недискаверабельность pin-жеста и
+    /// cap-сетки. Реализована как обычный dismissible-баннер (паттерн уже есть в
+    /// `CashflowCurrencySelectorView`), а не как anchored coach-mark с указателями —
+    /// отдельная позиционная система тултипов для двух строк текста была бы
+    /// абстракцией ради абстракции (KISS) для задачи такого размера.
+    @ViewBuilder
+    private var categoryCapCoachMarkBanner: some View {
+        if showCategoryCapCoachMark {
+            HStack(alignment: .top, spacing: AppSpacing.s) {
+                Image(systemName: "hand.tap.fill")
+                    .font(.millioCalloutSemibold)
+                    .foregroundStyle(AppColors.textSecondary)
+                    .padding(.top, 1)
+
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    Text(L("cashflow.category.coachmark.pin_hint", defaultValue: "Long-press to pin a category"))
+                    Text(L("cashflow.category.coachmark.show_all_hint", defaultValue: "All categories →"))
+                }
+                .font(.millioCaptionRegular)
+                .foregroundStyle(AppColors.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button {
+                    withAnimation(AppAnimation.standard) {
+                        showCategoryCapCoachMark = false
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.millioCaption2)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .frame(width: 18, height: 18)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L("cashflow.common.close"))
+            }
+            .padding(.vertical, AppSpacing.s)
+            .padding(.horizontal, AppSpacing.m)
+            .background(innerPanelBackground)
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
 

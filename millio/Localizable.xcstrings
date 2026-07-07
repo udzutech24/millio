@@ -19694,6 +19694,21 @@
         }
       }
     },
+    "cashflow.breakdown.show_all": {
+      "comment": "Link under top-3 breakdown entries opening full transactions history with the matching filter",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": { "state": "translated", "value": "Show all" }
+        },
+        "ru": {
+          "stringUnit": { "state": "translated", "value": "Показать всё" }
+        },
+        "zh-Hans": {
+          "stringUnit": { "state": "translated", "value": "显示全部" }
+        }
+      }
+    },
     "cashflow.budget.badge.near": {
       "extractionState": "stale",
       "localizations": {
@@ -26908,6 +26923,36 @@
         }
       }
     },
+    "cashflow.category.coachmark.pin_hint": {
+      "comment": "One-time coach-mark hint: long-press pins a category to the top of the grid",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": { "state": "translated", "value": "Long-press to pin a category" }
+        },
+        "ru": {
+          "stringUnit": { "state": "translated", "value": "Долгое нажатие — закрепить категорию" }
+        },
+        "zh-Hans": {
+          "stringUnit": { "state": "translated", "value": "长按可固定分类" }
+        }
+      }
+    },
+    "cashflow.category.coachmark.show_all_hint": {
+      "comment": "One-time coach-mark hint pointing at the \"All categories\" expand link",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": { "state": "translated", "value": "All categories →" }
+        },
+        "ru": {
+          "stringUnit": { "state": "translated", "value": "Все категории →" }
+        },
+        "zh-Hans": {
+          "stringUnit": { "state": "translated", "value": "所有分类 →" }
+        }
+      }
+    },
     "cashflow.category.delete.amounts.empty": {
       "comment": "Delete category summary when there are no linked transaction amounts",
       "localizations": {
@@ -27704,6 +27749,21 @@
             "state": "translated",
             "value": "分类设置"
           }
+        }
+      }
+    },
+    "cashflow.category.show_all": {
+      "comment": "Link/button that expands the capped category grid to the full catalog",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": { "state": "translated", "value": "All categories" }
+        },
+        "ru": {
+          "stringUnit": { "state": "translated", "value": "Все категории" }
+        },
+        "zh-Hans": {
+          "stringUnit": { "state": "translated", "value": "所有分类" }
         }
       }
     },
