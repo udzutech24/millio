@@ -46,6 +46,7 @@ extension CashflowViewModel {
         guard isCurrentChartUpdateRevision(revision) else { return }
 
         loadBudgetPlanForCurrentPeriod()
+        await reloadDashboardBudgetSnapshots(expectedRevision: revision)
         let input = CashflowChartInput(
             chartPeriod: state.chartPeriod,
             selectedMonth: state.selectedMonth,
@@ -233,6 +234,28 @@ extension CashflowViewModel {
         in currency: String? = nil
     ) async -> (plan: BudgetPlan?, snapshot: BudgetProgressSnapshot?, categoryLimits: [String: Double]) {
         await monthlyBudgetSummary(for: .income, month: month, in: currency)
+    }
+
+    /// Пересчитывает per-kind снапшоты бюджета для карточки главного экрана Cashflow (Фаза 1).
+    /// Бюджет считается только помесячно — вне `chartPeriod == .specificMonth` карточка скрывается
+    /// (см. plans/2026-07-05__cashflow-add-transaction-redesign.md §7.1.5 и §7.3, п.7).
+    /// `expectedRevision` — тот же guard, что и у `updateChartDataAsync`, чтобы устаревший таск не
+    /// перезаписал состояние после более свежего вызова (смена месяца/валюты во время await).
+    func reloadDashboardBudgetSnapshots(expectedRevision: Int) async {
+        guard state.chartPeriod == .specificMonth else {
+            state.dashboardExpenseBudgetSnapshot = nil
+            state.dashboardIncomeBudgetSnapshot = nil
+            return
+        }
+
+        let month = state.selectedMonth
+        let currency = state.displayCurrency
+        let expense = await expenseBudgetSummary(for: month, in: currency)
+        let income = await incomeBudgetSummary(for: month, in: currency)
+
+        guard isCurrentChartUpdateRevision(expectedRevision) else { return }
+        state.dashboardExpenseBudgetSnapshot = expense.snapshot
+        state.dashboardIncomeBudgetSnapshot = income.snapshot
     }
 
     var isMonthlyBudgetAutoRepeatEnabled: Bool {
