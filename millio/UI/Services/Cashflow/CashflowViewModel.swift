@@ -657,6 +657,20 @@ final class CashflowViewModel: ViewModelProtocol {
         scheduledService.nextOccurrenceDate(for: template, relativeTo: referenceDate)
     }
 
+    /// Секция «Предстоящие» на главном экране Cashflow (Фаза 0, Шаг 6) — переиспользует те же
+    /// источники, что и полный «Планировщик» (`scheduledPlannerEntries`), плюс будущие проценты
+    /// по вкладам; merge/сортировка/cap — в `CashflowUpcomingSectionBuilder`.
+    func upcomingSectionItems(limit: Int = CashflowUpcomingSectionBuilder.defaultVisibleCount) -> [CashflowUpcomingItem] {
+        CashflowUpcomingSectionBuilder.items(
+            incomeEntries: scheduledPlannerEntries(for: .income),
+            expenseEntries: scheduledPlannerEntries(for: .expense),
+            depositInterestEvents: accountsCoreDepositCashflowBridge.upcomingInterestEvents(),
+            incomeCategoryTitle: { [weak self] raw in self?.incomeCategoryDisplayName(for: raw) ?? "" },
+            expenseCategoryTitle: { [weak self] raw in self?.expenseCategoryDisplayName(for: raw) ?? "" },
+            limit: limit
+        )
+    }
+
     private func monthlyTotal(
         for type: CashflowTransactionType,
         month: Date,

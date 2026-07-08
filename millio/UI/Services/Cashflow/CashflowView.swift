@@ -183,6 +183,8 @@ private struct CashflowContentView: View {
     @State private var budgetSetupExistingAmount: Double? = nil
     @State private var budgetSetupExistingCategoryLimits: [String: Double] = [:]
     @State private var budgetSetupCategorySnapshots: [BudgetCategoryProgressSnapshot] = []
+    @State private var showUpcomingPlanner: Bool = false
+    @State private var upcomingPlannerKind: CashflowCategoryKind = .expense
     @State private var showIncomeBreakdown: Bool = false
     @State private var showExpenseBreakdown: Bool = false
     @State private var showExpandedChart: Bool = false
@@ -227,6 +229,12 @@ private struct CashflowContentView: View {
                         budgetHeroSection
                     }
 
+                    // Секция «Предстоящие» (Фаза 0, Шаг 6) — не привязана к выбранному периоду
+                    // графика (речь о ближайшем будущем от «сейчас»), поэтому видна всегда, когда
+                    // есть что показать. Пустой список — карточка не рендерится вовсе (AC3).
+                    if !upcomingItems.isEmpty {
+                        upcomingSection
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 18)
@@ -291,6 +299,9 @@ private struct CashflowContentView: View {
         }
         .sheet(isPresented: $showBudgetSetupSheet) {
             budgetSetupSheetContent
+        }
+        .sheet(isPresented: $showUpcomingPlanner) {
+            upcomingPlannerSheet
         }
         .fullScreenCover(isPresented: $showExpandedChart) {
             cashflowExpandedChartSheet
@@ -505,6 +516,54 @@ private struct CashflowContentView: View {
             budgetSetupCategorySnapshots = summary.snapshot?.categorySnapshots ?? []
             showBudgetSetupSheet = true
         }
+    }
+
+    // MARK: - Upcoming Section (Фаза 0, Шаг 6 редизайна add-flow)
+
+    /// Источник — `CashflowViewModel.upcomingSectionItems()`, который переиспользует
+    /// `scheduledPlannerEntries` (тот же движок, что и полный «Планировщик») и
+    /// `AccountsCoreDepositCashflowBridge.upcomingInterestEvents` — без пересчёта.
+    private var upcomingItems: [CashflowUpcomingItem] {
+        viewModel.upcomingSectionItems()
+    }
+
+    private var upcomingSection: some View {
+        CashflowUpcomingCard(items: upcomingItems, onShowAll: openUpcomingPlanner)
+    }
+
+    /// Полный «Планировщик» (`CashflowScheduledTransactionsView`) построен вокруг одного `kind`
+    /// (доход ИЛИ расход) — управление им не меняется (§5 плана). Ссылка «Все» открывает его для
+    /// kind ближайшей (первой в списке) предстоящей операции — так пользователь попадает туда,
+    /// где реально есть данные, вместо произвольного дефолта.
+    private func openUpcomingPlanner() {
+        upcomingPlannerKind = upcomingItems.first?.kind ?? .expense
+        showUpcomingPlanner = true
+    }
+
+    private var upcomingPlannerSheet: some View {
+        NavigationStack {
+            CashflowScheduledTransactionsView(
+                viewModel: viewModel,
+                kind: upcomingPlannerKind,
+                mode: .planner
+            )
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showUpcomingPlanner = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                            .frame(width: 36, height: 36)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L("cashflow.common.close"))
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
 
     private var budgetSetupPeriodTitle: String {

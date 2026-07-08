@@ -76,6 +76,44 @@ final class AccountsCoreDepositCashflowBridge {
         return materializeDueInterestIncome()
     }
 
+    /// Будущее (ещё не due) начисление процентов по вкладу — читает уже сгенерированный
+    /// `AccountEvent` (см. `DepositInterestScheduler.extendActiveDepositHorizons`), суммы/даты
+    /// не пересчитываются заново. Используется секцией «Предстоящие» на главном экране Cashflow
+    /// (Фаза 0, Шаг 6, план `2026-07-05__cashflow-add-transaction-redesign.md`).
+    struct UpcomingInterestEvent {
+        let date: Date
+        let amount: Double
+        let currencyCode: String
+        let accountID: UUID
+        let accountName: String
+    }
+
+    /// Ближайшие будущие (`date > today`) начисления процентов по активным вкладам — до
+    /// материализации в Cashflow (см. `materializeDueInterestIncome`). Тот же приём чтения, что и
+    /// там: широкий фетч `AccountEvent` + фильтрация в Swift (без compound-предиката с traversal).
+    /// Архивные вклады не исключаются намеренно — согласуется с тем, что уже сгенерированные ДО
+    /// закрытия due-события всё равно материализуются (см. §7.3.2 плана).
+    func upcomingInterestEvents(limit: Int = 10) -> [UpcomingInterestEvent] {
+        let today = calendar.startOfDay(for: now())
+        let allEvents = (try? modelContext.fetch(FetchDescriptor<AccountEvent>())) ?? []
+
+        return allEvents
+            .filter { $0.type == .interest && $0.date > today && $0.account?.kind == .deposit }
+            .sorted { $0.date < $1.date }
+            .compactMap { event -> UpcomingInterestEvent? in
+                guard let account = event.account, let amount = event.amount, amount > 0 else { return nil }
+                return UpcomingInterestEvent(
+                    date: event.date,
+                    amount: NSDecimalNumber(decimal: amount).doubleValue,
+                    currencyCode: account.currency,
+                    accountID: account.id,
+                    accountName: account.name
+                )
+            }
+            .prefix(limit)
+            .map { $0 }
+    }
+
     /// Материализует в Cashflow все due (`date <= today`) interest-события вкладов, у которых ещё
     /// нет соответствующей строки. Идемпотентно: ключ дедупа — `importReferenceKey` == `AccountEvent
     /// .sourceTransactionID` (тот уже уникален на период по конвенции `DepositInterestScheduler`).
