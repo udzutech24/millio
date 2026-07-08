@@ -1,57 +1,67 @@
 {
   "planFile": "2026-07-07__overnight-run.md",
-  "title": "Overnight run 2026-07-07 + доверификация",
-  "updated": "2026-07-08T12:30:00+03:00",
+  "title": "Overnight run 07.07 + доверификация и мержи 08.07",
+  "updated": "2026-07-08T23:40:00+03:00",
   "phases": [
     {
       "name": "Ночной прогон (Ф0-Ф4, полировка, график, 6b Ф1, отчёт)",
       "status": "done",
-      "note": "см. progress/2026-07-08-overnight-report.md"
+      "note": "progress/2026-07-08-overnight-report.md"
     },
     {
-      "name": "Верификация Ф3+график (тесты, UX-чеклист, резолюции)",
+      "name": "Верификация Ф3+график + фикс 2 финдингов",
       "status": "done",
-      "note": "гейт чист; 2 финдинга найдены и закрыты (4c5cf02)"
+      "note": "Transfer-FAB + локальный разделитель, 4c5cf02"
     },
     {
-      "name": "Фикс финдингов Ф3: Transfer-FAB + разделитель по локали",
+      "name": "Ревью + верификация 6b Ф1",
       "status": "done",
-      "note": "4c5cf02 в feature/cashflow-chart-variant-a, 48/48 зелёных"
+      "note": "код корректен, гейт 0 новых; E2E-зазор = среда (нет iCloud)"
     },
     {
-      "name": "Ревью + верификация 6b Ф1 (LegacyAccountsMigrator)",
+      "name": "Диагностика locale-редов + фиксы",
       "status": "done",
-      "note": "код корректен; гейт 0 новых красных (1731/17 baseline); E2E-зазор = среда (нет iCloud)"
-    },
-    {
-      "name": "Диагностика 13 locale-редов + флаки-пара",
-      "status": "done",
-      "note": "8/13 старые baseline; 5 новых, фиксы в fix/test-locale-pins b5385a8 (24/24)"
-    },
-    {
-      "name": "Мерж Ф3+график (chart-a ветка)",
-      "status": "pending",
-      "note": "решение владельца; остался 1 пробел: визуально глянуть график на PRO"
-    },
-    {
-      "name": "Мерж 6b Ф1",
-      "status": "pending",
-      "note": "решение владельца; опционально ручной E2E backup/restore на iCloud-симуляторе (10 мин)"
+      "note": "5 реально новых (не 13), все починены + флаки-пара"
     },
     {
       "name": "Мерж fix/test-locale-pins",
-      "status": "pending",
-      "note": "решение владельца; чистые тест-фиксы, риск минимальный"
+      "status": "done",
+      "note": "f2135ba"
     },
     {
-      "name": "Push develop в origin (9+ коммитов)",
+      "name": "Мерж Ф3+график",
+      "status": "done",
+      "note": "849413e"
+    },
+    {
+      "name": "Мерж 6b Ф1",
+      "status": "done",
+      "note": "15b3be2"
+    },
+    {
+      "name": "Финальный гейт на итоговом develop",
+      "status": "done",
+      "note": "1731 passed / 12 baseline failed / 0 новых; красных стало меньше"
+    },
+    {
+      "name": "Сборка develop на симулятор Pro Max",
+      "status": "done",
+      "note": "установлен develop@356ea02"
+    },
+    {
+      "name": "Push в origin (13 коммитов)",
       "status": "pending",
-      "note": "по команде владельца"
+      "note": "утром по команде — ночью запрещено регламентом"
     },
     {
       "name": "TestFlight",
       "status": "pending",
-      "note": "по команде владельца → Nova"
+      "note": "утром по команде → Nova"
+    },
+    {
+      "name": "Взгляд владельца: график на PRO + опц. ручной E2E 6b",
+      "status": "pending",
+      "note": "единственные непокрытые агентами зазоры"
     }
   ],
   "costUsd": null,
