@@ -24,13 +24,37 @@ struct CashflowQuickEntryPanel: View {
 
     // MARK: - State
 
+    @Environment(AppState.self) private var appState
+
     @State private var amountText: String = ""
     @State private var note: String = ""
     @State private var selectedCardID: String? = nil
     @State private var isSaving: Bool = false
     @State private var showError: Bool = false
+    // Ручной оверрайд валюты транзакции. nil → валюта следует за выбранным счётом (§2.1.1).
+    @State private var overrideCurrency: String? = nil
+    @State private var showCurrencyPicker: Bool = false
+    @State private var currencySearchText: String = ""
 
     @FocusState private var amountFocused: Bool
+
+    /// Валюта выбранного счёта (легаси-карты + счета нового ядра), с фолбэком на display-валюту.
+    private var accountCurrency: String {
+        if let selectedCardID {
+            if let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == selectedCardID }) {
+                return card.currency
+            }
+            if let account = viewModel.newCoreAccountsForCashflowPicker().first(where: { $0.id.uuidString == selectedCardID }) {
+                return account.currency
+            }
+        }
+        return viewModel.state.displayCurrency
+    }
+
+    /// Итоговая валюта транзакции: ручной оверрайд либо валюта счёта.
+    private var effectiveCurrency: String {
+        overrideCurrency ?? accountCurrency
+    }
 
     // MARK: - Body
 
@@ -61,7 +85,7 @@ struct CashflowQuickEntryPanel: View {
             categoryHeader
             amountField
             noteField
-            cardPicker
+            accountAndCurrencyRow
             saveButton
             if onOpenFullEditor != nil {
                 Button(L("cashflow.quick.open_full_editor")) {
@@ -170,6 +194,84 @@ struct CashflowQuickEntryPanel: View {
             )
     }
 
+    private var accountAndCurrencyRow: some View {
+        HStack(spacing: AppSpacing.s) {
+            cardPicker
+            currencyChip
+        }
+        // Смена счёта возвращает валюту к валюте нового счёта (§2.1.1).
+        .onChange(of: selectedCardID) { _, _ in
+            overrideCurrency = nil
+        }
+    }
+
+    private var currencyChip: some View {
+        Button {
+            amountFocused = false
+            showCurrencyPicker = true
+        } label: {
+            HStack(spacing: AppSpacing.xs) {
+                Text(effectiveCurrency)
+                    .font(.millioSubheadlineMedium)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .monospacedDigit()
+                Image(systemName: "chevron.down")
+                    .font(.millioCaption)
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+            .padding(.vertical, AppSpacing.m)
+            .padding(.horizontal, AppSpacing.ml)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(kind.accentColor.opacity(0.14))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(
+                                overrideCurrency != nil
+                                    ? kind.accentColor.opacity(0.5)
+                                    : Color.white.opacity(0.1),
+                                lineWidth: 1
+                            )
+                    )
+            )
+        }
+        .sheet(isPresented: $showCurrencyPicker) {
+            currencyPickerSheet
+        }
+    }
+
+    private var currencyPickerSheet: some View {
+        let canUseCrypto = EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
+        return NavigationStack {
+            CurrencyPickerView(
+                allCodes: CurrencySelectionSupport.allCodes(includeCrypto: canUseCrypto),
+                searchText: $currencySearchText,
+                selectedCodes: SettingsManager.shared.favoriteCurrencyCodes,
+                favoriteCodes: Set(SettingsManager.shared.favoriteCurrencyCodes),
+                currentSelection: effectiveCurrency,
+                primaryPinnedCode: CashflowTransactionEditorView.operationCurrencyPrimaryPinnedCode(
+                    from: SettingsManager.shared.primaryCurrencyCode
+                ),
+                onSelect: { currency in
+                    overrideCurrency = currency
+                    showCurrencyPicker = false
+                }
+            )
+            .navigationTitle(L("cashflow.editor.transaction_currency"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("cashflow.common.cancel")) {
+                        showCurrencyPicker = false
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
     private var cardPicker: some View {
         let cards = viewModel.state.availableCards
         let selectedCard = cards.first(where: { $0.cardUniqueID == selectedCardID })
@@ -266,7 +368,7 @@ struct CashflowQuickEntryPanel: View {
         let transaction = CashflowTransaction(
             transactionType: kind.transactionType,
             amount: amount,
-            currency: viewModel.state.displayCurrency,
+            currency: effectiveCurrency,
             transactionDate: CashflowCategorySheetBootstrap.initialTransactionDate(
                 forSelectedMonth: selectedMonth
             ),
