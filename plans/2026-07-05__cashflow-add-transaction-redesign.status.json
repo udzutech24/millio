@@ -1,13 +1,14 @@
 {
   "planFile": "2026-07-05__cashflow-add-transaction-redesign.md",
   "title": "Cashflow add-flow редизайн",
-  "updated": "2026-07-08T07:25:00+03:00",
+  "updated": "2026-07-08T08:30:00+03:00",
   "phases": [
     { "name": "Ф0 — авто-транзакции вкладов", "status": "done", "note": "смержено" },
     { "name": "Ф1 — бюджет-карточка наружу", "status": "done", "note": "2026-07-07" },
     { "name": "Ф2 — избранные категории", "status": "done", "note": "2026-07-07" },
     { "name": "Ф4 — топ-3 breakdown", "status": "done", "note": "0f2592a" },
-    { "name": "Ф3 — единый шит (3a-3f)", "status": "done", "note": "feature/cashflow-phase3-unified-sheet, не мержено, ждёт проверки владельца" }
+    { "name": "Ф3 — единый шит (3a-3f)", "status": "done", "note": "feature/cashflow-phase3-unified-sheet, не мержено, ждёт проверки владельца" },
+    { "name": "§7.6 — график вариант A", "status": "done", "note": "feature/cashflow-chart-variant-a, не мержено, гейт зелёный" }
   ],
   "costUsd": null,
   "etaMinutes": null

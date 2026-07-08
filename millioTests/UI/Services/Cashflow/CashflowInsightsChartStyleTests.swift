@@ -30,39 +30,6 @@ struct CashflowInsightsChartStyleTests {
         #expect(compact.maxBarHeight > relaxed.maxBarHeight)
     }
 
-    @Test("Bar height keeps tiny values visible without breaking zero state")
-    func visibleBarHeightUsesMinimumOnlyForNonZeroValues() {
-        let selected = CashflowInsightsChartStyle.visibleBarHeight(
-            value: 1,
-            maxValue: 100,
-            maxBarHeight: 220,
-            isSelected: true
-        )
-        let unselected = CashflowInsightsChartStyle.visibleBarHeight(
-            value: 1,
-            maxValue: 100,
-            maxBarHeight: 220,
-            isSelected: false
-        )
-        let negative = CashflowInsightsChartStyle.visibleBarHeight(
-            value: -1,
-            maxValue: 100,
-            maxBarHeight: 220,
-            isSelected: false
-        )
-        let zero = CashflowInsightsChartStyle.visibleBarHeight(
-            value: 0,
-            maxValue: 100,
-            maxBarHeight: 220,
-            isSelected: false
-        )
-
-        #expect(selected == 20)
-        #expect(unselected == 16)
-        #expect(negative == 16)
-        #expect(zero == 0)
-    }
-
     @Test("Compact group width never shrinks below the configured minimum")
     func compactGroupWidthHonorsMinimum() {
         let width = CashflowInsightsChartStyle.compactGroupWidth(

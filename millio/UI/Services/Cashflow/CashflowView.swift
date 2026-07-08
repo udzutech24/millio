@@ -203,6 +203,9 @@ private struct CashflowContentView: View {
     private let neonViolet = Color(hex: "7460E0")
     private let neonPositive = Color(hex: "4ECFA0")
     private let neonNegative = Color(hex: "D45050")
+    /// Полоса сверху/снизу графика "вариант A", зарезервированная под подпись суммы выбранного
+    /// месяца — бар туда не дорастает, иначе подпись сливается с баром того же цвета.
+    private static let variantALabelMargin: CGFloat = 20
     private let primarySecondaryText = Color.white.opacity(0.78)
     private let panelFill = Color.white.opacity(0.035)
     private let innerGlassFill = Color.white.opacity(0.018)
@@ -1000,19 +1003,17 @@ private struct CashflowContentView: View {
         let granularity = cashflowInsightsGranularity
 
         return VStack(spacing: 18) {
-            cashflowInsightsBars(
+            cashflowVariantAChart(
                 presentation: presentation,
                 granularity: granularity,
-                chartHeight: CashflowInsightsControlsStyle.compactBarsHeight,
-                maxBarHeight: 120,
+                totalHeight: CashflowInsightsControlsStyle.compactBarsHeight,
+                barsAreaHeight: 120,
                 minimumGroupWidth: 50,
                 barWidth: 32,
                 labelFontSize: 13,
                 visibleWindowPeriods: compactChartVisiblePeriods,
                 onBarTap: handleChartBarTap
             )
-
-            
         }
     }
 
@@ -1427,61 +1428,6 @@ private struct CashflowContentView: View {
         }
     }
 
-    private func cashflowInsightsBars(
-        presentation: CashflowInsightsPresentation,
-        granularity: CashflowInsightsGranularity,
-        chartHeight: CGFloat,
-        maxBarHeight: CGFloat,
-        minimumGroupWidth: CGFloat,
-        barWidth: CGFloat,
-        labelFontSize: CGFloat,
-        visibleWindowPeriods: Int,
-        onBarTap: @escaping (CashflowInsightsBar) -> Void
-    ) -> some View {
-        GeometryReader { proxy in
-            let maxValue = max(
-                presentation.bars.flatMap { [abs($0.expense), abs($0.income)] }.max() ?? 0,
-                1
-            )
-            let groupWidth = CashflowInsightsChartStyle.compactGroupWidth(
-                containerWidth: proxy.size.width,
-                barCount: visibleWindowPeriods,
-                minimumGroupWidth: minimumGroupWidth
-            )
-
-            ScrollViewReader { reader in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .center, spacing: 8) {
-                        ForEach(presentation.bars) { bar in
-                            cashflowInsightsBarGroup(
-                                bar: bar,
-                                granularity: granularity,
-                                selectedPeriodStart: presentation.selectedPeriodStart,
-                                maxValue: maxValue,
-                                groupWidth: groupWidth,
-                                maxBarHeight: maxBarHeight,
-                                barWidth: barWidth,
-                                labelFontSize: labelFontSize,
-                                onTap: { onBarTap(bar) }
-                            )
-                        }
-                    }
-                }
-                .scrollClipDisabled()
-                .onAppear {
-                    scrollChartToLatestPeriod(reader: reader, bars: presentation.bars)
-                }
-                .onChange(of: presentation.bars.map(\.periodStart)) { _, _ in
-                    scrollChartToLatestPeriod(reader: reader, bars: presentation.bars)
-                }
-            }
-            .frame(maxHeight: .infinity, alignment: .bottomLeading)
-            .padding(.horizontal, 2)
-            .padding(.top, 6)
-        }
-        .frame(height: chartHeight)
-    }
-
     private var cashflowFullScreenChart: some View {
         let presentation = cashflowFullScreenPresentation
         let granularity = cashflowInsightsGranularity
@@ -1492,26 +1438,89 @@ private struct CashflowContentView: View {
                 barCount: presentation.bars.count,
                 visiblePeriods: fullScreenChartVisiblePeriods
             )
-            let maxValue = max(
-                presentation.bars.flatMap { [abs($0.expense), abs($0.income)] }.max() ?? 0,
-                1
+
+            cashflowVariantAChart(
+                presentation: presentation,
+                granularity: granularity,
+                totalHeight: 332,
+                barsAreaHeight: metrics.maxBarHeight,
+                groupWidth: metrics.groupWidth,
+                spacing: metrics.spacing,
+                barWidth: metrics.barWidth,
+                labelFontSize: metrics.labelFontSize,
+                bottomPadding: AppSpacing.ml,
+                onBarTap: handleChartBarTap
             )
+        }
+        .frame(height: 332)
+    }
+
+    /// Вариант A редизайна графика Cashflow (§7.6 плана): единое полотно с общей нулевой осью
+    /// вместо прежних плиток-«таблеток» на каждый месяц. Высота баров строго пропорциональна
+    /// сумме на единой шкале (см. `CashflowChartVariantALayout`), поверх — net-линия с точками.
+    private func cashflowVariantAChart(
+        presentation: CashflowInsightsPresentation,
+        granularity: CashflowInsightsGranularity,
+        totalHeight: CGFloat,
+        barsAreaHeight: CGFloat,
+        minimumGroupWidth: CGFloat = 50,
+        groupWidth: CGFloat? = nil,
+        spacing: CGFloat = 8,
+        barWidth: CGFloat,
+        labelFontSize: CGFloat,
+        visibleWindowPeriods: Int? = nil,
+        bottomPadding: CGFloat = 0,
+        onBarTap: @escaping (CashflowInsightsBar) -> Void
+    ) -> some View {
+        GeometryReader { proxy in
+            let resolvedGroupWidth = groupWidth ?? CashflowInsightsChartStyle.compactGroupWidth(
+                containerWidth: proxy.size.width,
+                barCount: visibleWindowPeriods ?? presentation.bars.count,
+                minimumGroupWidth: minimumGroupWidth
+            )
+            let halfHeight = barsAreaHeight / 2
+            // Резервируем полосу под подпись суммы выбранного месяца сверху/снизу —
+            // иначе при максимальном значении бар доходит до самого края полотна и подпись
+            // того же оттенка зелёного/красного сливается с баром (нечитаемо, а не просто "тесно").
+            let usableHalfHeight = max(halfHeight - Self.variantALabelMargin, 10)
+            let layouts = CashflowChartVariantALayout.barLayouts(
+                bars: presentation.bars,
+                halfHeight: usableHalfHeight
+            )
+            let totalWidth = CGFloat(presentation.bars.count) * resolvedGroupWidth
+                + CGFloat(max(presentation.bars.count - 1, 0)) * spacing
 
             ScrollViewReader { reader in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .center, spacing: metrics.spacing) {
-                        ForEach(presentation.bars) { bar in
-                            cashflowInsightsBarGroup(
-                                bar: bar,
-                                granularity: granularity,
+                    ZStack(alignment: .topLeading) {
+                        Canvas { context, size in
+                            drawVariantACanvas(
+                                context: &context,
+                                size: size,
+                                bars: presentation.bars,
+                                layouts: layouts,
                                 selectedPeriodStart: presentation.selectedPeriodStart,
-                                maxValue: maxValue,
-                                groupWidth: metrics.groupWidth,
-                                maxBarHeight: metrics.maxBarHeight,
-                                barWidth: metrics.barWidth,
-                                labelFontSize: metrics.labelFontSize,
-                                onTap: { handleChartBarTap(bar) }
+                                granularity: granularity,
+                                groupWidth: resolvedGroupWidth,
+                                spacing: spacing,
+                                barWidth: barWidth,
+                                halfHeight: halfHeight
                             )
+                        }
+                        .frame(width: totalWidth, height: barsAreaHeight)
+
+                        HStack(alignment: .top, spacing: spacing) {
+                            ForEach(Array(zip(presentation.bars, layouts)), id: \.0.id) { bar, _ in
+                                variantAColumn(
+                                    bar: bar,
+                                    granularity: granularity,
+                                    selectedPeriodStart: presentation.selectedPeriodStart,
+                                    groupWidth: resolvedGroupWidth,
+                                    barsAreaHeight: barsAreaHeight,
+                                    labelFontSize: labelFontSize,
+                                    onTap: { onBarTap(bar) }
+                                )
+                            }
                         }
                     }
                 }
@@ -1525,23 +1534,126 @@ private struct CashflowContentView: View {
             }
             .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, 2)
-            .padding(.top, 12)
-            .padding(.bottom, 14)
+            .padding(.top, AppSpacing.s)
+            .padding(.bottom, bottomPadding)
         }
-        .frame(height: 332)
+        .frame(height: totalHeight)
     }
 
+    /// Рисует общую фоновую сетку, зеркальные бары income/expense и net-линию с точками —
+    /// одним полотном на весь видимый диапазон (а не отдельной плиткой на месяц).
+    private func drawVariantACanvas(
+        context: inout GraphicsContext,
+        size: CGSize,
+        bars: [CashflowInsightsBar],
+        layouts: [CashflowChartVariantABar],
+        selectedPeriodStart: Date,
+        granularity: CashflowInsightsGranularity,
+        groupWidth: CGFloat,
+        spacing: CGFloat,
+        barWidth: CGFloat,
+        halfHeight: CGFloat
+    ) {
+        let zeroY = halfHeight
+
+        var edgePath = Path()
+        edgePath.move(to: CGPoint(x: 0, y: 1))
+        edgePath.addLine(to: CGPoint(x: size.width, y: 1))
+        edgePath.move(to: CGPoint(x: 0, y: size.height - 1))
+        edgePath.addLine(to: CGPoint(x: size.width, y: size.height - 1))
+        context.stroke(edgePath, with: .color(Color.white.opacity(0.06)), lineWidth: 1)
+
+        var zeroPath = Path()
+        zeroPath.move(to: CGPoint(x: 0, y: zeroY))
+        zeroPath.addLine(to: CGPoint(x: size.width, y: zeroY))
+        context.stroke(zeroPath, with: .color(Color.white.opacity(0.18)), lineWidth: 1)
+
+        let comparisonGranularity: Calendar.Component = {
+            switch granularity {
+            case .year: return .year
+            case .month: return .month
+            case .week: return .weekOfYear
+            }
+        }()
+
+        var netPoints: [(point: CGPoint, isPositive: Bool, isSelected: Bool)] = []
+
+        for (index, pair) in zip(bars, layouts).enumerated() {
+            let (bar, layout) = pair
+            let isSelected = Calendar.current.isDate(
+                bar.periodStart,
+                equalTo: selectedPeriodStart,
+                toGranularity: comparisonGranularity
+            )
+            let columnX = CGFloat(index) * (groupWidth + spacing)
+            let centerX = columnX + groupWidth / 2
+            let opacity = isSelected ? 1.0 : 0.42
+
+            if isSelected {
+                let highlightRect = CGRect(x: columnX, y: 0, width: groupWidth, height: size.height)
+                context.stroke(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous).path(in: highlightRect),
+                    with: .color(Color.white.opacity(0.10)),
+                    lineWidth: 1
+                )
+            }
+
+            if layout.incomeHeight > 0 {
+                let rect = CGRect(
+                    x: centerX - barWidth / 2,
+                    y: zeroY - layout.incomeHeight,
+                    width: barWidth,
+                    height: layout.incomeHeight
+                )
+                let path = RoundedRectangle(cornerRadius: min(10, barWidth / 2), style: .continuous).path(in: rect)
+                context.fill(path, with: .color(neonPositive.opacity(opacity)))
+            }
+            if layout.expenseHeight > 0 {
+                let rect = CGRect(
+                    x: centerX - barWidth / 2,
+                    y: zeroY,
+                    width: barWidth,
+                    height: layout.expenseHeight
+                )
+                let path = RoundedRectangle(cornerRadius: min(10, barWidth / 2), style: .continuous).path(in: rect)
+                context.fill(path, with: .color(neonNegative.opacity(opacity)))
+            }
+
+            netPoints.append((CGPoint(x: centerX, y: zeroY - layout.netOffset), layout.isPositiveNet, isSelected))
+        }
+
+        if netPoints.count > 1 {
+            var linePath = Path()
+            linePath.move(to: netPoints[0].point)
+            for entry in netPoints.dropFirst() {
+                linePath.addLine(to: entry.point)
+            }
+            context.stroke(linePath, with: .color(Color.white.opacity(0.35)), lineWidth: 1.5)
+        }
+
+        for entry in netPoints {
+            let radius: CGFloat = entry.isSelected ? 4.5 : 3
+            let dotColor = entry.isPositive ? neonPositive : neonNegative
+            let rect = CGRect(x: entry.point.x - radius, y: entry.point.y - radius, width: radius * 2, height: radius * 2)
+            context.fill(Path(ellipseIn: rect), with: .color(dotColor))
+            if entry.isSelected {
+                let glowRect = rect.insetBy(dx: -3, dy: -3)
+                context.fill(Path(ellipseIn: glowRect), with: .color(dotColor.opacity(0.22)))
+            }
+        }
+    }
+
+    /// Тач-таргет и подписи одного месяца: сумма income/expense видна только у выбранного месяца,
+    /// сами бары рисуются в `drawVariantACanvas` — колонка лишь задаёт геометрию и лейбл периода.
     @ViewBuilder
-    private func cashflowInsightsBarGroup(
+    private func variantAColumn(
         bar: CashflowInsightsBar,
         granularity: CashflowInsightsGranularity,
         selectedPeriodStart: Date,
-        maxValue: Double,
         groupWidth: CGFloat,
-        maxBarHeight: CGFloat,
-        barWidth: CGFloat,
+        barsAreaHeight: CGFloat,
         labelFontSize: CGFloat,
-        onTap: (() -> Void)? = nil
+        onTap: @escaping () -> Void
     ) -> some View {
         let comparisonGranularity: Calendar.Component = {
             switch granularity {
@@ -1555,141 +1667,68 @@ private struct CashflowContentView: View {
             equalTo: selectedPeriodStart,
             toGranularity: comparisonGranularity
         )
-        let halfHeight = maxBarHeight / 2
-        let incomeHeight = CashflowInsightsChartStyle.visibleBarHeight(
-            value: bar.income, maxValue: maxValue, maxBarHeight: halfHeight, isSelected: isSelected
-        )
-        let expenseHeight = CashflowInsightsChartStyle.visibleBarHeight(
-            value: bar.expense, maxValue: maxValue, maxBarHeight: halfHeight, isSelected: isSelected
-        )
-        let netGlow = bar.income >= bar.expense ? neonPositive : neonNegative
 
-        let content = VStack(spacing: 0) {
-            // ── Доходы — растут вверх от нулевой линии ──────────────
-            ZStack(alignment: .bottom) {
-                Color.clear.frame(height: halfHeight)
-                if incomeHeight > 0 {
-                    biChartBar(
-                        height: incomeHeight,
-                        width: barWidth,
-                        fill: LinearGradient(
-                            colors: [Color(hex: "4ECFA0"), Color(hex: "1E8A62"), Color(hex: "091A12")],
-                            startPoint: .top, endPoint: .bottom
-                        ),
-                        glowColor: neonPositive,
-                        isSelected: isSelected,
-                        shineAtTop: true
-                    )
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(width: groupWidth, height: barsAreaHeight)
+                .overlay(alignment: .top) {
+                    if isSelected, bar.income > 0 {
+                        Text("+\(compactChartAmount(bar.income))")
+                            .font(.millioCaption2)
+                            .foregroundStyle(neonPositive)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.55)
+                            // Явный width — иначе подпись может запросить больше места, чем своя
+                            // колонка, и вылезти за пределы полотна графика (обрезается соседями).
+                            .frame(width: groupWidth)
+                            .padding(.top, AppSpacing.xs)
+                    }
                 }
-            }
-
-            // ── Нулевая линия ─────────────────────────────────────────
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [.clear, Color.white.opacity(isSelected ? 0.22 : 0.10), .clear],
-                        startPoint: .leading, endPoint: .trailing
-                    )
-                )
-                .frame(height: 1.5)
-
-            // ── Расходы — растут вниз от нулевой линии ───────────────
-            ZStack(alignment: .top) {
-                Color.clear.frame(height: halfHeight)
-                if expenseHeight > 0 {
-                    biChartBar(
-                        height: expenseHeight,
-                        width: barWidth,
-                        fill: LinearGradient(
-                            colors: [Color(hex: "3B1212"), Color(hex: "C44444"), Color(hex: "C45858")],
-                            startPoint: .top, endPoint: .bottom
-                        ),
-                        glowColor: neonNegative,
-                        isSelected: isSelected,
-                        shineAtTop: false
-                    )
+                .overlay(alignment: .bottom) {
+                    if isSelected, bar.expense > 0 {
+                        Text("−\(compactChartAmount(bar.expense))")
+                            .font(.millioCaption2)
+                            .foregroundStyle(neonNegative)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.55)
+                            .frame(width: groupWidth)
+                            .padding(.bottom, AppSpacing.xs)
+                    }
                 }
-            }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onTap()
+                    fireLightImpact()
+                }
 
-            // ── Лейбл периода ─────────────────────────────────────────
+            // Динамический размер шрифта лейбла периода зависит от ширины колонки —
+            // считается в CashflowInsightsChartStyle/Style-метриках, фиксированный AppTypography-токен
+            // тут не подходит (адаптив под разные экраны и число видимых месяцев).
             Text(bar.label)
                 .font(.system(size: labelFontSize, weight: .medium))
-                .foregroundStyle(AppColors.textPrimary.opacity(bar.isPlaceholder ? 0.50 : 0.92))
+                .foregroundStyle(AppColors.textPrimary.opacity(isSelected ? 0.95 : (bar.isPlaceholder ? 0.45 : 0.65)))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
+                .padding(.horizontal, AppSpacing.s)
+                .padding(.vertical, AppSpacing.xs)
                 .background(
                     Capsule()
                         .fill(Color.white.opacity(isSelected ? 0.15 : 0.0))
                 )
                 .frame(maxWidth: .infinity)
-                .padding(.top, 8)
-                .padding(.bottom, 10)
+                .padding(.top, AppSpacing.s)
         }
         .frame(width: groupWidth)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(isSelected ? 0.11 : (bar.isPlaceholder ? 0.06 : 0.025)),
-                            Color.white.opacity(isSelected ? 0.04 : 0.0)
-                        ],
-                        startPoint: .top, endPoint: .bottom
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(isSelected ? 0.15 : 0.05), lineWidth: 1)
-                )
-        )
-        .shadow(color: netGlow.opacity(isSelected ? 0.15 : 0.0), radius: isSelected ? 24 : 0, x: 0, y: 0)
-        .offset(y: isSelected ? -3 : 0)
-        .animation(.spring(response: 0.26, dampingFraction: 0.82), value: isSelected)
-
-        if let onTap {
-            Button { onTap(); fireLightImpact() } label: { content }
-                .buttonStyle(.plain)
-        } else {
-            content
-        }
+        .animation(AppAnimation.spring, value: isSelected)
     }
 
-    private func biChartBar(
-        height: CGFloat,
-        width: CGFloat,
-        fill: LinearGradient,
-        glowColor: Color,
-        isSelected: Bool,
-        shineAtTop: Bool
-    ) -> some View {
-        let cornerRadius = min(14, width / 2)
-        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(fill)
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.20), .clear, Color.black.opacity(0.06)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            .overlay(alignment: shineAtTop ? .top : .bottom) {
-                Capsule(style: .continuous)
-                    .fill(Color.white.opacity(isSelected ? 0.26 : 0.0))
-                    .frame(width: width * 0.62, height: 5)
-                    .blur(radius: 2.5)
-                    .padding(shineAtTop ? .top : .bottom, 5)
-            }
-            .frame(width: width, height: height)
-            .shadow(
-                color: glowColor.opacity(isSelected ? 0.32 : 0.0),
-                radius: isSelected ? 12 : 0,
-                x: 0,
-                y: shineAtTop ? -3 : 3
-            )
+    /// Компактная сумма для подписи бара ("120 тыс.", "1,2 млн" — локализуется системным форматтером).
+    private func compactChartAmount(_ value: Double) -> String {
+        value.formatted(
+            .number
+                .precision(.fractionLength(0...1))
+                .notation(.compactName)
+        )
     }
 
     private func handleChartBarTap(_ bar: CashflowInsightsBar) {
