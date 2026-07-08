@@ -398,6 +398,10 @@ struct DashboardView: View {
             startPoint: .leading,
             endPoint: .trailing
         )
+        // Обводка — всегда плоский однотонный акцент (первый цвет градиента), а не сам градиент:
+        // раньше «Курсы» (моноцвет) и «Кешбэк» (двутоновый градиент) выглядели по-разному
+        // стилистически, хотя оба чипа — один компонент.
+        let strokeColor = accentColors.first ?? Color.white
         return Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
@@ -414,7 +418,7 @@ struct DashboardView: View {
                     .fill(Color.white.opacity(0.05))
                     .overlay(
                         Capsule()
-                            .strokeBorder(accent.opacity(0.60), lineWidth: 1)
+                            .strokeBorder(strokeColor.opacity(0.55), lineWidth: 1)
                     )
             )
         }

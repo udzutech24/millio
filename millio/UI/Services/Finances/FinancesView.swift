@@ -476,6 +476,8 @@ struct FinancesMainTabView: View {
     var onNavigateToDynamics: (() -> Void)? = nil
     @State private var draggedGroupID: String?
     @State private var isEmptyIntroHidden: Bool = FinancesEmptyStateIntroPrefs().isHidden()
+    /// Разворот сводной строки «Скрытые группы (N)» — сессионный, без персистентности.
+    @State private var isHiddenGroupsRowExpanded = false
     @State private var showFinanceSettingsSheet = false
     @State private var showMassTickerImportSheet = false
     // Наблюдает за изменениями балансов через SwiftData — гарантирует перерисовку при изменении balance/amount
@@ -850,16 +852,70 @@ struct FinancesMainTabView: View {
         }
     }
 
+    /// Группа считается пустой, если в ней нет ни легаси-счетов, ни счетов нового ядра —
+    /// такие группы сворачиваются в одну строку, чтобы не засорять список пустыми заголовками.
+    private func isGroupEmpty(_ group: FinanceGroup) -> Bool {
+        viewModel.orderedAccounts(for: group).isEmpty && viewModel.newCoreAccounts(matching: group).isEmpty
+    }
+
     private func groupsListView(_ groups: [FinanceGroup]) -> some View {
-        VStack(spacing: 10) {
-            ForEach(groups) { group in
+        let nonEmptyGroups = groups.filter { !isGroupEmpty($0) }
+        let emptyGroups = groups.filter { isGroupEmpty($0) }
+
+        return VStack(spacing: 10) {
+            ForEach(nonEmptyGroups) { group in
                 FinanceGroupRow(
                     group: group,
                     viewModel: viewModel,
                     draggedGroupID: $draggedGroupID
                 )
             }
+
+            if !emptyGroups.isEmpty {
+                hiddenGroupsRow(count: emptyGroups.count)
+
+                if isHiddenGroupsRowExpanded {
+                    ForEach(emptyGroups) { group in
+                        FinanceGroupRow(
+                            group: group,
+                            viewModel: viewModel,
+                            draggedGroupID: $draggedGroupID
+                        )
+                    }
+                }
+            }
         }
+    }
+
+    private func hiddenGroupsRow(count: Int) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                isHiddenGroupsRowExpanded.toggle()
+            }
+        } label: {
+            HStack(spacing: AppSpacing.m) {
+                Text(String(format: L("finances.main.hidden_groups_row"), count))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppColors.textTertiary)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.textTertiary.opacity(0.9))
+                    .rotationEffect(.degrees(isHiddenGroupsRowExpanded ? 90 : 0))
+            }
+            .padding(.horizontal, FinancesMainLayoutPolicy.horizontalPadding)
+            .padding(.vertical, AppSpacing.m)
+            .frame(maxWidth: .infinity)
+            .background(
+                FinanceChromeCardBackground(
+                    cornerRadius: FinanceScreenChrome.groupRowCornerRadius,
+                    accentColor: AppColors.textTertiary
+                )
+            )
+        }
+        .buttonStyle(.plain)
     }
     
     // MARK: - Helpers

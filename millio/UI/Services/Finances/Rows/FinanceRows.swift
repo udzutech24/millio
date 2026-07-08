@@ -110,6 +110,70 @@ private func financeAmountLabel(
     }
 }
 
+// MARK: - Group Product Category (иконка вместо цветной полоски)
+
+/// Обобщённая товарная категория счетов группы — для иконки-бейджа в строке группы.
+/// Не путать с `FinanceAccountType`/`AccountKind` — это UI-упрощение для отображения одной иконки
+/// на группу, которая может содержать разнородные счета.
+private enum FinanceGroupProductCategory: Hashable {
+    case deposit
+    case investment
+    case credit
+    case card
+    case other
+
+    /// Порядок разрешения ничьих при подсчёте доминирующей категории.
+    static let priorityOrder: [FinanceGroupProductCategory] = [.investment, .credit, .deposit, .card, .other]
+
+    init(legacyType: FinanceAccountType) {
+        switch legacyType {
+        case .card: self = .card
+        case .credit: self = .credit
+        case .investment: self = .investment
+        }
+    }
+
+    init(kind: AccountKind) {
+        switch kind {
+        case .deposit: self = .deposit
+        case .loan, .debt: self = .credit
+        case .marketInvestment: self = .investment
+        case .cash, .debitCard, .bankAccount: self = .card
+        case .manualAsset: self = .other
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .deposit: return "banknote.fill"
+        case .investment: return "chart.line.uptrend.xyaxis"
+        case .credit: return "doc.text.fill"
+        case .card: return "creditcard.fill"
+        case .other: return "square.grid.2x2.fill"
+        }
+    }
+}
+
+/// Квадратная иконка-бейдж типа продукта группы — заменяет цветную вертикальную полоску-акцент.
+private struct FinanceGroupTypeIconView: View {
+    let category: FinanceGroupProductCategory
+    let accentColor: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.groupRowTypeIconCornerRadius, style: .continuous)
+            .fill(accentColor.opacity(0.16))
+            .overlay(
+                Image(systemName: category.iconName)
+                    .font(.system(size: FinancesMainLayoutPolicy.groupRowTypeIconSize * 0.44, weight: .semibold))
+                    .foregroundStyle(accentColor)
+            )
+            .frame(
+                width: FinancesMainLayoutPolicy.groupRowTypeIconSize,
+                height: FinancesMainLayoutPolicy.groupRowTypeIconSize
+            )
+    }
+}
+
 // MARK: - Finance Group Row
 
 struct FinanceGroupRow: View {
@@ -117,7 +181,9 @@ struct FinanceGroupRow: View {
     @ObservedObject var viewModel: FinanceViewModel
     @Binding var draggedGroupID: String?
 
-    private let contentLeadingInset: CGFloat = 28
+    // Раньше 28pt резервировали место под цветную полоску-акцент слева от заголовка.
+    // Полоску заменила иконка типа продукта (см. FinanceGroupTypeIconView) — инсет уменьшен.
+    private let contentLeadingInset: CGFloat = AppSpacing.l
     private let contentTrailingInset: CGFloat = 16
     private let expandedDividerLeadingInset: CGFloat = 64
     
@@ -132,7 +198,34 @@ struct FinanceGroupRow: View {
     private var groupTotal: Double {
         viewModel.state.groupTotals[groupID] ?? 0.0
     }
-    
+
+    /// Счета группы обоих миров (легаси FinanceAccount + новое ядро event-sourcing).
+    private var legacyAccounts: [FinanceAccount] {
+        viewModel.orderedAccounts(for: group)
+    }
+
+    private var totalAccountsCount: Int {
+        legacyAccounts.count + newCoreAccounts.count
+    }
+
+    /// Доминирующая товарная категория группы для иконки-бейджа (заменяет цветную полоску).
+    /// Группа может содержать разные типы счетов — берём большинство, при ничьей приоритет
+    /// фиксированный (инвестиции > кредит > вклад > карта), пустая группа = "прочее".
+    private var dominantProductCategory: FinanceGroupProductCategory {
+        var counts: [FinanceGroupProductCategory: Int] = [:]
+        for account in legacyAccounts {
+            let category = FinanceGroupProductCategory(legacyType: account.accountType)
+            counts[category, default: 0] += 1
+        }
+        for account in newCoreAccounts {
+            let category = FinanceGroupProductCategory(kind: account.kind)
+            counts[category, default: 0] += 1
+        }
+        guard let maxCount = counts.values.max() else { return .other }
+        let topCategories = counts.filter { $0.value == maxCount }.keys
+        return FinanceGroupProductCategory.priorityOrder.first { topCategories.contains($0) } ?? .other
+    }
+
     var body: some View {
         groupContent
             .background(groupBackground)
@@ -165,7 +258,9 @@ struct FinanceGroupRow: View {
     
     private var groupHeader: some View {
         GeometryReader { proxy in
-            HStack(spacing: 12) {
+            HStack(spacing: AppSpacing.m) {
+                FinanceGroupTypeIconView(category: dominantProductCategory, accentColor: group.color)
+
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         viewModel.handle(.toggleGroupExpanded(groupID))
@@ -179,7 +274,7 @@ struct FinanceGroupRow: View {
 
                 dragChevron
             }
-            .padding(.vertical, 16)
+            .padding(.vertical, AppSpacing.l)
             .padding(.leading, contentLeadingInset)
             .padding(.trailing, contentTrailingInset)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -191,7 +286,7 @@ struct FinanceGroupRow: View {
                     }
             )
         }
-        .frame(height: 56)
+        .frame(height: FinancesMainLayoutPolicy.groupRowHeaderHeight)
     }
     
     private func headerContent(containerWidth: CGFloat) -> some View {
@@ -205,7 +300,7 @@ struct FinanceGroupRow: View {
     }
     
     private var groupNameSection: some View {
-        HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: AppSpacing.xs / 2) {
             OverflowFadeText(
                 text: group.name,
                 font: .system(size: 16, weight: .semibold),
@@ -213,6 +308,12 @@ struct FinanceGroupRow: View {
                 fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
                 fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
             )
+
+            // Явно без процентов динамики — приросты живут только на экране «Динамика».
+            Text(String(format: L("finances.group.accounts_count"), totalAccountsCount))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AppColors.textTertiary.opacity(0.9))
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .layoutPriority(1)
@@ -348,19 +449,13 @@ struct FinanceGroupRow: View {
         }
     }
     
+    // Цветной акцент группы теперь несёт иконка типа продукта (FinanceGroupTypeIconView),
+    // отдельная капсула-полоска слева больше не нужна.
     private var groupBackground: some View {
-        let accentColor = group.color
-        return FinanceChromeCardBackground(
+        FinanceChromeCardBackground(
             cornerRadius: FinanceScreenChrome.groupRowCornerRadius,
-            accentColor: accentColor
+            accentColor: group.color
         )
-            .overlay(alignment: .leading) {
-                Capsule(style: .continuous)
-                    .fill(accentColor.opacity(0.9))
-                    .frame(width: 2.5)
-                    .padding(.vertical, 14)
-                    .padding(.leading, 12)
-            }
     }
     
     private func loadGroupTotal() async {

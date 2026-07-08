@@ -23,7 +23,9 @@ struct FinancesMainLayoutPolicyTests {
 
         #expect(paddingWithFAB > paddingWithoutFAB)
         #expect(paddingWithoutFAB > CGFloat.zero)
-        #expect(paddingWithFAB == FinancesMainLayoutPolicy.fabDiameter + FinancesMainLayoutPolicy.fabBottomPadding)
+        // + AppSpacing.m — иначе последняя строка списка визуально касается FAB без зазора
+        // (найдено в ходе полировки экрана «Счета», 2026-07-08).
+        #expect(paddingWithFAB == FinancesMainLayoutPolicy.fabDiameter + FinancesMainLayoutPolicy.fabBottomPadding + AppSpacing.m)
         #expect(paddingWithoutFAB == FinancesMainLayoutPolicy.scrollBottomPaddingWithoutFAB)
     }
 

@@ -66,12 +66,15 @@ struct TotalBalanceWidget: View {
                 Button(action: { onTap?() }) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(L("Общий баланс"))
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.millioCallout)
                             .foregroundStyle(Color.white.opacity(0.55))
 
+                        // Баланс — доминанта иерархии дашборда: крупнее и жирнее любых других
+                        // чисел на экране (millioDisplay), моноширинные цифры не "прыгают" при countUp.
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             Text(formattedBalance)
-                                .font(.system(size: 28, weight: .bold))
+                                .font(.millioDisplay)
+                                .monospacedDigit()
                                 .foregroundStyle(Color.white)
                                 .minimumScaleFactor(0.6)
                                 .lineLimit(1)
@@ -114,8 +117,8 @@ struct TotalBalanceWidget: View {
             .buttonStyle(.plain)
             .disabled(onSparklineTap == nil)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
+        .padding(.horizontal, AppSpacing.xl)
+        .padding(.vertical, AppSpacing.l)
         .background(cardBackground)
         .onAppear {
             guard !hasCountedUp else { return }
@@ -167,6 +170,7 @@ struct TotalBalanceWidget: View {
         HStack(spacing: 0) {
             Text(text)
                 .font(.system(size: 12, weight: .medium))
+                .monospacedDigit()
                 .foregroundStyle(color)
             if daysCount > 0 {
                 Text("  ·  \(daysCount)\(L("dashboard.balance.days_suffix"))")
@@ -219,11 +223,6 @@ struct TotalBalanceWidget: View {
     // MARK: - Card background
 
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(Color.white.opacity(0.06))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color.white.opacity(0.10), lineWidth: 0.7)
-            )
+        DashboardCardBackground()
     }
 }

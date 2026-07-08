@@ -14,6 +14,11 @@ struct CashflowSummaryWidget: View {
     var isAmountHidden: Bool = false
     var onTap: (() -> Void)? = nil
 
+    /// Фикс высоты мини-плиток — иначе более длинная подпись ("Изм. активов") иногда
+    /// переносится на 2 строки, а короткие ("Доходы"/"Расходы") остаются в 1, и плитки
+    /// визуально "прыгают" по высоте в одном ряду.
+    private let metricTileMinHeight: CGFloat = 54
+
     private var currencySymbol: String {
         MonetaCurrency(rawValue: displayCurrency)?.symbol ?? displayCurrency
     }
@@ -29,9 +34,9 @@ struct CashflowSummaryWidget: View {
             headerRow
             metricRow
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
-        .background(cardBackground)
+        .padding(.horizontal, AppSpacing.xl)
+        .padding(.vertical, AppSpacing.l)
+        .background(DashboardCardBackground())
     }
 
     // MARK: - Header
@@ -43,9 +48,12 @@ struct CashflowSummaryWidget: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.55))
 
+                // Заметно меньше баланса на «Общий баланс» (30pt) — баланс остаётся
+                // доминантой иерархии дашборда, кэшфлоу вторичен.
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(formattedSigned(cashflowTotal))
-                        .font(.system(size: 28, weight: .bold))
+                        .font(.system(size: 26, weight: .bold))
+                        .monospacedDigit()
                         .foregroundStyle(totalColor)
                         .minimumScaleFactor(0.55)
                         .lineLimit(1)
@@ -123,11 +131,12 @@ struct CashflowSummaryWidget: View {
 
             Text(showSign ? formattedSigned(value) + " \(currencySymbol)" : formatted(abs(value)) + " \(currencySymbol)")
                 .font(.system(size: 12, weight: .semibold))
+                .monospacedDigit()
                 .foregroundStyle(valueColor)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: metricTileMinHeight, alignment: .topLeading)
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
         .background(
@@ -160,14 +169,4 @@ struct CashflowSummaryWidget: View {
         return "\(sign)\(formatted(abs(value)))"
     }
 
-    // MARK: - Card background
-
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(Color.white.opacity(0.06))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color.white.opacity(0.10), lineWidth: 0.7)
-            )
-    }
 }

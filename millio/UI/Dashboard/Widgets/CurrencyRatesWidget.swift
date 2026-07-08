@@ -47,9 +47,9 @@ struct CurrencyRatesWidget: View {
                     rateRows
                 }
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 16)
-            .background(cardBackground)
+            .padding(.horizontal, AppSpacing.xl)
+            .padding(.vertical, AppSpacing.l)
+            .background(DashboardCardBackground())
         }
         .buttonStyle(.plain)
         .task { await loadRates() }
@@ -87,6 +87,7 @@ struct CurrencyRatesWidget: View {
                     Spacer()
                     Text(row.formattedRate)
                         .font(.system(size: 15, weight: .medium))
+                        .monospacedDigit()
                         .foregroundStyle(Color.white.opacity(0.75))
                 }
             }
@@ -112,17 +113,6 @@ struct CurrencyRatesWidget: View {
                 }
             }
         }
-    }
-
-    // MARK: - Background
-
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(Color.white.opacity(0.06))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color.white.opacity(0.10), lineWidth: 0.7)
-            )
     }
 
     // MARK: - Data

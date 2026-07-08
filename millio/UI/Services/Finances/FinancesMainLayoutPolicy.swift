@@ -19,6 +19,11 @@ enum FinancesMainLayoutPolicy {
     static let groupRowAmountMaxWidth: CGFloat = 126
     static let groupRowNameFadeStart: CGFloat = 0.90
     static let groupRowNameFadeEnd: CGFloat = 0.98
+    /// Квадратная иконка типа продукта в строке группы (заменяет цветную полоску-акцент).
+    static let groupRowTypeIconSize: CGFloat = 32
+    static let groupRowTypeIconCornerRadius: CGFloat = 9
+    /// Высота шапки группы выросла под вторую строку "N счетов" под названием.
+    static let groupRowHeaderHeight: CGFloat = 64
     static let fabDiameter: CGFloat = FinanceScreenChrome.fabDiameter
     static let fabIconSize: CGFloat = FinanceScreenChrome.fabIconSize
     static let fabTrailingPadding: CGFloat = 20
@@ -33,7 +38,8 @@ enum FinancesMainLayoutPolicy {
     static func scrollContentBottomPadding(showsAddFAB: Bool) -> CGFloat {
         // Привязываем отступ к реальным размерам FAB, чтобы не было "пустой пропасти".
         // Раньше это был магический 92, который на некоторых девайсах визуально ронял экран слишком низко.
-        showsAddFAB ? (fabDiameter + fabBottomPadding) : scrollBottomPaddingWithoutFAB
+        // + AppSpacing.m — иначе последняя строка списка визуально касается FAB без зазора.
+        showsAddFAB ? (fabDiameter + fabBottomPadding + AppSpacing.m) : scrollBottomPaddingWithoutFAB
     }
 
     static func groupRowAmountWidth(containerWidth: CGFloat) -> CGFloat {
