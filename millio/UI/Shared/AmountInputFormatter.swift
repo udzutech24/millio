@@ -51,6 +51,28 @@ enum AmountInputFormatter {
         return trimLeadingZeros(result)
     }
 
+    /// Разделитель дробной части для ОТОБРАЖЕНИЯ (не для парсинга/хранения — там всегда
+    /// канонический "."). RU показывает ",", EN/zh-Hans — ".".
+    static func localizedDecimalSeparator(locale: Locale = AppLocalization.currentAppLocale) -> String {
+        locale.decimalSeparator ?? "."
+    }
+
+    /// Как `sanitize`, но результат форматируется под разделитель текущего языка приложения —
+    /// используется только для живого поля ввода суммы (§7.4: разделитель по локали ru — ",").
+    /// Канонический вид с "." по-прежнему возвращают `sanitize`/`parse`/`plainString` — `sanitize()`
+    /// нормализует "," обратно в "." на входе, поэтому хранить локализованный разделитель в
+    /// bound-строке безопасно.
+    static func sanitizeForDisplay(
+        _ text: String,
+        maxFractionDigits: Int = defaultFractionDigits,
+        locale: Locale = AppLocalization.currentAppLocale
+    ) -> String {
+        let canonical = sanitize(text, maxFractionDigits: maxFractionDigits)
+        let separator = localizedDecimalSeparator(locale: locale)
+        guard separator != ".", canonical.contains(".") else { return canonical }
+        return canonical.replacingOccurrences(of: ".", with: separator)
+    }
+
     static func parse(_ text: String, maxFractionDigits: Int = marketQuantityFractionDigits) -> Double? {
         let normalized = sanitize(text, maxFractionDigits: maxFractionDigits)
         return Double(normalized)

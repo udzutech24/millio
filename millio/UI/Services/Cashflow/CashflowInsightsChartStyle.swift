@@ -62,19 +62,6 @@ enum CashflowInsightsChartStyle {
         max((containerWidth - 24) / CGFloat(max(barCount, 1)), minimumGroupWidth)
     }
 
-    static func visibleBarHeight(
-        value: Double,
-        maxValue: Double,
-        maxBarHeight: CGFloat,
-        isSelected: Bool
-    ) -> CGFloat {
-        let magnitude = abs(value)
-        guard magnitude > epsilon else { return 0 }
-        let normalizedHeight = maxValue > epsilon ? CGFloat(magnitude / maxValue) : 0
-        let minimumHeight: CGFloat = isSelected ? 20 : 16
-        return max(minimumHeight, normalizedHeight * maxBarHeight)
-    }
-
     static func barLabel(
         for date: Date,
         granularity: CashflowInsightsGranularity,
