@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct CashflowQuickEntryPanel: View {
 
@@ -161,7 +162,7 @@ struct CashflowQuickEntryPanel: View {
     private var amountField: some View {
         TextField("0", text: $amountText)
             .keyboardType(.decimalPad)
-            .font(.millioDisplay)
+            .font(.millioDisplayLarge)
             .foregroundStyle(AppColors.textPrimary)
             .monospacedDigit()
             .multilineTextAlignment(.center)
@@ -263,6 +264,7 @@ struct CashflowQuickEntryPanel: View {
                     from: SettingsManager.shared.primaryCurrencyCode
                 ),
                 onSelect: { currency in
+                    fireSelectionHaptic()
                     overrideCurrency = currency
                     showCurrencyPicker = false
                 }
@@ -288,6 +290,7 @@ struct CashflowQuickEntryPanel: View {
 
         return Menu {
             Button {
+                fireSelectionHaptic()
                 selectedCardID = nil
             } label: {
                 Label(L("cashflow.quick.card.none"), systemImage: "xmark.circle")
@@ -295,6 +298,7 @@ struct CashflowQuickEntryPanel: View {
             Divider()
             ForEach(cards, id: \.cardUniqueID) { card in
                 Button {
+                    fireSelectionHaptic()
                     selectedCardID = card.cardUniqueID
                 } label: {
                     Label(card.name, systemImage: "creditcard")
@@ -320,7 +324,12 @@ struct CashflowQuickEntryPanel: View {
                     .fill(Color.white.opacity(0.06))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                            .strokeBorder(
+                                selectedCard != nil
+                                    ? kind.accentColor.opacity(0.5)
+                                    : Color.white.opacity(0.1),
+                                lineWidth: 1
+                            )
                     )
             )
         }
@@ -367,6 +376,21 @@ struct CashflowQuickEntryPanel: View {
     private func close() {
         amountFocused = false
         onDismiss()
+    }
+
+    // Лёгкий тик на выбор счёта/валюты. Отдельно от BudgetThresholdHapticsPlan
+    // (тот живёт на сетке категорий и реагирует на прогресс бюджета) — не конфликтуют.
+    private func fireSelectionHaptic() {
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+
+    private func fireSavedHaptic() {
+        switch kind.transactionType {
+        case .expense:
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 1.0)
+        default:
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        }
     }
 
     private func persistDraft() {
@@ -416,6 +440,7 @@ struct CashflowQuickEntryPanel: View {
             await MainActor.run {
                 isSaving = false
                 if didSave {
+                    fireSavedHaptic()
                     viewModel.clearQuickEntryDraft(for: kind.transactionType)
                     onSave?()
                     close()
