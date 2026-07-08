@@ -169,7 +169,10 @@ struct CashflowQuickEntryPanel: View {
             .focused($amountFocused)
             .contentTransition(.numericText())
             .onChange(of: amountText) { _, newValue in
-                amountText = AmountInputFormatter.sanitize(newValue)
+                // Отображаем разделитель дробной части по локали приложения (§7.4: "," для ru).
+                // Парсинг (parsedAmount/saveTransaction) всегда идёт через canonical "." —
+                // sanitize() внутри нормализует любой введённый разделитель обратно.
+                amountText = AmountInputFormatter.sanitizeForDisplay(newValue)
             }
             .padding(.vertical, AppSpacing.ml)
             .padding(.horizontal, AppSpacing.l)
