@@ -59604,6 +59604,30 @@
         }
       }
     },
+    "finances.group.accounts_count": {
+      "comment": "Placeholder: number of accounts in group row second line. Example: '3 accounts'",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d accounts"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d счетов"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d 个账户"
+          }
+        }
+      }
+    },
     "finances.group.action.add_account": {
       "extractionState": "manual",
       "localizations": {
@@ -61527,6 +61551,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "尚未添加财务产品"
+          }
+        }
+      }
+    },
+    "finances.main.hidden_groups_row": {
+      "comment": "Placeholder: number of empty groups collapsed into one row. Example: 'Hidden groups (2)'",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hidden groups (%d)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скрытые группы (%d)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏分组 (%d)"
           }
         }
       }
