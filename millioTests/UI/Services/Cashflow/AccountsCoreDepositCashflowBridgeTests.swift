@@ -251,4 +251,80 @@ struct AccountsCoreDepositCashflowBridgeTests {
         #expect(bridge.materializeDueInterestIncome() == true) // но уже сгенерированный 1-й период всё равно виден
         #expect(try fetchInterestTransactions(ctx).count == 1)
     }
+
+    // MARK: - upcomingInterestEvents (Фаза 0, Шаг 6 — секция «Предстоящие»)
+
+    @Test
+    func upcomingInterestEventsExcludesDueAndReturnsOnlyFuturePeriods() throws {
+        let (container, ctx, service) = try makeContext()
+        _ = container
+
+        let opening = calendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+        let termEnd = calendar.date(byAdding: .month, value: 4, to: opening)!
+        let account = try service.createAccount(
+            name: "Вклад «Растущий»", kind: .deposit, currency: "RUB", openingBalance: 100_000, date: opening
+        )
+        account.depositMeta = DepositMeta(
+            rate: 12, capitalization: .monthly, termEnd: termEnd, payoutDay: nil,
+            allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: nil,
+            remindEnd: false, autoRollover: false
+        )
+        try DepositInterestScheduler.regenerateFutureInterestEvents(
+            for: account, service: service, asOf: opening, calendar: calendar, context: ctx
+        )
+
+        // "Сегодня" — конец 1 месяца: 1-й период due, 2-3-4 — ещё впереди.
+        let asOf = calendar.date(byAdding: .month, value: 1, to: opening)!
+        let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { asOf }, calendar: calendar)
+
+        let upcoming = bridge.upcomingInterestEvents()
+        #expect(upcoming.count == 3) // периоды 2, 3, 4 — due-период 1 сюда не входит
+
+        let expectedFirst = calendar.date(byAdding: .month, value: 2, to: opening)!
+        #expect(calendar.isDate(upcoming.first!.date, inSameDayAs: expectedFirst))
+        // Капитализация .monthly: 2-й период начисляется на 100 000 + 1 000 (1-й период) = 101 000.
+        #expect(upcoming.first?.amount == 1_010) // 101 000 * 12% / 12
+        #expect(upcoming.first?.currencyCode == "RUB")
+        #expect(upcoming.first?.accountName == "Вклад «Растущий»")
+        #expect(upcoming.first?.accountID == account.id)
+
+        // Отсортировано по возрастанию даты.
+        #expect(upcoming.map(\.date) == upcoming.map(\.date).sorted())
+
+        // Материализация due-периода не пересекается с upcoming (разные множества).
+        #expect(bridge.materializeDueInterestIncome() == true)
+        #expect(try fetchInterestTransactions(ctx).count == 1)
+        #expect(bridge.upcomingInterestEvents().count == 3) // материализация 1-го периода не трогает будущие
+    }
+
+    @Test
+    func upcomingInterestEventsRespectsLimit() throws {
+        let (container, ctx, service) = try makeContext()
+        _ = container
+
+        let opening = calendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+        let account = try service.createAccount(
+            name: "Бессрочный вклад", kind: .deposit, currency: "RUB", openingBalance: 100_000, date: opening
+        )
+        account.depositMeta = DepositMeta(
+            rate: 12, capitalization: .monthly, termEnd: nil, payoutDay: nil,
+            allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: nil,
+            remindEnd: false, autoRollover: false
+        )
+        try DepositInterestScheduler.regenerateFutureInterestEvents(
+            for: account, service: service, asOf: opening, calendar: calendar, context: ctx
+        )
+
+        let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { opening }, calendar: calendar)
+        #expect(bridge.upcomingInterestEvents(limit: 2).count == 2)
+    }
+
+    @Test
+    func upcomingInterestEventsEmptyWhenNoDeposits() throws {
+        let (container, ctx, _) = try makeContext()
+        _ = container
+
+        let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { Date() }, calendar: calendar)
+        #expect(bridge.upcomingInterestEvents().isEmpty)
+    }
 }

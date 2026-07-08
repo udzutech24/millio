@@ -38882,6 +38882,36 @@
         }
       }
     },
+    "cashflow.upcoming.section_title": {
+      "comment": "Title of the compact 'Upcoming' card on the main Cashflow screen (Phase 0, Step 6)",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": { "state": "translated", "value": "Upcoming" }
+        },
+        "ru": {
+          "stringUnit": { "state": "translated", "value": "Предстоящие" }
+        },
+        "zh-Hans": {
+          "stringUnit": { "state": "translated", "value": "即将发生" }
+        }
+      }
+    },
+    "cashflow.upcoming.show_all": {
+      "comment": "Link on the 'Upcoming' card opening the full scheduled transactions planner",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": { "state": "translated", "value": "All" }
+        },
+        "ru": {
+          "stringUnit": { "state": "translated", "value": "Все" }
+        },
+        "zh-Hans": {
+          "stringUnit": { "state": "translated", "value": "全部" }
+        }
+      }
+    },
     "common.cancel": {
       "extractionState": "manual",
       "localizations": {
