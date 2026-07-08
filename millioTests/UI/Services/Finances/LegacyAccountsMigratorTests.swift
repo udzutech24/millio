@@ -119,9 +119,11 @@ struct LegacyAccountsMigratorTests {
 
         let totalAfterFirst = await s.totals.totalAt(Date(), in: "RUB")
 
+        // После первого прогона легаси скрыта (archivedAt) → во второй скан не попадает вовсе.
+        // Именно archivedAt (а не реестр) — гарант идемпотентности, restore-safe.
         let second = s.migrator.migrateAll()
         #expect(second.migrated == 0)
-        #expect(second.skippedAlreadyConverted == 2)
+        #expect(second.skippedAlreadyConverted == 0)
         #expect(second.failures == 0)
 
         // Ни новых двойников, ни сдвига тотала.
