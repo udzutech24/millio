@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__overnight-run.md",
   "title": "Overnight run 2026-07-07",
-  "updated": "2026-07-08T07:40:00+03:00",
+  "updated": "2026-07-08T08:55:00+03:00",
   "phases": [
     {
       "name": "Baseline — 18 преэкзистентных",
@@ -40,23 +40,23 @@
     },
     {
       "name": "График Cashflow вариант A",
-      "status": "in_progress",
-      "note": "вариант A, ветка поверх Ф3, идёт"
+      "status": "done",
+      "note": "00a2e40 в ветке поверх Ф3, БЕЗ мержа"
     },
     {
       "name": "6b фаза 1",
-      "status": "pending",
-      "note": "opus, без мержа; первый кандидат на скип"
+      "status": "done",
+      "note": "305f6b8+2 в feature/legacy-accounts-purge, БЕЗ мержа, ждёт ревью+stress-test"
     },
     {
       "name": "Сборки + отчёт",
-      "status": "pending",
-      "note": "progress/2026-07-08-overnight-report.md"
+      "status": "done",
+      "note": "iPhone 17 Pro = Ф3+график, iPhone 17 = develop; отчёт progress/2026-07-08-overnight-report.md"
     },
     {
       "name": "Выключить caffeinate",
-      "status": "pending",
-      "note": ""
+      "status": "done",
+      "note": "погашен после отчёта"
     }
   ],
   "costUsd": null,
