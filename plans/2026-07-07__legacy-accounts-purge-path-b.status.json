@@ -1,0 +1,15 @@
+{
+  "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
+  "title": "6b Путь B — миграция и снос легаси-счетов",
+  "updated": "2026-07-08T00:00:00Z",
+  "phases": [
+    { "name": "Ф1 — миграционный слой + вайринг старта", "status": "done", "note": "LegacyAccountsMigrator, 11 тестов, 0 новых красных; ветка не мержена" },
+    { "name": "Ф2 — read-switch single-world + снос AccountTotalPolicy", "status": "pending", "note": null },
+    { "name": "Ф3 — живые писатели (StockBulkImport, ScreenshotSeeder)", "status": "pending", "note": null },
+    { "name": "Ф4 — упрощение мостов + снос редакторов/VM/менеджеров", "status": "pending", "note": null },
+    { "name": "Ф5 — снос регистрации, схема V6, @Model-файлы", "status": "pending", "note": "device stress-test + бэкап обязательны" },
+    { "name": "Ф6 — редизайн экрана Счета (после сноса)", "status": "pending", "note": null }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

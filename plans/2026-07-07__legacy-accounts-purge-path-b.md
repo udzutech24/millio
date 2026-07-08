@@ -105,8 +105,29 @@
 
 ## 6. Разбивка на фазы (каждая ≈ одна sonnet-сессия)
 
-### 🟢 Фаза 1 — Миграционный слой + переключение чтения (БЕЗ удаления файлов) — САМАЯ БЕЗОПАСНАЯ
+### 🟢 Фаза 1 — Миграционный слой + переключение чтения (БЕЗ удаления файлов) — САМАЯ БЕЗОПАСНАЯ — [x] РЕАЛИЗОВАН (2026-07-08, ветка `feature/legacy-accounts-purge`, НЕ мержено)
 **Что:** новый `LegacyAccountsMigrator` (оркестратор поверх готового `LegacyAccountConverter`); одноразовый прогон при старте user-скоупа под SwiftData-флагом; идемпотентность; перевод чтения total/списка на single-world там, где легаси после миграции пуст. **Ни один файл не удаляется** — легаси остаётся в коде, но данные переехали и легаси-счета скрыты (`archivedAt`). Полностью обратимо (`unconvert`).
+
+**Что сделано:**
+- `millio/UI/Services/Finances/LegacyAccountsMigrator.swift` — оркестратор (рядом с `LegacyAccountConversion`, а НЕ в Core: перебирает легаси-@Model, Core остаётся легаси-агностичным). Перебирает активные (`archivedAt == nil`) `Card/Credit/Investment` (широкий fetch + Swift-фильтр, обход ловушки #Predicate §7.2), строит `Plan` → `Input` → `converter.convert`. Группа двойника резолвится из junction `FinanceAccount` по имени.
+- Вызов в `millioApp.runPostStartupRefreshes()` синхронно на MainActor, ДО фонового бэкфилла, за per-scope UserDefaults-флагом (паттерн `AccountSnapshotBackfillCoordinator`).
+- 11 тестов `LegacyAccountsMigratorTests` — зелёные.
+
+**Отклонения от плана (обоснованы):**
+- **SwiftData-флаг → UserDefaults per-scope + `archivedAt`.** Новый @Model = схема V6 = НЕ аддитивная Ф1 (V6 отдана Ф5). Причём цель «переносился при restore» УЖЕ достигнута: гарант идемпотентности — хранимый `archivedAt` (в SwiftData, переносится при restore), а не флаг. Скрытая легаси не перечисляется → повторная миграция после restore невозможна даже при утере реестра/флага. UserDefaults-флаг — лишь короткое замыкание, корректность от него не зависит.
+- **Переключение чтения на single-world → отдано Ф2.** Инвариант тотала (AC2) держится двоемирием само: скрытая легаси вносит 0, двойник вносит равный вклад через уже подключённый `newCoreTotalProvider`. Read-switch не нужен для AC Ф1 и это явный скоуп Ф2 (снятие ссылок + снос `AccountTotalPolicy` + тест равенства экранов). Трогать God-VM в Ф1 — лишний риск.
+- **Гэп меты вклада/рынка** зафиксирован `TODO(6b/фаза-post)` в шапке мигратора (AC6).
+
+**Self-audit по AC:**
+- AC1 ✅ `migratesAllActiveLegacy_totalMatchesLegacyContribution` — все активные → двойник + `isConverted`.
+- AC2 ✅ `migratedCoreTotalEqualsSignedSum` (core-тотал = сумма знаковых вкладов; легаси скрыта = 0 → двоемирный тотал неизменен).
+- AC3 ✅ `secondRunIsNoOp` + `migrateIfNeeded_flagShortCircuitsSecondRun` (идемпотентность через `archivedAt`, не реестр).
+- AC4 ✅ `unconvertRestoresLegacy` (легаси активна, двойник удалён, реестр чист).
+- AC5 ✅ build 0 ошибок; полный `millioTests` — 18 baseline-красных, 0 новых (19-й `FinanceDynamicsViewModelTests.testDeleteGroupPreservesArchivedLinkForHistoricalCalculation` — известный флаки, изолированно зелёный).
+- AC6 ✅ TODO в коде + отчёт.
+- Доп: `emptyStore_isNoOp`, `alreadyArchivedLegacy_notMigrated` (restore-safety), `groupPreservedFromJunction`, `ungroupedJunction_mapsToNilGroup`.
+
+**⚠️ Перед мержем Ф1:** device-level `/stress-test` + бэкап user-стора + явное «да» владельца (правило 7 — стартовая миграция трогает данные пользователя; план не ревьюился).
 **Acceptance criteria:**
 - AC1: после прогона все не-converted `Card/Credit/Investment` имеют core-двойника; `registry.isConverted` == true для каждого.
 - AC2: тотал Accounts/Dashboard/Динамика **не изменился** (opening-balance-двойник = прежний баланс легаси) — тест на сумму до/после.
@@ -150,3 +171,4 @@ AC Фазы 6: соотношение полосы = данным тотала; 
 ## Журнал
 - 2026-07-07: план создан (Максим/Plan, opus), инвентаризация по кодбазе; фаза 1 признана безопасной к ночной реализации.
 - 2026-07-08 (ночь): добавлена Фаза 6 — редизайн экрана «Счета» (утверждён владельцем по мокапу); быстрые правки экрана вынесены в ночную полировку.
+- 2026-07-08 (ночь, Александр): **Фаза 1 РЕАЛИЗОВАНА** на ветке `feature/legacy-accounts-purge` (от develop 6b0680d, НЕ мержено, НЕ пушено). Коммиты: мигратор+вайринг+тесты, фикс теста идемпотентности. 11 тестов зелёные, полный сьют 0 новых красных vs baseline (18). Отклонения: SwiftData-флаг→UserDefaults+archivedAt (schema V6 отдана Ф5), read-switch отдан Ф2 (инвариант держит двоемирие). Перед мержем — device stress-test + бэкап + «да» владельца.

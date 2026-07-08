@@ -571,6 +571,20 @@ struct millioApp: App {
 
         await financeStartupWarmupUseCase?.warmupIfNeeded()
 
+        // 6b Фаза 1: одноразовая opening-balance-миграция активных легаси-счетов (Card/Credit/Investment)
+        // в ядро AccountsCore. Синхронно на MainActor и ДО фонового бэкфилла: двойники должны появиться
+        // раньше пересчётов/бэкфилла. Идемпотентно (archivedAt-скрытие легаси) и обратимо (unconvert);
+        // инвариант тотала держится двоемирием (скрытая легаси = 0, двойник вносит равный вклад).
+        if let modelContainer = diContainer?.modelContainer {
+            let scopeIdentifier = activeDataScope.storeConfigurationName
+            let migrator = LegacyAccountsMigrator(modelContext: modelContainer.mainContext)
+            let summary = migrator.migrateIfNeeded(scopeIdentifier: scopeIdentifier)
+            if summary.migrated > 0 || summary.failures > 0 {
+                AppLogger.log(.info, category: "AccountsCore",
+                              "Legacy migration [\(scopeIdentifier)]: \(summary.migrated) мигрировано, \(summary.skippedAlreadyConverted) уже, \(summary.failures) ошибок")
+            }
+        }
+
         // Fire-and-forget: бэкфилл снапшотов — фоновая пересборка потенциально длинной истории
         // (годы событий на счёт), не должна задерживать остальные пост-старт шаги. Партиальный
         // прогресс безопасен (см. batched save в AccountSnapshotRebuilder), поэтому не ждём завершения.
