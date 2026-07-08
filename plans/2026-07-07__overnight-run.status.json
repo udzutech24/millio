@@ -1,19 +1,63 @@
 {
   "planFile": "2026-07-07__overnight-run.md",
   "title": "Overnight run 2026-07-07",
-  "updated": "2026-07-08T06:28:00+03:00",
+  "updated": "2026-07-08T06:40:00+03:00",
   "phases": [
-    { "name": "Baseline — 18 преэкзистентных", "status": "done", "note": "465533a" },
-    { "name": "План 6b", "status": "done", "note": "готов, 72f68f4; +Фаза 6 (редизайн Счетов, утверждён)" },
-    { "name": "Ф1", "status": "done", "note": "СМЕРЖЕНА, 41ebf1e" },
-    { "name": "Ф2+Ф4", "status": "done", "note": "СМЕРЖЕНЫ, 44b5c6f" },
-    { "name": "Хвост Ф0 — «Предстоящие»", "status": "in_progress", "note": "sonnet, гейт: полный прогон тестов" },
-    { "name": "Ф3 — единый экран", "status": "pending", "note": "opus, без мержа, §4" },
-    { "name": "UI-полировка Dashboard + быстрые правки Счетов + чистка", "status": "pending", "note": "sonnet, после Ф3; FAB/иконки/Без группы" },
-    { "name": "График Cashflow вариант A", "status": "pending", "note": "утверждён владельцем §7.6; после полировки, если бюджет позволит" },
-    { "name": "6b фаза 1", "status": "pending", "note": "opus, без мержа; первый кандидат на скип" },
-    { "name": "Сборки + отчёт", "status": "pending", "note": "progress/2026-07-08-overnight-report.md" },
-    { "name": "Выключить caffeinate", "status": "pending", "note": "" }
+    {
+      "name": "Baseline — 18 преэкзистентных",
+      "status": "done",
+      "note": "465533a"
+    },
+    {
+      "name": "План 6b",
+      "status": "done",
+      "note": "готов, 72f68f4; +Фаза 6 (редизайн Счетов, утверждён)"
+    },
+    {
+      "name": "Ф1",
+      "status": "done",
+      "note": "СМЕРЖЕНА, 41ebf1e"
+    },
+    {
+      "name": "Ф2+Ф4",
+      "status": "done",
+      "note": "СМЕРЖЕНЫ, 44b5c6f"
+    },
+    {
+      "name": "Хвост Ф0 — «Предстоящие»",
+      "status": "done",
+      "note": "СМЕРЖЕНА, 517ba6f; 0 новых красных"
+    },
+    {
+      "name": "Ф3 — единый экран",
+      "status": "in_progress",
+      "note": "opus, без мержа, §4; идёт"
+    },
+    {
+      "name": "UI-полировка Dashboard + быстрые правки Счетов + чистка",
+      "status": "pending",
+      "note": "sonnet, после Ф3; FAB/иконки/Без группы"
+    },
+    {
+      "name": "График Cashflow вариант A",
+      "status": "pending",
+      "note": "утверждён владельцем §7.6; после полировки, если бюджет позволит"
+    },
+    {
+      "name": "6b фаза 1",
+      "status": "pending",
+      "note": "opus, без мержа; первый кандидат на скип"
+    },
+    {
+      "name": "Сборки + отчёт",
+      "status": "pending",
+      "note": "progress/2026-07-08-overnight-report.md"
+    },
+    {
+      "name": "Выключить caffeinate",
+      "status": "pending",
+      "note": ""
+    }
   ],
   "costUsd": null,
   "etaMinutes": 300

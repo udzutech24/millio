@@ -258,11 +258,11 @@ private struct CashflowContentView: View {
             } else if let creatingType = viewModel.state.creatingTransactionType {
                 switch creatingType {
                 case .income:
-                    CashflowCategorySheetContainer(viewModel: viewModel, initialTab: .incomes)
+                    CashflowUnifiedEntryContainer(viewModel: viewModel, initialTab: .incomes)
                 case .expense:
-                    CashflowCategorySheetContainer(viewModel: viewModel, initialTab: .expenses)
+                    CashflowUnifiedEntryContainer(viewModel: viewModel, initialTab: .expenses)
                 case .transfer:
-                    CashflowTransferTransactionSheet(viewModel: viewModel)
+                    CashflowUnifiedEntryContainer(viewModel: viewModel, initialTab: .transfer)
                 case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
                     CashflowTransactionEditorView(
                         viewModel: viewModel,
