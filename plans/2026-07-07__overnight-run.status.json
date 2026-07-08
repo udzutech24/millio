@@ -1,64 +1,59 @@
 {
   "planFile": "2026-07-07__overnight-run.md",
-  "title": "Overnight run 2026-07-07",
-  "updated": "2026-07-08T08:55:00+03:00",
+  "title": "Overnight run 2026-07-07 + доверификация",
+  "updated": "2026-07-08T12:30:00+03:00",
   "phases": [
     {
-      "name": "Baseline — 18 преэкзистентных",
+      "name": "Ночной прогон (Ф0-Ф4, полировка, график, 6b Ф1, отчёт)",
       "status": "done",
-      "note": "465533a"
+      "note": "см. progress/2026-07-08-overnight-report.md"
     },
     {
-      "name": "План 6b",
+      "name": "Верификация Ф3+график (тесты, UX-чеклист, резолюции)",
       "status": "done",
-      "note": "готов, 72f68f4; +Фаза 6 (редизайн Счетов, утверждён)"
+      "note": "гейт чист; 2 финдинга найдены и закрыты (4c5cf02)"
     },
     {
-      "name": "Ф1",
+      "name": "Фикс финдингов Ф3: Transfer-FAB + разделитель по локали",
       "status": "done",
-      "note": "СМЕРЖЕНА, 41ebf1e"
+      "note": "4c5cf02 в feature/cashflow-chart-variant-a, 48/48 зелёных"
     },
     {
-      "name": "Ф2+Ф4",
+      "name": "Ревью + верификация 6b Ф1 (LegacyAccountsMigrator)",
       "status": "done",
-      "note": "СМЕРЖЕНЫ, 44b5c6f"
+      "note": "код корректен; гейт 0 новых красных (1731/17 baseline); E2E-зазор = среда (нет iCloud)"
     },
     {
-      "name": "Хвост Ф0 — «Предстоящие»",
-      "status": "in_progress",
-      "note": "sonnet, гейт: полный прогон тестов"
+      "name": "Диагностика 13 locale-редов + флаки-пара",
+      "status": "done",
+      "note": "8/13 старые baseline; 5 новых, фиксы в fix/test-locale-pins b5385a8 (24/24)"
     },
     {
-      "name": "Ф3 — единый экран",
-      "status": "done",
-      "note": "ГОТОВА в feature/cashflow-phase3-unified-sheet, 0 новых красных, БЕЗ мержа — ждёт владельца"
+      "name": "Мерж Ф3+график (chart-a ветка)",
+      "status": "pending",
+      "note": "решение владельца; остался 1 пробел: визуально глянуть график на PRO"
     },
     {
-      "name": "UI-полировка Dashboard + быстрые правки Счетов + чистка",
-      "status": "done",
-      "note": "СМЕРЖЕНА в develop, c354a64"
+      "name": "Мерж 6b Ф1",
+      "status": "pending",
+      "note": "решение владельца; опционально ручной E2E backup/restore на iCloud-симуляторе (10 мин)"
     },
     {
-      "name": "График Cashflow вариант A",
-      "status": "done",
-      "note": "00a2e40 в ветке поверх Ф3, БЕЗ мержа"
+      "name": "Мерж fix/test-locale-pins",
+      "status": "pending",
+      "note": "решение владельца; чистые тест-фиксы, риск минимальный"
     },
     {
-      "name": "6b фаза 1",
-      "status": "done",
-      "note": "305f6b8+2 в feature/legacy-accounts-purge, БЕЗ мержа, ждёт ревью+stress-test"
+      "name": "Push develop в origin (9+ коммитов)",
+      "status": "pending",
+      "note": "по команде владельца"
     },
     {
-      "name": "Сборки + отчёт",
-      "status": "done",
-      "note": "iPhone 17 Pro = Ф3+график, iPhone 17 = develop; отчёт progress/2026-07-08-overnight-report.md"
-    },
-    {
-      "name": "Выключить caffeinate",
-      "status": "done",
-      "note": "погашен после отчёта"
+      "name": "TestFlight",
+      "status": "pending",
+      "note": "по команде владельца → Nova"
     }
   ],
   "costUsd": null,
-  "etaMinutes": 300
+  "etaMinutes": null
 }
