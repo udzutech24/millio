@@ -72,8 +72,18 @@ struct CashflowQuickEntryPanel: View {
         }
         .onAppear {
             amountFocused = true
-            selectedCardID = viewModel.state.availableCards.first?.cardUniqueID
+            // Per-tab черновик (Ф3d) восстанавливается из VM; если счёт в черновике
+            // не задан — берём основной счёт как раньше.
+            let draft = viewModel.quickEntryDraft(for: kind.transactionType)
+            amountText = draft.amountText
+            note = draft.note
+            selectedCardID = draft.selectedCardID ?? viewModel.state.availableCards.first?.cardUniqueID
+            overrideCurrency = draft.overrideCurrency
         }
+        .onChange(of: amountText) { _, _ in persistDraft() }
+        .onChange(of: note) { _, _ in persistDraft() }
+        .onChange(of: selectedCardID) { _, _ in persistDraft() }
+        .onChange(of: overrideCurrency) { _, _ in persistDraft() }
         .alert(L("cashflow.editor.save_failed.title"), isPresented: $showError) {
             Button(L("cashflow.common.ok"), role: .cancel) {}
         }
@@ -359,6 +369,18 @@ struct CashflowQuickEntryPanel: View {
         onDismiss()
     }
 
+    private func persistDraft() {
+        viewModel.updateQuickEntryDraft(
+            CashflowQuickEntryDraft(
+                amountText: amountText,
+                note: note,
+                selectedCardID: selectedCardID,
+                overrideCurrency: overrideCurrency
+            ),
+            for: kind.transactionType
+        )
+    }
+
     private func saveTransaction() {
         guard let amount = parsedAmount else { return }
 
@@ -394,6 +416,7 @@ struct CashflowQuickEntryPanel: View {
             await MainActor.run {
                 isSaving = false
                 if didSave {
+                    viewModel.clearQuickEntryDraft(for: kind.transactionType)
                     onSave?()
                     close()
                 } else {
