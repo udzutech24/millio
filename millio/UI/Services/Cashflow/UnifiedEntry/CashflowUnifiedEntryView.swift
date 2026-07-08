@@ -302,24 +302,29 @@ struct CashflowCategoryTransactionSheet: View {
                     handleCategoryDeletion(preview: preview, targetRaw: targetRaw)
                 }
             }
-            .sheet(item: $quickEntryCategory) { option in
-                CashflowQuickEntrySheet(
-                    viewModel: viewModel,
-                    option: option,
-                    kind: kind,
-                    selectedMonth: selectedMonth,
-                    onSave: {
-                        reloadMonthlyTotal(focusingOn: option.rawValue)
-                    },
-                    onOpenFullEditor: { category in
-                        // Небольшая задержка чтобы quick sheet успел закрыться
-                        // перед тем как navigationDestination сработает
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            .overlay {
+                // Инлайн-панель быстрого ввода вместо второго .sheet (§2.1.2, Ф3b):
+                // остаёмся в одном модальном контексте единого экрана.
+                if let option = quickEntryCategory {
+                    CashflowQuickEntryPanel(
+                        viewModel: viewModel,
+                        option: option,
+                        kind: kind,
+                        selectedMonth: selectedMonth,
+                        onSave: {
+                            reloadMonthlyTotal(focusingOn: option.rawValue)
+                        },
+                        onOpenFullEditor: { category in
                             selectedCategory = category
+                        },
+                        onDismiss: {
+                            withAnimation(AppAnimation.medium) { quickEntryCategory = nil }
                         }
-                    }
-                )
+                    )
+                    .zIndex(2)
+                }
             }
+            .animation(AppAnimation.medium, value: quickEntryCategory)
             .overlay(alignment: .bottom) {
                 if let pendingCategoryUndoAction {
                     CashflowCategoryUndoBanner(action: pendingCategoryUndoAction) {
