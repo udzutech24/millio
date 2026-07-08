@@ -464,14 +464,16 @@ struct ConverterViewModelTests {
 
     @Test("Share timestamp and last updated text format through app locale")
     func testShareAndLastUpdatedUseSelectedAppLanguage() async {
-        let previousLanguage = LanguageManager.shared.currentLanguage
+        // Swift Testing параллелит тесты внутри таргета: без явной фиксации языка
+        // тест зависит от ambient LanguageManager.shared, который другие l10n-тесты
+        // временно переключают. Пиним язык через AppLanguageTestSupport.withLanguage
+        // (лочит мутацию на время блока), как это делают остальные l10n-тесты в проекте.
         let defaults = UserDefaults.standard
         // Ключ должен совпадать с дефолтным источником ViewModel (.millio)
         let key = CurrencyWidgetShared.Keys.lastRatesTimestamp(for: RateSource.millio.rawValue)
         let hadValue = defaults.object(forKey: key) != nil
         let previousValue = defaults.double(forKey: key)
         defer {
-            LanguageManager.shared.setLanguage(previousLanguage)
             if hadValue {
                 defaults.set(previousValue, forKey: key)
             } else {
@@ -484,13 +486,15 @@ struct ConverterViewModelTests {
         let viewModel = ConverterViewModel(rateRepository: MockConverterRateRepository())
         defaults.set(timestamp, forKey: key)
 
-        LanguageManager.shared.setLanguage(.english)
-        #expect(viewModel.getShareData(now: date).dateString == expectedShareTimestamp(date, locale: Locale(identifier: "en")))
-        #expect(viewModel.lastUpdatedText == expectedShareTimestamp(date, locale: Locale(identifier: "en")))
+        AppLanguageTestSupport.withLanguage(.english) {
+            #expect(viewModel.getShareData(now: date).dateString == expectedShareTimestamp(date, locale: Locale(identifier: "en")))
+            #expect(viewModel.lastUpdatedText == expectedShareTimestamp(date, locale: Locale(identifier: "en")))
+        }
 
-        LanguageManager.shared.setLanguage(.russian)
-        #expect(viewModel.getShareData(now: date).dateString == expectedShareTimestamp(date, locale: Locale(identifier: "ru")))
-        #expect(viewModel.lastUpdatedText == expectedShareTimestamp(date, locale: Locale(identifier: "ru")))
+        AppLanguageTestSupport.withLanguage(.russian) {
+            #expect(viewModel.getShareData(now: date).dateString == expectedShareTimestamp(date, locale: Locale(identifier: "ru")))
+            #expect(viewModel.lastUpdatedText == expectedShareTimestamp(date, locale: Locale(identifier: "ru")))
+        }
     }
 
     @Test("Share draft title switches live with app language and is not cached in state")
