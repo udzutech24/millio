@@ -147,6 +147,11 @@
 
 **⚠️ Перед мержем Ф1.5:** device `/stress-test` + бэкап user-стора + явное «да» владельца (трогает данные групп + 3 экрана).
 
+**Фикс после адверсариального ревью (2026-07-09, коммит поверх e90c1a3):**
+- **Дефект 1 (CONFIRMED, medium) — исправлен.** `legacyFieldsMigratedAt` теперь сериализуется в `AccountGroup.export()`/`AccountGroupImporter.import` (как `TimeInterval`, `NSNull()` при nil) — маркер идемпотентности переживает backup/restore, как `archivedAt` у легаси-счетов в Ф1. Без фикса restore на новом устройстве сбрасывал бы маркер в nil → повторный прогон `GroupsMigrator` перезаписывал бы поля `AccountGroup` поверх правок пользователя. Тест-регрессия: `GroupsMigratorTests.restoredGroupWithMarkerIsNotReMigrated` (export → import с новым id, как реальный restore → маркер не nil → повторная миграция no-op, правка юзера не затёрта).
+- **Дефект 2 (PLAUSIBLE, low) — задокументирован, не гардится полноценно.** Дубли имён легаси-групп теоретически возможны (UI не проверяет уникальность имени), но не наблюдались в проде (1–2 юзера) — полноценная UI-валидация вне скоупа слияния моделей. Вместо тихого схлопывания: `GroupsMigrator` детектирует дубль явно (`Summary.skippedDuplicateName` + warning-лог с именем группы), первая группа мигрирует поля, остальные не молчат. Задокументировано в докстринге класса как «Известное ограничение». Тест: `GroupsMigratorTests.duplicateLegacyGroupNamesAreLoggedNotSilentlyDropped`.
+- Build SUCCEEDED; полный `millioTests` — 0 новых красных vs baseline (все падения, включая `CashflowCategoryHelpContentTests`/`CashflowTransactionEditorViewLayoutTests` zh-Hans locale-leak флаки, входят в `progress/accounts-core-baseline-failures.md`); `GroupsMigratorTests` — 8/8 ✔ (swift-testing).
+
 ---
 
 ## 5. План отката

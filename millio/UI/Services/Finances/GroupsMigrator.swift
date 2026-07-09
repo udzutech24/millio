@@ -16,6 +16,14 @@ import SwiftData
 ///
 /// Модель `FinanceGroup` в этой фазе НЕ удаляется (снос — Фаза 5): только читатели групп
 /// переключаются на `AccountGroup`, а данные полей переезжают сюда.
+///
+/// **Известное ограничение (не гардится намеренно, ревью 2026-07-09).** Мостик `resolveAccountGroup`
+/// резолвит `AccountGroup` ПО ИМЕНИ — две активные `FinanceGroup` с одинаковым именем схлопнутся
+/// в одну `AccountGroup` (первая мигрирует поля, вторая логируется как дубль и пропускается, её
+/// core-счета попадут в ту же группу). UI создания/редактирования группы (`FinanceGroupService`)
+/// не проверяет уникальность имени — теоретически возможно, но не наблюдалось в проде (1–2 юзера).
+/// Не гардим полноценно (доп. UI-валидация — отдельная задача вне скоупа слияния моделей), но НЕ
+/// молчим: `Summary.skippedDuplicateName` + warning-лог с именем группы.
 @MainActor
 final class GroupsMigrator {
 
@@ -23,8 +31,10 @@ final class GroupsMigrator {
         var migrated = 0
         var skippedAlreadyMigrated = 0
         var skippedUngrouped = 0
+        /// Счётчик дублей имён легаси-групп (см. докстринг класса, «Известное ограничение»).
+        var skippedDuplicateName = 0
 
-        var total: Int { migrated + skippedAlreadyMigrated + skippedUngrouped }
+        var total: Int { migrated + skippedAlreadyMigrated + skippedUngrouped + skippedDuplicateName }
     }
 
     private let modelContext: ModelContext
@@ -62,6 +72,13 @@ final class GroupsMigrator {
     func migrateAll() -> Summary {
         var summary = Summary()
         let financeGroups = (try? modelContext.fetch(FetchDescriptor<FinanceGroup>())) ?? []
+        // Дефект 2 (ревью 2026-07-09): резолвер мостика по имени коллапсирует ДВЕ разные `FinanceGroup`
+        // с одинаковым именем в ОДНУ `AccountGroup`. UI создания группы не гарантирует уникальность
+        // имени (нет проверки в `FinanceGroupService.updateGroup`) — теоретически возможно, хоть и не
+        // наблюдалось в проде (1–2 юзера). Здесь НЕ молчим: первая группа с именем мигрирует поля,
+        // повторные с тем же именем детектируются явно (см. ниже) и логируются как дубль, а не тихо
+        // классифицируются "уже мигрировано".
+        var seenNames = Set<String>()
 
         for financeGroup in financeGroups {
             // Ungrouped/пустое имя не имеет собственной `AccountGroup` (core-семантика: group == nil).
@@ -74,6 +91,15 @@ final class GroupsMigrator {
                 matching: financeGroup, in: modelContext
             ) else {
                 summary.skippedUngrouped += 1
+                continue
+            }
+
+            if !seenNames.insert(financeGroup.name).inserted {
+                summary.skippedDuplicateName += 1
+                AppLogger.log(.warning, category: "AccountsCore",
+                              "GroupsMigrator: дубль имени легаси-группы \"\(financeGroup.name)\" — " +
+                              "поля этой группы НЕ перенесены (уже перенесены с первой одноимённой), " +
+                              "её core-счета схлопнутся в ту же AccountGroup")
                 continue
             }
 

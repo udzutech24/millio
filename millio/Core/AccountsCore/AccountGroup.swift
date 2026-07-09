@@ -69,7 +69,8 @@ final class AccountGroup: Persistable {
             "order": order,
             "isFavorite": isFavorite,
             "usesManualAccountOrdering": usesManualAccountOrdering,
-            "priorityRaw": priorityRaw
+            "priorityRaw": priorityRaw,
+            "legacyFieldsMigratedAt": legacyFieldsMigratedAt?.timeIntervalSince1970 ?? NSNull()
         ]
         return try JSONSerialization.data(withJSONObject: dict)
     }

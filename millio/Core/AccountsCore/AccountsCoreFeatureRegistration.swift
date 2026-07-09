@@ -51,6 +51,10 @@ struct AccountGroupImporter: ModelImporter {
         let isFavorite = data["isFavorite"] as? Bool ?? false
         let usesManualAccountOrdering = data["usesManualAccountOrdering"] as? Bool ?? false
         let priorityRaw = data["priorityRaw"] as? String ?? "normal"
+        // Дефект 1 (ревью 2026-07-09): маркер идемпотентности ДОЛЖЕН пережить restore — без него
+        // `GroupsMigrator` считал бы восстановленную группу немигрированной и перезаписывал бы поля
+        // из легаси-FinanceGroup поверх правок пользователя, сделанных после миграции.
+        let legacyFieldsMigratedAt = (data["legacyFieldsMigratedAt"] as? TimeInterval).map(Date.init(timeIntervalSince1970:))
 
         let descriptor = FetchDescriptor<AccountGroup>(predicate: #Predicate<AccountGroup> { $0.id == id })
         if let existing = try? context.fetch(descriptor).first {
@@ -61,6 +65,7 @@ struct AccountGroupImporter: ModelImporter {
             existing.isFavorite = isFavorite
             existing.usesManualAccountOrdering = usesManualAccountOrdering
             existing.priorityRaw = priorityRaw
+            existing.legacyFieldsMigratedAt = legacyFieldsMigratedAt
             return
         }
 
@@ -68,6 +73,7 @@ struct AccountGroupImporter: ModelImporter {
             id: id, name: name, colorHex: colorHex, displayCurrency: displayCurrency, order: order,
             isFavorite: isFavorite, usesManualAccountOrdering: usesManualAccountOrdering, priorityRaw: priorityRaw
         )
+        group.legacyFieldsMigratedAt = legacyFieldsMigratedAt
         context.insert(group)
     }
 }

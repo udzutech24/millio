@@ -109,6 +109,62 @@ struct GroupsMigratorTests {
         #expect(accountGroup(s.ctx, name: "Кредиты")?.isFavorite == false)
     }
 
+    // MARK: - Дефект 1 (ревью 2026-07-09): restore-сценарий — маркер переживает export/import
+
+    @Test
+    func restoredGroupWithMarkerIsNotReMigrated() throws {
+        let s = try makeStack()
+        seedFinanceGroup(s.ctx, name: "Вклады", isFavorite: true, priority: .high)
+        try s.ctx.save()
+
+        // Первая миграция + пользователь правит core-группу.
+        _ = s.migrator.migrateAll()
+        let core = try #require(accountGroup(s.ctx, name: "Вклады"))
+        core.isFavorite = false
+        try s.ctx.save()
+
+        // Экспорт (backup) → импорт на "новом устройстве" (маркер ДОЛЖЕН пережить сериализацию).
+        let exported = try core.export()
+        let restoredID = UUID()
+        var dict = try #require(JSONSerialization.jsonObject(with: exported) as? [String: Any])
+        dict["id"] = restoredID.uuidString // имитируем свежий import с новым id, как реальный restore
+        let restoredData = try JSONSerialization.data(withJSONObject: dict)
+
+        try AccountGroupImporter.import(from: JSONSerialization.jsonObject(with: restoredData) as! [String: Any], context: s.ctx)
+        try s.ctx.save()
+
+        let restored = try #require(accountGroup(s.ctx, name: "Вклады"))
+        // Маркер восстановлен из бэкапа — НЕ nil.
+        #expect(restored.legacyFieldsMigratedAt != nil)
+
+        // Повторный прогон миграции (как на новом устройстве после restore) — НЕ должен перезаписать
+        // isFavorite обратно на true (значение легаси), потому что маркер уже был на группе.
+        let afterRestoreMigration = s.migrator.migrateAll()
+        #expect(afterRestoreMigration.migrated == 0)
+        #expect(accountGroup(s.ctx, name: "Вклады")?.isFavorite == false)
+    }
+
+    // MARK: - Дефект 2 (ревью 2026-07-09): дубли имён легаси-групп не молчат
+
+    @Test
+    func duplicateLegacyGroupNamesAreLoggedNotSilentlyDropped() throws {
+        let s = try makeStack()
+        seedFinanceGroup(s.ctx, name: "Дубль", isFavorite: true, priority: .high)
+        seedFinanceGroup(s.ctx, name: "Дубль", isFavorite: false, priority: .low)
+        try s.ctx.save()
+
+        let summary = s.migrator.migrateAll()
+
+        #expect(summary.migrated == 1)
+        #expect(summary.skippedDuplicateName == 1)
+        // Поля мигрировали с ПЕРВОЙ группы (детерминированный fetch-порядок в SwiftData для теста).
+        let core = try #require(accountGroup(s.ctx, name: "Дубль"))
+        #expect(core.isFavorite == true)
+        // Только ОДНА AccountGroup "Дубль" — обе легаси схлопнулись в неё (мостик по имени).
+        let all = try s.ctx.fetch(FetchDescriptor<AccountGroup>(predicate: #Predicate { $0.name == "Дубль" }))
+        #expect(all.count == 1)
+    }
+
     // MARK: - AC4: флаг-гейт короткого замыкания
 
     @Test

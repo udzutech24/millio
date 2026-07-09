@@ -586,7 +586,8 @@ struct millioApp: App {
 
             // 6b Фаза 1.5: перенос полей легаси-групп (isFavorite/priority/ordering/color/currency/order)
             // на одноимённые AccountGroup. После миграции счетов (выше) группы-двойники уже существуют —
-            // здесь дозаполняем их поля. Идемпотентно (legacyFieldsMigratedAt-маркер на AccountGroup).
+            // здесь дозаполняем их поля. Идемпотентно (legacyFieldsMigratedAt-маркер на AccountGroup,
+            // сериализуется в export/import — переживает backup/restore, фикс дефекта ревью 2026-07-09).
             let groupsMigrator = GroupsMigrator(modelContext: modelContainer.mainContext)
             let groupsSummary = groupsMigrator.migrateIfNeeded(scopeIdentifier: scopeIdentifier)
             if groupsSummary.migrated > 0 {
