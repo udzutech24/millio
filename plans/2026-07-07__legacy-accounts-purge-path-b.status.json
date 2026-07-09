@@ -1,15 +1,48 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-09T22:10:00Z",
+  "updated": "2026-07-10T01:00:00Z",
   "phases": [
-    { "name": "Ф1 — миграционный слой + вайринг старта", "status": "done", "note": "LegacyAccountsMigrator, 11 тестов, 0 новых красных; ветка не мержена" },
-    { "name": "Ф1.5 — слияние моделей групп FinanceGroup↔AccountGroup", "status": "done", "note": "AccountGroup+4 поля, GroupsMigrator, per-group core-сумма, Dynamics breakdown, 8 тестов; build ок, 0 новых красных; НЕ мержено" },
-    { "name": "Ф2 — read-switch single-world + снос AccountTotalPolicy", "status": "pending", "note": null },
-    { "name": "Ф3 — живые писатели (StockBulkImport, ScreenshotSeeder)", "status": "pending", "note": null },
-    { "name": "Ф4 — упрощение мостов + снос редакторов/VM/менеджеров", "status": "pending", "note": null },
-    { "name": "Ф5 — снос регистрации, схема V6, @Model-файлы (вкл. FinanceGroup.swift)", "status": "pending", "note": "device stress-test + бэкап обязательны" },
-    { "name": "Ф6 — редизайн экрана Счета (после сноса)", "status": "pending", "note": "+ кастомные иконки групп (customIconName), решение владельца 2026-07-09" }
+    {
+      "name": "Ф1 — миграционный слой + вайринг старта",
+      "status": "done",
+      "note": "LegacyAccountsMigrator, 11 тестов, 0 новых красных; ветка не мержена"
+    },
+    {
+      "name": "Ф1.5 — слияние моделей групп FinanceGroup↔AccountGroup",
+      "status": "done",
+      "note": "e90c1a3 + фикс адверс-ревью 369c57c (маркер в backup/restore, дубли имён логируются); 8 тестов, build ок, 0 новых красных; Release-билд на симуляторе 26.5; НЕ мержено"
+    },
+    {
+      "name": "Ф2 — агрегат тотала single-world + снос AccountTotalPolicy (scoped)",
+      "status": "done",
+      "note": "80ad7cc: calculateTotalsSnapshot core-only + заголовок Динамики получил ядро (закрыт gap unified-totals Ф4); AccountTotalPolicy снесён (инлайн); AC1/AC2 тесты, 3 FinanceViewModelTests мигрированы; build ок, 0 новых красных; НЕ мержено"
+    },
+    {
+      "name": "Ф2b — остаток read-слоя (mergingNewCoreSeries, FinanceRows/orderedAccounts, VM.calculateGroupTotal)",
+      "status": "pending",
+      "note": "escalated: несущий stitching графика + орфанит Ф4-код + нужен порт per-account Dynamics (1b) + device stress-test"
+    },
+    {
+      "name": "Ф3 — живые писатели (StockBulkImport, ScreenshotSeeder) + create-views (не мёртвые!)",
+      "status": "pending",
+      "note": "grep опроверг «мёртвый код»: FinanceCreateViews/InlineCreateForms референсятся FinancesSheets/FinanceAddAccountView"
+    },
+    {
+      "name": "Ф4 — упрощение мостов + снос редакторов/VM/менеджеров",
+      "status": "pending",
+      "note": null
+    },
+    {
+      "name": "Ф5 — снос регистрации, схема V6, @Model-файлы (вкл. FinanceGroup.swift)",
+      "status": "pending",
+      "note": "device stress-test + бэкап обязательны"
+    },
+    {
+      "name": "Ф6 — редизайн экрана Счета (после сноса)",
+      "status": "pending",
+      "note": "+ кастомные иконки групп (customIconName), решение владельца 2026-07-09"
+    }
   ],
   "costUsd": null,
   "etaMinutes": null
