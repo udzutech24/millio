@@ -1,0 +1,14 @@
+{
+  "planFile": "2026-07-05__unified-totals.md",
+  "title": "Единый источник totals",
+  "updated": "2026-07-09T07:40:00+03:00",
+  "phases": [
+    { "name": "Фаза 1 — канон AccountTotalPolicy", "status": "done" },
+    { "name": "Фаза 2 — рефакторинг FinanceDynamicsViewModel", "status": "done" },
+    { "name": "Фаза 3 — хардненинг FinanceTotalsService", "status": "done" },
+    { "name": "Фаза 4 — AccountsCore в заголовке Динамики", "status": "pending", "note": "заблокирован, нужен owner decision + stress-test" },
+    { "name": "Фаза 5 — AccountsCore в per-группных totals/редакторе/Dynamics-breakdown", "status": "pending", "note": "найдено 2026-07-09 на симуляторе; требует Фазы 6 моста FinanceGroup+AccountGroup" }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}
