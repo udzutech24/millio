@@ -15,8 +15,15 @@ struct GroupsMigratorTests {
         let flagDefaults: UserDefaults
     }
 
+    // Контейнер должен пережить тест — `ModelContext` не держит сильную ссылку на владеющий
+    // `ModelContainer`, иначе in-memory store освобождается сразу после return из makeStack()
+    // (use-after-free → "crashed with signal trap"). Паттерн — как в LegacyMigrationOrderingTests
+    // (retainedContainers на AppMigrationPlan.makeInMemoryContainer).
+    private static var retainedContainers: [ModelContainer] = []
+
     private func makeStack() throws -> Stack {
         let container = try AppMigrationPlan.makeInMemoryContainer()
+        Self.retainedContainers.append(container)
         let ctx = container.mainContext
         let flagDefaults = UserDefaults(suiteName: "grp-mig-\(UUID().uuidString)")!
         let migrator = GroupsMigrator(modelContext: ctx, defaults: flagDefaults)
