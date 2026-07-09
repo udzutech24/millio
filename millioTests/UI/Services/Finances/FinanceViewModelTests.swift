@@ -824,30 +824,17 @@ struct FinanceViewModelTests {
 
     @Test("Пересчет общей суммы не делает принудительный refresh курсов")
     func testCalculateTotalAmountDoesNotForceRefreshRates() async throws {
-        let modelContext = try createTestModelContext()
-
-        let group = FinanceGroup(name: "Мультивалюта", colorHex: "#00AAFF")
-        group.displayCurrency = "RUB"
-        modelContext.insert(group)
-
-        let cardUSD = Card(
-            name: "USD карта",
-            cardNumber: "1001",
-            bank: .tinkoff,
-            cardType: .debit,
-            currency: "USD",
-            balance: 10.0
-        )
-        cardUSD.includeInTotal = true
-        modelContext.insert(cardUSD)
-
-        let accountUSD = FinanceAccount(accountType: .card, accountID: cardUSD.cardUniqueID)
-        accountUSD.group = group
-        modelContext.insert(accountUSD)
-        try modelContext.save()
+        // 6b Фаза 2 (single-world): агрегат «Общий баланс» считается по ЯДРУ (`AccountsTotalsService`),
+        // поэтому фикстура — core-счёт (USD), а не легаси-карта. Инвариант теста тот же: конвертация
+        // не должна триггерить force-refresh курсов.
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let modelContext = container.mainContext
 
         let mockRateService = MockCurrencyRateService()
         mockRateService.setRate(from: "USD", to: "RUB", rate: 100.0)
+
+        let coreService = AccountsCoreService(modelContext: modelContext)
+        _ = try coreService.createAccount(name: "USD счёт", kind: .debitCard, currency: "USD", openingBalance: 10)
 
         let viewModel = FinanceViewModel(
             modelContext: modelContext,
@@ -859,6 +846,7 @@ struct FinanceViewModelTests {
 
         await viewModel.calculateTotalAmountAsync()
 
+        // 10 USD × 100 = 1000 RUB (валюта экрана по умолчанию — RUB).
         #expect(mockRateService.forceRefreshCallCount == 0)
         #expect(abs(viewModel.state.totalAmount - 1000.0) < 0.01)
     }
@@ -2498,9 +2486,11 @@ struct FinanceViewModelTests {
         viewModel.handle(.loadGroups)
         viewModel.handle(.loadAccounts)
 
+        // 6b Фаза 2: агрегат `state.totalAmount` считается по ЯДРУ (single-world), поэтому легаси-
+        // фикстура в него не входит. Дедуп проверяем по per-group сумме (`groupTotals`, бывший
+        // легаси+core-микс) и по числу junction'ов — это и есть цель теста.
         let didPropagate = await waitForAsyncStatePropagation {
-            viewModel.state.totalAmount == 1_000
-                && viewModel.state.groupTotals[primaryGroup.groupUniqueID] == 1_000
+            viewModel.state.groupTotals[primaryGroup.groupUniqueID] == 1_000
         }
 
         #expect(didPropagate)
@@ -2508,7 +2498,6 @@ struct FinanceViewModelTests {
         let accounts = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
         #expect(accounts.count == 1)
         #expect(accounts.first?.group?.groupUniqueID == primaryGroup.groupUniqueID)
-        #expect(viewModel.state.totalAmount == 1_000)
         #expect(viewModel.state.groupTotals[primaryGroup.groupUniqueID] == 1_000)
     }
 
@@ -2567,10 +2556,13 @@ struct FinanceViewModelTests {
 
         EventBus.shared.publish(FinanceEvent.creditsUpdated)
         
+        // 6b Фаза 2: проверяем пересчёт per-group суммы (`groupTotals`) — это и есть предмет теста.
+        // Агрегат `state.totalAmount` теперь считается по ЯДРУ (single-world) и легаси-кредит в него
+        // не входит, поэтому из условия он убран.
         var didUpdate = false
         for _ in 0..<100 {
             let groupTotal = viewModel.state.groupTotals[trackedGroupID] ?? 0.0
-            if abs(groupTotal + 500.0) < 0.01, abs(viewModel.state.totalAmount + 500.0) < 0.01 {
+            if abs(groupTotal + 500.0) < 0.01 {
                 didUpdate = true
                 break
             }

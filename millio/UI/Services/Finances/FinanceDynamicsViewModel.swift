@@ -849,6 +849,22 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             targetDate = endDate
         }
 
+        // Вклад ЯДРА в агрегат заголовка (6b Фаза 2, single-world): без скоуп-фильтров
+        // (все счета, не режим одного счёта) заголовок «Динамика» обязан сходиться с агрегатом
+        // Дашборда/«Счетов» (`AccountsTotalsService.totalAt`) — это закрывает R1 аудита 2026-07-02
+        // (три пути тотала → один). Для легаси-данных вклад = 0 (нет core-счетов), поэтому
+        // легаси-реплей не меняется. Скоупы (выбор групп/счетов, режим одного счёта) остаются на
+        // легаси-пути до порта per-account Dynamics на ядро (задача «1b»/Фаза 4).
+        let isUnscopedAggregate = state.selectedGroupIDs.isEmpty
+            && state.selectedAccountIDs.isEmpty
+            && !state.isSingleAccountMode
+        let coreCurrent: Double = isUnscopedAggregate
+            ? NSDecimalNumber(decimal: await financeViewModel.accountsTotalsService.totalAt(targetDate, in: state.displayCurrency)).doubleValue
+            : 0
+        let coreStart: Double = isUnscopedAggregate
+            ? NSDecimalNumber(decimal: await financeViewModel.accountsTotalsService.totalAt(startDate, in: state.displayCurrency)).doubleValue
+            : 0
+
         // Для single account без выбранной точки: используем live balance напрямую для всех типов,
         // кроме market-priced investments (stocks/crypto) — они идут через replay с рыночными ценами.
         if selectedDate == nil, accounts.count == 1, let account = accounts.first,
@@ -857,17 +873,17 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
            ) {
             if Task.isCancelled { return }
             if selectedDate != state.selectedDate { return }
-            state.currentBalance = liveBalance
+            state.currentBalance = liveBalance + coreCurrent
             let startBalance = await calculateBalanceAtDate(
                 accounts: accounts,
                 date: startDate,
                 accountCardIDs: Set(),
                 debtAsNegative: useNetTotals,
                 includeInitialBeforeCreation: false
-            )
+            ) + coreStart
             if Task.isCancelled { return }
             if selectedDate != state.selectedDate { return }
-            let rawDelta = liveBalance - startBalance
+            let rawDelta = state.currentBalance - startBalance
             let delta = adjustDeltaForSingleAccountIfNeeded(
                 delta: rawDelta, accounts: accounts, useNetTotals: useNetTotals
             )
@@ -881,7 +897,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             accountCardIDs: Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil }),
             debtAsNegative: useNetTotals,
             includeInitialBeforeCreation: false
-        )
+        ) + coreCurrent
         if Task.isCancelled { return }
         if selectedDate != state.selectedDate { return }
         state.currentBalance = currentBalance
@@ -895,7 +911,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             // Старт периода должен отражать фактическое состояние на эту дату.
             // Счет, созданный позже, не должен "задним числом" попадать в стартовый баланс.
             includeInitialBeforeCreation: false
-        )
+        ) + coreStart
         if Task.isCancelled { return }
         if selectedDate != state.selectedDate { return }
 
@@ -1830,7 +1846,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
-                guard AccountTotalPolicy.isActive(
+                guard Self.isLegacyActiveInTotal(
                     includeInTotal: card.includeInTotal,
                     archivedAt: card.archivedAt,
                     at: date
@@ -1972,7 +1988,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
-                guard AccountTotalPolicy.isActive(
+                guard Self.isLegacyActiveInTotal(
                     includeInTotal: credit.includeInTotal,
                     archivedAt: credit.archivedAt,
                     at: date
@@ -1998,7 +2014,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                                 to: state.displayCurrency,
                                 at: date
                             )
-                            totalBalance += AccountTotalPolicy.signedContribution(
+                            totalBalance += Self.signedLegacyContribution(
                                 converted,
                                 isLiability: isLiabilityAccount(account),
                                 debtAsNegative: debtAsNegative
@@ -2021,7 +2037,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
-                guard AccountTotalPolicy.isActive(
+                guard Self.isLegacyActiveInTotal(
                     includeInTotal: investment.includeInTotal,
                     archivedAt: investment.archivedAt,
                     at: date
@@ -2116,7 +2132,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     to: state.displayCurrency,
                     at: date
                 )
-                totalBalance += AccountTotalPolicy.signedContribution(
+                totalBalance += Self.signedLegacyContribution(
                     converted,
                     isLiability: isLiabilityAccount(account),
                     debtAsNegative: debtAsNegative
@@ -2193,6 +2209,22 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         case .investment:
             return false
         }
+    }
+
+    // MARK: - Участие легаси-счёта на дату (инлайн бывшего AccountTotalPolicy, снесён в 6b Фазе 2)
+
+    /// Включён флагом И не архивирован строго до `date` (time-aware: точки истории ДО архивации
+    /// по-прежнему включают счёт). Легаси-реплей `calculateBalanceAtDate` остаётся до сноса легаси.
+    private static func isLegacyActiveInTotal(includeInTotal: Bool, archivedAt: Date?, at date: Date) -> Bool {
+        guard includeInTotal else { return false }
+        if let archivedAt, date > archivedAt { return false }
+        return true
+    }
+
+    /// Знак обязательства для net-вклада; при `debtAsNegative == false` — величина как есть.
+    private static func signedLegacyContribution(_ amount: Double, isLiability: Bool, debtAsNegative: Bool) -> Double {
+        guard debtAsNegative, isLiability else { return amount }
+        return -abs(amount)
     }
 
     private func adjustDeltaForSingleAccountIfNeeded(
