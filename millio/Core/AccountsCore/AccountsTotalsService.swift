@@ -54,6 +54,23 @@ final class AccountsTotalsService {
         return total
     }
 
+    /// Σ по ЗАДАННОМУ подмножеству счетов нового ядра на дату — та же механика, что `totalAt`, но по
+    /// готовому списку (per-group сумма: Фаза 1.5 слияния групп, чтобы группа из core-счетов давала
+    /// верную сумму/дельту на экранах «Счета»/«Динамика»). `participatingOnly` фильтрует архивные.
+    func total(for accounts: [Account], on date: Date, in currency: String, participatingOnly: Bool = true) async -> Decimal {
+        guard !accounts.isEmpty else { return 0 }
+        let priceProvider = marketPriceProvider(for: accounts)
+        var total: Decimal = 0
+        for account in accounts {
+            if participatingOnly, !account.participates(on: date) { continue }
+            guard let balance = try? await balance(for: account, on: date, priceProvider: priceProvider) else { continue }
+            guard balance != 0 else { continue }
+            guard let rate = await rate(from: account.currency, to: currency, on: date) else { continue }
+            total += balance * Decimal(rate)
+        }
+        return total
+    }
+
     /// Точки для графика: одна точка на календарный день между `start` и `end` включительно,
     /// каждая — курсом СВОЕЙ даты (AC13), не сегодняшним.
     func seriesBetween(start: Date, end: Date, currency: String) async -> [(Date, Decimal)] {

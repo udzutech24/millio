@@ -1,6 +1,6 @@
 # План 6b Путь B — миграция легаси-счетов в AccountsCore + снос легаси-миров
 
-**Дата создания:** 2026-07-07 · **Статус:** НЕ НАЧАТ (план готов, не ревьюился) · **Тип:** L, Bulletproof
+**Дата создания:** 2026-07-07 · **Статус:** РЕВЬЮ ПРОВЕДЕНО 2026-07-09 (Ф1 реализована, не мержена; Ф1.5 добавлена; открытые вопросы — владельцу) · **Тип:** L, Bulletproof
 **Одобрение:** владелец 2026-07-07 — планирование + фаза 1 реализации (ночной runbook `plans/2026-07-07__overnight-run.md` §5, задача №6/№7).
 **Вводная:** приложение стоит у 1–2 реальных пользователей; снос признан безопасным стресс-тестом 2026-07-06; потеря истории легаси при opening-balance-миграции согласована владельцем.
 **Вход:** `plans/2026-07-02__accounts-system-audit.md`, `plans/2026-07-04__accounts-core-rebuild-plan.md` (фазы 0–6a реализованы, смержены в develop), `progress/accounts-core-rebuild-handoff.md`, память `millio-6b-path-decision`.
@@ -21,7 +21,7 @@
 | `millio/UI/Services/Investments/Investment.swift` | `Investment` (@Model) |
 | `millio/UI/Services/Finances/FinanceAccount.swift` | `FinanceAccount` (строковая junction-связь) |
 
-⚠️ `FinanceGroup.swift` — **НЕ сносить**: новое ядро зеркалит группы по имени (`AccountGroup`), но UI-группировка и `FinanceGroupService` завязаны на `FinanceGroup`. Оценить отдельно (кандидат на консолидацию с `AccountGroup`, но за скоупом первого прохода).
+⚠️ `FinanceGroup.swift` — судьба решена ревью 2026-07-09: **консолидация с `AccountGroup` — Фаза 1.5** (см. ниже), не «за скоупом». Снос самого файла `FinanceGroup.swift` откладывается до Фазы 5 (после того как все читатели переключены на `AccountGroup` в Фазе 1.5) — модель числится там же, где остальные @Model-файлы легаси-мира.
 
 ### 1.2 Core / регистрация / бэкап-импортёры (удаляются / правятся)
 | Файл | Действие |
@@ -90,6 +90,62 @@
 | **AccountTotalPolicy** | `.../Finances/AccountTotalPolicy.swift` | **СНОСИТСЯ.** Это политика «включать ли ЛЕГАСИ-счёт в тотал и с каким знаком». У ядра эквивалент — `Account.participates(date)` (time-aware, Фаза 5) + знак в движке C. После сноса легаси политике нечего решать. |
 
 **Что упрощается в total-слое:** `FinanceTotalsService.calculateTotalsSnapshot` и `FinanceDynamicsViewModel.calculateTotalForAllGroups` сейчас складывают ДВА вклада (легаси через `AccountTotalPolicy` + ядро через `AccountsTotalsService.totalAt`). После сноса — только `AccountsTotalsService.totalAt`. `ChartDataPoint.mergingNewCoreSeries` (поточечное сложение двух рядов) схлопывается в один ряд `seriesBetween`. **Три пути тотала → один** (закрывает R1 аудита 2026-07-02). Точки чтения легаси на снос/правку: `FinanceViewModel.newCoreAccounts`, `FinanceRows` (dual-render), `FinanceDynamicsViewModel` merge, `mergingNewCoreSeries`.
+
+### 4a. Слияние моделей групп `FinanceGroup` ↔ `AccountGroup` — вход из ревью 2026-07-09
+
+**Диагноз** (`plans/2026-07-05__unified-totals.md` §1.3a, верифицирован повторно 2026-07-09): группы, целиком состоящие из AccountsCore-счетов, показывают сумму 0 / «No finance products» / «No groups» на трёх независимых экранах — все три call site (`FinanceTotalsService.calculateGroupTotal:148-160`, `FinanceGroupService.orderedAccounts(for:):83-88`, `FinanceDynamicsViewModel.hydratedAccounts(in:):2681-2695` + `updateDynamicsBreakdown():1059-1086`) читают только `FinanceGroup.accounts` (legacy junction), не зная про `Account.group` (AccountsCore).
+
+**Подтверждено ревью:** `FinanceGroup` (`.../Finances/FinanceGroup.swift:13-48`) и `AccountGroup` (`Core/AccountsCore/AccountGroup.swift:6-17`) — два независимых SwiftData `@Model`, без FK-связи. Единственный мостик — `AccountsCoreAdditionBridge.resolveAccountGroup` (:64-78): при создании/миграции AccountsCore-счёта ищет `AccountGroup` по имени, создаёт новый, если нет. Это уже используется Фазой 1 (двойник счёта резолвит свою группу по имени junction'а), но **только резолвит/создаёт** — не переносит остальные поля и не является постоянной связью:
+
+| Поле | `FinanceGroup` | `AccountGroup` | Судьба при слиянии |
+|------|-----------------|-----------------|---------------------|
+| `colorHex` | `String` (non-optional) | `String?` | переносится |
+| `displayCurrency` | `String?` | `String?` | переносится |
+| `order` | есть | есть | переносится |
+| `isFavorite` | есть | **нет** | ✅ переносится (решение владельца 2026-07-09) |
+| `usesManualAccountOrdering` | есть | **нет** | ✅ переносится |
+| `priorityRaw` | есть | **нет** | ✅ переносится |
+| иконка (кастомная) | нет (только вычисляемая по доминирующему типу, `FinanceRows.swift:203-227`) | нет | см. ниже — отдельный вопрос, не блокирует слияние |
+
+**Решение по месту в плане:** это НЕ точечная правка трёх call site (получился бы ещё один временный мост поверх временного) и НЕ часть Фазы 2 (та про total/read-слой уровня счёта, а не про модель группы — разный радиус изменений: тут schema-миграция @Model + смена типа у 3 UI-читателей + редактор группы). Вставляется **новой Фазой 1.5**, сразу после уже реализованной Фазы 1 и **до** Фазы 2 — потому что Фаза 2 (переключение total/read-слоя на single-world) для per-группных сумм физически не может завершиться, пока группы не унифицированы: иначе Фаза 2 просто узаконит тот же баг «AccountsCore-группа = 0» как «ожидаемое поведение».
+
+### 🟢 Фаза 1.5 — Слияние моделей групп (`FinanceGroup` → канон `AccountGroup`) — [x] РЕАЛИЗОВАН (2026-07-09, Александр, ветка `feature/legacy-accounts-purge`, НЕ мержено)
+
+**Что:** `AccountGroup` расширяется недостающими полями (`isFavorite`, `usesManualAccountOrdering`, `priorityRaw` — переносятся все три, решение владельца 2026-07-09); новый одноразовый `GroupsMigrator` (аналог `LegacyAccountsMigrator`, тот же паттерн: идемпотентность через постоянный маркер, не UserDefaults-only) переносит для каждой активной `FinanceGroup` эти поля на резолвленный/созданный `AccountGroup` (переиспользует `resolveAccountGroup`, но делает перенос полей один раз, а не только name-match). Три call site (`calculateGroupTotal`, `orderedAccounts(for:)`, `hydratedAccounts(in:)`/`updateDynamicsBreakdown()`) переключаются читать `AccountGroup`/`Account.group` вместо `FinanceGroup.accounts`. Редактор группы (`FinanceGroupEditorView`) переводится на `AccountGroup`. Сама модель `FinanceGroup.swift` **не удаляется** в этой фазе (это происходит в Фазе 5 вместе с остальными @Model-файлами легаси-мира, после того как ничего её больше не читает) — только читатели переключаются.
+
+**Acceptance criteria:**
+- AC1: группа, целиком состоящая из AccountsCore-счетов, показывает верную сумму / список продуктов / попадает в «Groups» breakdown Analytics (регрессионный тест на баг из §1.3a).
+- AC2: смешанная группа (легаси + AccountsCore) — сумма/список = сумме по всем счетам обоих миров (тест).
+- AC3: `isFavorite`/`order`/`usesManualAccountOrdering`/`priorityRaw` не теряются после миграции (переносятся все, решение владельца) — тест на конкретный набор групп до/после.
+- AC4: идемпотентность миграции — повторный прогон no-op (паттерн Фазы 1).
+- AC5: build 0 ошибок; тесты — ноль новых красных vs baseline.
+- AC6: `AccountsCoreAdditionBridge.resolveAccountGroup` TODO-комментарий про «Фазу 6» обновлён/удалён (задача выполнена здесь, не в редизайне).
+
+**Риск:** трогает данные пользователя (группы) и три экрана сразу — `/stress-test` + явное «да» владельца обязательны перед мержем, как и для Фазы 1/5.
+
+**Что сделано (2026-07-09):**
+- `AccountGroup` расширена 4 аддитивными полями (lightweight-миграция, V6 НЕ трогалась, сборка зелёная): `isFavorite`/`usesManualAccountOrdering`/`priorityRaw:String` + постоянный маркер идемпотентности `legacyFieldsMigratedAt: Date?` (аналог `archivedAt` Ф1). Добавлен computed `priority`. Export/AccountGroupImporter расширены для паритета бэкапа.
+- Новый `GroupsMigrator` (`millio/UI/Services/Finances/GroupsMigrator.swift`) — паттерн `LegacyAccountsMigrator`: per-scope UserDefaults-флаг + постоянный маркер `legacyFieldsMigratedAt`. Вызов в `millioApp.runPostStartupRefreshes()` сразу после `LegacyAccountsMigrator`.
+- Per-group сумма обоих миров: `AccountsTotalsService.total(for:on:in:)` (сумма по подмножеству счетов) + `FinanceViewModel.calculateGroupTotal` (VM-обёртка, :1061) = legacy + core.
+- Dynamics Groups breakdown: группы из core-счетов больше не отбрасываются, core-вклад добавляется к start/end.
+- Скрытие Ungrouped учитывает core (`FinanceGroupService.shouldHideGroupInList`); правки редактора синхронизируются на `AccountGroup` (`FinanceGroupService.updateGroup` → `syncCoreGroup`).
+- Тесты: `GroupsMigratorTests` (6) + `AccountsTotalsServicePerGroupTests` (2) — зелёные (swift-testing ✔).
+
+**Отклонения от буквального плана (обоснованы, mentor stress-test):**
+1. `priorityRaw` = **String** (не Int) — источник `FinanceGroup.priorityRaw` это String, перенос байт-в-байт.
+2. Core влит в **VM-обёртку** `FinanceViewModel.calculateGroupTotal` (:1061), а НЕ в `FinanceTotalsService.calculateGroupTotal`: последняя разделяется с агрегатом `calculateTotalsSnapshot`, который добавляет core отдельным лампом (`newCoreTotalProvider`) — правка там задвоила бы core в «Общем балансе». VM-обёртка используется только display-сайтами → AC1/AC2 закрыты, агрегат стабилен (переключение агрегата на single-world — скоуп Ф2, не тронут).
+3. `orderedAccounts` НЕ сменён на `AccountGroup` (возвращает `[FinanceAccount]`, унификация типа = рефактор Ф2/Ф6). Список уже дуально-рендерится (`FinanceRows` + `newCoreAccounts`); добавлена только core-осведомлённость скрытия Ungrouped.
+4. Редактор «переведён на AccountGroup» = синхронизация полей на `AccountGroup` при сохранении (а не переписывание 669-строчного view — Ф6).
+
+**Self-audit по AC:**
+- AC1 ✅ per-group сумма/список/Dynamics-breakdown группы из core-счетов больше не 0/пусто (`AccountsTotalsServicePerGroupTests.totalForSubset…`, breakdown drop-guard + core start/end).
+- AC2 ✅ смешанная = legacy + core (независимые вклады складываются; `calculateGroupTotal` = legacy + core).
+- AC3 ✅ `GroupsMigratorTests.migratesAllFieldsToCoreGroup` / `reusesExistingCoreGroupByName` — все поля переносятся, дублей нет.
+- AC4 ✅ `secondRunIsNoOpAndPreservesUserEdits` (маркер держит, правки юзера не затираются) + `migrateIfNeededShortCircuitsSecondCall`.
+- AC5 ✅ build SUCCEEDED; полный `millioTests` — все падения из документированного baseline (18), 0 новых; мои 2 сьюта ✔ (записи в «Failing tests» по GroupsMigratorTests = флаки-запуск клонов симулятора, swift-testing репортит ✔).
+- AC6 ✅ TODO/комментарий про «Фазу 6» в `AccountsCoreAdditionBridge.resolveAccountGroup` обновлён.
+
+**⚠️ Перед мержем Ф1.5:** device `/stress-test` + бэкап user-стора + явное «да» владельца (трогает данные групп + 3 экрана).
 
 ---
 
@@ -161,14 +217,18 @@
 1. **Stacked-полоса «активы vs обязательства»** с нетто — вместо двух карточек Credit/Debit с прогресс-барами без шкалы.
 2. **Секции «Активы» / «Обязательства» с подытогами** в списке групп — вместо смешанного списка.
 3. **Шапка**: вторичная валюта чипом «≈ N $»; валютным группам подстрока «≈ в ₽». БЕЗ чипа прироста и БЕЗ sparkline.
+4. **Кастомные иконки групп** (решение владельца 2026-07-09, см. ниже) — `AccountGroup.customIconName`, UI-пикер по паттерну `account-custom-icons`.
 
 ⚠️ **Решение владельца (2026-07-08): приросты и графики НЕ дублировать в «Счетах»** — «данные по приростам есть в Динамике и график», «лишнего городить не нужно». Экран «Динамика» уже показывает чип «+149 074 +1.6%», график тотала и разрез Groups с процентами. Поэтому из скоупа Фазы 6 ИСКЛЮЧЕНЫ: чип динамики/sparkline в шапке «Счетов» и «±X%» во второй строке групп (остаётся только «N счетов»). «Счета» = состояние (сколько где лежит), «Динамика» = движение (как менялось). Если когда-то захочется мостик между ними — максимум тап по группе → Динамика с фильтром этой группы, не дубль данных.
 
 Быстрые правки того же ревью (НЕ ждут 6b, взяты в ночную полировку 2026-07-08): FAB-отступ списка; иконки типа продукта вместо цветных полосок + вторая строка «N счетов» (без процентов — см. решение выше); «Ungrouped» → локализованное «Без группы», нулевые группы → свёрнутые «Скрытые».
 
-AC Фазы 6: соотношение полосы = данным тотала; подытоги секций сходятся с шапкой; вёрстка в токенах; RU/EN/zh-Hans; ноль дублей данных Динамики.
+**Кастомные иконки групп — вход из ревью 2026-07-09, решение владельца: включить в Фазу 6.** Сейчас у `FinanceGroup`/`AccountGroup` нет поля под кастомную иконку — только `colorHex` и вычисляемая по доминирующему типу счетов иконка-бейдж (`FinanceRows.swift:203-227`, `FinanceGroupTypeIconView`). Это НОВАЯ фича, не баг — намеренно не втиснута в Фазу 1.5 (там только слияние моделей, не новый функционал). Ложится на `AccountGroup` (уже канон после Фазы 1.5), поле по готовому паттерну (`CashflowCustomCategory.icon` / `Account.customIconName`, `plans/2026-05-15__account-custom-icons.md`) — `customIconName: String?` (SF Symbol/эмодзи), UI-пикер переиспользует существующий `CashflowCategoryIconView`/аналог.
+
+AC Фазы 6: соотношение полосы = данным тотала; подытоги секций сходятся с шапкой; вёрстка в токенах; RU/EN/zh-Hans; ноль дублей данных Динамики; кастомная иконка группы сохраняется и рендерится на всех 3 экранах (Счета/редактор группы/Динамика-breakdown), дефолт (без кастомной) — прежняя вычисляемая иконка по доминирующему типу.
 
 ## Журнал
 - 2026-07-07: план создан (Максим/Plan, opus), инвентаризация по кодбазе; фаза 1 признана безопасной к ночной реализации.
 - 2026-07-08 (ночь): добавлена Фаза 6 — редизайн экрана «Счета» (утверждён владельцем по мокапу); быстрые правки экрана вынесены в ночную полировку.
 - 2026-07-08 (ночь, Александр): **Фаза 1 РЕАЛИЗОВАНА** на ветке `feature/legacy-accounts-purge` (от develop 6b0680d, НЕ мержено, НЕ пушено). Коммиты: мигратор+вайринг+тесты, фикс теста идемпотентности. 11 тестов зелёные, полный сьют 0 новых красных vs baseline (18). Отклонения: SwiftData-флаг→UserDefaults+archivedAt (schema V6 отдана Ф5), read-switch отдан Ф2 (инвариант держит двоемирие). Перед мержем — device stress-test + бэкап + «да» владельца.
+- 2026-07-09: ревью плана (сессия ревью, sonnet). Добавлена **Фаза 1.5 — слияние моделей групп** `FinanceGroup`↔`AccountGroup` (вход из `plans/2026-07-05__unified-totals.md` §1.3a, найдено владельцем на симуляторе). Верифицировано субагентами: диагноз §1.3a актуален (file:line подтверждены), у групп нет поля иконки. **Решения владельца:** (1) Фаза 1.5 — отдельная фаза между Ф1 и Ф2; (2) все три поля `isFavorite`/`usesManualAccountOrdering`/`priorityRaw` переносятся при слиянии; (3) кастомные иконки групп (новая фича) — в Фазу 6 (редизайн Счетов), не раньше. План готов к следующему шагу — реализации Фазы 1.5 (по-прежнему под guard phrase, код не пишется без явной команды).

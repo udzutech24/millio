@@ -388,6 +388,7 @@ final class FinanceViewModel: ViewModelProtocol {
             ungroupedGroupName: self.ungroupedGroupName,
             groupsProvider: { [weak self] in self?.state.groups ?? [] },
             accountInfoResolver: { [weak self] account in self?.getAccountInfo(account: account) != nil },
+            coreAccountsCount: { [weak self] group in self?.newCoreAccounts(matching: group).count ?? 0 },
             onLoadGroups: { [weak self] in self?.loadGroups() },
             onLoadAccounts: { [weak self] in self?.loadAccounts() },
             onCalculateTotal: { [weak self] in self?.calculateTotalAmount() },
@@ -1057,9 +1058,21 @@ final class FinanceViewModel: ViewModelProtocol {
         return (delta, pct)
     }
 
-    /// Подсчитать сумму группы в указанной валюте
+    /// Подсчитать сумму группы в указанной валюте — ОБА мира (Фаза 1.5 слияния групп): легаси-junction
+    /// (`FinanceGroup.accounts` через `totalsService`) + счета нового ядра, привязанные к одноимённой
+    /// `AccountGroup` (`newCoreAccounts(matching:)`). Пока легаси не снесена (Фаза 5) — читаются оба;
+    /// группа целиком из core-счетов больше не даёт 0 (баг §1.3a плана unified-totals).
+    ///
+    /// ВАЖНО: это ДИСПЛЕЙНЫЙ per-group тотал (карточка группы/редактор/строки). Агрегат «Общий баланс»
+    /// (`totalsService.calculateTotalsSnapshot`) вызывает `FinanceTotalsService.calculateGroupTotal`
+    /// НАПРЯМУЮ и добавляет core одним лампом через `newCoreTotalProvider` — сюда он не заходит, поэтому
+    /// core здесь НЕ задваивается в общем балансе (переключение агрегата на single-world — Фаза 2).
     func calculateGroupTotal(group: FinanceGroup, in currency: String) async -> Double {
-        await totalsService.calculateGroupTotal(group: group, in: currency)
+        let legacyTotal = await totalsService.calculateGroupTotal(group: group, in: currency)
+        let coreAccounts = newCoreAccounts(matching: group)
+        guard !coreAccounts.isEmpty else { return legacyTotal }
+        let coreTotal = await accountsTotalsService.total(for: coreAccounts, on: nowProvider(), in: currency)
+        return legacyTotal + NSDecimalNumber(decimal: coreTotal).doubleValue
     }
 
 

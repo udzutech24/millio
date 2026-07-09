@@ -1078,12 +1078,17 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             
             // Подготавливаем данные для групп до входа в TaskGroup
             let groupsData = await MainActor.run {
-                groupsToShow.enumerated().compactMap { index, groupItem -> (Int, String, String, [String], [String])? in
+                groupsToShow.enumerated().compactMap { index, groupItem -> (Int, String, String, [String], [String], Bool)? in
                     let groupAccounts = self.getAccounts(for: groupItem)
                     let filteredAccounts = selectedAccountIDs.isEmpty
                         ? groupAccounts
                         : groupAccounts.filter { selectedAccountIDs.contains($0.accountUniqueID) }
-                    if filteredAccounts.isEmpty { return nil }
+                    // Счета нового ядра включаем, только когда НЕ фильтруем по конкретным легаси-счетам
+                    // (у core нет legacy-`accountUniqueID`, выбор счетов — легаси-UI). Фаза 1.5: группа
+                    // из одних core-счетов больше не выпадает из Groups breakdown (баг §1.3a).
+                    let includeCore = selectedAccountIDs.isEmpty
+                        && !self.financeViewModel.newCoreAccounts(matching: groupItem).isEmpty
+                    if filteredAccounts.isEmpty && !includeCore { return nil }
                     let accountCardIDs = Set(filteredAccounts.compactMap { account -> String? in
                         if account.accountType == .card {
                             return account.accountID
@@ -1095,7 +1100,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         groupItem.groupUniqueID,
                         groupItem.name,
                         filteredAccounts.map(\.accountUniqueID),
-                        Array(accountCardIDs)
+                        Array(accountCardIDs),
+                        includeCore
                     )
                 }
             }
@@ -1103,7 +1109,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             var orderedItems: [Int: DynamicsBreakdownItem] = [:]
 
             await withTaskGroup(of: (Int, DynamicsBreakdownItem?).self) { group in
-                for (index, groupID, groupName, accountIDs, accountCardIDsArray) in groupsData {
+                for (index, groupID, groupName, accountIDs, accountCardIDsArray, includeCore) in groupsData {
                     group.addTask { @MainActor in
                         guard let groupItem = self.state.groups.first(where: { $0.groupUniqueID == groupID }) else {
                             return (index, nil)
@@ -1112,10 +1118,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         let filteredAccounts = self
                             .getAccounts(for: groupItem)
                             .filter { accountIDs.contains($0.accountUniqueID) }
-                        guard !filteredAccounts.isEmpty else {
+                        // Core-счета группы (Фаза 1.5) — считаются, только если фильтр не по легаси-счетам.
+                        let coreAccounts = includeCore
+                            ? self.financeViewModel.newCoreAccounts(matching: groupItem)
+                            : []
+                        guard !filteredAccounts.isEmpty || !coreAccounts.isEmpty else {
                             return (index, nil)
                         }
                         let accountCardIDs = Set(accountCardIDsArray)
+                        let targetCurrency = self.state.displayCurrency
 
                         async let startBalanceTask = self.calculateBalanceAtDate(
                             accounts: filteredAccounts,
@@ -1131,10 +1142,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             debtAsNegative: true,
                             includeInitialBeforeCreation: false
                         )
-                        
-                        let startBalance = await startBalanceTask
-                        let endBalance = await endBalanceTask
-                        
+                        // Вклад core-счетов в валюте экрана (та же, что у calculateBalanceAtDate) на обе даты.
+                        async let coreStartTask = coreAccounts.isEmpty ? Decimal(0)
+                            : self.financeViewModel.accountsTotalsService.total(for: coreAccounts, on: startDate, in: targetCurrency)
+                        async let coreEndTask = coreAccounts.isEmpty ? Decimal(0)
+                            : self.financeViewModel.accountsTotalsService.total(for: coreAccounts, on: endDate, in: targetCurrency)
+
+                        let startBalance = await startBalanceTask + NSDecimalNumber(decimal: await coreStartTask).doubleValue
+                        let endBalance = await endBalanceTask + NSDecimalNumber(decimal: await coreEndTask).doubleValue
+
                         // Для групп считаем чистый баланс (долги учитываем со знаком минус)
                         let delta = endBalance - startBalance
                         let percent = self.calculateDeltaPercent(delta: delta, startBalance: startBalance)

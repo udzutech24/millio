@@ -583,6 +583,16 @@ struct millioApp: App {
                 AppLogger.log(.info, category: "AccountsCore",
                               "Legacy migration [\(scopeIdentifier)]: \(summary.migrated) мигрировано, \(summary.skippedAlreadyConverted) уже, \(summary.failures) ошибок")
             }
+
+            // 6b Фаза 1.5: перенос полей легаси-групп (isFavorite/priority/ordering/color/currency/order)
+            // на одноимённые AccountGroup. После миграции счетов (выше) группы-двойники уже существуют —
+            // здесь дозаполняем их поля. Идемпотентно (legacyFieldsMigratedAt-маркер на AccountGroup).
+            let groupsMigrator = GroupsMigrator(modelContext: modelContainer.mainContext)
+            let groupsSummary = groupsMigrator.migrateIfNeeded(scopeIdentifier: scopeIdentifier)
+            if groupsSummary.migrated > 0 {
+                AppLogger.log(.info, category: "AccountsCore",
+                              "Groups merge [\(scopeIdentifier)]: \(groupsSummary.migrated) групп перенесено")
+            }
         }
 
         // Fire-and-forget: бэкфилл снапшотов — фоновая пересборка потенциально длинной истории
