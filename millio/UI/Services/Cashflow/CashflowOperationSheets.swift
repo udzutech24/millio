@@ -55,42 +55,6 @@ enum CashflowCategorySheetBootstrap {
         return calendar.date(from: components) ?? monthStart
     }
 }
-struct CashflowIncomeTransactionSheet: View {
-    @ObservedObject var viewModel: CashflowViewModel
-    let initialHistoryCardID: String?
-
-    init(viewModel: CashflowViewModel, initialHistoryCardID: String? = nil) {
-        self.viewModel = viewModel
-        self.initialHistoryCardID = initialHistoryCardID
-    }
-
-    var body: some View {
-        CashflowCategoryTransactionSheet(
-            viewModel: viewModel,
-            kind: .income,
-            initialHistoryCardID: initialHistoryCardID
-        )
-    }
-}
-
-struct CashflowExpenseTransactionSheet: View {
-    @ObservedObject var viewModel: CashflowViewModel
-    let initialHistoryCardID: String?
-
-    init(viewModel: CashflowViewModel, initialHistoryCardID: String? = nil) {
-        self.viewModel = viewModel
-        self.initialHistoryCardID = initialHistoryCardID
-    }
-
-    var body: some View {
-        CashflowCategoryTransactionSheet(
-            viewModel: viewModel,
-            kind: .expense,
-            initialHistoryCardID: initialHistoryCardID
-        )
-    }
-}
-
 struct CashflowTransferTransactionSheet: View {
     @ObservedObject var viewModel: CashflowViewModel
 

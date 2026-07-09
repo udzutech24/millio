@@ -19,10 +19,6 @@ final class CashflowViewModel: ViewModelProtocol {
     
     @Published var state = CashflowState()
 
-    /// Per-tab черновики быстрого ввода (Ф3d): переживают закрытие/переоткрытие
-    /// единого шита, т.к. живут в VM, а не в @State панели.
-    @Published private(set) var quickEntryDrafts: [CashflowTransactionType: CashflowQuickEntryDraft] = [:]
-
     /// Anti-double-tap guard (Ф3d): защищает от повторного сохранения при быстром
     /// двойном тапе CTA/гонке двух вызовов persist на MainActor.
     @Published private(set) var isPersistingTransaction: Bool = false
@@ -717,24 +713,6 @@ final class CashflowViewModel: ViewModelProtocol {
             replacing: existingTransaction,
             dismissEditorOnSuccess: dismissEditorOnSuccess
         )
-    }
-
-    // MARK: - Quick-entry drafts (Ф3d)
-
-    func quickEntryDraft(for type: CashflowTransactionType) -> CashflowQuickEntryDraft {
-        quickEntryDrafts[type] ?? CashflowQuickEntryDraft()
-    }
-
-    func updateQuickEntryDraft(_ draft: CashflowQuickEntryDraft, for type: CashflowTransactionType) {
-        if draft.isEmpty {
-            quickEntryDrafts[type] = nil
-        } else {
-            quickEntryDrafts[type] = draft
-        }
-    }
-
-    func clearQuickEntryDraft(for type: CashflowTransactionType) {
-        quickEntryDrafts[type] = nil
     }
 
     func isAmountAvailable(

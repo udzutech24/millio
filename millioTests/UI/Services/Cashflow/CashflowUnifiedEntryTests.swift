@@ -3,8 +3,7 @@
 //  millioTests
 //
 //  Регресс-тесты Фазы 3 редизайна add-flow (чекпоинт 3d):
-//  per-tab черновики быстрого ввода, идемпотентность открытия шита и
-//  anti-double-tap при сохранении транзакции.
+//  идемпотентность открытия шита и anti-double-tap при сохранении транзакции.
 //
 
 import Foundation
@@ -43,56 +42,6 @@ struct CashflowUnifiedEntryTests {
         defaults.removePersistentDomain(forName: suiteName)
         defaults.set("RUB", forKey: "primaryCurrencyCode")
         return defaults
-    }
-
-    // MARK: - Per-tab drafts
-
-    @Test("Черновик быстрого ввода: сумма+валюта переживают переоткрытие для каждого таба")
-    func draftsPersistPerTab() throws {
-        let vm = CashflowViewModel(modelContext: try makeContext(), defaults: makeIsolatedDefaults())
-
-        // По умолчанию черновик пуст.
-        #expect(vm.quickEntryDraft(for: .expense) == CashflowQuickEntryDraft())
-        #expect(vm.quickEntryDraft(for: .income) == CashflowQuickEntryDraft())
-
-        vm.updateQuickEntryDraft(
-            CashflowQuickEntryDraft(amountText: "150", note: "обед", selectedCardID: "card-1", overrideCurrency: "USD"),
-            for: .expense
-        )
-        vm.updateQuickEntryDraft(
-            CashflowQuickEntryDraft(amountText: "5000", overrideCurrency: "EUR"),
-            for: .income
-        )
-        vm.updateQuickEntryDraft(
-            CashflowQuickEntryDraft(amountText: "42", overrideCurrency: "GBP"),
-            for: .transfer
-        )
-
-        // Черновики независимы по табам (переживают «переоткрытие» = повторное чтение из VM).
-        #expect(vm.quickEntryDraft(for: .expense).amountText == "150")
-        #expect(vm.quickEntryDraft(for: .expense).overrideCurrency == "USD")
-        #expect(vm.quickEntryDraft(for: .income).amountText == "5000")
-        #expect(vm.quickEntryDraft(for: .income).overrideCurrency == "EUR")
-        #expect(vm.quickEntryDraft(for: .transfer).amountText == "42")
-        #expect(vm.quickEntryDraft(for: .transfer).overrideCurrency == "GBP")
-
-        // Расходный черновик не протёк в доходный.
-        #expect(vm.quickEntryDraft(for: .income).note == "")
-    }
-
-    @Test("Пустой черновик очищается из VM, непустой — сохраняется")
-    func emptyDraftIsCleared() throws {
-        let vm = CashflowViewModel(modelContext: try makeContext(), defaults: makeIsolatedDefaults())
-
-        vm.updateQuickEntryDraft(CashflowQuickEntryDraft(amountText: "10"), for: .expense)
-        #expect(vm.quickEntryDrafts[.expense] != nil)
-
-        vm.updateQuickEntryDraft(CashflowQuickEntryDraft(), for: .expense)
-        #expect(vm.quickEntryDrafts[.expense] == nil)
-
-        vm.updateQuickEntryDraft(CashflowQuickEntryDraft(amountText: "20"), for: .expense)
-        vm.clearQuickEntryDraft(for: .expense)
-        #expect(vm.quickEntryDrafts[.expense] == nil)
     }
 
     // MARK: - Idempotent open

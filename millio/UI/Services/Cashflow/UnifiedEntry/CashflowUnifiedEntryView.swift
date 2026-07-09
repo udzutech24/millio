@@ -60,7 +60,6 @@ struct CashflowCategoryTransactionSheet: View {
     @State private var hasCompletedInitialLoad: Bool = false
     @State private var suppressNextCategoryTap: Bool = false
     @State private var showReorderSheet: Bool = false
-    @State private var quickEntryCategory: CashflowCategoryOption?
     @FocusState private var isSearchFieldFocused: Bool
     private let outerCornerRadius: CGFloat = 22
     private let innerCornerRadius: CGFloat = 16
@@ -302,29 +301,6 @@ struct CashflowCategoryTransactionSheet: View {
                     handleCategoryDeletion(preview: preview, targetRaw: targetRaw)
                 }
             }
-            .overlay {
-                // Инлайн-панель быстрого ввода вместо второго .sheet (§2.1.2, Ф3b):
-                // остаёмся в одном модальном контексте единого экрана.
-                if let option = quickEntryCategory {
-                    CashflowQuickEntryPanel(
-                        viewModel: viewModel,
-                        option: option,
-                        kind: kind,
-                        selectedMonth: selectedMonth,
-                        onSave: {
-                            reloadMonthlyTotal(focusingOn: option.rawValue)
-                        },
-                        onOpenFullEditor: { category in
-                            selectedCategory = category
-                        },
-                        onDismiss: {
-                            withAnimation(AppAnimation.medium) { quickEntryCategory = nil }
-                        }
-                    )
-                    .zIndex(2)
-                }
-            }
-            .animation(AppAnimation.medium, value: quickEntryCategory)
             .overlay(alignment: .bottom) {
                 if let pendingCategoryUndoAction {
                     CashflowCategoryUndoBanner(action: pendingCategoryUndoAction) {
@@ -820,7 +796,7 @@ struct CashflowCategoryTransactionSheet: View {
                     suppressNextCategoryTap = false
                     return
                 }
-                quickEntryCategory = option
+                selectedCategory = option
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .top, spacing: 8) {

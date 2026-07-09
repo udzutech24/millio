@@ -423,21 +423,6 @@ struct CashflowHistoryQuery {
     var categoryRawValue: String? = nil
 }
 
-// MARK: - Quick-entry draft (Ф3d)
-
-/// Черновик быстрого ввода одного таба (доход/расход). Хранится в VM, поэтому
-/// переживает закрытие и повторное открытие единого шита.
-struct CashflowQuickEntryDraft: Equatable {
-    var amountText: String = ""
-    var note: String = ""
-    var selectedCardID: String? = nil
-    var overrideCurrency: String? = nil
-
-    var isEmpty: Bool {
-        amountText.isEmpty && note.isEmpty && selectedCardID == nil && overrideCurrency == nil
-    }
-}
-
 // MARK: - Cashflow Actions
 
 enum CashflowAction {

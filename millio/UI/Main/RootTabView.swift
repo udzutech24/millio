@@ -106,12 +106,12 @@ struct RootTabView: View {
         }
         .sheet(isPresented: $showIncomeSheet) {
             if let vm = cashflowViewModel {
-                CashflowIncomeTransactionSheet(viewModel: vm)
+                CashflowUnifiedEntryContainer(viewModel: vm, initialTab: .incomes)
             }
         }
         .sheet(isPresented: $showExpenseSheet) {
             if let vm = cashflowViewModel {
-                CashflowExpenseTransactionSheet(viewModel: vm)
+                CashflowUnifiedEntryContainer(viewModel: vm, initialTab: .expenses)
             }
         }
         .sheet(isPresented: $showTransferSheet) {
