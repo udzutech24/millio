@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-10T01:00:00Z",
+  "updated": "2026-07-10T02:30:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -11,12 +11,12 @@
     {
       "name": "Ф1.5 — слияние моделей групп FinanceGroup↔AccountGroup",
       "status": "done",
-      "note": "e90c1a3 + фикс адверс-ревью 369c57c (маркер в backup/restore, дубли имён логируются); 8 тестов, build ок, 0 новых красных; Release-билд на симуляторе 26.5; НЕ мержено"
+      "note": "e90c1a3 + фикс адверс-ревью 369c57c (маркер в backup/restore, дубли имён логируются); build ок; Release-билд на симуляторе 26.5; НЕ мержено. ⚠️ 2026-07-10: GroupsMigratorTests обнаружен падающим (container-retention баг в тесте, не в проде) через xcresulttool — прежняя пометка «8/8 ✔» была ложным позитивом текстового summary xcodebuild; нужен маленький отдельный фикс теста"
     },
     {
       "name": "Ф2 — агрегат тотала single-world + снос AccountTotalPolicy (scoped)",
       "status": "done",
-      "note": "80ad7cc: calculateTotalsSnapshot core-only + заголовок Динамики получил ядро (закрыт gap unified-totals Ф4); AccountTotalPolicy снесён (инлайн); AC1/AC2 тесты, 3 FinanceViewModelTests мигрированы; build ок, 0 новых красных; НЕ мержено"
+      "note": "80ad7cc + фикс адверс-ревью (transient «баланс≈0» на первом запуске — миграция перенесена до .ready в millioApp.swift, вариант (а)): calculateTotalsSnapshot core-only + заголовок Динамики получил ядро (закрыт gap unified-totals Ф4); AccountTotalPolicy снесён (инлайн); AC1/AC2 + LegacyMigrationOrderingTests (2) тесты, 3 FinanceViewModelTests мигрированы; build ок, релевантные сьюты 0 новых красных (проверено через xcresulttool ground truth); НЕ мержено"
     },
     {
       "name": "Ф2b — остаток read-слоя (mergingNewCoreSeries, FinanceRows/orderedAccounts, VM.calculateGroupTotal)",

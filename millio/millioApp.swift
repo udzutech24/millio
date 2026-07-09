@@ -253,6 +253,13 @@ struct millioApp: App {
         await authManager.restoreSession()
         AppLogger.log(.info, category: "App", "Auth restored — isAuthenticated=\(authManager.isAuthenticated) userID=\(authManager.currentUser?.id ?? "nil")")
         await synchronizeDataScope(with: authManager.currentUser) {
+            // 6b Фаза 2 (фикс адверсариального ревью 2026-07-10): легаси→core миграция ДО .ready.
+            // Агрегат «Общий баланс» стал core-only (FinanceTotalsService.calculateTotalsSnapshot) —
+            // если FinanceViewModel монтируется раньше миграции, первый расчёт видит core пустым и
+            // показывает «баланс ≈ 0» (ни мигратор, ни конвертер не публикуют FinanceEvent — авто-
+            // пересчёта нет, transient держится до случайного триггера или рестарта). Здесь — на
+            // финальном (пост-swap) контейнере, гарантированно до конструирования RootTabView/VM.
+            await self.runLegacyAccountsMigrationIfNeeded()
             await useCase.initialize()
         }
         AppLogger.log(.info, category: "App", "Active scope after sync: \(activeDataScope.storeConfigurationName), storeExisted=\(activeScopeStoreExistedBeforeBinding)")
@@ -571,30 +578,10 @@ struct millioApp: App {
 
         await financeStartupWarmupUseCase?.warmupIfNeeded()
 
-        // 6b Фаза 1: одноразовая opening-balance-миграция активных легаси-счетов (Card/Credit/Investment)
-        // в ядро AccountsCore. Синхронно на MainActor и ДО фонового бэкфилла: двойники должны появиться
-        // раньше пересчётов/бэкфилла. Идемпотентно (archivedAt-скрытие легаси) и обратимо (unconvert);
-        // инвариант тотала держится двоемирием (скрытая легаси = 0, двойник вносит равный вклад).
-        if let modelContainer = diContainer?.modelContainer {
-            let scopeIdentifier = activeDataScope.storeConfigurationName
-            let migrator = LegacyAccountsMigrator(modelContext: modelContainer.mainContext)
-            let summary = migrator.migrateIfNeeded(scopeIdentifier: scopeIdentifier)
-            if summary.migrated > 0 || summary.failures > 0 {
-                AppLogger.log(.info, category: "AccountsCore",
-                              "Legacy migration [\(scopeIdentifier)]: \(summary.migrated) мигрировано, \(summary.skippedAlreadyConverted) уже, \(summary.failures) ошибок")
-            }
-
-            // 6b Фаза 1.5: перенос полей легаси-групп (isFavorite/priority/ordering/color/currency/order)
-            // на одноимённые AccountGroup. После миграции счетов (выше) группы-двойники уже существуют —
-            // здесь дозаполняем их поля. Идемпотентно (legacyFieldsMigratedAt-маркер на AccountGroup,
-            // сериализуется в export/import — переживает backup/restore, фикс дефекта ревью 2026-07-09).
-            let groupsMigrator = GroupsMigrator(modelContext: modelContainer.mainContext)
-            let groupsSummary = groupsMigrator.migrateIfNeeded(scopeIdentifier: scopeIdentifier)
-            if groupsSummary.migrated > 0 {
-                AppLogger.log(.info, category: "AccountsCore",
-                              "Groups merge [\(scopeIdentifier)]: \(groupsSummary.migrated) групп перенесено")
-            }
-        }
+        // 6b Фаза 2 (фикс ревью 2026-07-10): легаси→core миграция ПЕРЕНЕСЕНА отсюда — теперь
+        // вызывается раньше, ДО lifecycle == .ready (см. runLegacyAccountsMigrationIfNeeded и
+        // initializeColdStart). Здесь (после .ready, после монтирования RootTabView) было слишком
+        // поздно: FinanceViewModel уже успевал посчитать core-only агрегат тотала на пустом ядре.
 
         // Fire-and-forget: бэкфилл снапшотов — фоновая пересборка потенциально длинной истории
         // (годы событий на счёт), не должна задерживать остальные пост-старт шаги. Партиальный
@@ -602,6 +589,38 @@ struct millioApp: App {
         if let coordinator = accountSnapshotBackfillCoordinator {
             let scopeIdentifier = activeDataScope.storeConfigurationName
             Task { await coordinator.backfillIfNeeded(scopeIdentifier: scopeIdentifier) }
+        }
+    }
+
+    /// 6b Фаза 2 (фикс адверсариального ревью 2026-07-10): одноразовая opening-balance-миграция
+    /// активных легаси-счетов (Card/Credit/Investment) в ядро AccountsCore + перенос полей легаси-
+    /// групп. Вызывается ИЗ initializeColdStart ДО useCase.initialize() (который выставляет
+    /// lifecycle = .ready) — на финальном (пост-swap) контейнере, но раньше, чем RootTabView вообще
+    /// монтируется. Синхронная и быстрая (1–2 счёта у текущих юзеров, без сетевых вызовов) —
+    /// перенос раньше .ready не меняет её стоимость, только устраняет transient «баланс ≈ 0» на
+    /// первом кадре (агрегат тотала core-only с Фазы 2, а FinanceViewModel не пересчитывает сам
+    /// себя после миграции — ни мигратор, ни конвертер не публикуют FinanceEvent).
+    @MainActor
+    private func runLegacyAccountsMigrationIfNeeded() async {
+        guard let modelContainer = diContainer?.modelContainer else { return }
+        let scopeIdentifier = activeDataScope.storeConfigurationName
+
+        let migrator = LegacyAccountsMigrator(modelContext: modelContainer.mainContext)
+        let summary = migrator.migrateIfNeeded(scopeIdentifier: scopeIdentifier)
+        if summary.migrated > 0 || summary.failures > 0 {
+            AppLogger.log(.info, category: "AccountsCore",
+                          "Legacy migration [\(scopeIdentifier)]: \(summary.migrated) мигрировано, \(summary.skippedAlreadyConverted) уже, \(summary.failures) ошибок")
+        }
+
+        // 6b Фаза 1.5: перенос полей легаси-групп (isFavorite/priority/ordering/color/currency/order)
+        // на одноимённые AccountGroup. После миграции счетов (выше) группы-двойники уже существуют —
+        // здесь дозаполняем их поля. Идемпотентно (legacyFieldsMigratedAt-маркер на AccountGroup,
+        // сериализуется в export/import — переживает backup/restore, фикс дефекта ревью 2026-07-09).
+        let groupsMigrator = GroupsMigrator(modelContext: modelContainer.mainContext)
+        let groupsSummary = groupsMigrator.migrateIfNeeded(scopeIdentifier: scopeIdentifier)
+        if groupsSummary.migrated > 0 {
+            AppLogger.log(.info, category: "AccountsCore",
+                          "Groups merge [\(scopeIdentifier)]: \(groupsSummary.migrated) групп перенесено")
         }
     }
 
