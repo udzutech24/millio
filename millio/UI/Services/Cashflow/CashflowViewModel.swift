@@ -18,7 +18,11 @@ final class CashflowViewModel: ViewModelProtocol {
     typealias Action = CashflowAction
     
     @Published var state = CashflowState()
-    
+
+    /// Anti-double-tap guard (Ф3d): защищает от повторного сохранения при быстром
+    /// двойном тапе CTA/гонке двух вызовов persist на MainActor.
+    @Published private(set) var isPersistingTransaction: Bool = false
+
     let modelContext: ModelContext
     private let historicalRateStore: HistoricalRateStore
     private let notificationManager: NotificationManagerProtocol
@@ -226,6 +230,9 @@ final class CashflowViewModel: ViewModelProtocol {
             loadTransactions()
             
         case .addTransaction(let type):
+            // Идемпотентность (Ф3d): шит уже открыт → повторный тап игнорируем,
+            // иначе двойной тап FAB/кнопки пере-инициализирует состояние редактора.
+            guard !state.showTransactionEditor else { return }
             // Обновляем список карт перед открытием редактора, чтобы видеть актуальные данные
             loadCards()
             loadInvestments()
@@ -691,7 +698,17 @@ final class CashflowViewModel: ViewModelProtocol {
         replacing existingTransaction: CashflowTransaction? = nil,
         dismissEditorOnSuccess: Bool = true
     ) async -> Bool {
-        await persistenceService.persistTransaction(
+        // Anti-double-tap (Ф3d): пока идёт сохранение — повторный вызов отклоняем,
+        // чтобы двойной тап CTA не создал дубль транзакции. Проверка/установка
+        // атомарны на MainActor.
+        if isPersistingTransaction { return false }
+        isPersistingTransaction = true
+        // Уступаем MainActor до начала работы: конкурентный второй вызов (двойной
+        // тап CTA) успевает увидеть выставленный флаг и отклониться, независимо от
+        // того, уступает ли слой персистентности сам по себе.
+        await Task.yield()
+        defer { isPersistingTransaction = false }
+        return await persistenceService.persistTransaction(
             transaction,
             replacing: existingTransaction,
             dismissEditorOnSuccess: dismissEditorOnSuccess

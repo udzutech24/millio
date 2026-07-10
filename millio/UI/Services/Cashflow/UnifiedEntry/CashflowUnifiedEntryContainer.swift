@@ -1,8 +1,10 @@
 //
-//  CashflowCategorySheetContainer.swift
+//  CashflowUnifiedEntryContainer.swift
 //  millio
 //
-//  Monzo-style PageTabView: Расходы | Доходы | Все транзакции
+//  Единый свайп-контейнер add-flow: Расход | Доход | Перевод (Фаза 3 редизайна).
+//  Таб «Всё» (browse-history) убран по требованию владельца (§2.1.2) — история
+//  доступна отдельной точкой входа на главном экране Cashflow.
 //
 
 import SwiftUI
@@ -12,7 +14,7 @@ import SwiftUI
 enum CashflowSheetTab: Int, CaseIterable, Identifiable {
     case expenses = 0
     case incomes  = 1
-    case all      = 2
+    case transfer = 2
 
     var id: Int { rawValue }
 
@@ -20,16 +22,16 @@ enum CashflowSheetTab: Int, CaseIterable, Identifiable {
         switch self {
         case .expenses: return L("cashflow.tab.expenses")
         case .incomes:  return L("cashflow.tab.incomes")
-        case .all:      return L("cashflow.tab.all")
+        case .transfer: return L("cashflow.tab.transfer")
         }
     }
 }
 
 // MARK: - Container
 
-struct CashflowCategorySheetContainer: View {
+struct CashflowUnifiedEntryContainer: View {
     @ObservedObject var viewModel: CashflowViewModel
-    /// Начальная вкладка задаётся caller'ом (income/expense → первая/вторая, transfer → all).
+    /// Начальная вкладка задаётся caller'ом (income/expense/transfer → соответствующий таб).
     var initialTab: CashflowSheetTab
 
     @State private var selectedTab: CashflowSheetTab
@@ -59,15 +61,18 @@ struct CashflowCategorySheetContainer: View {
                 )
                 .tag(CashflowSheetTab.incomes)
 
-                CashflowTransactionsHistoryView(
+                // Перевод: полный редактор без секции выбора типа операции —
+                // функционально идентичен прежнему CashflowTransferTransactionSheet.
+                CashflowTransactionEditorView(
                     viewModel: viewModel,
-                    showsDismissButton: true,
-                    initialFilter: .all
+                    transactionType: .transfer,
+                    showsTransactionTypeSection: false,
+                    customNavigationTitle: L("cashflow.operation.new_transfer")
                 )
-                .tag(CashflowSheetTab.all)
+                .tag(CashflowSheetTab.transfer)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .animation(.easeInOut(duration: 0.25), value: selectedTab)
+            .animation(AppAnimation.medium, value: selectedTab)
         }
         .background(Color.black)
     }
@@ -75,14 +80,14 @@ struct CashflowCategorySheetContainer: View {
     // MARK: - Segment picker
 
     private var segmentPicker: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: AppSpacing.xs) {
             ForEach(CashflowSheetTab.allCases) { tab in
                 segmentButton(for: tab)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.horizontal, AppSpacing.l)
+        .padding(.top, AppSpacing.m)
+        .padding(.bottom, AppSpacing.s)
     }
 
     private func segmentButton(for tab: CashflowSheetTab) -> some View {
@@ -90,13 +95,13 @@ struct CashflowCategorySheetContainer: View {
         let fg: Color = isSelected ? AppColors.textPrimary : AppColors.textPrimary.opacity(0.5)
         let bg: Color = isSelected ? Color.white.opacity(0.12) : .clear
         return Button(tab.title) {
-            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = tab }
+            withAnimation(AppAnimation.standard) { selectedTab = tab }
         }
-        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+        .font(isSelected ? .millioBodySemibold : .millioBodyRegular)
         .foregroundStyle(fg)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
+        .padding(.horizontal, AppSpacing.ml)
+        .padding(.vertical, AppSpacing.s)
         .background(bg, in: Capsule())
-        .animation(.easeInOut(duration: 0.18), value: selectedTab)
+        .animation(AppAnimation.fast, value: selectedTab)
     }
 }

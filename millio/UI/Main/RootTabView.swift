@@ -106,17 +106,22 @@ struct RootTabView: View {
         }
         .sheet(isPresented: $showIncomeSheet) {
             if let vm = cashflowViewModel {
-                CashflowIncomeTransactionSheet(viewModel: vm)
+                CashflowUnifiedEntryContainer(viewModel: vm, initialTab: .incomes)
             }
         }
         .sheet(isPresented: $showExpenseSheet) {
             if let vm = cashflowViewModel {
-                CashflowExpenseTransactionSheet(viewModel: vm)
+                CashflowUnifiedEntryContainer(viewModel: vm, initialTab: .expenses)
             }
         }
         .sheet(isPresented: $showTransferSheet) {
             if let vm = cashflowViewModel {
-                CashflowTransferTransactionSheet(viewModel: vm)
+                // Ф3: раньше здесь открывался старый двухшаговый CashflowTransferTransactionSheet
+                // в обход единого экрана (в отличие от FAB внутри самого таба Cashflow, который уже
+                // шёл через CashflowUnifiedEntryContainer, см. CashflowView.swift). Приводим к единому
+                // поведению — Перевод из глобального FAB/Dashboard тоже открывает unified-контейнер
+                // с сегмент-пикером Расход|Доход|Перевод.
+                CashflowUnifiedEntryContainer(viewModel: vm, initialTab: .transfer)
             }
         }
         .sheet(isPresented: $showProfileSheet) {

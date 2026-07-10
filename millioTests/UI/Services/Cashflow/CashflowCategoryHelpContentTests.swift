@@ -12,20 +12,28 @@ import Foundation
 struct CashflowCategoryHelpContentTests {
     @Test("Подсказка для доходов описывает экран и ключевые действия")
     func incomeHelpContainsMainGuidance() {
-        let content = CashflowCategoryHelpContent.make(for: .income)
+        // Swift Testing параллелит тесты внутри таргета: без явной фиксации языка
+        // тест зависит от ambient LanguageManager.shared, который другие l10n-тесты
+        // временно переключают (withLanguage). Пиним язык и сравниваем через L(),
+        // как это делают остальные l10n-тесты в проекте (см. AppLanguageTestSupport).
+        AppLanguageTestSupport.withLanguage(.russian) {
+            let content = CashflowCategoryHelpContent.make(for: .income)
 
-        #expect(content.title == String(localized: "cashflow.operation.help.title"))
-        #expect(content.notes.contains(String(localized: "cashflow.operation.help.note.currency_first")))
-        #expect(content.notes.contains(String(localized: "cashflow.operation.help.note.category_month")))
-        #expect(!content.notes.contains(String(localized: "cashflow.operation.help.note.income_history")))
+            #expect(content.title == L("cashflow.operation.help.title"))
+            #expect(content.notes.contains(L("cashflow.operation.help.note.currency_first")))
+            #expect(content.notes.contains(L("cashflow.operation.help.note.category_month")))
+            #expect(!content.notes.contains(L("cashflow.operation.help.note.income_history")))
+        }
     }
 
     @Test("Подсказка для расходов оставляет только короткие шаги без дублирующего вступления")
     func expenseHelpContainsHistoryRestoreNote() {
-        let content = CashflowCategoryHelpContent.make(for: .expense)
+        AppLanguageTestSupport.withLanguage(.russian) {
+            let content = CashflowCategoryHelpContent.make(for: .expense)
 
-        #expect(content.notes.contains(String(localized: "cashflow.operation.help.note.currency_first")))
-        #expect(content.notes.contains(String(localized: "cashflow.operation.help.note.category_month")))
-        #expect(!content.notes.contains(String(localized: "cashflow.operation.help.note.expense_history")))
+            #expect(content.notes.contains(L("cashflow.operation.help.note.currency_first")))
+            #expect(content.notes.contains(L("cashflow.operation.help.note.category_month")))
+            #expect(!content.notes.contains(L("cashflow.operation.help.note.expense_history")))
+        }
     }
 }

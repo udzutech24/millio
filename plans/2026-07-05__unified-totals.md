@@ -1,6 +1,6 @@
 # Единый источник правды для totals (Дашборд / Счета / Динамика) — 2026-07-05
 
-**Статус:** РЕАЛИЗОВАН (фазы 1–3), Фаза 4 — ЗАБЛОКИРОВАН (осознанно отложена, см. ниже)
+**Статус:** РЕАЛИЗОВАН (фазы 1–3), Фаза 4 — ЗАБЛОКИРОВАН, Фаза 5 — ЗАБЛОКИРОВАН (обе осознанно отложены, см. ниже)
 **Ветка:** `feature/unified-totals` (от `develop@258295d`, ядро AccountsCore уже смержено)
 **Владелец распорядился:** устранить класс бага «разные экраны показывают разный итог».
 
@@ -42,6 +42,20 @@
 Существующий тест `FinanceTotalsServiceAccountsCoreTests.swift` (AC2) проверяет только точку интеграции внутри `FinanceTotalsService` — не проверяет реальный путь Dynamics-заголовка. Его докстринг «Accounts-тотал и Analytics-тотал получают вклад нового ядра из ОДНОЙ функции» **не подтверждён для реального кода** (см. Фаза 4).
 
 Прежняя команда (`plans/2026-07-02__accounts-system-audit.md`, Фаза 3/5) уже проанализировала близкий класс проблемы (три пути тотала, R1) и явно отложила полную интеграцию AccountsCore в Dynamics-режимы `byAccounts`/`singleAccount` на «Фазу 1b» — с обоснованием (доп. сложность: delta, single-account fast path, синхронизация выбора счетов).
+
+### 1.3a. Третье, ещё более широкое расхождение — обнаружено 2026-07-09, НЕ входит в текущий фикс (см. Фаза 5)
+
+Владелец на симуляторе (develop, после миграции «Rebuild ядра счетов») увидел: группы, состоящие целиком из AccountsCore-счетов (напр. «Вклады» 5 accounts, «Акции» 11 accounts), показывают сумму **0** в списке групп на экране «Счета», список «No finance products» в редакторе группы, и полностью выпадают из вкладки «Groups» на графике Analytics/Dynamics («No groups»). Количество счетов при этом отображается верно — расходится только сумма/членство.
+
+Это ШИРЕ, чем Фаза 4 (которая только про заголовок «Динамика» в режиме «без фильтра, все счета сразу»). Здесь ломается сам per-группный путь — три независимых call site читают только legacy-связь `FinanceGroup.accounts` и не знают о `Account.group` (AccountsCore), потому что моста между `FinanceGroup` и `AccountGroup` пока нет (см. `AccountsCoreAdditionBridge.resolveAccountGroup`, комментарий «ВРЕМЕННЫЙ мэппинг по имени (до Фазы 6...)»):
+
+| Что | Файл:строки | Что делает не так |
+|---|---|---|
+| Сумма группы (экран «Счета») | `FinanceTotalsService.swift:148-160`, `calculateGroupTotal` | `guard let accounts = group.accounts else { return 0.0 }` — AccountsCore-счета не участвуют, а `FinanceRows.swift:203-208` (`totalAccountsCount`) их всё же считает в счётчике → разрыв «N accounts, но 0 ₽» |
+| Список счетов в редакторе группы | `FinanceGroupService.swift:88`, `orderedAccounts(for:)` | та же `group.accounts ?? []`, без AccountsCore → «No finance products» при непустой группе |
+| Вкладка «Groups» на Analytics/Dynamics | `FinanceDynamicsViewModel.swift:2681-2695`, `hydratedAccounts(in:)` + `updateDynamicsBreakdown()` (:1082-1086) | пустой legacy-список → `return nil` → группа целиком выпадает из breakdown → «No groups» |
+
+Настоящий фикс — это и есть «Фаза 6» из комментария в `AccountsCoreAdditionBridge.swift` (объединение `FinanceGroup` и `AccountGroup` в одну сущность), а не точечная правка трёх call site — иначе получится ещё один временный мост поверх временного моста.
 
 ### 1.4. Почему НЕ трогаем источник курса (осознанное решение)
 
@@ -87,6 +101,7 @@
 - [x] **Фаза 3 — хардненинг `FinanceTotalsService`.** `getAccountAmount` фильтрует archivedAt (card/credit/investment) + includeInTotal (credit) через `AccountTotalPolicy`. Комментарий про `newCoreTotalProvider` уточнён (ссылка на этот план вместо мёртвой `calculateTotalForAllGroups`). Регрессионный тест консистентности: один набор legacy-счетов (обычный/`includeInTotal=false`/архивный/кредит/кредитка с долгом/мультивалюта) → тотал Dynamics == тотал TotalsService.
   Статус: РЕАЛИЗОВАН.
 - [ ] **Фаза 4 (ЗАБЛОКИРОВАН, отдельная сессия) — AccountsCore в заголовке «Динамика».** Добавить `financeViewModel.accountsTotalsService.totalAt(date, in:)` в `updateCurrentBalanceAndDelta` для случая «все счета, без фильтра по группам/аккаунтам» (`state.selectedGroupIDs.isEmpty && state.selectedAccountIDs.isEmpty && !state.isSingleAccountMode`), аналогично уже существующему паттерну для графика (`ChartDataPoint.mergingNewCoreSeries`, Фаза AC3). Требует: учёт в `periodDelta` (стартовый баланс тоже должен включать AccountsCore на `startDate`), impact на single-account fast path, /stress-test (трогает протестированную дельту). НЕ реализовано в этой сессии — не было явно авторизовано, требует отдельного stress-test и решения владельца о размере (вероятно M). Зафиксировано здесь, чтобы не потерялось.
+- [ ] **Фаза 5 (НЕ НАЧАТ, отдельная сессия) — AccountsCore в per-группных totals/редакторе группы/Dynamics-breakdown.** Обнаружено 2026-07-09 при тестировании владельцем на симуляторе (см. 1.3a). Три call site читают только `FinanceGroup.accounts` (legacy): `FinanceTotalsService.calculateGroupTotal` (:148-160), `FinanceGroupService.orderedAccounts(for:)` (:88), `FinanceDynamicsViewModel.hydratedAccounts(in:)` (:2681-2695) + `updateDynamicsBreakdown()` (:1082-1086). Правильное решение — это «Фаза 6» из `AccountsCoreAdditionBridge.swift` (объединение `FinanceGroup`+`AccountGroup` в одну сущность), а не ещё один точечный мост. Требует: архитектурное решение по объединению групп двух миров, миграцию данных существующих групп, /stress-test (трогает суммы денег на 3 экранах сразу), решение владельца о размере (вероятно L, архитектурная задача). НЕ реализовано — не авторизовано, зафиксировано здесь, чтобы не потерялось.
 
 ---
 

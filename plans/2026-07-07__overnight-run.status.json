@@ -1,64 +1,69 @@
 {
   "planFile": "2026-07-07__overnight-run.md",
-  "title": "Overnight run 2026-07-07",
-  "updated": "2026-07-08T07:40:00+03:00",
+  "title": "Overnight run 07.07 + доверификация и мержи 08.07",
+  "updated": "2026-07-08T23:40:00+03:00",
   "phases": [
     {
-      "name": "Baseline — 18 преэкзистентных",
+      "name": "Ночной прогон (Ф0-Ф4, полировка, график, 6b Ф1, отчёт)",
       "status": "done",
-      "note": "465533a"
-    },
-    {
-      "name": "План 6b",
-      "status": "done",
-      "note": "готов, 72f68f4; +Фаза 6 (редизайн Счетов, утверждён)"
-    },
-    {
-      "name": "Ф1",
-      "status": "done",
-      "note": "СМЕРЖЕНА, 41ebf1e"
-    },
-    {
-      "name": "Ф2+Ф4",
-      "status": "done",
-      "note": "СМЕРЖЕНЫ, 44b5c6f"
-    },
-    {
-      "name": "Хвост Ф0 — «Предстоящие»",
-      "status": "in_progress",
-      "note": "sonnet, гейт: полный прогон тестов"
-    },
-    {
-      "name": "Ф3 — единый экран",
-      "status": "done",
-      "note": "ГОТОВА в feature/cashflow-phase3-unified-sheet, 0 новых красных, БЕЗ мержа — ждёт владельца"
-    },
-    {
-      "name": "UI-полировка Dashboard + быстрые правки Счетов + чистка",
-      "status": "done",
-      "note": "СМЕРЖЕНА в develop, c354a64"
-    },
-    {
-      "name": "График Cashflow вариант A",
-      "status": "in_progress",
-      "note": "вариант A, ветка поверх Ф3, идёт"
-    },
-    {
-      "name": "6b фаза 1",
-      "status": "pending",
-      "note": "opus, без мержа; первый кандидат на скип"
-    },
-    {
-      "name": "Сборки + отчёт",
-      "status": "pending",
       "note": "progress/2026-07-08-overnight-report.md"
     },
     {
-      "name": "Выключить caffeinate",
+      "name": "Верификация Ф3+график + фикс 2 финдингов",
+      "status": "done",
+      "note": "Transfer-FAB + локальный разделитель, 4c5cf02"
+    },
+    {
+      "name": "Ревью + верификация 6b Ф1",
+      "status": "done",
+      "note": "код корректен, гейт 0 новых; E2E-зазор = среда (нет iCloud)"
+    },
+    {
+      "name": "Диагностика locale-редов + фиксы",
+      "status": "done",
+      "note": "5 реально новых (не 13), все починены + флаки-пара"
+    },
+    {
+      "name": "Мерж fix/test-locale-pins",
+      "status": "done",
+      "note": "f2135ba"
+    },
+    {
+      "name": "Мерж Ф3+график",
+      "status": "done",
+      "note": "849413e"
+    },
+    {
+      "name": "Мерж 6b Ф1",
+      "status": "done",
+      "note": "15b3be2"
+    },
+    {
+      "name": "Финальный гейт на итоговом develop",
+      "status": "done",
+      "note": "1731 passed / 12 baseline failed / 0 новых; красных стало меньше"
+    },
+    {
+      "name": "Сборка develop на симулятор Pro Max",
+      "status": "done",
+      "note": "установлен develop@356ea02"
+    },
+    {
+      "name": "Push в origin (13 коммитов)",
       "status": "pending",
-      "note": ""
+      "note": "утром по команде — ночью запрещено регламентом"
+    },
+    {
+      "name": "TestFlight",
+      "status": "pending",
+      "note": "утром по команде → Nova"
+    },
+    {
+      "name": "Взгляд владельца: график на PRO + опц. ручной E2E 6b",
+      "status": "pending",
+      "note": "единственные непокрытые агентами зазоры"
     }
   ],
   "costUsd": null,
-  "etaMinutes": 300
+  "etaMinutes": null
 }

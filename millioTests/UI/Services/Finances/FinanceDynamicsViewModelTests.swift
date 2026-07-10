@@ -515,8 +515,13 @@ struct FinanceDynamicsViewModelTests {
         archivedCard.hasInitialBalance = true
         archivedCard.archivedAt = now
 
+        // FinanceSystemGroups.ungroupedName вычисляется через L() из ambient
+        // LanguageManager.shared при каждом обращении. Захватываем один раз в
+        // константу, чтобы не ловить гонку с другими (не-serialized) l10n-тестами,
+        // мутирующими язык между созданием группы и финальным #expect ниже.
+        let ungroupedName = FinanceSystemGroups.ungroupedName
         let activeGroup = FinanceGroup(name: "Вклады", colorHex: "#FFFFFF")
-        let ungroupedGroup = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: "#3C4B5E")
+        let ungroupedGroup = FinanceGroup(name: ungroupedName, colorHex: "#3C4B5E")
 
         let activeAccount = FinanceAccount(accountType: .card, accountID: activeCard.cardUniqueID)
         activeAccount.group = activeGroup
@@ -559,7 +564,7 @@ struct FinanceDynamicsViewModelTests {
         dynamicsViewModel.handle(.setShowArchivedAccounts(true))
         await dynamicsViewModel.updateDynamicsBreakdown()
 
-        #expect(dynamicsViewModel.state.dynamicsBreakdown.contains { $0.name == FinanceSystemGroups.ungroupedName })
+        #expect(dynamicsViewModel.state.dynamicsBreakdown.contains { $0.name == ungroupedName })
     }
 
     @Test("Aggregated chart хранит archived history, а header и breakdown остаются visible-only")

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import millio
 
@@ -135,5 +136,51 @@ struct AmountInputFormatterTests {
             maxFractionDigits: AmountInputFormatter.marketPriceFractionDigits
         )
         #expect(sanitized == "0.12345678")
+    }
+
+    // MARK: - sanitizeForDisplay (§7.4: разделитель дробной части по локали)
+
+    @Test("sanitizeForDisplay shows comma separator for ru locale")
+    func sanitizeForDisplayShowsCommaForRuLocale() {
+        let ruLocale = Locale(identifier: "ru_RU")
+        let displayed = AmountInputFormatter.sanitizeForDisplay("125.5", locale: ruLocale)
+        #expect(displayed == "125,5")
+    }
+
+    @Test("sanitizeForDisplay accepts comma input under ru locale and re-displays comma")
+    func sanitizeForDisplayAcceptsCommaInputForRuLocale() {
+        let ruLocale = Locale(identifier: "ru_RU")
+        let displayed = AmountInputFormatter.sanitizeForDisplay("125,5", locale: ruLocale)
+        #expect(displayed == "125,5")
+    }
+
+    @Test("sanitizeForDisplay keeps dot separator for en locale")
+    func sanitizeForDisplayKeepsDotForEnLocale() {
+        let enLocale = Locale(identifier: "en_US")
+        let displayed = AmountInputFormatter.sanitizeForDisplay("125.5", locale: enLocale)
+        #expect(displayed == "125.5")
+    }
+
+    @Test("sanitizeForDisplay keeps dot separator for zh-Hans locale")
+    func sanitizeForDisplayKeepsDotForSimplifiedChineseLocale() {
+        let zhLocale = Locale(identifier: "zh-Hans")
+        let displayed = AmountInputFormatter.sanitizeForDisplay("125.5", locale: zhLocale)
+        #expect(displayed == "125.5")
+    }
+
+    @Test("sanitizeForDisplay round-trips through parse regardless of locale separator")
+    func sanitizeForDisplayRoundTripsThroughParse() {
+        let ruLocale = Locale(identifier: "ru_RU")
+        let displayed = AmountInputFormatter.sanitizeForDisplay("007", locale: ruLocale)
+        #expect(displayed == "7")
+        let parsed = AmountInputFormatter.parse(displayed)
+        #expect(abs((parsed ?? 0) - 7) < 0.000_001)
+    }
+
+    @Test("sanitizeForDisplay preserves trailing separator while typing under ru locale")
+    func sanitizeForDisplayPreservesTrailingSeparatorForRuLocale() {
+        let ruLocale = Locale(identifier: "ru_RU")
+        let displayed = AmountInputFormatter.sanitizeForDisplay("125,", locale: ruLocale)
+        #expect(displayed == "125,")
     }
 }

@@ -221,22 +221,30 @@ struct CashflowTransactionEditorViewLayoutTests {
 
     @Test("Конфигурация cashflow-листа для дохода")
     func incomeSheetConfiguration() {
-        let kind = CashflowCategoryTransactionSheetKind.income
-        #expect(kind.navigationTitle == String(localized: "cashflow.operation.new_income"))
-        #expect(kind.monthlyTotalTitle == String(localized: "cashflow.operation.total_income_for_month"))
-        #expect(kind.categoryKind == .income)
-        #expect(kind.transactionType == .income)
-        #expect(kind.historyFilter == .income)
+        // Swift Testing параллелит тесты внутри таргета: без явной фиксации языка
+        // тест зависит от ambient LanguageManager.shared, который другие l10n-тесты
+        // временно переключают (withLanguage). Пиним язык и сравниваем через L(),
+        // как это делают остальные l10n-тесты в проекте (см. AppLanguageTestSupport).
+        AppLanguageTestSupport.withLanguage(.russian) {
+            let kind = CashflowCategoryTransactionSheetKind.income
+            #expect(kind.navigationTitle == L("cashflow.operation.new_income"))
+            #expect(kind.monthlyTotalTitle == L("cashflow.operation.total_income_for_month"))
+            #expect(kind.categoryKind == .income)
+            #expect(kind.transactionType == .income)
+            #expect(kind.historyFilter == .income)
+        }
     }
 
     @Test("Конфигурация cashflow-листа для расхода")
     func expenseSheetConfiguration() {
-        let kind = CashflowCategoryTransactionSheetKind.expense
-        #expect(kind.navigationTitle == String(localized: "cashflow.operation.new_expense"))
-        #expect(kind.monthlyTotalTitle == String(localized: "cashflow.operation.total_expense_for_month"))
-        #expect(kind.categoryKind == .expense)
-        #expect(kind.transactionType == .expense)
-        #expect(kind.historyFilter == .expense)
+        AppLanguageTestSupport.withLanguage(.russian) {
+            let kind = CashflowCategoryTransactionSheetKind.expense
+            #expect(kind.navigationTitle == L("cashflow.operation.new_expense"))
+            #expect(kind.monthlyTotalTitle == L("cashflow.operation.total_expense_for_month"))
+            #expect(kind.categoryKind == .expense)
+            #expect(kind.transactionType == .expense)
+            #expect(kind.historyFilter == .expense)
+        }
     }
 
     @Test("Для расходов быстрые переходы собраны в один горизонтальный ряд")
