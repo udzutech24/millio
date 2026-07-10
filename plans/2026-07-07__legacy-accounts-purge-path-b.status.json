@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-10T02:30:00Z",
+  "updated": "2026-07-10T03:45:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -11,7 +11,7 @@
     {
       "name": "Ф1.5 — слияние моделей групп FinanceGroup↔AccountGroup",
       "status": "done",
-      "note": "e90c1a3 + фикс адверс-ревью 369c57c (маркер в backup/restore, дубли имён логируются); build ок; Release-билд на симуляторе 26.5; НЕ мержено. ⚠️ 2026-07-10: GroupsMigratorTests обнаружен падающим (container-retention баг в тесте, не в проде) через xcresulttool — прежняя пометка «8/8 ✔» была ложным позитивом текстового summary xcodebuild; нужен маленький отдельный фикс теста"
+      "note": "e90c1a3 + фикс адверс-ревью 369c57c (маркер в backup/restore, дубли имён логируются); build ок; Release-билд на симуляторе 26.5; НЕ мержено. ✅ GroupsMigratorTests container-retention баг (найден 2026-07-10 через xcresulttool, ложный ✔ в текстовом summary xcodebuild) исправлен другим агентом (3a81230)"
     },
     {
       "name": "Ф2 — агрегат тотала single-world + снос AccountTotalPolicy (scoped)",
@@ -19,9 +19,14 @@
       "note": "80ad7cc + фикс адверс-ревью (transient «баланс≈0» на первом запуске — миграция перенесена до .ready в millioApp.swift, вариант (а)): calculateTotalsSnapshot core-only + заголовок Динамики получил ядро (закрыт gap unified-totals Ф4); AccountTotalPolicy снесён (инлайн); AC1/AC2 + LegacyMigrationOrderingTests (2) тесты, 3 FinanceViewModelTests мигрированы; build ок, релевантные сьюты 0 новых красных (проверено через xcresulttool ground truth); НЕ мержено"
     },
     {
-      "name": "Ф2b — остаток read-слоя (mergingNewCoreSeries, FinanceRows/orderedAccounts, VM.calculateGroupTotal)",
+      "name": "Ф2b — снос dual-path mergingNewCoreSeries, единый core-ряд графика",
+      "status": "done",
+      "note": "49fe371: ChartDataPoint.mergingNewCoreSeries снесён, замена addingCoreContribution (точный totalAt на даты легаси-скелета, не forward-fill); буквальный «core-only seriesBetween» отвергнут (стёр бы реальную легаси-историю — хуже MVP-ограничения); 45 protected Dynamics-тестов не тронуты, ChartDataPointMergeTests удалён, новый FinanceDynamicsCoreContributionTests (2); гейты только xcresulttool: 45/45 + 2/2 + полный сьют 15 failed = 100% baseline; НЕ мержено"
+    },
+    {
+      "name": "Ф2c — остаток read-слоя (FinanceRows/orderedAccounts, VM.calculateGroupTotal, per-account Dynamics «1b»)",
       "status": "pending",
-      "note": "escalated: несущий stitching графика + орфанит Ф4-код + нужен порт per-account Dynamics (1b) + device stress-test"
+      "note": "переименовано из Ф2b после реализации пункта (а) отдельно; орфанит Ф4-код + нужен device stress-test"
     },
     {
       "name": "Ф3 — живые писатели (StockBulkImport, ScreenshotSeeder) + create-views (не мёртвые!)",
