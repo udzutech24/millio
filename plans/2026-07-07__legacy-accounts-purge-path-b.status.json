@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-11T04:30:00Z",
+  "updated": "2026-07-10T22:22:59Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -65,8 +65,8 @@
     },
     {
       "name": "Ф5c.3 — снос EDIT-пути легаси (CardViewModel/CreditViewModel/InvestmentViewModel + isEditingLegacy)",
-      "status": "failed",
-      "note": "ЗАБЛОКИРОВАНА 2026-07-11 (стресс-тест, код НЕ тронут, коммитов нет) — premise-conflict, proven кодом: (1) в ядре нет update-API (AccountsCoreService=create/adjustBalance/buy/sell/archive/restore; AccountDetailView правит только balance+archive, не имя/валюту/мету/группу); (2) createMoneyAccountOnNewCore=CREATE-only → переиспользование для EDIT = механизм бага Ф6a; корректный core-EDIT = НОВЫЙ updateAccount = не минимальный порт; (3) легаси-EDIT-путь runtime-мёртв (миграция ставит archivedAt → getAccountInfo nil → строка выпадает из displayAccounts → EDIT-вход не рендерится). Симулятор-верификация непроводима (rich-редактора полей у core-счетов нет). Эскалация владельцу: выбор A (снести мёртвый путь как dead-code, rich-edit→Ф6) или B (построить updateAccount+rich-EDIT как отдельный M/L-проект). См. секцию «⛔ Блокер Ф5c.3» в плане"
+      "status": "done",
+      "note": "РЕАЛИЗОВАНА 2026-07-11 вариант A (коммит 1b4e60f, develop, НЕ push/merge). Снос runtime-мёртвого легаси-EDIT-пути: FinanceDynamicsView (fullProductEditSheetContent EDIT-конструктор, showFullProductEditSheet+.sheet+кнопка-шестерёнка, resolvedCard/Credit/Investment); FinanceAddAccountView (editingCard/Credit/Investment props+init, isEditingMode, все editingX-ветки, легаси-switch addAccount(), makeLegacyCard + 6 легаси-writers). 2 файла, net -382 строки. Три отклонения (briefing #3, доказано кодом): (1) 3 VM СОХРАНЕНЫ — backing ЖИВОЙ CREATE-формы (InlineCreateForms @ObservedObject), grep-финал не 0 (CardVM 3/CreditVM 4/InvestmentVM 4 файла), полное удаление=декаплинг create-формы→Ф6; (2) bridge isEditingLegacy-гуард сохранён (гард-тест AllPresetsOnNewCoreTests, Ф6a-защита), на 4 call-site передаётся false; (3) FinanceAccountService не тронут — archive/restore/physicallyDelete живут на легаси-management путях, EDIT-снос их не убил. Rich core-edit существующих счетов→Ф6, сейчас недоступен — НЕ регрессия (пробел с Ф1). Гейт: build 0 ошибок; xcresulttool 1747 passed/13 failed=baseline, 0 новых красных; AllPresetsOnNewCoreTests зелёный."
     },
     {
       "name": "Ф5c.4 — Cashback-порт (Card → Account), отдельный M-проект",
