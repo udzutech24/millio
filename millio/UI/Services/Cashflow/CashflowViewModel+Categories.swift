@@ -381,7 +381,20 @@ extension CashflowViewModel {
             debtAsNegative: true,
             includeInitialBeforeCreation: false
         )
-        return (start, end)
+
+        // 6b: легаси FinanceGroup/FinanceAccount пусты после миграции в AccountsCore, поэтому
+        // start/end выше = 0. Активы на дату теперь живут в ядре — добавляем core-вклад тем же
+        // движком (accountsTotalsService.totalAt), что даёт тотал на Дашборде и в Динамике
+        // (FinanceDynamicsViewModel.addingCoreContribution). Даты ДО первого снапшота ядро само
+        // трактует как 0 через Account.participates(on:) — новую семантику не вводим.
+        let totalsService = financeViewModel.accountsTotalsService
+        let coreStart = NSDecimalNumber(
+            decimal: await totalsService.totalAt(normalizedStartDate, in: state.displayCurrency)
+        ).doubleValue
+        let coreEnd = NSDecimalNumber(
+            decimal: await totalsService.totalAt(normalizedEndDate, in: state.displayCurrency)
+        ).doubleValue
+        return (start + coreStart, end + coreEnd)
     }
 
     func cardBalanceSnapshot(for cardID: String) -> CashflowCardBalanceSnapshot? {
