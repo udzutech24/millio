@@ -39,9 +39,19 @@
       "note": "5221736: снос доказанно-мёртвой легаси-редактор-поверхности (CardEditorView/CreditEditorView/InvestmentEditorView + FinanceEditViews/FinanceEditorWrappers/FinanceCreateViews + осиротевший тест + мёртвая обвязка FinanceViewModel/FinancesSheets, −3054 строк). DepositCashflowBridge верифицирован чистым. Escalation (доказано грепом→Ф5): гуарды isEditingLegacy живые (легаси-EDIT-путь FinanceAddAccountView через FinanceDynamicsView), CashflowBridge легаси-ветки несущие (историч. tx на легаси-ID, Card жив до Ф5), CardCatalog/CardManager/FinanceAccountService/FinanceInvestmentOrderService живут в God-VM/Cashback, легаси-VM+InlineCreateForms трогают живой экран. Cashback-узел (AC4): сквозная зависимость фичи от Card → выделенная миграция; остаточный блокер Card.swift (рекомендация б), решение владельца. Build ок, 1709 passed/26 failed = baseline/flaky (вкл. новый order-flaky GroupsMigratorTests.duplicateLegacyGroupNames — не Ф4), 0 новых красных (xcresulttool). НЕ мержено"
     },
     {
-      "name": "Ф5 — снос регистрации, схема V6, @Model-файлы (вкл. FinanceGroup.swift)",
-      "status": "pending",
-      "note": "device stress-test + бэкап обязательны"
+      "name": "Ф5a — Cashflow: пикер cash-подобных инвестиций → ядро, ремап cardID/investmentID, снос мёртвых инвест-ордеров",
+      "status": "done",
+      "note": "7d5e906: LegacyAccountConversion — isCashflowAccount Investment → .bankAccount (не .manualAsset), попадает в пикер Cashflow. LegacyAccountsMigrator.remapCashflowHistory() — cardID/toCardID/investmentID легаси→core UUID (только денежные kind). FinanceInvestmentOrderService.swift + tradeSheet/marketInvestmentDetailsView в FinanceDynamicsView + FinanceTradeCelebration* снесены целиком (grep-доказанная мёртвость: getMarketInvestment фильтрует archivedAt, недостижимо после Ф1-миграции — портирование заменено делецией). Build SUCCEEDED. НЕ мержено"
+    },
+    {
+      "name": "Ф5b — Cashback: ремап cardIDs + фикс backup-import (scoped)",
+      "status": "done",
+      "note": "c7ef57a: remapCashbackCardIDs() в LegacyAccountsMigrator (переиспользует remappedCashLikeAccountID). CashbackImporter — валидация cardIDs расширена на core Account.id (была строго Card, иначе restore пост-ремап всегда падал бы backupCorrupted). Build SUCCEEDED. Эскалировано: пикер Cashback (CardManager/CashbackViewModel/CashbackView ~2367 строк) остаётся легаси-only — новая абстракция уровня CashflowSelectableAccount не построена (это НОВАЯ фича, не порт). cleanInvalidCardIDs не триггерит на пустом availableCards — ремап не создаёт риска. НЕ мержено"
+    },
+    {
+      "name": "Ф5c — снос регистрации, схема V6, @Model-файлы (вкл. FinanceGroup.swift)",
+      "status": "blocked",
+      "note": "НЕ НАЧАТА — остановлено ментором после Ф5a/5b: свежий grep показал 76 файлов ещё ссылаются на легаси-типы (CashbackView/ViewModel ~3500 строк, CardViewModel/CreditViewModel/InvestmentViewModel живы через EDIT-путь, FinanceAccountService 11 живых сайтов, CardCatalog/CardManager, FinanceInvestmentOrderService-класса живых мостов, MarketData/ScopeMerge/DataIntegrityCleaner/DataResetService/SheetsDataMapper/TotalBalanceWidget/RateSourcePickerView/SheetsConnectionView, InlineCreateForms DTO-рефактор, isEditingLegacy guard removal). Объём — это отдельный L-Bulletproof, не остаток одного захода поверх Ф5a/5b. Требуется декомпозиция на под-фазы с device-тестами на каждой (Cashback-порт, CardViewModel/CreditViewModel/InvestmentViewModel-снос, Core-файлы, финальная схема+модели)."
     },
     {
       "name": "Ф6 — редизайн экрана Счета (после сноса)",
