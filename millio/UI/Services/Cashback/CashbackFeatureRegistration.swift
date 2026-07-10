@@ -76,10 +76,16 @@ struct CashbackImporter: ModelImporter {
         }
         let monthKey = (data["monthKey"] as? String) ?? Cashback.monthKey(for: Date(timeIntervalSince1970: createdAt))
         
+        // cardIDs может ссылаться либо на легаси `Card.cardUniqueID`, либо (после ремапа Фазы 5b
+        // плана 6b «Путь B») на `Account.id.uuidString` core-двойника — обе валидны, иначе restore
+        // бэкапа, снятого ПОСЛЕ ремапа, всегда падал бы с backupCorrupted.
         let cardDescriptor = FetchDescriptor<Card>()
         let cards = (try? context.fetch(cardDescriptor)) ?? []
-        let validUniqueIDs = Set(cards.map(\.cardUniqueID))
-        guard cardIDs.allSatisfy({ validUniqueIDs.contains($0) }) else {
+        let validLegacyIDs = Set(cards.map(\.cardUniqueID))
+        let accountDescriptor = FetchDescriptor<Account>()
+        let accounts = (try? context.fetch(accountDescriptor)) ?? []
+        let validCoreIDs = Set(accounts.map { $0.id.uuidString })
+        guard cardIDs.allSatisfy({ validLegacyIDs.contains($0) || validCoreIDs.contains($0) }) else {
             throw AppError.backupCorrupted
         }
         

@@ -119,8 +119,37 @@ final class LegacyAccountsMigrator {
         }
 
         remapCashflowHistory()
+        remapCashbackCardIDs()
 
         return summary
+    }
+
+    // MARK: - Ремап Cashback.cardIDs (Фаза 5b плана 6b «Путь B»)
+
+    /// Однократно переписывает `Cashback.cardIDs` с легаси `Card.uniqueID` на `Account.id` core-двойника
+    /// (та же денежная проверка kind, что `remapCashflowHistory`). Без этого привязка кэшбэка к карте
+    /// осиротевает после сноса легаси-моделей (Фаза 5c) — `CashbackViewModel.cleanInvalidCardIDs`
+    /// молча вычистила бы эти ID как «несуществующие». Идемпотентно по построению (см. `remapCashflowHistory`).
+    private func remapCashbackCardIDs() {
+        let cashbacks = (try? modelContext.fetch(FetchDescriptor<Cashback>())) ?? []
+        guard !cashbacks.isEmpty else { return }
+
+        var didChange = false
+        for cashback in cashbacks {
+            let remapped = cashback.cardIDs.map { remappedCashLikeAccountID(legacyUniqueID: $0) ?? $0 }
+            if remapped != cashback.cardIDs {
+                cashback.cardIDs = remapped
+                didChange = true
+            }
+        }
+
+        guard didChange else { return }
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "AccountsCore",
+                          "Legacy migration: ремап Cashback.cardIDs — \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Ремап истории Cashflow (Фаза 5a плана 6b «Путь B»)
