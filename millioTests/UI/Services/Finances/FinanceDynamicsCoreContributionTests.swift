@@ -268,4 +268,109 @@ struct FinanceDynamicsCoreContributionTests {
         let firstPoint = try #require(dynamicsViewModel.state.chartData.sorted { $0.date < $1.date }.first)
         #expect(abs(total.startValue - firstPoint.value) < 0.01, "Total Start должен совпасть с первой точкой графика (\(firstPoint.value)), а не быть 0")
     }
+
+    // MARK: - Ветка .groups: Start строки группы = домиграционный баланс легаси-предшественника (не 0)
+
+    @Test("Мигрированный счёт на вкладке «Группы»: Start строки группы = легаси-баланс до миграции (не 0)")
+    func migratedGroupRow_startUsesLegacyPredecessor() async throws {
+        let ctx = try makeContext()
+        let now = Date()
+        let createdAt = now.addingTimeInterval(-20 * 86_400)
+        let migratedAt = now.addingTimeInterval(-5 * 86_400)
+
+        let card = Card(name: "Легаси карта", cardNumber: "1234", cardType: .debit, currency: "RUB", balance: 100_000)
+        card.createdAt = createdAt
+        card.updatedAt = migratedAt
+        card.initialBalance = 100_000
+        card.hasInitialBalance = true
+        ctx.insert(card)
+
+        let group = FinanceGroup(name: "Основная", colorHex: "#FFFFFF")
+        ctx.insert(group)
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        ctx.insert(account)
+        try ctx.save()
+
+        let legacyUniqueID = card.cardUniqueID
+        defer { LegacyConversionRegistry.shared.remove(legacyUniqueID: legacyUniqueID) }
+        let flagDefaults = UserDefaults(suiteName: "core-group-pred-flag-\(UUID().uuidString)")!
+        let migrator = LegacyAccountsMigrator(
+            modelContext: ctx, registry: .shared, defaults: flagDefaults, nowProvider: { migratedAt }
+        )
+        #expect(migrator.migrateAll().migrated == 1)
+
+        let financeViewModel = FinanceViewModel(modelContext: ctx, currencyService: MockCurrencyRateService(), skipInitialLoad: true)
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: ctx, financeViewModel: financeViewModel, currencyService: MockCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.customPeriod = (start: now.addingTimeInterval(-10 * 86_400), end: now)
+        dynamicsViewModel.state.dynamicsMode = .aggregated
+        dynamicsViewModel.state.viewMode = .groups
+        await dynamicsViewModel.updateDynamicsBreakdown()
+
+        let breakdown = dynamicsViewModel.state.dynamicsBreakdown
+        let row = try #require(breakdown.first { $0.name == "Основная" }, "строка группы должна быть в breakdown")
+        // Start строки группы = легаси-баланс на начало периода (100 000), а НЕ 0 (симптом «у групп нет начала»).
+        #expect(abs(row.startValue - 100_000) < 0.01, "Start строки группы должен взять баланс легаси-предшественника core-счёта (100 000), не 0")
+        #expect(abs(row.endValue - 100_000) < 0.01, "End строки группы приходит от ядра после миграции (100 000)")
+    }
+
+    // MARK: - Ветка .groups: счета без группы попадают отдельной Ungrouped-строкой (паритет с «Счета»)
+
+    @Test("Вкладка «Группы»: core-счёт без группы показывается отдельной Ungrouped-строкой (паритет Total с «Счета»)")
+    func ungroupedCoreAccount_appearsAsUngroupedRowInGroupsBreakdown() async throws {
+        let ctx = try makeContext()
+        let createdAt = Date().addingTimeInterval(-60 * 86_400)
+
+        // Чистый core-счёт БЕЗ группы (group == nil) — эмулирует состояние после 6b, когда легаси пуста.
+        let accountsService = AccountsCoreService(modelContext: ctx)
+        let coreAccount = try accountsService.createAccount(
+            name: "Наличные без группы",
+            kind: .cash,
+            currency: "RUB",
+            openingBalance: 150_000,
+            group: nil,
+            date: createdAt
+        )
+        _ = coreAccount
+        try ctx.save()
+
+        let financeViewModel = FinanceViewModel(modelContext: ctx, currencyService: MockCurrencyRateService(), skipInitialLoad: true)
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: ctx, financeViewModel: financeViewModel, currencyService: MockCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.period = .month
+
+        // Groups: ungrouped-счёт должен присутствовать отдельной строкой, иначе Total групп занижен.
+        dynamicsViewModel.state.viewMode = .groups
+        await dynamicsViewModel.updateDynamicsBreakdown()
+        let groupsBreakdown = dynamicsViewModel.state.dynamicsBreakdown
+        let ungroupedRow = try #require(
+            groupsBreakdown.first { $0.name == FinanceSystemGroups.ungroupedName },
+            "core-счёт без группы должен попасть в Ungrouped-строку вкладки «Группы» (раньше выпадал → Total=0)"
+        )
+        #expect(abs(ungroupedRow.endValue - 150_000) < 0.01, "End Ungrouped-строки = баланс core-счёта без группы (150 000)")
+
+        let groupsTotal = try #require(FinanceDynamicsPresentation.totalRow(from: groupsBreakdown, viewMode: .groups))
+
+        // Accounts: тот же счёт виден per-account; Total обеих вкладок должен сойтись.
+        dynamicsViewModel.state.viewMode = .accounts
+        await dynamicsViewModel.updateDynamicsBreakdown()
+        let accountsBreakdown = dynamicsViewModel.state.dynamicsBreakdown
+        let accountsTotal = try #require(FinanceDynamicsPresentation.totalRow(from: accountsBreakdown, viewMode: .accounts))
+        #expect(abs(groupsTotal.endValue - accountsTotal.endValue) < 0.01,
+                "Total вкладок «Группы» и «Счета» должен совпадать после включения Ungrouped-строки")
+    }
 }

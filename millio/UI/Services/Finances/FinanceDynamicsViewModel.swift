@@ -1050,6 +1050,42 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         state.currencyBreakdown = items
     }
 
+    /// Легаси-счета, индексированные по `accountID` (== легаси `uniqueID`, ключ `LegacyConversionRegistry`).
+    /// Историческая выборка (distantPast…distantFuture) включает archived-предшественников мигрированных
+    /// core-счетов, скрытых из `.currentVisible`.
+    private func legacyAccountsByUniqueID() -> [String: FinanceAccount] {
+        Dictionary(
+            getAccountsForCalculation(
+                scope: .historicalInterval(DateInterval(start: .distantPast, end: .distantFuture))
+            ).map { ($0.accountID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    /// Вклад легаси-предшественников набора core-счетов на дату (реверс `LegacyConversionRegistry`).
+    /// До миграции 6b core-двойника не существовало → `accountsTotalsService.total` = 0 на домиграционных
+    /// датах, из-за чего Start строки/группы показывался 0 при живом графике. Добавляем баланс легаси-
+    /// двойника ТЕМ ЖЕ time-aware движком, что рисует скелет графика (`calculateBalanceAtDate`: archived-
+    /// счёт отдаёт реальный баланс для дат <= archivedAt, после — 0). Двойного счёта нет: конвертированный
+    /// легаси archived и в `.currentVisible`-строки не попадает.
+    private func legacyPredecessorContribution(
+        for coreAccounts: [Account],
+        on date: Date,
+        legacyByUniqueID: [String: FinanceAccount]
+    ) async -> Double {
+        var sum: Double = 0
+        for account in coreAccounts {
+            guard let legacyUniqueID = LegacyConversionRegistry.shared.legacyUniqueID(forCoreAccountID: account.id),
+                  let legacyAccount = legacyByUniqueID[legacyUniqueID] else { continue }
+            let cardIDs: Set<String> = legacyAccount.accountType == .card ? [legacyAccount.accountID] : []
+            sum += await calculateBalanceAtDate(
+                accounts: [legacyAccount], date: date,
+                accountCardIDs: cardIDs, debtAsNegative: true, includeInitialBeforeCreation: false
+            )
+        }
+        return sum
+    }
+
     /// Core-счета для ветки `.accounts` дашборда «Динамика»: каждый счёт — отдельная строка, суммы и
     /// дельта в валюте экрана через тот же `accountsTotalsService`, что и per-group суммы (Фаза 1.5).
     /// Уважает выбор групп (`selectedGroupIDs`); дедуп по `id`. Список короткий — считаем последовательно.
@@ -1066,44 +1102,33 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 coreAccounts.append(account)
             }
         }
+        // Ungrouped core-счета (`group == nil`) не входят ни в одну группу `state.groups` (ungrouped-
+        // псевдогруппа отфильтрована в fetchGroupsFromStore при пустой легаси-связи). Добавляем отдельными
+        // строками, чтобы Total вкладки «Счета» совпадал с вкладкой «Группы» (там — Ungrouped-строка).
+        // Только когда фильтр по группам не активен (иначе показываем лишь выбранные группы).
+        if state.selectedGroupIDs.isEmpty {
+            let ungroupedProbe = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: "#FFFFFF")
+            for account in financeViewModel.newCoreAccounts(matching: ungroupedProbe) where seen.insert(account.id).inserted {
+                coreAccounts.append(account)
+            }
+        }
         guard !coreAccounts.isEmpty else { return [] }
 
         // Легаси-предшественники (реверс LegacyConversionRegistry): до миграции 6b core-двойника не
-        // существовало, поэтому core.total(startDate)=0 и строка показывала Start=0 при живом графике
-        // («по графику цифры были, а показывает 0»). Добавляем баланс легаси-двойника ТЕМ ЖЕ time-aware
-        // движком, что рисует скелет графика (calculateBalanceAtDate: archived-счёт отдаёт реальный
-        // баланс только для дат <= archivedAt, после миграции — 0). Итог per-account идентичен
-        // комбинированному движку графика (легаси-скелет + core totalAt), поэтому и Total (сумма строк)
-        // согласован с первой точкой серии. Двойного счёта нет: конвертированный легаси archived и в
-        // .accounts-строки (scope .currentVisible) не попадает.
-        // Ключ реестра — легаси `uniqueID` (== `FinanceAccount.accountID`), а не `accountUniqueID`.
-        let legacyByUniqueID: [String: FinanceAccount] = Dictionary(
-            getAccountsForCalculation(
-                scope: .historicalInterval(DateInterval(start: .distantPast, end: .distantFuture))
-            ).map { ($0.accountID, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
+        // существовало → core.total(startDate)=0 и строка показывала Start=0 при живом графике
+        // («по графику цифры были, а показывает 0»). Добавляем баланс легаси-двойника тем же движком
+        // (legacyPredecessorContribution), что и per-group строки — итог per-account идентичен
+        // комбинированному движку графика, поэтому Total (сумма строк) согласован с первой точкой серии.
+        let legacyByUniqueID = legacyAccountsByUniqueID()
 
         var items: [DynamicsBreakdownItem] = []
         for account in coreAccounts {
-            var start = NSDecimalNumber(
+            let start = NSDecimalNumber(
                 decimal: await financeViewModel.accountsTotalsService.total(for: [account], on: startDate, in: currency)
-            ).doubleValue
-            var end = NSDecimalNumber(
+            ).doubleValue + (await legacyPredecessorContribution(for: [account], on: startDate, legacyByUniqueID: legacyByUniqueID))
+            let end = NSDecimalNumber(
                 decimal: await financeViewModel.accountsTotalsService.total(for: [account], on: endDate, in: currency)
-            ).doubleValue
-            if let legacyUniqueID = LegacyConversionRegistry.shared.legacyUniqueID(forCoreAccountID: account.id),
-               let legacyAccount = legacyByUniqueID[legacyUniqueID] {
-                let cardIDs: Set<String> = legacyAccount.accountType == .card ? [legacyAccount.accountID] : []
-                start += await calculateBalanceAtDate(
-                    accounts: [legacyAccount], date: startDate,
-                    accountCardIDs: cardIDs, debtAsNegative: true, includeInitialBeforeCreation: false
-                )
-                end += await calculateBalanceAtDate(
-                    accounts: [legacyAccount], date: endDate,
-                    accountCardIDs: cardIDs, debtAsNegative: true, includeInitialBeforeCreation: false
-                )
-            }
+            ).doubleValue + (await legacyPredecessorContribution(for: [account], on: endDate, legacyByUniqueID: legacyByUniqueID))
             // Знак уже заложен в total (loan/debt отрицательны) — как в ветке .groups, дельту не переворачиваем.
             let delta = end - start
             items.append(DynamicsBreakdownItem(
@@ -1174,6 +1199,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
 
             var orderedItems: [Int: DynamicsBreakdownItem] = [:]
+            // Легаси-предшественники для core-вклада групп (реверс реестра) — считаем один раз до TaskGroup.
+            let legacyByUniqueID = legacyAccountsByUniqueID()
 
             await withTaskGroup(of: (Int, DynamicsBreakdownItem?).self) { group in
                 for (index, groupID, groupName, accountIDs, accountCardIDsArray, includeCore) in groupsData {
@@ -1214,9 +1241,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             : self.financeViewModel.accountsTotalsService.total(for: coreAccounts, on: startDate, in: targetCurrency)
                         async let coreEndTask = coreAccounts.isEmpty ? Decimal(0)
                             : self.financeViewModel.accountsTotalsService.total(for: coreAccounts, on: endDate, in: targetCurrency)
+                        // Легаси-предшественники core-счетов группы: до миграции 6b core-total=0 → Start группы
+                        // показывал 0 при живом графике (симптом «у групп нет начала»). Тот же движок, что в .accounts.
+                        async let corePredStartTask = self.legacyPredecessorContribution(for: coreAccounts, on: startDate, legacyByUniqueID: legacyByUniqueID)
+                        async let corePredEndTask = self.legacyPredecessorContribution(for: coreAccounts, on: endDate, legacyByUniqueID: legacyByUniqueID)
 
-                        let startBalance = await startBalanceTask + NSDecimalNumber(decimal: await coreStartTask).doubleValue
-                        let endBalance = await endBalanceTask + NSDecimalNumber(decimal: await coreEndTask).doubleValue
+                        let startBalance = await startBalanceTask + NSDecimalNumber(decimal: await coreStartTask).doubleValue + (await corePredStartTask)
+                        let endBalance = await endBalanceTask + NSDecimalNumber(decimal: await coreEndTask).doubleValue + (await corePredEndTask)
 
                         // Для групп считаем чистый баланс (долги учитываем со знаком минус)
                         let delta = endBalance - startBalance
@@ -1245,7 +1276,53 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
 
             breakdown = groupsData.compactMap { orderedItems[$0.0] }
-            
+
+            // Ungrouped-строка (паритет с вкладкой «Счета»): счета без группы (легаси `group == nil` и
+            // core `group == nil`) выпадают из групповых строк — fetchGroupsFromStore отбрасывает пустую
+            // по легаси ungrouped-псевдогруппу (после 6b легаси-связь пуста), поэтому её нет в state.groups.
+            // На вкладке «Счета» они видны (per-account loop), из-за чего Total групп не сходился с Total
+            // счетов ровно на сумму Ungrouped. Добавляем строку тем же движком, что и обычные группы.
+            // Только когда фильтр по группам/счетам не активен (ungrouped-псевдогруппу не выбрать явно).
+            if selectedGroupIDs.isEmpty, selectedAccountIDs.isEmpty {
+                let shownLegacyIDs = Set(groupsData.flatMap { $0.3 })
+                let ungroupedLegacy = accounts.filter { !shownLegacyIDs.contains($0.accountUniqueID) }
+                let ungroupedProbe = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: "#FFFFFF")
+                let ungroupedCore = financeViewModel.newCoreAccounts(matching: ungroupedProbe)
+                if !ungroupedLegacy.isEmpty || !ungroupedCore.isEmpty {
+                    let currency = state.displayCurrency
+                    let ungroupedCardIDs = Set(ungroupedLegacy.compactMap { $0.accountType == .card ? $0.accountID : nil })
+                    let legacyStart = await calculateBalanceAtDate(
+                        accounts: ungroupedLegacy, date: startDate,
+                        accountCardIDs: ungroupedCardIDs, debtAsNegative: true, includeInitialBeforeCreation: false
+                    )
+                    let legacyEnd = await calculateBalanceAtDate(
+                        accounts: ungroupedLegacy, date: endDate,
+                        accountCardIDs: ungroupedCardIDs, debtAsNegative: true, includeInitialBeforeCreation: false
+                    )
+                    let coreStart = ungroupedCore.isEmpty ? 0
+                        : NSDecimalNumber(decimal: await financeViewModel.accountsTotalsService.total(for: ungroupedCore, on: startDate, in: currency)).doubleValue
+                    let coreEnd = ungroupedCore.isEmpty ? 0
+                        : NSDecimalNumber(decimal: await financeViewModel.accountsTotalsService.total(for: ungroupedCore, on: endDate, in: currency)).doubleValue
+                    let predStart = await legacyPredecessorContribution(for: ungroupedCore, on: startDate, legacyByUniqueID: legacyByUniqueID)
+                    let predEnd = await legacyPredecessorContribution(for: ungroupedCore, on: endDate, legacyByUniqueID: legacyByUniqueID)
+                    let startBalance = legacyStart + coreStart + predStart
+                    let endBalance = legacyEnd + coreEnd + predEnd
+                    let delta = endBalance - startBalance
+                    breakdown.append(DynamicsBreakdownItem(
+                        id: "ungrouped",
+                        name: ungroupedProbe.name,
+                        startValue: startBalance,
+                        endValue: endBalance,
+                        delta: delta,
+                        deltaPercent: calculateDeltaPercent(delta: delta, startBalance: startBalance),
+                        icon: nil,
+                        accountType: nil,
+                        isCreditCard: false,
+                        isArchived: false
+                    ))
+                }
+            }
+
         case .accounts:
             // Показываем каждый счет отдельно - вычисляем параллельно
             let accountsData = await MainActor.run {
