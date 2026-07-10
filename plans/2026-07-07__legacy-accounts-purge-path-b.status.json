@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-11T05:40:00Z",
+  "updated": "2026-07-11T07:10:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -85,8 +85,8 @@
     },
     {
       "name": "Ф5c.6 — финальный снос: схема V6, @Model-файлы, миграторы",
-      "status": "pending",
-      "note": "Card/Credit/Investment/FinanceAccount/FinanceGroup.swift + миграторы/конвертер/реестр, ОДНОВРЕМЕННО (SwiftData-ограничение). Пред-гейт: grep за пределами скоупа = 0 хитов. Критический риск — апгрейд-путь обязателен (юзер должен пройти билд Ф1–5b перед 5c.6), полный device stress-test перед мержем"
+      "status": "blocked",
+      "note": "ЗАБЛОКИРОВАНА 2026-07-11 (стресс-тест классификации, код НЕ тронут). Классификация 136 файлов: (a) ложные/comment-only=13; (b) removal-кластер=~19 (5 @Model + 7 менеджеров/VM + 3 легаси-FeatureRegistration + 5 миграторов/конвертеров + AppSchemaVersions); (c) живые потребители=~43 → проваливают пред-гейт стр.459. Доминанта (c): ВЕСЬ Finances-слой всё ещё на легаси-@Model — FinanceViewModel (65 ссылок, ЖИВАЯ RootTabView:337: state.groups:[FinanceGroup]/availableCards:[Card]/cardByID), FinanceDynamicsViewModel (56, FetchDescriptor<Card/Credit/Investment> :523-529), +FinanceAccountService(45)/FinanceGroupService(20)/FinanceDynamicsView(21)/FinanceTotalsService(11)/FinanceOverviewCardView(10)/ещё ~10. Прочие (c): data-critical ScopeMergeReader/Dedup/DataIntegrityCleaner/DataResetService (легаси-ветки нельзя пре-удалить §348, core обязан пережить), Cashflow-резолв (11), MarketData Investment-параметры (3, реальные), ScreenshotDataSeeder (rewrite), QuickSetupApplier/AccountsCoreAdditionBridge. Ментор-вердикт (правило 7): снос НЕ форсирован (форс=build-break ~250 ссылок ИЛИ тихая потеря данных); инверсия порядка фаз (снос зависит от реплатформинга Finances на core = Фаза 6 предшествует); version-gate НЕ реализован — преждевременно+небезопасно standalone (без V6 защищать нечего=YAGNI; на текущем билде до-миграционный юзер без маркера→ложная блокировка=регрессия; входит в removal-пакет с V6). Remaining-scope: 5c.7(L реплатформинг Finances+updateAccount, слить с Фазой 6)→5c.8(M Cashflow-резолв)→5c.9(S/M MarketData)→5c.10(M Seeder)→5c.11=снос когда пред-гейт зелёный. Гейт: docs-only диф→build/тесты неизменны от baseline 80c55d3 (1745/14) by construction"
     },
     {
       "name": "Багфиксы по ручной проверке владельца (Ф1–Ф5b)",
