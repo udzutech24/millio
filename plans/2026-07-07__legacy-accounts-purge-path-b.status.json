@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-11T07:10:00Z",
+  "updated": "2026-07-11T08:30:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -25,8 +25,8 @@
     },
     {
       "name": "Ф2c — остаток read-слоя (FinanceRows/orderedAccounts, VM.calculateGroupTotal, per-account Dynamics «1b»)",
-      "status": "pending",
-      "note": "переименовано из Ф2b после реализации пункта (а) отдельно; орфанит Ф4-код + нужен device stress-test"
+      "status": "blocked",
+      "note": "ЗАБЛОКИРОВАНА 2026-07-11 (стресс-тест «узкая ли независимо», код НЕ тронут). Grep-вердикт: все 3 пункта upstream-зависят от реплатформинга Finances → слита с 5c.7/Ф6, не узкая. (б) orderedAccounts(for:) — 3 def все FinanceGroup→[FinanceAccount] (FinanceViewModel:970/FinanceGroupService:88/FinanceDynamicsViewModel:2868), смена типа орфанит getAccountInfo (8 потребителей) + FinanceAccountRow (5) = Ф4+5c.7; (в) VM.calculateGroupTotal:892 ключён на FinanceGroup, стандалон-снос ломает ~11 тестов при 0 AC, само-схлопнётся на Ф4/5 = KISS-нарушение; (1b) per-account chart-modes в FinanceDynamicsViewModel (56 легаси-ссылок, FetchDescriptor<Card/Credit/Investment>:523-529). Диф docs-only → build/тесты неизменны от baseline 676e5c5 (1745/14) by construction"
     },
     {
       "name": "Ф3 — живые писатели (StockBulkImport, ScreenshotSeeder) + create-views (не мёртвые!)",
