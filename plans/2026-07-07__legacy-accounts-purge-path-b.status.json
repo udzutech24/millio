@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-10T03:45:00Z",
+  "updated": "2026-07-10T05:10:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -30,8 +30,8 @@
     },
     {
       "name": "Ф3 — живые писатели (StockBulkImport, ScreenshotSeeder) + create-views (не мёртвые!)",
-      "status": "pending",
-      "note": "grep опроверг «мёртвый код»: FinanceCreateViews/InlineCreateForms референсятся FinancesSheets/FinanceAddAccountView"
+      "status": "done",
+      "note": "52fff71: StockBulkImportServices на AccountsCoreService (scoped). ScreenshotDataSeeder — доказанный блокер (Cashback→легаси Card), эскалирован владельцу. FinanceCreateViews — подтверждён мёртвым (Ф4). InlineCreateForms — не писатель (DTO без insert), рефакторинг типов в Ф4. Build ок, 22 failed = 16 baseline + 1 LanguageManager + 5 нового UserDefaults-flaky (задокументирован), 0 новых от диффа"
     },
     {
       "name": "Ф4 — упрощение мостов + снос редакторов/VM/менеджеров",
