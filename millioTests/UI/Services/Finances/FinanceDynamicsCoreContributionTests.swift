@@ -373,4 +373,81 @@ struct FinanceDynamicsCoreContributionTests {
         #expect(abs(groupsTotal.endValue - accountsTotal.endValue) < 0.01,
                 "Total вкладок «Группы» и «Счета» должен совпадать после включения Ungrouped-строки")
     }
+
+    // MARK: - Инвариант единого источника: Total(Groups) == Total(Accounts) на смешанной фикстуре
+
+    @Test("Единый источник: Total вкладок «Группы» и «Счета» совпадает (2 группы + ungrouped + мигрированный + кредит), Ungrouped ровно одна строка")
+    func groupsAndAccountsTotalsMatch_onMixedFixture() async throws {
+        let ctx = try makeContext()
+        let now = Date()
+        let createdAt = now.addingTimeInterval(-40 * 86_400)
+        let migratedAt = now.addingTimeInterval(-5 * 86_400)
+
+        // Легаси-FinanceGroup для state.groups + одноимённые AccountGroup для core-счетов (матч по имени).
+        let financeGroupA = FinanceGroup(name: "Группа A", colorHex: "#111111")
+        let financeGroupB = FinanceGroup(name: "Группа B", colorHex: "#222222")
+        ctx.insert(financeGroupA)
+        ctx.insert(financeGroupB)
+        let coreGroupA = AccountGroup(name: "Группа A")
+        let coreGroupB = AccountGroup(name: "Группа B")
+        ctx.insert(coreGroupA)
+        ctx.insert(coreGroupB)
+
+        let accountsService = AccountsCoreService(modelContext: ctx)
+        // Группа A: актив + обязательство (кредит с отрицательным итогом) — проверяет знаковую агрегацию.
+        _ = try accountsService.createAccount(name: "Наличные A", kind: .cash, currency: "RUB", openingBalance: 200_000, group: coreGroupA, date: createdAt)
+        _ = try accountsService.createAccount(name: "Кредит A", kind: .loan, currency: "RUB", openingBalance: 500_000, group: coreGroupA, date: createdAt)
+        // Группа B: актив.
+        _ = try accountsService.createAccount(name: "Наличные B", kind: .cash, currency: "RUB", openingBalance: 300_000, group: coreGroupB, date: createdAt)
+        // Ungrouped: core без группы.
+        _ = try accountsService.createAccount(name: "Наличные без группы", kind: .cash, currency: "RUB", openingBalance: 150_000, group: nil, date: createdAt)
+
+        // Мигрированный легаси-счёт (в Группе B): проверяет путь легаси-предшественника.
+        let card = Card(name: "Легаси карта B", cardNumber: "9999", cardType: .debit, currency: "RUB", balance: 100_000)
+        card.createdAt = createdAt
+        card.updatedAt = migratedAt
+        card.initialBalance = 100_000
+        card.hasInitialBalance = true
+        ctx.insert(card)
+        let legacyAccount = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        legacyAccount.group = financeGroupB
+        financeGroupB.accounts = [legacyAccount]
+        ctx.insert(legacyAccount)
+        try ctx.save()
+
+        let legacyUniqueID = card.cardUniqueID
+        defer { LegacyConversionRegistry.shared.remove(legacyUniqueID: legacyUniqueID) }
+        let flagDefaults = UserDefaults(suiteName: "one-source-flag-\(UUID().uuidString)")!
+        let migrator = LegacyAccountsMigrator(modelContext: ctx, registry: .shared, defaults: flagDefaults, nowProvider: { migratedAt })
+        #expect(migrator.migrateAll().migrated == 1)
+
+        let financeViewModel = FinanceViewModel(modelContext: ctx, currencyService: MockCurrencyRateService(), skipInitialLoad: true)
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(modelContext: ctx, financeViewModel: financeViewModel, currencyService: MockCurrencyRateService())
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.period = .month
+
+        dynamicsViewModel.state.viewMode = .groups
+        await dynamicsViewModel.updateDynamicsBreakdown()
+        let groupsBreakdown = dynamicsViewModel.state.dynamicsBreakdown
+        let groupsTotal = try #require(FinanceDynamicsPresentation.totalRow(from: groupsBreakdown, viewMode: .groups))
+
+        // Ungrouped-строка ровно одна (регресс тройного Ungrouped: раньше псевдогруппа + синтетика двоили).
+        let ungroupedRows = groupsBreakdown.filter { $0.name == FinanceSystemGroups.ungroupedName }
+        #expect(ungroupedRows.count == 1, "Ungrouped должна быть ровно одна строка, а не дубли (баг тройного Ungrouped)")
+
+        dynamicsViewModel.state.viewMode = .accounts
+        await dynamicsViewModel.updateDynamicsBreakdown()
+        let accountsBreakdown = dynamicsViewModel.state.dynamicsBreakdown
+        let accountsTotal = try #require(FinanceDynamicsPresentation.totalRow(from: accountsBreakdown, viewMode: .accounts))
+
+        // Инвариант единого источника: обе вкладки агрегируют ОДНИ И ТЕ ЖЕ per-account строки.
+        #expect(abs(groupsTotal.startValue - accountsTotal.startValue) < 0.01,
+                "Start Total(Groups)=\(groupsTotal.startValue) должен совпасть с Total(Accounts)=\(accountsTotal.startValue)")
+        #expect(abs(groupsTotal.endValue - accountsTotal.endValue) < 0.01,
+                "End Total(Groups)=\(groupsTotal.endValue) должен совпасть с Total(Accounts)=\(accountsTotal.endValue)")
+    }
 }

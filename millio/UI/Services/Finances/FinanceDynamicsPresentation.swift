@@ -38,13 +38,24 @@ enum FinanceDynamicsPresentation {
         )
     }
 
+    /// Является ли строка обязательством (кредит/кредитка) — единый признак для знаковой математики.
+    static func isLiability(_ item: DynamicsBreakdownItem) -> Bool {
+        item.accountType == .credit || item.isCreditCard
+    }
+
+    /// Знаковое значение per-account строки: у обязательства баланс уменьшает капитал (`-abs`).
+    /// Единый источник знака для заголовка «Счета» и для агрегации строк групп — иначе Total вкладок
+    /// «Группы» и «Счета» расходятся на кредитах (баг тройного/знакового Ungrouped 2026-07).
+    static func signedAccountValue(_ value: Double, for item: DynamicsBreakdownItem) -> Double {
+        isLiability(item) ? -abs(value) : value
+    }
+
     private static func signedValue(
         _ value: Double,
         for item: DynamicsBreakdownItem,
         viewMode: DynamicsViewMode
     ) -> Double {
         guard viewMode == .accounts else { return value }
-        let isLiability = item.accountType == .credit || item.isCreditCard
-        return isLiability ? -abs(value) : value
+        return signedAccountValue(value, for: item)
     }
 }
