@@ -136,27 +136,6 @@ struct ChartDataPoint: Identifiable, Equatable {
     static func == (lhs: ChartDataPoint, rhs: ChartDataPoint) -> Bool {
         lhs.id == rhs.id && lhs.date == rhs.date && lhs.value == rhs.value
     }
-
-    /// Поточечно добавляет к точкам старого мира вклад нового ядра event-sourcing (Фаза 1a-ui, AC3).
-    /// Для каждой точки `points` берётся значение `newCoreSeries` на СОВПАДАЮЩИЙ или ближайший
-    /// ПРЕДЫДУЩИЙ календарный день (forward-fill того же дня — у нового ядра дырок нет by design,
-    /// т.к. `AccountsTotalsService.seriesBetween` строит одну точку на каждый календарный день).
-    /// Пустой `newCoreSeries` (нет ни одного нового счёта) не меняет `points` — no-op.
-    static func mergingNewCoreSeries(_ points: [ChartDataPoint], newCoreSeries: [(Date, Decimal)]) -> [ChartDataPoint] {
-        guard !newCoreSeries.isEmpty else { return points }
-        let calendar = Calendar(identifier: .gregorian)
-        let sorted = newCoreSeries.sorted { $0.0 < $1.0 }
-
-        return points.map { point in
-            guard let match = sorted.last(where: {
-                calendar.isDate($0.0, inSameDayAs: point.date) || $0.0 < point.date
-            }) else {
-                return point
-            }
-            let addition = NSDecimalNumber(decimal: match.1).doubleValue
-            return ChartDataPoint(date: point.date, value: point.value + addition, label: point.label)
-        }
-    }
 }
 
 // MARK: - Dynamics Mode
@@ -1360,13 +1339,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 debtAsNegative: useNetTotals,
                 liveEndBalance: liveEndBalanceAggr
             )
-            // Вклад нового ядра event-sourcing (Фаза 1a-ui, AC3) — только для агрегированного
+            // Вклад ядра event-sourcing (6b Фаза 2b, single-world) — только для агрегированного
             // "тотал-графика"; в byAccounts/singleAccount новые счета появятся в 1b вместе с
-            // переносом их выбора в общий список счетов Dynamics.
-            let newCoreSeries = await financeViewModel.accountsTotalsService.seriesBetween(
-                start: period.start, end: period.end, currency: state.displayCurrency
-            )
-            chartData = ChartDataPoint.mergingNewCoreSeries(chartData, newCoreSeries: newCoreSeries)
+            // переносом их выбора в общий список счетов Dynamics. Снесён dual-path
+            // (`mergingNewCoreSeries` + отдельный дневной `seriesBetween`-ряд с forward-fill
+            // приближением): точный запрос ядра НА ТЕ ЖЕ даты легаси-скелета, без промежуточного
+            // массива/эвристики совпадения дат.
+            chartData = await addingCoreContribution(chartData, currency: state.displayCurrency)
             guard isCurrentChartUpdateRevision(revision) else { return }
             state.chartData = chartData
 
@@ -1415,6 +1394,31 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
     }
     
+    /// 6b Фаза 2b (single-world): добавляет вклад ядра event-sourcing в каждую точку легаси-
+    /// скелета НА ТУ ЖЕ дату — точный запрос через `AccountsTotalsService.totalAt`, без
+    /// промежуточного дневного ряда и forward-fill приближения (замена снесённому
+    /// `ChartDataPoint.mergingNewCoreSeries`). Легаси-скелет (`points`, из `buildTimeSeriesData`)
+    /// остаётся источником ДОмиграционной истории — он уже time-aware (архивные счета отдают
+    /// реальный баланс только для дат `<= archivedAt`), поэтому на датах до миграции ядро
+    /// добавляет 0 (двойника ещё нет), а после миграции легаси даёт 0 (скрыт) и добавляется
+    /// ядро — итог идентичен прежнему dual-path, но без риска рассинхрона дат между двумя
+    /// независимо построенными рядами. Известное MVP-ограничение (opening-balance датой
+    /// миграции, искажение дельты на границе, см. план 6b §Ф2) не усугубляется и не устраняется —
+    /// это тот же compromise, просто без лишнего слоя приближённого слияния.
+    /// No-op на пустых `points` (нечего дополнять) — это тот же пробел «1b» (core-only счета ещё
+    /// не участвуют в списке счетов Dynamics), не регрессия этой фазы.
+    private func addingCoreContribution(_ points: [ChartDataPoint], currency: String) async -> [ChartDataPoint] {
+        guard !points.isEmpty else { return points }
+        var result: [ChartDataPoint] = []
+        result.reserveCapacity(points.count)
+        for point in points {
+            let coreValue = await financeViewModel.accountsTotalsService.totalAt(point.date, in: currency)
+            let addition = NSDecimalNumber(decimal: coreValue).doubleValue
+            result.append(ChartDataPoint(date: point.date, value: point.value + addition, label: point.label))
+        }
+        return result
+    }
+
     /// Построить временной ряд данных для графика
     func buildTimeSeriesData(
         accounts: [FinanceAccount],

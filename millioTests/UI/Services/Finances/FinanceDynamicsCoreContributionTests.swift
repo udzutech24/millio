@@ -1,0 +1,158 @@
+import Foundation
+import SwiftData
+import Testing
+@testable import millio
+
+/// 6b Фаза 2b (single-world): `ChartDataPoint.mergingNewCoreSeries` (dual-path — отдельный
+/// дневной ряд ядра + forward-fill приближённое слияние с легаси-скелетом) снесён. Замена —
+/// `FinanceDynamicsViewModel.addingCoreContribution` — точный запрос ядра НА ТЕ ЖЕ даты, что уже
+/// построил легаси-скелет (`buildTimeSeriesData`). Тесты здесь проверяют результирующее поведение
+/// агрегированного графика «Динамики» через публичный `updateChartDataAsync()`, а не саму
+/// (приватную) функцию — тестируем контракт, а не реализацию.
+@Suite("Dynamics aggregated chart: core contribution (6b Фаза 2b, замена mergingNewCoreSeries)")
+@MainActor
+struct FinanceDynamicsCoreContributionTests {
+
+    private static var retainedContainers: [ModelContainer] = []
+
+    private func makeContext() throws -> ModelContext {
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        Self.retainedContainers.append(container)
+        return container.mainContext
+    }
+
+    private func makeMigrator(modelContext: ModelContext, nowProvider: @escaping () -> Date) -> LegacyAccountsMigrator {
+        let registry = LegacyConversionRegistry(defaults: UserDefaults(suiteName: "core-series-reg-\(UUID().uuidString)")!)
+        let flagDefaults = UserDefaults(suiteName: "core-series-flag-\(UUID().uuidString)")!
+        return LegacyAccountsMigrator(modelContext: modelContext, registry: registry, defaults: flagDefaults, nowProvider: nowProvider)
+    }
+
+    private func waitUntil(
+        timeoutNanoseconds: UInt64 = 2_000_000_000,
+        intervalNanoseconds: UInt64 = 10_000_000,
+        condition: @escaping @MainActor () -> Bool
+    ) async {
+        let start = DispatchTime.now().uptimeNanoseconds
+        while DispatchTime.now().uptimeNanoseconds - start < timeoutNanoseconds {
+            await Task.yield()
+            if condition() { return }
+            try? await Task.sleep(nanoseconds: intervalNanoseconds)
+        }
+    }
+
+    // MARK: - Мигрированный легаси-счёт: скелет истории + вклад ядра после миграции
+
+    @Test("Мигрированный счёт: доскелетная легаси-история сохраняется, текущее значение приходит от ядра (не 0)")
+    func migratedAccount_preservesLegacyHistoryAndCarriesCoreValueForward() async throws {
+        let ctx = try makeContext()
+        let now = Date()
+        // Миграция — час назад (строго раньше любого последующего "now" в этом тесте), создание
+        // счёта — 10 дней назад. Фиксированный nowProvider у мигратора делает archivedAt/opening-
+        // событие ядра детерминированными, без гонки с реальным Date().
+        let migratedAt = now.addingTimeInterval(-3_600)
+        let createdAt = now.addingTimeInterval(-10 * 86_400)
+
+        let card = Card(
+            name: "Легаси карта",
+            cardNumber: "1234",
+            cardType: .debit,
+            currency: "RUB",
+            balance: 100_000
+        )
+        card.createdAt = createdAt
+        card.updatedAt = migratedAt
+        card.initialBalance = 100_000
+        card.hasInitialBalance = true
+        ctx.insert(card)
+
+        let group = FinanceGroup(name: "Основная", colorHex: "#FFFFFF")
+        ctx.insert(group)
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        ctx.insert(account)
+        try ctx.save()
+
+        // Мигрируем ДО построения VM — легаси скрыт (archivedAt=migratedAt), core-двойник создан
+        // с opening-событием на migratedAt.
+        let migrator = makeMigrator(modelContext: ctx, nowProvider: { migratedAt })
+        let summary = migrator.migrateAll()
+        #expect(summary.migrated == 1)
+        #expect(card.archivedAt == migratedAt)
+
+        let financeViewModel = FinanceViewModel(modelContext: ctx, currencyService: MockCurrencyRateService(), skipInitialLoad: true)
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: ctx,
+            financeViewModel: financeViewModel,
+            currencyService: MockCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.period = .month
+        dynamicsViewModel.state.dynamicsMode = .aggregated
+        await dynamicsViewModel.updateChartDataAsync()
+
+        let points = dynamicsViewModel.state.chartData.sorted { $0.date < $1.date }
+        #expect(!points.isEmpty, "Легаси-скелет должен построиться (счёт существовал, есть junction)")
+
+        // Точка у начала периода (ДО миграции, легаси ещё активна, ядро ещё не существует) —
+        // реальная легаси-история сохранена, не обнулена новым механизмом.
+        let firstValue = try #require(points.first?.value)
+        #expect(abs(firstValue - 100_000) < 0.01, "Доисторическая точка должна остаться легаси-значением (100 000), не 0")
+
+        // Точка на конце периода ("сейчас", ПОСЛЕ миграции) — легаси скрыт (вносит 0), но core-
+        // двойник вносит мигрированный баланс. Если бы вклад ядра не добавлялся (регресс к
+        // dual-path без core, или к простому обнулению), здесь было бы 0.
+        let lastValue = try #require(points.last?.value)
+        #expect(abs(lastValue - 100_000) < 0.01, "Текущая точка должна прийти от ядра (100 000), а не обнулиться вместе с легаси")
+    }
+
+    // MARK: - Нет core-счетов вообще: скелет не меняется (не регресс, известный пробел «1b»)
+
+    @Test("Нет core-счетов — агрегированный график строится только по легаси, как раньше (не регрессия)")
+    func noCoreAccounts_chartUnaffectedByCoreContributionStep() async throws {
+        let ctx = try makeContext()
+        let now = Date()
+        let createdAt = now.addingTimeInterval(-5 * 86_400)
+
+        let card = Card(name: "Обычная карта", cardNumber: "5555", cardType: .debit, currency: "RUB", balance: 50_000)
+        card.createdAt = createdAt
+        card.updatedAt = now
+        card.initialBalance = 50_000
+        card.hasInitialBalance = true
+        ctx.insert(card)
+
+        let group = FinanceGroup(name: "Основная", colorHex: "#FFFFFF")
+        ctx.insert(group)
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        ctx.insert(account)
+        try ctx.save()
+
+        // Миграция НЕ запускается — ядро (`Account`) пусто, хотя тип зарегистрирован в схеме.
+        let financeViewModel = FinanceViewModel(modelContext: ctx, currencyService: MockCurrencyRateService(), skipInitialLoad: true)
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: ctx,
+            financeViewModel: financeViewModel,
+            currencyService: MockCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.period = .month
+        dynamicsViewModel.state.dynamicsMode = .aggregated
+        await dynamicsViewModel.updateChartDataAsync()
+
+        let points = dynamicsViewModel.state.chartData
+        #expect(!points.isEmpty)
+        for point in points {
+            #expect(abs(point.value - 50_000) < 0.01, "Без core-счетов addingCoreContribution добавляет 0 — график равен чистому легаси-скелету")
+        }
+    }
+}
