@@ -383,18 +383,18 @@ extension CashflowViewModel {
         )
 
         // 6b: легаси FinanceGroup/FinanceAccount пусты после миграции в AccountsCore, поэтому
-        // start/end выше = 0. Активы на дату теперь живут в ядре — добавляем core-вклад тем же
-        // движком (accountsTotalsService.totalAt), что даёт тотал на Дашборде и в Динамике
-        // (FinanceDynamicsViewModel.addingCoreContribution). Даты ДО первого снапшота ядро само
-        // трактует как 0 через Account.participates(on:) — новую семантику не вводим.
-        let totalsService = financeViewModel.accountsTotalsService
-        let coreStart = NSDecimalNumber(
-            decimal: await totalsService.totalAt(normalizedStartDate, in: state.displayCurrency)
-        ).doubleValue
-        let coreEnd = NSDecimalNumber(
-            decimal: await totalsService.totalAt(normalizedEndDate, in: state.displayCurrency)
-        ).doubleValue
-        return (start + coreStart, end + coreEnd)
+        // start/end выше = 0. Активы на дату теперь живут в ядре — добавляем core-вклад ТЕМ ЖЕ
+        // per-account движком, что и вкладка «Динамика» (coreAccountDynamicsItems), а не агрегатным
+        // totalAt. Иначе для счёта, мигрировавшего из легаси в core, Start = 0 на датах ДО первого
+        // core-снапшота: агрегатный totalAt теряет легаси-историю конвертации, а per-account путь
+        // реконструирует её через legacyPredecessorContribution. Так Cashflow Start == Dynamics Start.
+        // Оба пути берут одинаковый набор счетов (getAccountsForCalculation(scope: .currentVisible)),
+        // поэтому расхождение было только в core-вкладе, не в фильтре счетов.
+        let core = await dynamicsViewModel.coreContributionWithLegacyPredecessor(
+            startDate: normalizedStartDate,
+            endDate: normalizedEndDate
+        )
+        return (start + core.start, end + core.end)
     }
 
     func cardBalanceSnapshot(for cardID: String) -> CashflowCardBalanceSnapshot? {

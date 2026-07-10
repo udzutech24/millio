@@ -1086,14 +1086,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return sum
     }
 
-    /// Core-счета для ветки `.accounts` дашборда «Динамика»: каждый счёт — отдельная строка, суммы и
-    /// дельта в валюте экрана через тот же `accountsTotalsService`, что и per-group суммы (Фаза 1.5).
-    /// Уважает выбор групп (`selectedGroupIDs`); дедуп по `id`. Список короткий — считаем последовательно.
-    private func coreAccountDynamicsItems(startDate: Date, endDate: Date) async -> [DynamicsAccountRow] {
+    /// Core-счета, участвующие в расчёте динамики при текущем фильтре групп (`selectedGroupIDs`).
+    /// Единая точка сбора: используется и per-account строками `coreAccountDynamicsItems`, и суммарным
+    /// core-вкладом `coreContributionWithLegacyPredecessor` (Cashflow Assets-snapshot) — чтобы обе
+    /// вкладки/экрана считали по одному и тому же набору счетов. Дедуп по `id`.
+    private func coreAccountsForDynamics() -> [Account] {
         let groupsToShow = state.selectedGroupIDs.isEmpty
             ? state.groups
             : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
-        let currency = state.displayCurrency
 
         var seen: Set<UUID> = []
         var coreAccounts: [Account] = []
@@ -1112,6 +1112,40 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 coreAccounts.append(account)
             }
         }
+        return coreAccounts
+    }
+
+    /// Суммарный core-вклад (per-account total + вклад легаси-предшественника) на пару дат при текущем
+    /// фильтре групп. Считается ТЕМ ЖЕ движком, что per-account строки Динамики (`coreAccountDynamicsItems`),
+    /// поэтому Cashflow Assets-snapshot, вызывая этот метод, получает Start/End, идентичный вкладке «Динамика».
+    /// Агрегатный `accountsTotalsService.totalAt` тут НЕ годится: для мигрировавшего из легаси core-счёта он
+    /// возвращает 0 на датах ДО первого core-снапшота (легаси-история конвертации теряется) — это и был баг
+    /// «Активы на начало периода = 0» в Cashflow при живом Start в Динамике.
+    func coreContributionWithLegacyPredecessor(startDate: Date, endDate: Date) async -> (start: Double, end: Double) {
+        let coreAccounts = coreAccountsForDynamics()
+        guard !coreAccounts.isEmpty else { return (0, 0) }
+        let currency = state.displayCurrency
+        let legacyByUniqueID = legacyAccountsByUniqueID()
+
+        var start: Double = 0
+        var end: Double = 0
+        for account in coreAccounts {
+            start += NSDecimalNumber(
+                decimal: await financeViewModel.accountsTotalsService.total(for: [account], on: startDate, in: currency)
+            ).doubleValue + (await legacyPredecessorContribution(for: [account], on: startDate, legacyByUniqueID: legacyByUniqueID))
+            end += NSDecimalNumber(
+                decimal: await financeViewModel.accountsTotalsService.total(for: [account], on: endDate, in: currency)
+            ).doubleValue + (await legacyPredecessorContribution(for: [account], on: endDate, legacyByUniqueID: legacyByUniqueID))
+        }
+        return (start, end)
+    }
+
+    /// Core-счета для ветки `.accounts` дашборда «Динамика»: каждый счёт — отдельная строка, суммы и
+    /// дельта в валюте экрана через тот же `accountsTotalsService`, что и per-group суммы (Фаза 1.5).
+    /// Уважает выбор групп (`selectedGroupIDs`); дедуп по `id`. Список короткий — считаем последовательно.
+    private func coreAccountDynamicsItems(startDate: Date, endDate: Date) async -> [DynamicsAccountRow] {
+        let currency = state.displayCurrency
+        let coreAccounts = coreAccountsForDynamics()
         guard !coreAccounts.isEmpty else { return [] }
 
         // Легаси-предшественники (реверс LegacyConversionRegistry): до миграции 6b core-двойника не
