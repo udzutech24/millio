@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-10T23:30:00Z",
+  "updated": "2026-07-10T23:59:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -55,8 +55,8 @@
     },
     {
       "name": "Ф5c.1a — Sheets-экспорт-порт (Card/Investment → Account)",
-      "status": "pending",
-      "note": "Выделена из 5c.1: SheetsDataMapper + SheetsConnectionView:190-193 + CashflowViewModel:449. Порт Card/Investment→Account row-mapping, 2 сайта (один в god-VM). Блокер пред-гейта 5c.6. Средний риск (живая экспорт-фича, формат строк)"
+      "status": "done",
+      "note": "394b212: SheetsDataMapper.buildExportData(accounts:[Account]) — раздел по kind (.marketInvestment→Investments, остальное→Accounts/Archive); баланс=реплей AccountBalanceEngine.balanceAt (архив final_balance на archivedAt); позиция инвестиции qty/avg/cost=реплей buy/sell по скользящему среднему (реплика легаси applyBuy/Sell, не FIFO); транзакции резолвят счёт по account.id.uuidString (==cardID после remapCashflowHistory). Оба call-site→FetchDescriptor<Account>. Формат MillioExportData не изменён (read-path, чтением кода). 6 тестов SheetsDataMapperTests. Урок: тест-харнесс держит ModelContainer живым (mainContext без удержания контейнера=SIGTRAP, каскад 286 красных). Гейт: build ок, xcresulttool 1739 passed/14 failed=baseline, 0 новых красных. Разблокирован Sheets-блокер 5c.6. develop, НЕ push/merge"
     },
     {
       "name": "Ф5c.2 — InlineCreateForms DTO-рефактор",
