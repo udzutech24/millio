@@ -62,18 +62,35 @@ enum LegacyAccountConversion {
         )
     }
 
-    /// Инвестиция → `.manualAsset` (движок F замораживает значение одним opening-событием).
+    /// Инвестиция → `.manualAsset` (движок F замораживает значение одним opening-событием), КРОМЕ
+    /// «кэш-подобной» (`isCashflowAccount`, пресет «Счёт» — плюс/other/не рыночная) — та мигрирует
+    /// в `.bankAccount` (движок cashLike), чтобы попасть в `newCoreAccountsForCashflowPicker()` и
+    /// остаться выбираемой целью income/expense в Cashflow (Фаза 5a плана 6b «Путь B» — без этого
+    /// счёт после миграции пропадает из пикера, легаси-ветка `.investment` архивируется).
     ///
-    /// Осознанная девиация от «инвестиция → рыночный тип» брифинга: рыночный движок E считает
-    /// баланс как quantity×price и ИГНОРИРУЕТ opening — двойник показал бы 0, ломая инвариант
-    /// тотала; MVP запрещает реплей истории/котировок. `.deposit` потребовал бы meta/scheduler и
-    /// рисковал бы будущим дрейфом от начислений. `.manualAsset` замораживает любое значение без
-    /// meta и без дрейфа — единственный вариант, гарантирующий инвариант при MVP-ограничениях.
+    /// Для остальных (рыночные/вклад/недвижимость/бизнес/долг вне `.debt`-ветки Credit) — осознанная
+    /// девиация от «инвестиция → рыночный тип» брифинга: рыночный движок E считает баланс как
+    /// quantity×price и ИГНОРИРУЕТ opening — двойник показал бы 0, ломая инвариант тотала; MVP
+    /// запрещает реплей истории/котировок. `.deposit` потребовал бы meta/scheduler и рисковал бы
+    /// будущим дрейфом от начислений. `.manualAsset` замораживает любое значение без meta и без
+    /// дрейфа — единственный вариант, гарантирующий инвариант при MVP-ограничениях.
     /// Знаковый вклад = ±`amount` при `includeInTotal`, иначе 0 (как в `getAccountAmount`).
     static func plan(for investment: Investment, currency: String) -> Plan {
         let signed = investment.includeInTotal
             ? (investment.investmentType == .positive ? investment.amount : -investment.amount)
             : 0
+        if investment.isCashflowAccount {
+            return Plan(
+                legacyUniqueID: investment.investmentUniqueID,
+                name: investment.name,
+                currency: currency,
+                kind: .bankAccount,
+                openingBalance: Decimal(signed),
+                cardMeta: nil,
+                loanMeta: nil,
+                manualAssetMeta: nil
+            )
+        }
         return Plan(
             legacyUniqueID: investment.investmentUniqueID,
             name: investment.name,

@@ -130,9 +130,6 @@ struct FinanceState {
     var refreshIssueMessage: String? = nil
     var showRefreshIssue: Bool = false
 
-    /// Последняя успешно завершенная сделка по рыночному активу.
-    var tradeCelebration: FinanceTradeCelebration? = nil
-
     /// Точки спарклайна для дашборда (нормализованы [0..1])
     var dashboardSparkline: [Double] = []
 
@@ -144,46 +141,6 @@ struct FinanceState {
 }
 
 // StockRefreshIssues перемещён в FinanceMarketDataService.swift
-
-enum InvestmentOrderSide: Hashable {
-    case buy
-    case sell
-}
-
-struct InvestmentOrderFunding: Equatable {
-    var settlementAccountKind: CashflowSelectableAccount.Kind?
-    var shouldAffectCardBalance: Bool
-
-    static let ignored = InvestmentOrderFunding(
-        settlementAccountKind: nil,
-        shouldAffectCardBalance: false
-    )
-}
-
-struct FinanceTradeCelebration: Equatable, Identifiable {
-    let id: UUID
-    let side: InvestmentOrderSide
-    let investmentName: String
-    let investmentCategory: InvestmentCategory
-    let totalAmount: Double
-    let currency: String
-
-    init(
-        id: UUID = UUID(),
-        side: InvestmentOrderSide,
-        investmentName: String,
-        investmentCategory: InvestmentCategory,
-        totalAmount: Double,
-        currency: String
-    ) {
-        self.id = id
-        self.side = side
-        self.investmentName = investmentName
-        self.investmentCategory = investmentCategory
-        self.totalAmount = totalAmount
-        self.currency = currency
-    }
-}
 
 struct ArchivedFinanceAccountRow: Identifiable, Equatable {
     let id: String
@@ -232,14 +189,6 @@ enum FinanceAction {
     case hideQuickEditAccountSheet
     case updateAccountAmount(FinanceAccount, Double)
     case updateCreditCardQuickFields(account: FinanceAccount, creditLimit: Double, debt: Double)
-    case executeInvestmentOrder(
-        account: FinanceAccount,
-        side: InvestmentOrderSide,
-        quantity: Double,
-        unitPrice: Double,
-        funding: InvestmentOrderFunding
-    )
-    case updateMarketInvestmentDetails(account: FinanceAccount, quantity: Double, unitPrice: Double, purchaseUnitPrice: Double?)
     case showGroupDynamics(FinanceGroup)
     case hideGroupDynamics
     case showAccountDynamics(FinanceAccount)
@@ -250,7 +199,6 @@ enum FinanceAction {
     case setSavingsGoalAmount(Double)
     case toggleAmountVisibility
     case setAccountSortMode(AccountSortMode)
-    case clearTradeCelebration
 }
 
 // MARK: - Finance ViewModel
@@ -403,42 +351,6 @@ final class FinanceViewModel: ViewModelProtocol {
             onDismissAddAccountSheet: { [weak self] in
                 self?.state.showAddAccountSheet = false
                 self?.state.selectedGroupForAccount = nil
-            }
-        )
-    }()
-
-    // investmentOrderService использует lazy из-за замыканий на self
-    private(set) lazy var investmentOrderService: FinanceInvestmentOrderService = {
-        FinanceInvestmentOrderService(
-            modelContext: self.modelContext,
-            nowProvider: self.nowProvider,
-            investmentByIDProvider: { [weak self] in self?.investmentByID ?? [:] },
-            cardByIDProvider: { [weak self] in self?.cardByID ?? [:] },
-            availableCardsProvider: { [weak self] in self?.state.availableCards ?? [] },
-            availableInvestmentsProvider: { [weak self] in self?.state.availableInvestments ?? [] },
-            groupsProvider: { [weak self] in self?.state.groups ?? [] },
-            resolvedInvestmentCurrency: { [weak self] investment in
-                self?.resolvedInvestmentCurrency(investment) ?? investment.currency
-            },
-            normalizedConversionCurrency: { [weak self] currency in
-                self?.normalizedConversionCurrency(currency) ?? currency
-            },
-            normalizedCurrencyCode: { [weak self] currency in
-                self?.normalizedCurrencyCode(currency) ?? currency
-            },
-            investmentDisplayName: { [weak self] investment in
-                self?.investmentDisplayName(investment) ?? investment.name
-            },
-            onLoadAccounts: { [weak self] in self?.loadAccounts() },
-            onCalculateTotalAmount: { [weak self] in self?.calculateTotalAmount() },
-            onScheduleGroupTotalRefresh: { [weak self] groupID in
-                self?.scheduleGroupTotalRefresh(for: groupID)
-            },
-            onPublishAccountChangedEvent: { [weak self] accountType in
-                self?.publishAccountChangedEvent(for: accountType)
-            },
-            onUpdateTradeCelebration: { [weak self] celebration in
-                self?.state.tradeCelebration = celebration
             }
         )
     }()
@@ -662,23 +574,6 @@ final class FinanceViewModel: ViewModelProtocol {
         case .updateCreditCardQuickFields(let account, let creditLimit, let debt):
             updateCreditCardQuickFields(account: account, creditLimit: creditLimit, debt: debt)
 
-        case .executeInvestmentOrder(let account, let side, let quantity, let unitPrice, let funding):
-            investmentOrderService.executeInvestmentOrder(
-                account: account,
-                side: side,
-                quantity: quantity,
-                unitPrice: unitPrice,
-                funding: funding
-            )
-
-        case .updateMarketInvestmentDetails(let account, let quantity, let unitPrice, let purchaseUnitPrice):
-            investmentOrderService.updateMarketInvestmentDetails(
-                account: account,
-                quantity: quantity,
-                unitPrice: unitPrice,
-                purchaseUnitPrice: purchaseUnitPrice
-            )
-            
         case .showGroupDynamics(let group):
             state.selectedGroupForDynamics = group
             state.showGroupDynamics = true
@@ -723,9 +618,6 @@ final class FinanceViewModel: ViewModelProtocol {
                 group.usesManualAccountOrdering = false
             }
             try? modelContext.save()
-
-        case .clearTradeCelebration:
-            state.tradeCelebration = nil
     }
     }
     
@@ -1217,27 +1109,6 @@ final class FinanceViewModel: ViewModelProtocol {
 
     private func resolvedInvestmentCurrency(_ investment: Investment) -> String {
         totalsService.resolvedInvestmentCurrency(investment, displayCurrency: state.displayCurrency)
-    }
-
-    static func eligibleSettlementCards(
-        from cards: [Card],
-        investmentCurrency: String
-    ) -> [Card] {
-        FinanceInvestmentOrderService.eligibleSettlementCards(from: cards, investmentCurrency: investmentCurrency)
-    }
-
-    static func eligibleSettlementAccounts(
-        cards: [Card],
-        investments: [Investment],
-        investmentCurrency: String,
-        excludingInvestmentID: String? = nil
-    ) -> [CashflowSelectableAccount] {
-        FinanceInvestmentOrderService.eligibleSettlementAccounts(
-            cards: cards,
-            investments: investments,
-            investmentCurrency: investmentCurrency,
-            excludingInvestmentID: excludingInvestmentID
-        )
     }
 
     private func formatMarketNumber(_ value: Double, maximumFractionDigits: Int) -> String {
