@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-11T02:05:00Z",
+  "updated": "2026-07-11T03:20:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -75,8 +75,8 @@
     },
     {
       "name": "Ф5c.5 — снос мостов-менеджеров (CardCatalog/CardManager/FinanceInvestmentOrderService-класс)",
-      "status": "pending",
-      "note": "Снос после подтверждения zero live sites (требует 5c.3+5c.4 done). Низкий риск"
+      "status": "done",
+      "note": "РЕАЛИЗОВАНА 2026-07-11 (finding-only, кода не тронуто; develop, НЕ push/merge). grep -rnw ОПРОВЕРГ премису 'zero live sites'. FinanceInvestmentOrderService — 0 ссылок, файла нет (снесён в 5a): no-op. CardCatalog — LIVE: CashflowViewModel:423 (state.allCards, читается 6+ вьюхами), CashflowPersistenceService:430, +Categories:412/416, FinanceAccountService:107, CardViewModel:225/227. CardManager — LIVE: setup (CashbackViewModel:112, CardViewModel:232, FinanceAccountService:146) + getAllCards (CashbackViewModel:659, union-пикер Ф5c.4); 6 методов dead (только CardManagerTests), но в живом классе→уходят с файлом в 5c.6. Причина: оба фетчат Card @Model через FetchDescriptor<Card>, живой до 5c.6 — тот же класс мостов, что снапшот-исключения Ф5c.1; снос сейчас ломает build+runtime-пикеры. Реклассифицированы в 5c.6-кластер (allowlist пред-гейта обновлён; +CardCatalogTests/CardManagerTests). AC покрыт второй веткой ('явно обоснованы как остающиеся'). Гейт: диф docs-only→build/тесты неизменны от baseline 1c8a94d (1745 passed/14 failed) by construction"
     },
     {
       "name": "Ф5c.6 — финальный снос: схема V6, @Model-файлы, миграторы",
