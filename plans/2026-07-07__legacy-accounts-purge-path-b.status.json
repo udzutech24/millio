@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-10T07:30:00Z",
+  "updated": "2026-07-10T16:10:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -52,6 +52,11 @@
       "name": "Ф5c — снос регистрации, схема V6, @Model-файлы (вкл. FinanceGroup.swift)",
       "status": "blocked",
       "note": "НЕ НАЧАТА — остановлено ментором после Ф5a/5b: свежий grep показал 76 файлов ещё ссылаются на легаси-типы (CashbackView/ViewModel ~3500 строк, CardViewModel/CreditViewModel/InvestmentViewModel живы через EDIT-путь, FinanceAccountService 11 живых сайтов, CardCatalog/CardManager, FinanceInvestmentOrderService-класса живых мостов, MarketData/ScopeMerge/DataIntegrityCleaner/DataResetService/SheetsDataMapper/TotalBalanceWidget/RateSourcePickerView/SheetsConnectionView, InlineCreateForms DTO-рефактор, isEditingLegacy guard removal). Объём — это отдельный L-Bulletproof, не остаток одного захода поверх Ф5a/5b. Требуется декомпозиция на под-фазы с device-тестами на каждой (Cashback-порт, CardViewModel/CreditViewModel/InvestmentViewModel-снос, Core-файлы, финальная схема+модели)."
+    },
+    {
+      "name": "Багфиксы по ручной проверке владельца (Ф1–Ф5b)",
+      "status": "done",
+      "note": "350a190+2fa8b7a: карточка баланса Счетов, Динамика→Accounts, Cashflow активы — все три подключены к ядру; 800M на графике = документированное ограничение Ф2, не баг; гейт 1700/15 = 0 новых; Release проверен визуально на симуляторе 26.2. НЕ мержено"
     },
     {
       "name": "Ф6 — редизайн экрана Счета (после сноса)",
