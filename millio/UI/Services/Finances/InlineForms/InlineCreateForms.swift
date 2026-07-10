@@ -7,6 +7,69 @@ import SwiftUI
 
 // MARK: - Inline Create Forms
 
+/// Транзиентный value-DTO формы «Карта/Счёт» — заменяет легаси-@Model-карту в биндингах формы (6b Ф5c.2).
+/// Форма только собирает поля; реальная запись идёт снаружи (`AccountsCoreService` для create, легаси
+/// `CardViewModel.updateCard` для EDIT-пути — см. `FinanceAddAccountView.makeLegacyCard`). Зеркалит
+/// raw/computed-пары легаси-модели (`cardTypeRaw`/`cardType`, `priorityRaw`/`priority`), чтобы тело формы не менялось.
+struct InlineCardDraft {
+    var name: String
+    var cardNumber: String
+    var bank: Bank
+    var cardTypeRaw: String
+    var priorityRaw: String
+    var currency: String
+    var balance: Double
+    var creditLimit: Double?
+    var expiryDate: String?
+    var cardholderName: String?
+    var cardColor: String?
+    var isFavorite: Bool
+    var includeInTotal: Bool
+    var uniqueID: String
+
+    init(
+        name: String,
+        cardNumber: String = "",
+        bank: Bank = .other,
+        cardType: CardType = .debit,
+        priority: CardPriority = .normal,
+        currency: String,
+        balance: Double = 0.0,
+        creditLimit: Double? = nil,
+        expiryDate: String? = nil,
+        cardholderName: String? = nil,
+        cardColor: String? = nil,
+        isFavorite: Bool = false,
+        includeInTotal: Bool = true,
+        uniqueID: String = ""
+    ) {
+        self.name = name
+        self.cardNumber = cardNumber
+        self.bank = bank
+        self.cardTypeRaw = cardType.rawValue
+        self.priorityRaw = priority.rawValue
+        self.currency = currency
+        self.balance = balance
+        self.creditLimit = creditLimit
+        self.expiryDate = expiryDate
+        self.cardholderName = cardholderName
+        self.cardColor = cardColor
+        self.isFavorite = isFavorite
+        self.includeInTotal = includeInTotal
+        self.uniqueID = uniqueID
+    }
+
+    var cardType: CardType {
+        get { CardType(rawValue: cardTypeRaw) ?? .debit }
+        set { cardTypeRaw = newValue.rawValue }
+    }
+
+    var priority: CardPriority {
+        get { CardPriority(rawValue: priorityRaw) ?? .normal }
+        set { priorityRaw = newValue.rawValue }
+    }
+}
+
 struct InlineCardCreateForm<GroupSection: View>: View {
     @ObservedObject var viewModel: CardViewModel
     @Environment(AppState.self) private var appState
@@ -15,10 +78,10 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     let allowsTypeSwitching: Bool
     let selectedProductTitle: String
     let onOpenProductPicker: (() -> Void)?
-    let onCardDataChanged: (Card) -> Void
+    let onCardDataChanged: (InlineCardDraft) -> Void
     let groupSection: GroupSection
-    
-    @State private var card: Card
+
+    @State private var card: InlineCardDraft
     @State private var balanceText: String = ""
     @State private var balanceDisplayText: String = ""
     @State private var creditLimitText: String = ""
@@ -36,7 +99,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         allowsTypeSwitching: Bool = true,
         selectedProductTitle: String,
         onOpenProductPicker: (() -> Void)? = nil,
-        onCardDataChanged: @escaping (Card) -> Void,
+        onCardDataChanged: @escaping (InlineCardDraft) -> Void,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
         self.viewModel = viewModel
@@ -46,7 +109,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         self.onOpenProductPicker = onOpenProductPicker
         self.onCardDataChanged = onCardDataChanged
         self.groupSection = groupSection()
-        _card = State(initialValue: Card(
+        _card = State(initialValue: InlineCardDraft(
             name: name.wrappedValue,
             cardNumber: "",
             bank: .other,
@@ -59,8 +122,8 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         _balanceDisplayText = State(initialValue: "")
     }
     
-    var currentCard: Card {
-        let result = card
+    var currentCard: InlineCardDraft {
+        var result = card
         result.name = name
         if result.cardType == .credit {
             let limit = AmountInputFormatter.parse(creditLimitText) ?? 0
@@ -166,7 +229,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
 
         name = editingCard.name
 
-        let draft = Card(
+        var draft = InlineCardDraft(
             name: editingCard.name,
             cardNumber: editingCard.cardNumber,
             bank: editingCard.bank,

@@ -65,7 +65,7 @@ struct FinanceAddAccountView: View {
     @State private var cardViewModel: CardViewModel?
     @State private var creditViewModel: CreditViewModel?
     @State private var investmentViewModel: InvestmentViewModel?
-    @State private var cardData: Card?
+    @State private var cardData: InlineCardDraft?
     @State private var creditData: (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)?
     @State private var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?
     /// Данные формы «Вклад»/«Накопительный счёт» нового ядра (Фаза 3) — `nil` для остальных пресетов.
@@ -1561,23 +1561,47 @@ struct FinanceAddAccountView: View {
         focusNameFieldIfNeeded()
     }
 
+    /// Собирает легаси-`Card` из транзиентного драфта формы (`InlineCardDraft`) для передачи в легаси-writer
+    /// `CardViewModel.updateCard`. Единственная точка, где драфт формы становится @Model — сам
+    /// `InlineCardCreateForm` больше не знает про `Card` (6b Ф5c.2). Уходит вместе с EDIT-путём в Ф5c.3.
+    private func makeLegacyCard(from draft: InlineCardDraft) -> Card {
+        let card = Card(
+            name: draft.name,
+            cardNumber: draft.cardNumber,
+            bank: draft.bank,
+            cardType: draft.cardType,
+            priority: draft.priority,
+            currency: draft.currency,
+            balance: draft.balance,
+            creditLimit: draft.creditLimit,
+            expiryDate: draft.expiryDate,
+            cardholderName: draft.cardholderName,
+            cardColor: draft.cardColor,
+            isFavorite: draft.isFavorite,
+            includeInTotal: draft.includeInTotal
+        )
+        card.uniqueID = draft.uniqueID
+        return card
+    }
+
     private func createCardAndAddToGroup(cardViewModel: CardViewModel, group: FinanceGroup?) {
         guard let cardData = cardData else { return }
 
-        if cardData.uniqueID.isEmpty {
-            cardData.uniqueID = UUID().uuidString
+        let card = makeLegacyCard(from: cardData)
+        if card.uniqueID.isEmpty {
+            card.uniqueID = UUID().uuidString
         }
 
-        cardData.customIconName = draftIconName
-        cardData.customIconColor = draftIconColor
+        card.customIconName = draftIconName
+        card.customIconColor = draftIconColor
 
-        let createdCardID = cardData.cardUniqueID
+        let createdCardID = card.cardUniqueID
 
         // Создаем карту из данных формы
-        cardViewModel.handle(.updateCard(cardData))
-        
+        cardViewModel.handle(.updateCard(card))
+
         guard cardViewModel.state.cards.contains(where: { $0.cardUniqueID == createdCardID }) else { return }
-        
+
         viewModel.handle(.addAccountToGroup(
             accountType: .card,
             accountID: createdCardID,
@@ -1628,15 +1652,16 @@ struct FinanceAddAccountView: View {
     private func updateCardAndGroup(cardViewModel: CardViewModel, card: Card, group: FinanceGroup?) {
         guard let cardData = cardData else { return }
 
-        if cardData.uniqueID.isEmpty {
-            cardData.uniqueID = card.uniqueID
+        let payload = makeLegacyCard(from: cardData)
+        if payload.uniqueID.isEmpty {
+            payload.uniqueID = card.uniqueID
         }
 
-        cardData.customIconName = draftIconName
-        cardData.customIconColor = draftIconColor
+        payload.customIconName = draftIconName
+        payload.customIconColor = draftIconColor
 
         cardViewModel.handle(.editCard(card))
-        cardViewModel.handle(.updateCard(cardData))
+        cardViewModel.handle(.updateCard(payload))
 
         viewModel.handle(.addAccountToGroup(
             accountType: .card,
