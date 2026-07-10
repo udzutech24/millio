@@ -8,9 +8,9 @@ import SwiftUI
 // MARK: - Inline Create Forms
 
 /// Транзиентный value-DTO формы «Карта/Счёт» — заменяет легаси-@Model-карту в биндингах формы (6b Ф5c.2).
-/// Форма только собирает поля; реальная запись идёт снаружи (`AccountsCoreService` для create, легаси
-/// `CardViewModel.updateCard` для EDIT-пути — см. `FinanceAddAccountView.makeLegacyCard`). Зеркалит
-/// raw/computed-пары легаси-модели (`cardTypeRaw`/`cardType`, `priorityRaw`/`priority`), чтобы тело формы не менялось.
+/// Форма только собирает поля; реальная запись идёт снаружи через `AccountsCoreService` (create-only —
+/// EDIT-путь и легаси-VM сняты в 6b Ф5c.3/5c.5b). Зеркалит raw/computed-пары легаси-модели
+/// (`cardTypeRaw`/`cardType`, `priorityRaw`/`priority`), чтобы тело формы не менялось.
 struct InlineCardDraft {
     var name: String
     var cardNumber: String
@@ -71,7 +71,6 @@ struct InlineCardDraft {
 }
 
 struct InlineCardCreateForm<GroupSection: View>: View {
-    @ObservedObject var viewModel: CardViewModel
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     @Binding var name: String
@@ -90,11 +89,9 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     @State private var isLoadingCurrencies: Bool = false
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
-    @State private var didPrefillFromEditing: Bool = false
     @State private var showCryptoProAlert: Bool = false
-    
+
     init(
-        viewModel: CardViewModel,
         name: Binding<String>,
         allowsTypeSwitching: Bool = true,
         selectedProductTitle: String,
@@ -102,7 +99,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         onCardDataChanged: @escaping (InlineCardDraft) -> Void,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
-        self.viewModel = viewModel
         self._name = name
         self.allowsTypeSwitching = allowsTypeSwitching
         self.selectedProductTitle = selectedProductTitle
@@ -152,7 +148,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         }
         .onAppear {
             loadAvailableCurrencies()
-            populateCardFromEditingIfNeeded()
             if balanceDisplayText.isEmpty {
                 balanceDisplayText = AmountInputFormatter.display(balanceText)
             }
@@ -221,48 +216,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     
     private var accentColor: Color { AppColors.financesGradient.first ?? AppColors.brandPrimary }
 
-    private func populateCardFromEditingIfNeeded() {
-        guard !didPrefillFromEditing, let editingCard = viewModel.state.editingCard else {
-            return
-        }
-        didPrefillFromEditing = true
-
-        name = editingCard.name
-
-        var draft = InlineCardDraft(
-            name: editingCard.name,
-            cardNumber: editingCard.cardNumber,
-            bank: editingCard.bank,
-            cardType: editingCard.cardType,
-            priority: editingCard.priority,
-            currency: editingCard.currency,
-            balance: editingCard.balance,
-            creditLimit: editingCard.creditLimit,
-            expiryDate: editingCard.expiryDate,
-            cardholderName: editingCard.cardholderName,
-            cardColor: editingCard.cardColor,
-            isFavorite: editingCard.isFavorite,
-            includeInTotal: editingCard.includeInTotal
-        )
-        if !editingCard.uniqueID.isEmpty {
-            draft.uniqueID = editingCard.uniqueID
-        }
-        card = draft
-
-        if draft.cardType == .credit {
-            let limit = draft.creditLimit ?? 0
-            let debt = max(0, limit - draft.balance)
-            creditLimitText = AmountInputFormatter.display(AmountInputFormatter.sanitize(String(limit)))
-            creditDebtText = AmountInputFormatter.display(AmountInputFormatter.sanitize(String(debt)))
-        } else {
-            let sanitizedBalance = AmountInputFormatter.sanitize(String(draft.balance))
-            balanceText = sanitizedBalance
-            balanceDisplayText = AmountInputFormatter.display(sanitizedBalance)
-        }
-
-        onCardDataChanged(currentCard)
-    }
-    
     private var typeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: L("finances.add_account.section.type"))
@@ -557,7 +510,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
 }
 
 struct InlineCreditCreateForm<GroupSection: View>: View {
-    @ObservedObject var viewModel: CreditViewModel
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     @Binding var name: String
@@ -583,16 +535,13 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     @State private var isLoadingCurrencies: Bool = false
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
-    @State private var didPrefillFromEditing: Bool = false
     @State private var showCryptoProAlert: Bool = false
-    
+
     init(
-        viewModel: CreditViewModel,
         name: Binding<String>,
         onCreditDataChanged: @escaping ((name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)?) -> Void,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
-        self.viewModel = viewModel
         self._name = name
         self.onCreditDataChanged = onCreditDataChanged
         self.groupSection = groupSection()
@@ -643,7 +592,6 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         }
         .onAppear {
             loadAvailableCurrencies()
-            populateCreditFromEditingIfNeeded()
             if amountDisplayText.isEmpty {
                 amountDisplayText = formatNumberForDisplay(amountText)
             }
@@ -737,40 +685,6 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         )
     }
 
-    private func populateCreditFromEditingIfNeeded() {
-        guard !didPrefillFromEditing, let editingCredit = viewModel.state.editingCredit else {
-            return
-        }
-        didPrefillFromEditing = true
-
-        name = editingCredit.name
-        amountText = AmountInputFormatter.sanitize(String(editingCredit.amount))
-        amountDisplayText = formatNumberForDisplay(amountText)
-        remainingAmountText = AmountInputFormatter.sanitize(String(editingCredit.remainingAmount))
-        remainingAmountDisplayText = formatNumberForDisplay(remainingAmountText)
-        monthlyPaymentText = AmountInputFormatter.sanitize(String(editingCredit.monthlyPayment))
-        monthlyPaymentDisplayText = formatNumberForDisplay(monthlyPaymentText)
-        selectedCurrency = editingCredit.currency
-        isFavorite = editingCredit.isFavorite
-        paymentMode = editingCredit.paymentMode
-        if let day = editingCredit.paymentDayOfMonth {
-            paymentDayOfMonth = max(1, min(31, day))
-        }
-        if let date = editingCredit.nextPaymentDate {
-            nextPaymentDate = date
-        }
-        reminderEnabled = editingCredit.reminderEnabled
-        if let daysBefore = editingCredit.reminderDaysBefore {
-            reminderDaysBeforeText = String(daysBefore)
-            reminderDaysBeforeDisplayText = String(daysBefore)
-        }
-        if let time = editingCredit.reminderTime {
-            reminderTime = time
-        }
-
-        emitCreditDataChange()
-    }
-    
     private var balanceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: L("finances.add_account.section.balance"))
@@ -1075,7 +989,6 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
 }
 
 struct InlineInvestmentCreateForm<GroupSection: View>: View {
-    @ObservedObject var viewModel: InvestmentViewModel
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     @Binding var name: String
@@ -1110,20 +1023,17 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @State private var showMarketSearchSheet: Bool = false
     @State private var isRefreshingPrice: Bool = false
     @State private var marketErrorMessage: String?
-    @State private var didPrefillFromEditing: Bool = false
     @State private var showCryptoProAlert: Bool = false
-    
+
     private let marketDataClient: MarketDataClientProtocol
-    
+
     init(
-        viewModel: InvestmentViewModel,
         name: Binding<String>,
         selectedCategory: Binding<InvestmentCategory>,
         onInvestmentDataChanged: @escaping ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void,
         marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
-        self.viewModel = viewModel
         self._name = name
         self._selectedCategory = selectedCategory
         self.onInvestmentDataChanged = onInvestmentDataChanged
@@ -1228,7 +1138,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             prioritySection
         }
         .onAppear {
-            prefillFromEditingIfNeeded()
             loadAvailableCurrencies()
             if amountDisplayText.isEmpty {
                 amountDisplayText = formatNumberForDisplay(amountText)
@@ -1676,40 +1585,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         }
     }
 
-    private func prefillFromEditingIfNeeded() {
-        guard !didPrefillFromEditing, let editing = viewModel.state.editingInvestment else {
-            return
-        }
-
-        selectedInvestmentType = editing.investmentType
-        selectedCategory = editing.category
-        amountText = String(editing.amount)
-        amountDisplayText = formatNumberForDisplay(amountText)
-        selectedCurrency = editing.currency
-        includeInTotal = editing.includeInTotal
-        selectedPriority = editing.priority
-        isFavorite = editing.isFavorite
-        marketSymbol = editing.marketSymbol ?? ""
-        marketAssetID = editing.assetID
-        marketExchange = editing.marketExchange
-        marketQuoteLookupKey = editing.marketQuoteLookupKey
-        marketMICCode = editing.marketMICCode
-        marketCurrency = editing.marketCurrency
-        marketQuantityText = editing.marketQuantity.map {
-            AmountInputFormatter.plainString(
-                from: $0,
-                maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
-            )
-        } ?? ""
-        marketQuantityDisplayText = formatMarketQuantityForDisplay(marketQuantityText)
-        purchaseUnitPriceText = editing.averagePurchaseUnitPrice.map { "\($0)" } ?? ""
-        lastKnownUnitPrice = editing.lastKnownUnitPrice
-        lastKnownPriceUpdatedAt = editing.lastKnownPriceUpdatedAt
-        marketProviderRaw = editing.marketProviderRaw
-        didPrefillFromEditing = true
-        onInvestmentDataChanged(getInvestmentData())
-    }
-    
     private func parseNumber(_ text: String) -> Double? {
         AmountInputFormatter.parse(text)
     }

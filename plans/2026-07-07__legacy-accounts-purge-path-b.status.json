@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-11T03:20:00Z",
+  "updated": "2026-07-11T05:40:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -77,6 +77,11 @@
       "name": "Ф5c.5 — снос мостов-менеджеров (CardCatalog/CardManager/FinanceInvestmentOrderService-класс)",
       "status": "done",
       "note": "РЕАЛИЗОВАНА 2026-07-11 (finding-only, кода не тронуто; develop, НЕ push/merge). grep -rnw ОПРОВЕРГ премису 'zero live sites'. FinanceInvestmentOrderService — 0 ссылок, файла нет (снесён в 5a): no-op. CardCatalog — LIVE: CashflowViewModel:423 (state.allCards, читается 6+ вьюхами), CashflowPersistenceService:430, +Categories:412/416, FinanceAccountService:107, CardViewModel:225/227. CardManager — LIVE: setup (CashbackViewModel:112, CardViewModel:232, FinanceAccountService:146) + getAllCards (CashbackViewModel:659, union-пикер Ф5c.4); 6 методов dead (только CardManagerTests), но в живом классе→уходят с файлом в 5c.6. Причина: оба фетчат Card @Model через FetchDescriptor<Card>, живой до 5c.6 — тот же класс мостов, что снапшот-исключения Ф5c.1; снос сейчас ломает build+runtime-пикеры. Реклассифицированы в 5c.6-кластер (allowlist пред-гейта обновлён; +CardCatalogTests/CardManagerTests). AC покрыт второй веткой ('явно обоснованы как остающиеся'). Гейт: диф docs-only→build/тесты неизменны от baseline 1c8a94d (1745 passed/14 failed) by construction"
+    },
+    {
+      "name": "Ф5c.5b — пред-гейт 5c.6: декаплинг CREATE-формы от трёх легаси-VM",
+      "status": "done",
+      "note": "РЕАЛИЗОВАНА 2026-07-11 (develop, НЕ push/merge). Закрыт долг-отклонение №1 Ф5c.3. Три @ObservedObject viewModel: Card/Credit/InvestmentViewModel в InlineCreateForms читались CREATE-формой ТОЛЬКО ради state.editing* в prefill-guard, но editing* ставится только .editCard/.editCredit/.editInvestment, которые нигде не диспатчатся после 5c.3 → prefill=мёртвый код (живой конструктор шлёт .addCard/.addCredit/.addInvestment, ставят editing*=nil, без записи). Удалены 3 @ObservedObject + init-параметры viewModel: + didPrefillFromEditing + 3 dead-метода prefill + вызовы в onAppear (InlineCreateForms.swift); @State cardViewModel/creditViewModel/investmentViewModel + ProgressView().task-обвязка async-создания VM (createFormSections рендерит формы напрямую) + VM-биндинги SelectedAccountTypeChangeHandler (FinanceAddAccountView.swift). 2 файла, net -187 строк. Запись счёта (AccountsCoreService через cardData/creditData/investmentData-колбэки) не тронута, поведение create-flow неизменно. grep -rnw 3 VM вне own-def = только сами классы + их тесты + doc-комментарий AccountsCoreAdditionBridge:83; VM реклассифицированы в 5c.6-кластер. Гейт: build 0 ошибок; xcresulttool 1745 passed/14 failed=baseline, 0 новых красных. Финальный пред-гейт-grep 5c.6 (grep -rlwE) = 135 файлов (broad word-match, нужна allowlist-реконсиляция в 5c.6)"
     },
     {
       "name": "Ф5c.6 — финальный снос: схема V6, @Model-файлы, миграторы",

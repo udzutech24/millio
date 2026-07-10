@@ -53,9 +53,6 @@ struct FinanceAddAccountView: View {
     @State private var selectedProductTypeTitle: String = FinanceAccountType.card.displayName
     @State private var selectedInvestmentPreset: FinanceAddAccountInvestmentPreset = .asset
     @State private var showCreateGroup = false
-    @State private var cardViewModel: CardViewModel?
-    @State private var creditViewModel: CreditViewModel?
-    @State private var investmentViewModel: InvestmentViewModel?
     @State private var cardData: InlineCardDraft?
     @State private var creditData: (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)?
     @State private var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?
@@ -507,61 +504,27 @@ struct FinanceAddAccountView: View {
     private var createFormSections: some View {
         switch selectedAccountType {
         case .card:
-            if cardViewModel == nil {
-                VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: L("finances.add_account.card.create"))
-                    FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
-                        ProgressView()
-                            .tint(AppColors.textPrimary)
-                            .task {
-                                let vm = CardViewModel(modelContext: viewModel.modelContext)
-                                vm.handle(.addCard)
-                                cardViewModel = vm
-                            }
-                    }
+            InlineCardCreateForm(
+                name: $accountName,
+                allowsTypeSwitching: true,
+                selectedProductTitle: selectedProductTypeTitle,
+                onOpenProductPicker: {
+                    showProductPicker = true
+                },
+                onCardDataChanged: { card in
+                    self.cardData = card
                 }
+            ) {
                 groupSection
-            } else if let vm = cardViewModel {
-                InlineCardCreateForm(
-                    viewModel: vm,
-                    name: $accountName,
-                    allowsTypeSwitching: true,
-                    selectedProductTitle: selectedProductTypeTitle,
-                    onOpenProductPicker: {
-                        showProductPicker = true
-                    },
-                    onCardDataChanged: { card in
-                        self.cardData = card
-                    }
-                ) {
-                    groupSection
-                }
             }
         case .credit:
-            if creditViewModel == nil {
-                VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: L("finances.add_account.credit.create"))
-                    FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
-                        ProgressView()
-                            .tint(AppColors.textPrimary)
-                            .task {
-                                let vm = CreditViewModel(modelContext: viewModel.modelContext)
-                                vm.handle(.addCredit)
-                                creditViewModel = vm
-                            }
-                    }
+            InlineCreditCreateForm(
+                name: $accountName,
+                onCreditDataChanged: { data in
+                    self.creditData = data
                 }
+            ) {
                 groupSection
-            } else if let vm = creditViewModel {
-                InlineCreditCreateForm(
-                    viewModel: vm,
-                    name: $accountName,
-                    onCreditDataChanged: { data in
-                        self.creditData = data
-                    }
-                ) {
-                    groupSection
-                }
             }
         case .investment:
             if selectedInvestmentPreset == .deposit {
@@ -572,23 +535,8 @@ struct FinanceAddAccountView: View {
                 ) {
                     groupSection
                 }
-            } else if investmentViewModel == nil {
-                VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: L("finances.add_account.investment.create"))
-                    FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
-                        ProgressView()
-                            .tint(AppColors.textPrimary)
-                            .task {
-                                let vm = InvestmentViewModel(modelContext: viewModel.modelContext)
-                                vm.handle(.addInvestment(isDeposit: selectedInvestmentPreset == .deposit))
-                                investmentViewModel = vm
-                            }
-                    }
-                }
-                groupSection
-            } else if let vm = investmentViewModel {
+            } else {
                 InlineInvestmentCreateForm(
-                    viewModel: vm,
                     name: $accountName,
                     selectedCategory: $selectedInvestmentCategory,
                     onInvestmentDataChanged: { data in
@@ -910,7 +858,7 @@ struct FinanceAddAccountView: View {
     
     var body: some View {
         let content = navigationContent
-            .modifier(SelectedAccountTypeChangeHandler(selectedAccountType: $selectedAccountType, cardViewModel: $cardViewModel, creditViewModel: $creditViewModel, investmentViewModel: $investmentViewModel, selectedArchivedAccountID: $selectedArchivedAccountID))
+            .modifier(SelectedAccountTypeChangeHandler(selectedAccountType: $selectedAccountType, selectedArchivedAccountID: $selectedArchivedAccountID))
             .onChange(of: selectedAccountType) { _, _ in
                 focusNameFieldIfNeeded()
             }
@@ -1450,25 +1398,15 @@ struct FinanceAddAccountView: View {
 
 private struct SelectedAccountTypeChangeHandler: ViewModifier {
     @Binding var selectedAccountType: FinanceAccountType
-    @Binding var cardViewModel: CardViewModel?
-    @Binding var creditViewModel: CreditViewModel?
-    @Binding var investmentViewModel: InvestmentViewModel?
     @Binding var selectedArchivedAccountID: String?
 
     func body(content: Content) -> some View {
         content
             .onChange(of: selectedAccountType) { oldValue, newValue in
                 if oldValue != newValue {
+                    // Смена типа сбрасывает выбор архивного счёта; формы пересоздаются
+                    // самим switch по selectedAccountType (structural identity → @State reset).
                     selectedArchivedAccountID = nil
-                    // Сбрасываем viewModels при смене типа
-                    switch oldValue {
-                    case .card:
-                        cardViewModel = nil
-                    case .credit:
-                        creditViewModel = nil
-                    case .investment:
-                        investmentViewModel = nil
-                    }
                 }
             }
     }
