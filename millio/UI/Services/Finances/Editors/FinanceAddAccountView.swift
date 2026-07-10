@@ -10,9 +10,6 @@ import SwiftData
 
 struct FinanceAddAccountView: View {
     @ObservedObject var viewModel: FinanceViewModel
-    let editingCard: Card?
-    let editingCredit: Credit?
-    let editingInvestment: Investment?
     let preselectedGroup: FinanceGroup?
     let preselectedAccountType: FinanceAccountType?
     let presentationStyle: FinanceEditorPresentationStyle
@@ -23,17 +20,11 @@ struct FinanceAddAccountView: View {
 
     init(
         viewModel: FinanceViewModel,
-        editingCard: Card? = nil,
-        editingCredit: Credit? = nil,
-        editingInvestment: Investment? = nil,
         preselectedGroup: FinanceGroup? = nil,
         preselectedAccountType: FinanceAccountType? = nil,
         presentationStyle: FinanceEditorPresentationStyle = .modal
     ) {
         self.viewModel = viewModel
-        self.editingCard = editingCard
-        self.editingCredit = editingCredit
-        self.editingInvestment = editingInvestment
         self.preselectedGroup = preselectedGroup
         self.preselectedAccountType = preselectedAccountType
         self.presentationStyle = presentationStyle
@@ -109,9 +100,7 @@ struct FinanceAddAccountView: View {
     
     private var navigationTitle: String {
         guard !showProductPicker else { return "" }
-        return (editingCard == nil && editingCredit == nil && editingInvestment == nil)
-            ? localized("finances.add_account.nav.new")
-            : localized("finances.add_account.nav.edit")
+        return localized("finances.add_account.nav.new")
     }
     
     private var resolvedGroup: FinanceGroup? {
@@ -514,27 +503,19 @@ struct FinanceAddAccountView: View {
         EmptyView()
     }
 
-    private var isEditingMode: Bool {
-        editingCard != nil || editingCredit != nil || editingInvestment != nil
-    }
-    
     @ViewBuilder
     private var createFormSections: some View {
         switch selectedAccountType {
         case .card:
             if cardViewModel == nil {
                 VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: editingCard == nil ? L("finances.add_account.card.create") : L("finances.add_account.card.edit"))
+                    FinancesSectionHeader(title: L("finances.add_account.card.create"))
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
                         ProgressView()
                             .tint(AppColors.textPrimary)
                             .task {
                                 let vm = CardViewModel(modelContext: viewModel.modelContext)
-                                if let editingCard {
-                                    vm.handle(.editCard(editingCard))
-                                } else {
-                                    vm.handle(.addCard)
-                                }
+                                vm.handle(.addCard)
                                 cardViewModel = vm
                             }
                     }
@@ -544,7 +525,7 @@ struct FinanceAddAccountView: View {
                 InlineCardCreateForm(
                     viewModel: vm,
                     name: $accountName,
-                    allowsTypeSwitching: !isEditingMode,
+                    allowsTypeSwitching: true,
                     selectedProductTitle: selectedProductTypeTitle,
                     onOpenProductPicker: {
                         showProductPicker = true
@@ -559,17 +540,13 @@ struct FinanceAddAccountView: View {
         case .credit:
             if creditViewModel == nil {
                 VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: editingCredit == nil ? L("finances.add_account.credit.create") : L("finances.add_account.credit.edit"))
+                    FinancesSectionHeader(title: L("finances.add_account.credit.create"))
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
                         ProgressView()
                             .tint(AppColors.textPrimary)
                             .task {
                                 let vm = CreditViewModel(modelContext: viewModel.modelContext)
-                                if let editingCredit {
-                                    vm.handle(.editCredit(editingCredit))
-                                } else {
-                                    vm.handle(.addCredit)
-                                }
+                                vm.handle(.addCredit)
                                 creditViewModel = vm
                             }
                     }
@@ -587,7 +564,7 @@ struct FinanceAddAccountView: View {
                 }
             }
         case .investment:
-            if selectedInvestmentPreset == .deposit, editingInvestment == nil {
+            if selectedInvestmentPreset == .deposit {
                 // Вклад/накопительный счёт — новое ядро event-sourcing (Фаза 3), НЕ старый Investment(isDeposit:).
                 InlineDepositCreateForm(
                     name: $accountName,
@@ -597,17 +574,13 @@ struct FinanceAddAccountView: View {
                 }
             } else if investmentViewModel == nil {
                 VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: editingInvestment == nil ? L("finances.add_account.investment.create") : L("finances.add_account.investment.edit"))
+                    FinancesSectionHeader(title: L("finances.add_account.investment.create"))
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
                         ProgressView()
                             .tint(AppColors.textPrimary)
                             .task {
                                 let vm = InvestmentViewModel(modelContext: viewModel.modelContext)
-                                if let editingInvestment {
-                                    vm.handle(.editInvestment(editingInvestment))
-                                } else {
-                                    vm.handle(.addInvestment(isDeposit: selectedInvestmentPreset == .deposit))
-                                }
+                                vm.handle(.addInvestment(isDeposit: selectedInvestmentPreset == .deposit))
                                 investmentViewModel = vm
                             }
                     }
@@ -766,7 +739,7 @@ struct FinanceAddAccountView: View {
                 if hasConfirmedProductSelection {
                     nameSection
 
-                    if !isEditingMode && selectedAccountType != .card {
+                    if selectedAccountType != .card {
                         accountTypeSection
                     }
                     addAccountModeSection
@@ -836,9 +809,7 @@ struct FinanceAddAccountView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     ToolbarGlassIconButton(
                         systemName: "checkmark",
-                        accessibilityLabel: isEditingMode
-                        ? localized("finances.common.save")
-                        : localized("finances.common.add"),
+                        accessibilityLabel: localized("finances.common.add"),
                         isEnabled: hasConfirmedProductSelection && isValid,
                         isHighlighted: hasConfirmedProductSelection && isValid
                     ) {
@@ -851,30 +822,7 @@ struct FinanceAddAccountView: View {
             areHintsHidden = UserDefaults.standard.bool(forKey: HintsPrefs.hiddenKey)
             if !didInitializePresentationState {
                 didInitializePresentationState = true
-                if let editingCard {
-                    hasConfirmedProductSelection = true
-                    selectedAccountType = .card
-                    selectedProductTypeTitle = FinanceAccountType.card.displayName(for: localizationLocale)
-                    accountName = editingCard.name
-                    draftIconName = editingCard.customIconName
-                    draftIconColor = editingCard.customIconColor
-                } else if let editingCredit {
-                    hasConfirmedProductSelection = true
-                    selectedAccountType = .credit
-                    selectedProductTypeTitle = FinanceAccountType.credit.displayName(for: localizationLocale)
-                    accountName = editingCredit.name
-                    draftIconName = editingCredit.customIconName
-                    draftIconColor = editingCredit.customIconColor
-                } else if let editingInvestment {
-                    hasConfirmedProductSelection = true
-                    selectedAccountType = .investment
-                    selectedInvestmentCategory = editingInvestment.category
-                    selectedInvestmentPreset = .category
-                    selectedProductTypeTitle = editingInvestment.category.displayName(for: localizationLocale)
-                    accountName = editingInvestment.name
-                    draftIconName = editingInvestment.customIconName
-                    draftIconColor = editingInvestment.customIconColor
-                } else if let preselectedAccountType {
+                if let preselectedAccountType {
                     hasConfirmedProductSelection = true
                     selectedAccountType = preselectedAccountType
                     switch preselectedAccountType {
@@ -890,7 +838,7 @@ struct FinanceAddAccountView: View {
                 } else {
                     hasConfirmedProductSelection = false
                     showProductPicker = FinanceAddAccountPresentationPolicy.shouldAutoPresentTypePicker(
-                        isEditingMode: isEditingMode,
+                        isEditingMode: false,
                         preselectedAccountType: preselectedAccountType
                     )
                 }
@@ -899,27 +847,6 @@ struct FinanceAddAccountView: View {
                 selectedGroupID = preselectedGroup.groupUniqueID
             } else if let preselectedGroup = viewModel.state.selectedGroupForAccount {
                 selectedGroupID = preselectedGroup.groupUniqueID
-            } else if let editingCard {
-                let editingID = editingCard.cardUniqueID
-                let descriptor = FetchDescriptor<FinanceAccount>()
-                let accountLink = (try? viewModel.modelContext.fetch(descriptor))?.first(where: {
-                    $0.accountType == .card && $0.accountID == editingID
-                })
-                selectedGroupID = accountLink?.group?.groupUniqueID
-            } else if let editingCredit {
-                let editingID = editingCredit.creditUniqueID
-                let descriptor = FetchDescriptor<FinanceAccount>()
-                let accountLink = (try? viewModel.modelContext.fetch(descriptor))?.first(where: {
-                    $0.accountType == .credit && $0.accountID == editingID
-                })
-                selectedGroupID = accountLink?.group?.groupUniqueID
-            } else if let editingInvestment {
-                let editingID = editingInvestment.investmentUniqueID
-                let descriptor = FetchDescriptor<FinanceAccount>()
-                let accountLink = (try? viewModel.modelContext.fetch(descriptor))?.first(where: {
-                    $0.accountType == .investment && $0.accountID == editingID
-                })
-                selectedGroupID = accountLink?.group?.groupUniqueID
             } else {
                 selectedGroupID = nil
             }
@@ -1026,7 +953,7 @@ struct FinanceAddAccountView: View {
         case .credit:
             return creditData != nil
         case .investment:
-            if selectedInvestmentPreset == .deposit, addAccountMode == .create, editingInvestment == nil {
+            if selectedInvestmentPreset == .deposit, addAccountMode == .create {
                 return depositData != nil
             }
             return investmentData != nil
@@ -1057,7 +984,7 @@ struct FinanceAddAccountView: View {
             guard let creditData else { return false }
             return creditData.amount != 0
         case .investment:
-            if selectedInvestmentPreset == .deposit, editingInvestment == nil {
+            if selectedInvestmentPreset == .deposit {
                 return (depositData?.amount ?? 0) != 0
             }
             guard let investmentData else { return false }
@@ -1149,18 +1076,16 @@ struct FinanceAddAccountView: View {
     }
     
     /// kind нового ядра для текущего выбора пресета «Карта»/«Счёт» — `nil` для остальных
-    /// пресетов (вклад/инвестиции/…, они пока идут старым путём, см. `AccountsCoreAdditionBridge`)
-    /// и для режима редактирования (`isEditingMode` — правка СУЩЕСТВУЮЩЕЙ легаси `Card`/`Investment`,
-    /// у new-core счетов редактирование — через `AccountDetailView`, не эту форму). Фикс Фазы 6a:
-    /// без `isEditingMode` правка легаси-карты создавала счёт-дубликат нового ядра вместо обновления —
-    /// см. докстринг `AccountsCoreAdditionBridge.moneyKind`.
+    /// пресетов (вклад/инвестиции/… — свои резолверы). Форма теперь только для СОЗДАНИЯ:
+    /// EDIT-путь легаси снесён (6b Ф5c.3), поэтому `isEditingLegacy: false`. Защитный гуард
+    /// `isEditingLegacy` в мосте сохранён (гард-тест `AllPresetsOnNewCoreTests`, анамнез Фазы 6a).
     private var newCoreMoneyKindForCurrentSelection: AccountKind? {
         guard addAccountMode == .create else { return nil }
         return AccountsCoreAdditionBridge.moneyKind(
             accountType: selectedAccountType,
             investmentPreset: selectedInvestmentPreset,
             bank: cardData?.bank ?? .other,
-            isEditingLegacy: isEditingMode
+            isEditingLegacy: false
         )
     }
 
@@ -1171,7 +1096,7 @@ struct FinanceAddAccountView: View {
         return AccountsCoreAdditionBridge.obligationKind(
             accountType: selectedAccountType,
             investmentCategory: selectedInvestmentCategory,
-            isEditingLegacy: isEditingMode
+            isEditingLegacy: false
         )
     }
 
@@ -1182,7 +1107,7 @@ struct FinanceAddAccountView: View {
         return AccountsCoreAdditionBridge.depositKind(
             accountType: selectedAccountType,
             investmentPreset: selectedInvestmentPreset,
-            isEditingLegacy: isEditingMode
+            isEditingLegacy: false
         )
     }
 
@@ -1197,7 +1122,7 @@ struct FinanceAddAccountView: View {
             investmentCategory: selectedInvestmentCategory,
             investmentPreset: selectedInvestmentPreset,
             hasTicker: hasTicker,
-            isEditingLegacy: isEditingMode
+            isEditingLegacy: false
         )
     }
 
@@ -1406,47 +1331,9 @@ struct FinanceAddAccountView: View {
             return
         }
 
-        switch selectedAccountType {
-        case .card:
-            if let cardViewModel = cardViewModel {
-                if let editingCard {
-                    updateCardAndGroup(
-                        cardViewModel: cardViewModel,
-                        card: editingCard,
-                        group: targetGroup
-                    )
-                } else {
-                    createCardAndAddToGroup(cardViewModel: cardViewModel, group: targetGroup)
-                }
-                return
-            }
-        case .credit:
-            if let creditViewModel = creditViewModel {
-                if let editingCredit {
-                    updateCreditAndGroup(
-                        creditViewModel: creditViewModel,
-                        credit: editingCredit,
-                        group: targetGroup
-                    )
-                } else {
-                    createCreditAndAddToGroup(creditViewModel: creditViewModel, group: targetGroup)
-                }
-                return
-            }
-        case .investment:
-            if let investmentViewModel = investmentViewModel {
-                if let editingInvestment {
-                    updateInvestmentAndGroup(
-                        investmentViewModel: investmentViewModel,
-                        investment: editingInvestment,
-                        group: targetGroup
-                    )
-                } else {
-                    createInvestmentAndAddToGroup(investmentViewModel: investmentViewModel, group: targetGroup)
-                }
-                return
-            }
-        }
+        // Все 11 create-пресетов резолвятся в один core-kind выше (гард-тест
+        // `AllPresetsOnNewCoreTests`) — легаси-writer'ы (Card/Credit/Investment) недостижимы
+        // после сноса EDIT-пути (6b Ф5c.3). Сюда управление в норме не доходит.
     }
 
     private var currentTrackedTickerCount: Int {
@@ -1466,10 +1353,6 @@ struct FinanceAddAccountView: View {
     private var isCreatingNewTrackedTicker: Bool {
         guard selectedAccountType == .investment else { return false }
         guard selectedInvestmentCategory.isMarketTickerCategory else { return false }
-
-        if let editingInvestment {
-            return !editingInvestment.category.isMarketTickerCategory
-        }
         return true
     }
 
@@ -1561,222 +1444,6 @@ struct FinanceAddAccountView: View {
         focusNameFieldIfNeeded()
     }
 
-    /// Собирает легаси-`Card` из транзиентного драфта формы (`InlineCardDraft`) для передачи в легаси-writer
-    /// `CardViewModel.updateCard`. Единственная точка, где драфт формы становится @Model — сам
-    /// `InlineCardCreateForm` больше не знает про `Card` (6b Ф5c.2). Уходит вместе с EDIT-путём в Ф5c.3.
-    private func makeLegacyCard(from draft: InlineCardDraft) -> Card {
-        let card = Card(
-            name: draft.name,
-            cardNumber: draft.cardNumber,
-            bank: draft.bank,
-            cardType: draft.cardType,
-            priority: draft.priority,
-            currency: draft.currency,
-            balance: draft.balance,
-            creditLimit: draft.creditLimit,
-            expiryDate: draft.expiryDate,
-            cardholderName: draft.cardholderName,
-            cardColor: draft.cardColor,
-            isFavorite: draft.isFavorite,
-            includeInTotal: draft.includeInTotal
-        )
-        card.uniqueID = draft.uniqueID
-        return card
-    }
-
-    private func createCardAndAddToGroup(cardViewModel: CardViewModel, group: FinanceGroup?) {
-        guard let cardData = cardData else { return }
-
-        let card = makeLegacyCard(from: cardData)
-        if card.uniqueID.isEmpty {
-            card.uniqueID = UUID().uuidString
-        }
-
-        card.customIconName = draftIconName
-        card.customIconColor = draftIconColor
-
-        let createdCardID = card.cardUniqueID
-
-        // Создаем карту из данных формы
-        cardViewModel.handle(.updateCard(card))
-
-        guard cardViewModel.state.cards.contains(where: { $0.cardUniqueID == createdCardID }) else { return }
-
-        viewModel.handle(.addAccountToGroup(
-            accountType: .card,
-            accountID: createdCardID,
-            group: group
-        ))
-        dismiss()
-    }
-    
-    private func createCreditAndAddToGroup(creditViewModel: CreditViewModel, group: FinanceGroup?) {
-        guard let creditData = creditData else { return }
-        let createdCreditID = UUID().uuidString
-        
-        // Создаем кредит из данных формы
-        creditViewModel.handle(.updateCredit(
-            name: creditData.name,
-            amount: creditData.amount,
-            monthlyPayment: creditData.monthlyPayment,
-            endDate: creditData.endDate,
-            remainingAmount: creditData.remainingAmount,
-            currency: creditData.currency,
-            bank: creditData.bank,
-            creditType: creditData.creditType,
-            isFavorite: creditData.isFavorite,
-            paymentMode: creditData.paymentMode,
-            paymentDayOfMonth: creditData.paymentDayOfMonth,
-            nextPaymentDate: creditData.nextPaymentDate,
-            reminderEnabled: creditData.reminderEnabled,
-            reminderDaysBefore: creditData.reminderDaysBefore,
-            reminderTime: creditData.reminderTime,
-            includeInTotal: creditData.includeInTotal,
-            uniqueID: createdCreditID
-        ))
-        
-        guard creditViewModel.state.credits.contains(where: { $0.creditUniqueID == createdCreditID }) else { return }
-        if let draftIconName, let created = creditViewModel.state.credits.first(where: { $0.creditUniqueID == createdCreditID }) {
-            created.customIconName = draftIconName
-            created.customIconColor = draftIconColor
-        }
-        
-        viewModel.handle(.addAccountToGroup(
-            accountType: .credit,
-            accountID: createdCreditID,
-            group: group
-        ))
-        dismiss()
-    }
-
-    private func updateCardAndGroup(cardViewModel: CardViewModel, card: Card, group: FinanceGroup?) {
-        guard let cardData = cardData else { return }
-
-        let payload = makeLegacyCard(from: cardData)
-        if payload.uniqueID.isEmpty {
-            payload.uniqueID = card.uniqueID
-        }
-
-        payload.customIconName = draftIconName
-        payload.customIconColor = draftIconColor
-
-        cardViewModel.handle(.editCard(card))
-        cardViewModel.handle(.updateCard(payload))
-
-        viewModel.handle(.addAccountToGroup(
-            accountType: .card,
-            accountID: card.cardUniqueID,
-            group: group
-        ))
-        dismiss()
-    }
-
-    private func updateCreditAndGroup(creditViewModel: CreditViewModel, credit: Credit, group: FinanceGroup?) {
-        guard let creditData = creditData else { return }
-
-        // Устанавливаем editingCredit и иконку до updateCredit — modelContext.save() вызывается внутри updateCredit
-        creditViewModel.state.editingCredit = credit
-        creditViewModel.state.editingCredit?.customIconName = draftIconName
-        creditViewModel.state.editingCredit?.customIconColor = draftIconColor
-        creditViewModel.handle(.updateCredit(
-            name: creditData.name,
-            amount: creditData.amount,
-            monthlyPayment: creditData.monthlyPayment,
-            endDate: creditData.endDate,
-            remainingAmount: creditData.remainingAmount,
-            currency: creditData.currency,
-            bank: creditData.bank,
-            creditType: creditData.creditType,
-            isFavorite: creditData.isFavorite,
-            paymentMode: creditData.paymentMode,
-            paymentDayOfMonth: creditData.paymentDayOfMonth,
-            nextPaymentDate: creditData.nextPaymentDate,
-            reminderEnabled: creditData.reminderEnabled,
-            reminderDaysBefore: creditData.reminderDaysBefore,
-            reminderTime: creditData.reminderTime,
-            includeInTotal: creditData.includeInTotal,
-            uniqueID: credit.creditUniqueID
-        ))
-
-        viewModel.handle(.addAccountToGroup(
-            accountType: .credit,
-            accountID: credit.creditUniqueID,
-            group: group
-        ))
-        dismiss()
-    }
-    
-    private func createInvestmentAndAddToGroup(investmentViewModel: InvestmentViewModel, group: FinanceGroup?) {
-        guard let investmentData = investmentData else { return }
-        let createdInvestmentID = UUID().uuidString
-        
-        // Создаем актив из данных формы
-        investmentViewModel.handle(.updateInvestment(
-            name: investmentData.name,
-            investmentType: investmentData.investmentType,
-            category: investmentData.category,
-            amount: investmentData.amount,
-            currency: investmentData.currency,
-            includeInTotal: investmentData.includeInTotal,
-            priority: investmentData.priority,
-            isFavorite: investmentData.isFavorite,
-            marketData: investmentData.marketData,
-            createCashflowTransaction: investmentData.createCashflowTransaction,
-            uniqueID: createdInvestmentID,
-            isDeposit: selectedInvestmentPreset == .deposit,
-            depositData: nil
-        ))
-        
-        guard investmentViewModel.state.investments.contains(where: { $0.investmentUniqueID == createdInvestmentID }) else { return }
-
-        if let draftIconName, let created = investmentViewModel.state.investments.first(where: { $0.investmentUniqueID == createdInvestmentID }) {
-            created.customIconName = draftIconName
-            created.customIconColor = draftIconColor
-        }
-
-        viewModel.handle(.addAccountToGroup(
-            accountType: .investment,
-            accountID: createdInvestmentID,
-            group: group
-        ))
-        dismiss()
-    }
-
-    private func updateInvestmentAndGroup(
-        investmentViewModel: InvestmentViewModel,
-        investment: Investment,
-        group: FinanceGroup?
-    ) {
-        guard let investmentData = investmentData else { return }
-
-        // Устанавливаем editingInvestment и иконку до updateInvestment — modelContext.save() вызывается внутри updateInvestment
-        investmentViewModel.state.editingInvestment = investment
-        investmentViewModel.state.editingInvestment?.customIconName = draftIconName
-        investmentViewModel.state.editingInvestment?.customIconColor = draftIconColor
-
-        investmentViewModel.handle(.updateInvestment(
-            name: investmentData.name,
-            investmentType: investmentData.investmentType,
-            category: investmentData.category,
-            amount: investmentData.amount,
-            currency: investmentData.currency,
-            includeInTotal: investmentData.includeInTotal,
-            priority: investmentData.priority,
-            isFavorite: investmentData.isFavorite,
-            marketData: investmentData.marketData,
-            createCashflowTransaction: investmentData.createCashflowTransaction,
-            uniqueID: investment.investmentUniqueID,
-            isDeposit: investment.isDeposit,
-            depositData: nil
-        ))
-
-        viewModel.handle(.addAccountToGroup(
-            accountType: .investment,
-            accountID: investment.investmentUniqueID,
-            group: group
-        ))
-        dismiss()
-    }
 }
 
 // MARK: - ViewModifier Helpers for FinanceAddAccountView

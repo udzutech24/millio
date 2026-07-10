@@ -192,7 +192,6 @@ private struct FinanceDynamicsContentView: View {
     @State private var showDisplayCurrencySheet: Bool = false
     @State private var displayCurrencySearchText: String = ""
     @State private var isBreakdownExpanded: Bool = false
-    @State private var showFullProductEditSheet: Bool = false
     @State private var showCashflowHistory: Bool = false
     @State private var cashflowViewModel: CashflowViewModel? = nil
     @State private var isInlineAccountEdit: Bool = false
@@ -292,9 +291,6 @@ private struct FinanceDynamicsContentView: View {
         }
         .sheet(isPresented: $showDisplayCurrencySheet) {
             displayCurrencySheet
-        }
-        .sheet(isPresented: $showFullProductEditSheet) {
-            fullProductEditSheetContent
         }
         .sheet(isPresented: $showCashflowHistory) {
             cashflowHistorySheetContent
@@ -408,21 +404,6 @@ private struct FinanceDynamicsContentView: View {
             return .account(account)
         }
         return .none
-    }
-
-    @ViewBuilder
-    private var fullProductEditSheetContent: some View {
-        if let account = initialAccount {
-            FinanceAddAccountView(
-                viewModel: financeViewModel,
-                editingCard: resolvedCard(for: account),
-                editingCredit: resolvedCredit(for: account),
-                editingInvestment: resolvedInvestment(for: account)
-            )
-            .onDisappear {
-                viewModel.handle(.loadData)
-            }
-        }
     }
 
     @ViewBuilder
@@ -1603,39 +1584,9 @@ private struct FinanceDynamicsContentView: View {
                     .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
             }
             .buttonStyle(.plain)
-
-            Divider()
-                .frame(height: FinanceDynamicsTopBarStyle.compactSeparatorHeight)
-                .overlay(FinanceDynamicsTopBarStyle.compactSeparatorColor)
-
-            Button {
-                showFullProductEditSheet = true
-            } label: {
-                Image(systemName: "gearshape")
-                    .symbolRenderingMode(.monochrome)
-                    .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
-                    .foregroundStyle(FinanceDynamicsTopBarStyle.passiveIconColor)
-                    .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, FinanceDynamicsTopBarStyle.containerHorizontalPadding)
         .padding(.vertical, FinanceDynamicsTopBarStyle.containerVerticalPadding)
-    }
-
-    private func resolvedCard(for account: FinanceAccount) -> Card? {
-        guard account.accountType == .card else { return nil }
-        return financeViewModel.state.availableCards.first(where: { $0.cardUniqueID == account.accountID })
-    }
-
-    private func resolvedCredit(for account: FinanceAccount) -> Credit? {
-        guard account.accountType == .credit else { return nil }
-        return financeViewModel.state.availableCredits.first(where: { $0.creditUniqueID == account.accountID })
-    }
-
-    private func resolvedInvestment(for account: FinanceAccount) -> Investment? {
-        guard account.accountType == .investment else { return nil }
-        return financeViewModel.state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID })
     }
 
     private func startInlineAccountEdit(for account: FinanceAccount) {
