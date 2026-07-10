@@ -71,3 +71,24 @@ testIncomeBudgetSummaryUsesIncomePlanConfiguration (порядок categorySnaps
 подтверждён чисто: 22 failed в full-run = 16 задокументированных baseline + 1 flaky-класс
 LanguageManager (`FinanceDynamicsViewModelTests.testDeleteGroupPreservesArchivedLinkForHistoricalCalculation`) +
 5 нового flaky-класса выше — ноль падений, вызванных диффом Фазы 3.
+
+## Дополнение по итогам Фазы 4 плана 6b (2026-07-10)
+
+**Новый flaky «GroupsMigratorTests.duplicateLegacyGroupNamesAreLoggedNotSilentlyDropped
+order-dependence»** (НЕ регрессия Фазы 4; файл Ф4-диффом не тронут). Тест Фазы 1.5
+про дубли имён легаси-групп: при двух `FinanceGroup` с одинаковым `name` только
+ПЕРВАЯ переносит поля на `AccountGroup` (best-effort, «Дефект 2» Ф1.5). «Первая»
+зависит от порядка `FetchDescriptor<FinanceGroup>` (SwiftData не гарантирует порядок
+без явного `sortBy`), поэтому ассерт `core.isFavorite == true` (`GroupsMigratorTests.swift:169`)
+недетерминирован. Доказано прямым повтором изолированного сьюта на одном коммите
+(feature/legacy-accounts-purge): **run 1 — зелёный, run 2 — красный**, без изменений кода.
+Системное лечение (кандидат для Дениса, вне скоупа Ф4): либо пин порядка (`sortBy`
+в `GroupsMigrator`), либо сделать ассерт порядко-независимым (проверять, что ХОТЬ ОДНА
+из дублей перенесла поля).
+
+Гейт Фазы 4 (AC1) подтверждён чисто через `xcrun xcresulttool`: полный `millioTests` —
+1709 passed / 26 failed = 12 задокументированных baseline (часть baseline-тестов в этом
+прогоне прошла — они time-sensitive) + 6 flaky-класса LanguageManager + 5 flaky-класса
+rate-cache + 2 `FinanceDynamicsCoreContributionTests` (Ф2b; зелёные в изолированном
+прогоне — параллельная интерференция) + 1 GroupsMigrator order-flaky выше. **Ноль падений,
+вызванных диффом Фазы 4** (снос дохлого UI-кода, логика не тронута).

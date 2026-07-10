@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-10T05:10:00Z",
+  "updated": "2026-07-10T07:30:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -34,9 +34,9 @@
       "note": "52fff71: StockBulkImportServices на AccountsCoreService (scoped). ScreenshotDataSeeder — доказанный блокер (Cashback→легаси Card), эскалирован владельцу. FinanceCreateViews — подтверждён мёртвым (Ф4). InlineCreateForms — не писатель (DTO без insert), рефакторинг типов в Ф4. Build ок, 22 failed = 16 baseline + 1 LanguageManager + 5 нового UserDefaults-flaky (задокументирован), 0 новых от диффа"
     },
     {
-      "name": "Ф4 — упрощение мостов + снос редакторов/VM/менеджеров",
-      "status": "pending",
-      "note": null
+      "name": "Ф4 — упрощение мостов + снос редакторов/VM/менеджеров (scoped)",
+      "status": "done",
+      "note": "5221736: снос доказанно-мёртвой легаси-редактор-поверхности (CardEditorView/CreditEditorView/InvestmentEditorView + FinanceEditViews/FinanceEditorWrappers/FinanceCreateViews + осиротевший тест + мёртвая обвязка FinanceViewModel/FinancesSheets, −3054 строк). DepositCashflowBridge верифицирован чистым. Escalation (доказано грепом→Ф5): гуарды isEditingLegacy живые (легаси-EDIT-путь FinanceAddAccountView через FinanceDynamicsView), CashflowBridge легаси-ветки несущие (историч. tx на легаси-ID, Card жив до Ф5), CardCatalog/CardManager/FinanceAccountService/FinanceInvestmentOrderService живут в God-VM/Cashback, легаси-VM+InlineCreateForms трогают живой экран. Cashback-узел (AC4): сквозная зависимость фичи от Card → выделенная миграция; остаточный блокер Card.swift (рекомендация б), решение владельца. Build ок, 1709 passed/26 failed = baseline/flaky (вкл. новый order-flaky GroupsMigratorTests.duplicateLegacyGroupNames — не Ф4), 0 новых красных (xcresulttool). НЕ мержено"
     },
     {
       "name": "Ф5 — снос регистрации, схема V6, @Model-файлы (вкл. FinanceGroup.swift)",
