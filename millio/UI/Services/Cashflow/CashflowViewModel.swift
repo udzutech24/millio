@@ -443,14 +443,12 @@ final class CashflowViewModel: ViewModelProtocol {
     /// Вызывается при сохранении транзакции — данные актуальны на момент вызова.
     func buildExportData() -> MillioExportData {
         let transactions = state.transactions
-        let cards = state.allCards
+        let accounts: [Account] = (try? modelContext.fetch(FetchDescriptor<Account>())) ?? []
         let budgets: [BudgetPlan] = (try? modelContext.fetch(FetchDescriptor<BudgetPlan>())) ?? []
-        let investments: [Investment] = (try? modelContext.fetch(FetchDescriptor<Investment>())) ?? []
         return SheetsDataMapper.buildExportData(
             transactions: transactions,
-            cards: cards,
-            budgets: budgets,
-            investments: investments
+            accounts: accounts,
+            budgets: budgets
         )
     }
 

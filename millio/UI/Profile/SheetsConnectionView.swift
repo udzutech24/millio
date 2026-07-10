@@ -187,14 +187,12 @@ struct SheetsConnectionView: View {
         defer { isLoading = false }
         do {
             let transactions = try modelContext.fetch(FetchDescriptor<CashflowTransaction>())
-            let cards = try modelContext.fetch(FetchDescriptor<Card>())
+            let accounts = try modelContext.fetch(FetchDescriptor<Account>())
             let budgets = try modelContext.fetch(FetchDescriptor<BudgetPlan>())
-            let investments = try modelContext.fetch(FetchDescriptor<Investment>())
             let exportData = SheetsDataMapper.buildExportData(
                 transactions: transactions,
-                cards: cards,
-                budgets: budgets,
-                investments: investments
+                accounts: accounts,
+                budgets: budgets
             )
             _ = try await service.syncNow(with: exportData)
             await refreshStatus()
