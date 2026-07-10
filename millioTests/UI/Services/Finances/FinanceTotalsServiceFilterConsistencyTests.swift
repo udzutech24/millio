@@ -2,21 +2,17 @@
 //  FinanceTotalsServiceFilterConsistencyTests.swift
 //  millioTests
 //
-//  Регрессионный тест консистентности тоталов — plans/2026-07-05__unified-totals.md.
-//  На одном и том же наборе legacy-счетов (обычный / includeInTotal=false у карты /
-//  архивная карта / архивный кредит / кредитная карта с долгом / мультивалюта)
-//  заголовок «Динамика» (FinanceDynamicsViewModel.state.currentBalance) и тотал
-//  Дашборда/«Счетов» (FinanceTotalsService.calculateTotalsSnapshot) обязаны давать
-//  ОДИНАКОВОЕ число. До фикса TotalsService не фильтровал archivedAt вообще (для всех
-//  трёх типов) — этот тест ловит регрессию, если фильтры снова разойдутся.
+//  6b Фаза 2 (single-world): агрегат «Общий баланс» считается ТОЛЬКО по ядру
+//  (`AccountsTotalsService.totalAt`). Регрессионный тест равенства путей тотала —
+//  Дашборд/«Счета» (`FinanceTotalsService.calculateTotalsSnapshot`) == заголовок «Динамика»
+//  (`FinanceDynamicsViewModel.state.currentBalance`) — на одном наборе core-счетов.
+//  Закрывает R1 аудита 2026-07-02 (три пути тотала → один).
 //
-//  ВАЖНО: сценарий "кредит с includeInTotal=false" сюда сознательно НЕ включён —
-//  FinanceAccountService.normalizeCreditsIncludeInTotal принудительно сбрасывает этот
-//  флаг в true при каждой loadAccounts(), поэтому такое состояние недостижимо в проде
-//  (проверено экспериментально при написании этого теста). Это отдельный,
-//  не связанный с текущим фиксом баг — см. Фазу 4 в plans/2026-07-05__unified-totals.md.
-//  Чистая логика AccountTotalPolicy для credit.includeInTotal=false покрыта отдельно
-//  в AccountTotalPolicyTests (там нормализатор не участвует).
+//  До Фазы 2 этот файл сравнивал легаси-агрегаты (legacy-фильтры includeInTotal/archivedAt
+//  прямо в `calculateTotalsSnapshot`). Легаси-цикл в агрегате снят: мигрированная легаси
+//  скрыта (`archivedAt`) и вносит 0, что и проверяет сценарий смешанных данных ниже.
+//  Легаси-фильтр включения/знака теперь живёт только в per-group display
+//  (`FinanceTotalsService.getAccountAmount`, инлайн бывшего `AccountTotalPolicy`).
 //
 
 import Foundation
@@ -27,168 +23,97 @@ import SwiftData
 @Suite(.serialized)
 @MainActor
 struct FinanceTotalsServiceFilterConsistencyTests {
-    private static let schema = Schema([
-        Card.self,
-        Credit.self,
-        Investment.self,
-        FinanceGroup.self,
-        FinanceAccount.self,
-        CashflowTransaction.self,
-        HistoricalRate.self
-    ])
+
     private static var retainedContainers: [ModelContainer] = []
 
-    private func createTestModelContext() throws -> ModelContext {
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Self.schema, configurations: [config])
+    private func makeContext() throws -> ModelContext {
+        UserDefaults.standard.set("RUB", forKey: "primaryCurrencyCode")
+        let container = try AppMigrationPlan.makeInMemoryContainer()
         Self.retainedContainers.append(container)
-        let context = container.mainContext
-        try context.save()
-        return context
+        return container.mainContext
     }
 
-    @Test("Динамика и TotalsService дают одинаковый тотал на смешанном наборе счетов")
-    func dynamicsAndTotalsServiceAgreeOnMixedAccounts() async throws {
-        let modelContext = try createTestModelContext()
-
-        let group = FinanceGroup(name: "Тестовая группа", colorHex: "#FF0000")
-        group.displayCurrency = "RUB"
-        modelContext.insert(group)
-
-        // 1. Обычная дебетовая карта RUB — учитывается везде.
-        let cardActive = Card(
-            name: "Активная карта",
-            cardNumber: "0001",
-            cardType: .debit,
-            currency: "RUB",
-            balance: 10_000.0
-        )
-        modelContext.insert(cardActive)
-
-        // 2. Карта, исключённая пользователем из тотала — НЕ должна учитываться нигде.
-        let cardExcluded = Card(
-            name: "Исключённая карта",
-            cardNumber: "0002",
-            cardType: .debit,
-            currency: "RUB",
-            balance: 5_000.0,
-            includeInTotal: false
-        )
-        modelContext.insert(cardExcluded)
-
-        // 3. Архивная карта (была активна, потом архивирована вчера) — НЕ должна учитываться
-        //    в "сегодняшнем" тотале ни на одном экране (ключевой регресс-кейс: раньше
-        //    TotalsService не проверял archivedAt вообще).
-        let cardArchived = Card(
-            name: "Архивная карта",
-            cardNumber: "0003",
-            cardType: .debit,
-            currency: "RUB",
-            balance: 7_000.0
-        )
-        cardArchived.archivedAt = Date().addingTimeInterval(-86_400)
-        modelContext.insert(cardArchived)
-
-        // 4. Кредитная карта с долгом: лимит 50000, остаток 20000 → долг 30000 (liability).
-        let creditCard = Card(
-            name: "Кредитка",
-            cardNumber: "0004",
-            cardType: .credit,
-            currency: "RUB",
-            balance: 20_000.0,
-            creditLimit: 50_000.0
-        )
-        modelContext.insert(creditCard)
-
-        // 5. Обычный кредит — liability, учитывается везде.
-        let creditActive = Credit(
-            name: "Кредит",
-            amount: 40_000.0,
-            interestRate: 0.0,
-            monthlyPayment: 1_000.0,
-            startDate: Date(),
-            termMonths: 12,
-            currency: "RUB"
-        )
-        creditActive.remainingAmount = 40_000.0
-        creditActive.updatedAt = Date()
-        modelContext.insert(creditActive)
-
-        // 6. Архивный кредит — ключевой регресс-кейс: TotalsService раньше не фильтровал
-        //    archivedAt для кредитов вообще, поэтому погашенный/архивированный кредит
-        //    продолжал бы вычитаться из Дашборда бесконечно.
-        let creditArchived = Credit(
-            name: "Погашенный кредит",
-            amount: 15_000.0,
-            interestRate: 0.0,
-            monthlyPayment: 500.0,
-            startDate: Date(),
-            termMonths: 6,
-            currency: "RUB"
-        )
-        creditArchived.remainingAmount = 15_000.0
-        creditArchived.updatedAt = Date()
-        creditArchived.archivedAt = Date().addingTimeInterval(-86_400)
-        modelContext.insert(creditArchived)
-
-        // 7. Мультивалютная инвестиция (USD) — курс задаём мок-сервисом 1 USD = 100 RUB.
-        let investmentUSD = Investment(
-            name: "Инвестиция USD",
-            investmentType: .positive,
-            category: .stocks,
-            amount: 100.0,
-            currency: "USD"
-        )
-        modelContext.insert(investmentUSD)
-
-        let accounts: [(FinanceAccountType, String)] = [
-            (.card, cardActive.cardUniqueID),
-            (.card, cardExcluded.cardUniqueID),
-            (.card, cardArchived.cardUniqueID),
-            (.card, creditCard.cardUniqueID),
-            (.credit, creditActive.creditUniqueID),
-            (.credit, creditArchived.creditUniqueID),
-            (.investment, investmentUSD.investmentUniqueID)
-        ]
-        for (type, id) in accounts {
-            let account = FinanceAccount(accountType: type, accountID: id)
-            account.group = group
-            modelContext.insert(account)
-        }
-
-        try modelContext.save()
-
-        let mockRateService = MockCurrencyRateService()
-        mockRateService.setRate(from: "USD", to: "RUB", rate: 100.0)
-
-        // --- Дашборд / «Счета» ---
-        let financeViewModel = FinanceViewModel(
-            modelContext: modelContext,
-            currencyService: mockRateService,
-            skipInitialLoad: true
-        )
-        financeViewModel.handle(.loadAccounts)
-        financeViewModel.handle(.loadGroups)
-        let totalsSnapshot = await financeViewModel.totalsService.calculateTotalsSnapshot()
-
-        // --- Динамика ---
-        let dynamicsViewModel = FinanceDynamicsViewModel(
+    /// Заголовок «Динамика» на дату «сегодня» (без скоуп-фильтров) сходится с агрегатом Дашборда.
+    private func dynamicsCurrentBalance(
+        financeViewModel: FinanceViewModel,
+        modelContext: ModelContext
+    ) async -> Double {
+        let dynamics = FinanceDynamicsViewModel(
             modelContext: modelContext,
             financeViewModel: financeViewModel,
-            currencyService: mockRateService
+            currencyService: financeViewModel.currencyService
         )
-        dynamicsViewModel.handle(.loadData)
-        await dynamicsViewModel.updateCurrentBalanceAndDelta()
+        dynamics.handle(.loadData)
+        dynamics.state.period = .week
+        dynamics.state.dynamicsMode = .aggregated
+        // Пинним целевую дату «сегодня», чтобы сравнивать с агрегатом Дашборда (`totalAt(now)`),
+        // а не с концом произвольно посчитанного периода.
+        dynamics.state.selectedDate = Date()
+        await dynamics.updateCurrentBalanceAndDelta()
+        return dynamics.state.currentBalance
+    }
 
-        // Ожидание: 10000 (активная карта) − 30000 (долг кредитки) − 40000 (кредит)
-        // + 100*100 (инвестиция USD→RUB) = −50000. Исключённые/архивные счета вклада НЕ дают.
-        let expected = 10_000.0 - 30_000.0 - 40_000.0 + 10_000.0
+    // AC1: три пути тотала сходятся на наборе core-счетов.
+    @Test("AC1: тотал Дашборда/«Счетов» == тотал «Динамики» на наборе core-счетов")
+    func aggregateTotalMatchesAcrossDashboardAndDynamics() async throws {
+        let ctx = try makeContext()
+        let service = AccountsCoreService(modelContext: ctx)
 
-        #expect(abs(totalsSnapshot.totalAmount - expected) < 0.01, "TotalsService (Дашборд/Счета) разошёлся с ожидаемым")
-        #expect(abs(dynamicsViewModel.state.currentBalance - expected) < 0.01, "Динамика разошлась с ожидаемым")
-        #expect(
-            abs(totalsSnapshot.totalAmount - dynamicsViewModel.state.currentBalance) < 0.01,
-            "Дашборд/Счета и Динамика должны совпадать до копейки"
-        )
+        let financeViewModel = FinanceViewModel(modelContext: ctx, currencyService: MockCurrencyRateService(), skipInitialLoad: true)
+        let currency = financeViewModel.state.displayCurrency
+
+        _ = try service.createAccount(name: "Дебетовая", kind: .debitCard, currency: currency, openingBalance: 10_000)
+        _ = try service.createAccount(name: "Наличные", kind: .cash, currency: currency, openingBalance: 2_500)
+        _ = try service.createAccount(name: "Счёт в банке", kind: .bankAccount, currency: currency, openingBalance: 5_000)
+
+        financeViewModel.handle(.loadAccounts)
+        financeViewModel.handle(.loadGroups)
+
+        let dashboard = await financeViewModel.totalsService.calculateTotalsSnapshot().totalAmount
+        let dynamics = await dynamicsCurrentBalance(financeViewModel: financeViewModel, modelContext: ctx)
+
+        let expected = 17_500.0
+        #expect(abs(dashboard - expected) < 0.01, "Дашборд/«Счета»: агрегат по ядру должен быть 17 500")
+        #expect(abs(dynamics - expected) < 0.01, "«Динамика»: заголовок должен сойтись с ядром")
+        #expect(abs(dashboard - dynamics) < 0.01, "Три пути тотала → один: Дашборд == Динамика")
+    }
+
+    // AC2: смешанные данные (мигрированная = скрытая легаси + нативные core) → тотал = сумма core,
+    // скрытая легаси вносит 0.
+    @Test("AC2: скрытая (архивная) легаси не вносит вклад — тотал = сумме core-счетов")
+    func hiddenLegacyContributesNothing() async throws {
+        let ctx = try makeContext()
+        let service = AccountsCoreService(modelContext: ctx)
+
+        let financeViewModel = FinanceViewModel(modelContext: ctx, currencyService: MockCurrencyRateService(), skipInitialLoad: true)
+        let currency = financeViewModel.state.displayCurrency
+
+        // Нативные core-счета.
+        _ = try service.createAccount(name: "Дебетовая", kind: .debitCard, currency: currency, openingBalance: 8_000)
+        _ = try service.createAccount(name: "Наличные", kind: .cash, currency: currency, openingBalance: 1_000)
+        let coreSum = 9_000.0
+
+        // Скрытая (мигрированная) легаси-карта: archivedAt в прошлом + junction в группе.
+        // Заметное значение (99 999) — если бы вклад «протёк», тест упал бы громко.
+        let group = FinanceGroup(name: "Группа", colorHex: "#00AAFF")
+        group.displayCurrency = currency
+        ctx.insert(group)
+        let hiddenCard = Card(name: "Мигрированная", cardNumber: "0000", cardType: .debit, currency: currency, balance: 99_999)
+        hiddenCard.archivedAt = Date().addingTimeInterval(-86_400)
+        ctx.insert(hiddenCard)
+        let junction = FinanceAccount(accountType: .card, accountID: hiddenCard.cardUniqueID)
+        junction.group = group
+        ctx.insert(junction)
+        try ctx.save()
+
+        financeViewModel.handle(.loadAccounts)
+        financeViewModel.handle(.loadGroups)
+
+        let dashboard = await financeViewModel.totalsService.calculateTotalsSnapshot().totalAmount
+        let dynamics = await dynamicsCurrentBalance(financeViewModel: financeViewModel, modelContext: ctx)
+
+        #expect(abs(dashboard - coreSum) < 0.01, "Дашборд: скрытая легаси не должна входить в агрегат")
+        #expect(abs(dynamics - coreSum) < 0.01, "Динамика: скрытая легаси не должна входить в заголовок")
+        #expect(abs(dashboard - dynamics) < 0.01, "Дашборд == Динамика на смешанных данных")
     }
 }

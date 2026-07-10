@@ -65,6 +65,34 @@ private final class CashflowTestNotificationManager: NotificationManagerProtocol
 }
 
 extension CashflowViewModelTests {
+    /// 6b-регрессия: при непустом ядре снапшот активов Cashflow не должен быть (0,0), иначе ревальвация
+    /// зеркалит доход. «Начало» ДО создания счёта = 0 (семантика Account.participates), «конец» после
+    /// создания = баланс из AccountsCore тем же движком, что даёт тотал Дашборда/Динамики.
+    @Test("Снапшот активов берётся из AccountsCore, не зеркалит доход")
+    func assetsSnapshotUsesCoreTotals() async throws {
+        UserDefaults.standard.set("RUB", forKey: "primaryCurrencyCode")
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let ctx = container.mainContext
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let coreService = AccountsCoreService(modelContext: ctx)
+        _ = try coreService.createAccount(
+            name: "Счёт RUB", kind: .bankAccount, currency: "RUB",
+            openingBalance: 100_000, date: base
+        )
+
+        let viewModel = CashflowViewModel(modelContext: ctx)
+        viewModel.state.displayCurrency = "RUB"
+
+        let snapshot = await viewModel.resolveAssetsSnapshotFromFinance(
+            startDate: base.addingTimeInterval(-10 * 86_400), // до создания счёта
+            endDate: base.addingTimeInterval(10 * 86_400)     // после создания счёта
+        )
+
+        let result = try #require(snapshot)
+        #expect(result.start == 0)         // ДО миграции/создания — 0, не зеркало
+        #expect(result.end == 100_000)     // активы ядра, а не пустой легаси-путь
+    }
+
     @Test("Сортировка категорий: pinned первым, затем системные (порядок enum), затем кастомные")
     func sortCategoryOptionsStableOrder() {
         let options = [

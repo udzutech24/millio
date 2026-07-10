@@ -91,6 +91,9 @@ struct StockBulkImportTests {
         Investment.self,
         FinanceGroup.self,
         FinanceAccount.self,
+        Account.self,
+        AccountEvent.self,
+        AccountGroup.self,
     ])
     private static var retainedContainers: [ModelContainer] = []
 
@@ -704,8 +707,10 @@ struct StockBulkImportTests {
         )
     }
 
-    @Test("Сохранение акций фиксирует USD и корректный баланс")
-    func persistenceStoresUsdAndComputesBalanceFromCurrentPrice() async throws {
+    @Test("Сохранение акций создаёт счёт ЯДРА с USD и buy-событием по цене покупки")
+    func persistenceCreatesCoreMarketAccountWithBuyEvent() async throws {
+        // План 6b «Путь B», Фаза 3: `persist(...)` больше не пишет легаси `Investment`/
+        // `FinanceAccount` — единственная точка записи `AccountsCoreService`.
         let context = try makeContext()
         let client = StockBulkImportMockMarketDataClient()
         await client.setLatestPrice(150, for: "AAPL")
@@ -740,26 +745,31 @@ struct StockBulkImportTests {
         )
 
         let investments = try context.fetch(FetchDescriptor<Investment>())
-        let accounts = try context.fetch(FetchDescriptor<FinanceAccount>())
-        let groups = try context.fetch(FetchDescriptor<FinanceGroup>())
+        let legacyAccounts = try context.fetch(FetchDescriptor<FinanceAccount>())
+        let accounts = try context.fetch(FetchDescriptor<Account>())
 
         #expect(savedCount == 1)
-        #expect(investments.count == 1)
+        // Легаси-мир остаётся пустым — ядро единственный писатель (AC1 Фазы 3).
+        #expect(investments.isEmpty)
+        #expect(legacyAccounts.isEmpty)
         #expect(accounts.count == 1)
-        #expect(groups.count == 1)
-        #expect(accounts[0].group != nil)
-        #expect(accounts[0].group?.name == L("finances.group.ungrouped"))
-        #expect(investments[0].currency == "USD")
-        #expect(investments[0].marketCurrency == "USD")
-        #expect(investments[0].marketSymbol == "NASDAQ:AAPL")
-        #expect(investments[0].marketQuantity == 2)
-        #expect(investments[0].averagePurchaseUnitPrice == 100)
-        #expect(investments[0].lastKnownUnitPrice == 150)
-        #expect(investments[0].amount == 300)
+        let account = try #require(accounts.first)
+        #expect(account.kind == .marketInvestment)
+        // targetGroup нил → Ungrouped ядра — это `group == nil`, а НЕ системная FinanceGroup
+        // (семантика ядра, план §4a), в отличие от легаси-поведения до миграции.
+        #expect(account.group == nil)
+        #expect(account.currency == "USD")
+        // Символ БЕЗ префикса биржи ("AAPL", не "NASDAQ:AAPL") — формат, совместимый с
+        // `AccountMarketPriceService.refreshTodayPrices()`.
+        #expect(account.marketMeta?.symbol == "AAPL")
+        #expect(account.includeInTotal == true)
+        let buyEvent = try #require(account.events?.first { $0.type == .buy })
+        #expect(buyEvent.quantity == 2)
+        #expect(buyEvent.unitPrice == 100)
     }
 
-    @Test("Импорт без mergeDuplicates не создаёт дубликаты FinanceAccount")
-    func persistenceWithoutMergeDoesNotDuplicateFinanceAccounts() async throws {
+    @Test("Импорт без mergeDuplicates не создаёт дубликаты счёта ядра")
+    func persistenceWithoutMergeDoesNotDuplicateCoreAccounts() async throws {
         let context = try makeContext()
         let client = StockBulkImportMockMarketDataClient()
 
@@ -802,12 +812,16 @@ struct StockBulkImportTests {
             mergeDuplicates: false
         )
 
-        let investments = try context.fetch(FetchDescriptor<Investment>())
-        let accounts = try context.fetch(FetchDescriptor<FinanceAccount>())
+        let accounts = try context.fetch(FetchDescriptor<Account>())
 
+        // Дедуп по символу внутри цикла persist() ловит второй draft даже без mergeDuplicates
+        // (тот же паттерн, что был у легаси identity-map) — savedCount считает обработанные
+        // строки, accounts.count доказывает отсутствие дубля счёта.
         #expect(savedCount == 2)
-        #expect(investments.count == 1)
         #expect(accounts.count == 1)
+        let buyEvents = accounts[0].events?.filter { $0.type == .buy } ?? []
+        #expect(buyEvents.count == 2)
+        #expect(buyEvents.reduce(Decimal(0)) { $0 + ($1.quantity ?? 0) } == 3)
     }
 
     @Test("selectCandidate проставляет тикер и рынок в строке")
@@ -985,34 +999,23 @@ struct StockBulkImportTests {
         #expect(requests.map(\.symbol) == ["SPY", "SPY.US"])
     }
 
-    @Test("Импорт US тикера мерджится с уже существующей позицией из обычного редактора")
-    func persistenceMergesWithExistingPlainSymbolAndExchange() async throws {
+    @Test("Импорт US тикера мерджится с уже существующим счётом ядра (обычный редактор давно на AccountsCoreService)")
+    func persistenceMergesWithExistingCoreMarketAccount() async throws {
+        // Обычный редактор (`FinanceAddAccountView.createAssetAccountOnNewCore`) уже создаёт
+        // рыночные счета через ядро — позиция «из обычного редактора» сегодня это `Account`,
+        // не легаси `Investment` (устаревшая посылка теста до Фазы 3).
         let context = try makeContext()
         let client = StockBulkImportMockMarketDataClient()
-        await client.setLatestPrice(677.03, for: "SPY.US")
 
-        let existing = Investment(
+        let coreService = AccountsCoreService(modelContext: context)
+        let existing = try coreService.createAccount(
             name: "SPY",
-            investmentType: .positive,
-            category: .stocks,
-            amount: 1000,
+            kind: .marketInvestment,
             currency: "USD",
-            includeInTotal: true,
-            priority: .normal,
-            isFavorite: false
+            openingBalance: 0,
+            marketMeta: MarketMeta(symbol: "SPY", assetClass: .stock)
         )
-        existing.marketSymbol = "SPY"
-        existing.marketExchange = "US"
-        existing.marketCurrency = "USD"
-        existing.marketQuantity = 10
-        existing.averagePurchaseUnitPrice = 600
-        existing.totalPurchaseCost = 6000
-        existing.lastKnownUnitPrice = 650
-        context.insert(existing)
-
-        let account = FinanceAccount(accountType: .investment, accountID: existing.investmentUniqueID)
-        context.insert(account)
-        try context.save()
+        try coreService.buy(account: existing, quantity: 10, unitPrice: 600)
 
         let service = StockBulkImportPersistenceService(modelContext: context, marketDataClient: client)
         let candidate = StockBulkImportCandidate(
@@ -1043,14 +1046,13 @@ struct StockBulkImportTests {
             mergeDuplicates: true
         )
 
-        let investments = try context.fetch(FetchDescriptor<Investment>())
-        let accounts = try context.fetch(FetchDescriptor<FinanceAccount>())
+        let accounts = try context.fetch(FetchDescriptor<Account>())
 
         #expect(savedCount == 1)
-        #expect(investments.count == 1)
         #expect(accounts.count == 1)
-        #expect(investments[0].marketSymbol == "US:SPY")
-        #expect(abs((investments[0].lastKnownUnitPrice ?? 0) - 677.03) < 0.0001)
-        #expect(abs((investments[0].marketQuantity ?? 0) - 27) < 0.0001)
+        #expect(accounts[0].marketMeta?.symbol == "SPY")
+        let buyEvents = accounts[0].events?.filter { $0.type == .buy } ?? []
+        #expect(buyEvents.count == 2)
+        #expect(buyEvents.reduce(Decimal(0)) { $0 + ($1.quantity ?? 0) } == 27)
     }
 }

@@ -176,66 +176,6 @@ struct FinanceLifecycleIntegrationTests {
         )
     }
 
-    @Test("Удаление покупки акции откатывает и деньги, и позицию, а в истории видна одна операция")
-    func deletingMarketBuyRevertsSettlementAndPositionTogether() async throws {
-        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 18, hour: 16)) ?? Date()
-        let harness = try FinanceLifecycleHarness(now: now)
-
-        let usdCard = try await harness.createLinkedDebitCard(name: "Broker Cash", balance: 5_000, currency: "USD")
-        let investment = try await harness.createLinkedMarketInvestment(
-            name: "SPY",
-            quantity: 17,
-            marketPrice: 676.33,
-            purchasePrice: 676.33,
-            currency: "USD"
-        )
-
-        try await harness.executeInvestmentOrder(
-            investmentID: investment.investmentUniqueID,
-            side: .buy,
-            quantity: 1,
-            unitPrice: 676.33,
-            funding: InvestmentOrderFunding(
-                settlementAccountKind: .card(cardID: usdCard.cardUniqueID),
-                shouldAffectCardBalance: true
-            )
-        )
-
-        try await harness.assertCardState(cardID: usdCard.cardUniqueID, balance: 4_323.67)
-        try await harness.assertInvestmentState(
-            investmentID: investment.investmentUniqueID,
-            quantity: 18,
-            amount: 12_173.94,
-            purchasePrice: 676.33,
-            purchaseCost: 12_173.94
-        )
-        harness.assertTransactionCount(2)
-
-        let visibleHistory = harness.cashflowViewModel.historyTransactions(
-            matching: CashflowHistoryQuery(typeFilter: .all)
-        )
-        #expect(visibleHistory.count == 1)
-
-        guard let groupedTransaction = visibleHistory.first else {
-            Issue.record("Expected grouped market order transaction")
-            return
-        }
-        #expect(groupedTransaction.hasAssetChangeSnapshot)
-        #expect(groupedTransaction.operationGroupID != nil)
-
-        try await harness.deleteTransaction(groupedTransaction, recalculate: true)
-
-        try await harness.assertCardState(cardID: usdCard.cardUniqueID, balance: 5_000)
-        try await harness.assertInvestmentState(
-            investmentID: investment.investmentUniqueID,
-            quantity: 17,
-            amount: 11_497.61,
-            purchasePrice: 676.33,
-            purchaseCost: 11_497.61
-        )
-        harness.assertTransactionCount(0)
-    }
-
     @Test("Редактирование сохранённого расхода переносит эффект на новую карту и переживает reopen")
     func editingSavedExpenseReappliesBalanceAcrossCardsAfterReopen() async throws {
         let now = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 19, hour: 11)) ?? Date()

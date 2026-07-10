@@ -171,6 +171,18 @@ struct FinanceOverviewCardView: View {
                     items.append(item)
                 }
             }
+            // Счета нового ядра той же группы (мост по имени, как в Динамике :1084). Легаси-таблицы
+            // пусты (Фаза 6b) — без этого ledger «Saldo» всегда показывал empty state при живом тотале.
+            for coreAccount in financeViewModel.newCoreAccounts(matching: group) {
+                if let item = await makeCoreLedgerItem(
+                    account: coreAccount,
+                    groupID: group.groupUniqueID,
+                    groupName: group.name,
+                    groupColorHex: group.colorHex
+                ) {
+                    items.append(item)
+                }
+            }
         }
 
         for card in financeViewModel.state.availableCards where !attachedKeys.contains(accountKey(type: .card, id: card.cardUniqueID)) {
@@ -258,6 +270,40 @@ struct FinanceOverviewCardView: View {
             accountIcon: info.icon,
             customIconName: customIconName,
             customIconColor: customIconColor,
+            amount: normalized.amount,
+            side: normalized.side
+        )
+    }
+
+    /// Ledger-строка для счёта нового ядра. Signed-сумма — тем же `accountsTotalsService`, что и
+    /// per-group суммы Динамики (единый источник, Фаза 1.5): >0 → debit (актив), <0 → credit (пассив).
+    private func makeCoreLedgerItem(
+        account: Account,
+        groupID: String,
+        groupName: String,
+        groupColorHex: String?
+    ) async -> FinanceOverviewLedgerSourceItem? {
+        let signedConverted = NSDecimalNumber(
+            decimal: await financeViewModel.accountsTotalsService.total(
+                for: [account],
+                on: Date(),
+                in: financeViewModel.state.displayCurrency
+            )
+        ).doubleValue
+        guard let normalized = FinanceOverviewLedgerStyle.normalizeAmount(
+            signedConverted,
+            defaultSide: .debit
+        ) else { return nil }
+
+        return FinanceOverviewLedgerSourceItem(
+            groupID: groupID,
+            groupName: groupName,
+            groupColorHex: groupColorHex,
+            accountID: account.id.uuidString,
+            accountName: account.name,
+            accountIcon: account.kind.fallbackIconName,
+            customIconName: nil,
+            customIconColor: nil,
             amount: normalized.amount,
             side: normalized.side
         )

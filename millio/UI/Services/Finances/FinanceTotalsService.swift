@@ -30,11 +30,11 @@ final class FinanceTotalsService {
     private let cardByIDProvider: () -> [String: Card]
     private let creditByIDProvider: () -> [String: Credit]
     private let investmentByIDProvider: () -> [String: Investment]
-    /// Вклад нового ядра event-sourcing (Фаза 1a-ui, AC2) — `AccountsTotalsService.totalAt(date, in:)`.
-    /// ВНИМАНИЕ: заголовок «Динамика» (`FinanceDynamicsViewModel.updateCurrentBalanceAndDelta`) этот
-    /// вклад пока НЕ добавляет — интеграция туда сознательно отложена (см.
-    /// plans/2026-07-05__unified-totals.md, Фаза 4). Не путать с удалённым мёртвым кодом
-    /// `calculateTotalForAllGroups`, который никогда не вызывался и вводил в заблуждение.
+    /// Единственный источник агрегата «Общий баланс» (6b Фаза 2, single-world) —
+    /// `AccountsTotalsService.totalAt(date, in:)`. С Фазы 2 легаси-мир мигрирован в ядро и скрыт
+    /// (`archivedAt`), поэтому агрегат считается только по ядру; легаси-цикл по группам снят.
+    /// Заголовок «Динамика» после Фазы 2 сводится к тому же вкладу (`totalAt`), закрывая R1
+    /// аудита 2026-07-02 (три пути тотала → один).
     private let newCoreTotalProvider: (String) async -> Decimal
 
     // MARK: - Init
@@ -61,85 +61,24 @@ final class FinanceTotalsService {
 
     // MARK: - Public: Расчёт общего баланса
 
+    /// Single-world (6b Фаза 2): агрегат «Общий баланс» = сумма по счетам ЯДРА в валюте экрана,
+    /// одной точкой `AccountsTotalsService.totalAt(now)`. Легаси-мир мигрирован и скрыт, поэтому
+    /// прежний цикл суммирования групп (легаси + core-ламп) снят — остаётся единственный источник.
+    /// Конвертация валют выполняется внутри ядра, поэтому агрегат сам по себе предупреждений о
+    /// курсах не порождает (per-group display считает `calculateGroupTotal` отдельно).
     func calculateTotalsSnapshot() async -> FinanceTotalsSnapshot {
         let displayCurrency = displayCurrencyProvider()
-        let groups = groupsProvider()
-        var total: Double = 0.0
-        var warnings: Set<String> = []
+        let total = NSDecimalNumber(decimal: await newCoreTotalProvider(displayCurrency)).doubleValue
 
-        // Собираем все валюты из всех групп
-        var allCurrenciesNeeded = Set<String>()
-        for group in groups {
-            let currencies = await collectCurrenciesFromGroup(group: group)
-            allCurrenciesNeeded.formUnion(currencies)
-            let groupCurrency = group.displayCurrency ?? displayCurrency
-            allCurrenciesNeeded.insert(groupCurrency)
-        }
-        allCurrenciesNeeded.insert(displayCurrency)
-        if let secondaryCurrency = secondaryDisplayCurrencyProvider() {
-            allCurrenciesNeeded.insert(secondaryCurrency)
-        }
-
-        // Рассчитываем основную сумму
-        for group in groups {
-            let groupCurrency = group.displayCurrency ?? displayCurrency
-            let groupTotalInGroupCurrency = await calculateGroupTotal(group: group, in: groupCurrency)
-            let normalizedGroupCurrency = normalizedConversionCurrency(groupCurrency)
-            let normalizedDisplayCurrency = normalizedConversionCurrency(displayCurrency)
-
-            if normalizedGroupCurrency == normalizedDisplayCurrency {
-                total += groupTotalInGroupCurrency
-            } else {
-                if let rate = await currencyService.getRate(from: normalizedGroupCurrency, to: normalizedDisplayCurrency), rate > 0 {
-                    total += groupTotalInGroupCurrency * rate
-                } else {
-                    warnings.insert(FinancesL10n.format("finances.warning.rate_unavailable", groupCurrency, displayCurrency))
-                    AppLogger.log(
-                        .warning,
-                        category: "Finance",
-                        "[Conversion] Failed to convert group amount \"\(group.name)\" from \(groupCurrency) to \(displayCurrency). Amount ignored."
-                    )
-                }
-            }
-        }
-
-        // Рассчитываем дополнительную сумму
         var secondaryTotal: Double = 0.0
         if let secondaryCurrency = secondaryDisplayCurrencyProvider() {
-            for group in groups {
-                let groupCurrency = group.displayCurrency ?? displayCurrency
-                let groupTotalInGroupCurrency = await calculateGroupTotal(group: group, in: groupCurrency)
-                let normalizedGroupCurrency = normalizedConversionCurrency(groupCurrency)
-                let normalizedSecondaryCurrency = normalizedConversionCurrency(secondaryCurrency)
-
-                if normalizedGroupCurrency == normalizedSecondaryCurrency {
-                    secondaryTotal += groupTotalInGroupCurrency
-                } else {
-                    if let rate = await currencyService.getRate(from: normalizedGroupCurrency, to: normalizedSecondaryCurrency), rate > 0 {
-                        secondaryTotal += groupTotalInGroupCurrency * rate
-                    } else {
-                        warnings.insert(FinancesL10n.format("finances.warning.rate_unavailable", groupCurrency, secondaryCurrency))
-                        AppLogger.log(
-                            .warning,
-                            category: "Finance",
-                            "[Conversion] Failed to convert group amount \"\(group.name)\" from \(groupCurrency) to \(secondaryCurrency). Amount ignored."
-                        )
-                    }
-                }
-            }
-        }
-
-        // Вклад нового ядра (AC2) — добавляется В ТУ ЖЕ сумму, поверх старого мира, единой функцией.
-        let newCoreTotal = NSDecimalNumber(decimal: await newCoreTotalProvider(displayCurrency)).doubleValue
-        total += newCoreTotal
-        if let secondaryCurrency = secondaryDisplayCurrencyProvider() {
-            secondaryTotal += NSDecimalNumber(decimal: await newCoreTotalProvider(secondaryCurrency)).doubleValue
+            secondaryTotal = NSDecimalNumber(decimal: await newCoreTotalProvider(secondaryCurrency)).doubleValue
         }
 
         return FinanceTotalsSnapshot(
             totalAmount: total,
             secondaryTotalAmount: secondaryTotal,
-            currencyConversionWarning: warnings.isEmpty ? nil : warnings.sorted().joined(separator: "\n")
+            currencyConversionWarning: nil
         )
     }
 
@@ -255,55 +194,54 @@ final class FinanceTotalsService {
         return displayCurrency
     }
 
-    // MARK: - Private: Сбор валют группы
-
-    private func collectCurrenciesFromGroup(group: FinanceGroup) async -> Set<String> {
-        var currencies: Set<String> = []
-        guard let accounts = group.accounts else { return currencies }
-
-        for account in accounts {
-            let amount = await getAccountAmount(account: account)
-            if abs(amount.value) > 0.01 {
-                currencies.insert(normalizedConversionCurrency(amount.currency))
-            }
-        }
-
-        return currencies
-    }
-
-    // MARK: - Private: Сумма счёта
+    // MARK: - Private: Сумма счёта (per-group display легаси-мира)
 
     private func getAccountAmount(account: FinanceAccount) async -> (value: Double, currency: String) {
-        // Дата всегда "сейчас" — TotalsService считает ТЕКУЩЕЕ состояние (Дашборд/Счета),
-        // в отличие от FinanceDynamicsViewModel, который умеет считать на произвольную
-        // историческую дату. Фильтр — тот же `AccountTotalPolicy`, что и там (см.
-        // plans/2026-07-05__unified-totals.md), иначе архивные/выключенные счета "зависают"
-        // в тотале Дашборда навсегда, хотя в Динамике корректно пропадают.
+        // Дата всегда "сейчас" — TotalsService считает ТЕКУЩЕЕ состояние (per-group display Счетов),
+        // в отличие от FinanceDynamicsViewModel, который умеет считать на произвольную дату.
+        // Фильтр включения/знака — инлайн бывшего `AccountTotalPolicy` (снесён в 6b Фазе 2): архивные/
+        // выключенные легаси-счета не должны "зависать" в per-group сумме. Легаси-мир read-only и
+        // мигрирует в ядро — метод остаётся только для отображения групп до сноса легаси (Фаза 4/5).
         let now = Date()
         let displayCurrency = displayCurrencyProvider()
         switch account.accountType {
         case .card:
             if let card = cardByIDProvider()[account.accountID],
-               AccountTotalPolicy.isActive(includeInTotal: card.includeInTotal, archivedAt: card.archivedAt, at: now) {
+               Self.isActiveInTotal(includeInTotal: card.includeInTotal, archivedAt: card.archivedAt, at: now) {
                 let snapshot = CardSnapshotFactory.make(from: card)
                 return (snapshot.netWorthAmount, snapshot.currency)
             }
 
         case .credit:
             if let credit = creditByIDProvider()[account.accountID],
-               AccountTotalPolicy.isActive(includeInTotal: credit.includeInTotal, archivedAt: credit.archivedAt, at: now) {
-                let value = AccountTotalPolicy.signedContribution(credit.remainingAmount, isLiability: true, debtAsNegative: true)
+               Self.isActiveInTotal(includeInTotal: credit.includeInTotal, archivedAt: credit.archivedAt, at: now) {
+                let value = Self.signedLiabilityContribution(credit.remainingAmount, isLiability: true, debtAsNegative: true)
                 return (value, credit.currency)
             }
 
         case .investment:
             if let investment = investmentByIDProvider()[account.accountID],
-               AccountTotalPolicy.isActive(includeInTotal: investment.includeInTotal, archivedAt: investment.archivedAt, at: now) {
+               Self.isActiveInTotal(includeInTotal: investment.includeInTotal, archivedAt: investment.archivedAt, at: now) {
                 let value = investment.investmentType == .positive ? investment.amount : -investment.amount
                 return (value, resolvedInvestmentCurrency(investment, displayCurrency: displayCurrency))
             }
         }
 
         return (0.0, "RUB")
+    }
+
+    // MARK: - Private: Участие легаси-счёта (инлайн бывшего AccountTotalPolicy, снесён в 6b Фазе 2)
+
+    /// Включён флагом И не архивирован строго до `date` (time-aware архивация).
+    private static func isActiveInTotal(includeInTotal: Bool, archivedAt: Date?, at date: Date) -> Bool {
+        guard includeInTotal else { return false }
+        if let archivedAt, date > archivedAt { return false }
+        return true
+    }
+
+    /// Знак обязательства (кредит/кредитка) для net-вклада; при `debtAsNegative == false` — как есть.
+    private static func signedLiabilityContribution(_ amount: Double, isLiability: Bool, debtAsNegative: Bool) -> Double {
+        guard debtAsNegative, isLiability else { return amount }
+        return -abs(amount)
     }
 }

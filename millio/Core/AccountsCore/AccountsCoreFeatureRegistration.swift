@@ -47,6 +47,14 @@ struct AccountGroupImporter: ModelImporter {
         let colorHex = data["colorHex"] as? String
         let displayCurrency = data["displayCurrency"] as? String
         let order = data["order"] as? Int ?? 0
+        // Поля Фазы 1.5 (слияние с легаси-FinanceGroup) — с дефолтами для старых бэкапов без них.
+        let isFavorite = data["isFavorite"] as? Bool ?? false
+        let usesManualAccountOrdering = data["usesManualAccountOrdering"] as? Bool ?? false
+        let priorityRaw = data["priorityRaw"] as? String ?? "normal"
+        // Дефект 1 (ревью 2026-07-09): маркер идемпотентности ДОЛЖЕН пережить restore — без него
+        // `GroupsMigrator` считал бы восстановленную группу немигрированной и перезаписывал бы поля
+        // из легаси-FinanceGroup поверх правок пользователя, сделанных после миграции.
+        let legacyFieldsMigratedAt = (data["legacyFieldsMigratedAt"] as? TimeInterval).map(Date.init(timeIntervalSince1970:))
 
         let descriptor = FetchDescriptor<AccountGroup>(predicate: #Predicate<AccountGroup> { $0.id == id })
         if let existing = try? context.fetch(descriptor).first {
@@ -54,10 +62,18 @@ struct AccountGroupImporter: ModelImporter {
             existing.colorHex = colorHex
             existing.displayCurrency = displayCurrency
             existing.order = order
+            existing.isFavorite = isFavorite
+            existing.usesManualAccountOrdering = usesManualAccountOrdering
+            existing.priorityRaw = priorityRaw
+            existing.legacyFieldsMigratedAt = legacyFieldsMigratedAt
             return
         }
 
-        let group = AccountGroup(id: id, name: name, colorHex: colorHex, displayCurrency: displayCurrency, order: order)
+        let group = AccountGroup(
+            id: id, name: name, colorHex: colorHex, displayCurrency: displayCurrency, order: order,
+            isFavorite: isFavorite, usesManualAccountOrdering: usesManualAccountOrdering, priorityRaw: priorityRaw
+        )
+        group.legacyFieldsMigratedAt = legacyFieldsMigratedAt
         context.insert(group)
     }
 }

@@ -13,15 +13,48 @@ final class AccountGroup: Persistable {
     var displayCurrency: String?
     var order: Int = 0
 
+    // Поля, унаследованные от легаси-`FinanceGroup` при слиянии моделей (Фаза 1.5 плана 6b «Путь B»).
+    // Все три — аддитивные с дефолтами → lightweight-миграция схемы (V6 не требуется).
+    /// Избранная группа.
+    var isFavorite: Bool = false
+    /// Включён ли ручной порядок счетов внутри группы.
+    var usesManualAccountOrdering: Bool = false
+    /// Приоритет группы (raw `GroupPriority`). Тип String — как в легаси-`FinanceGroup`, чтобы
+    /// перенос был байт-в-байт без потери (не Int).
+    var priorityRaw: String = "normal"
+
+    /// Постоянный маркер «поля легаси-группы уже перенесены на эту `AccountGroup`» (SwiftData,
+    /// переносится при restore). Гарант идемпотентности `GroupsMigrator` — по тому же принципу, что
+    /// `archivedAt` у легаси-счетов в Фазе 1: не UserDefaults-флаг, а хранимый признак, переживающий
+    /// restore на новом устройстве. nil = перенос ещё не выполнялся.
+    var legacyFieldsMigratedAt: Date?
+
     @Relationship(deleteRule: .nullify, inverse: \Account.group)
     var accounts: [Account]? = []
 
-    init(id: UUID = UUID(), name: String, colorHex: String? = nil, displayCurrency: String? = nil, order: Int = 0) {
+    var priority: GroupPriority {
+        get { GroupPriority(rawValue: priorityRaw) ?? .normal }
+        set { priorityRaw = newValue.rawValue }
+    }
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        colorHex: String? = nil,
+        displayCurrency: String? = nil,
+        order: Int = 0,
+        isFavorite: Bool = false,
+        usesManualAccountOrdering: Bool = false,
+        priorityRaw: String = "normal"
+    ) {
         self.id = id
         self.name = name
         self.colorHex = colorHex
         self.displayCurrency = displayCurrency
         self.order = order
+        self.isFavorite = isFavorite
+        self.usesManualAccountOrdering = usesManualAccountOrdering
+        self.priorityRaw = priorityRaw
     }
 
     // MARK: - Backup export/import (полный CloudKit backup, спека §0.4 — НЕ путь reconciliation)
@@ -33,7 +66,11 @@ final class AccountGroup: Persistable {
             "name": name,
             "colorHex": colorHex ?? NSNull(),
             "displayCurrency": displayCurrency ?? NSNull(),
-            "order": order
+            "order": order,
+            "isFavorite": isFavorite,
+            "usesManualAccountOrdering": usesManualAccountOrdering,
+            "priorityRaw": priorityRaw,
+            "legacyFieldsMigratedAt": legacyFieldsMigratedAt?.timeIntervalSince1970 ?? NSNull()
         ]
         return try JSONSerialization.data(withJSONObject: dict)
     }

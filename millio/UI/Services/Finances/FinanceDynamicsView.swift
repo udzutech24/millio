@@ -191,19 +191,7 @@ private struct FinanceDynamicsContentView: View {
     @State private var showDisplayCurrencyInfoAlert: Bool = false
     @State private var showDisplayCurrencySheet: Bool = false
     @State private var displayCurrencySearchText: String = ""
-    @State private var showTradeSheet: Bool = false
-    @State private var tradeMode: InvestmentOrderSide = .buy
-    @State private var tradePriceMode: TradePriceMode = .market
-    @State private var tradeQuantityText: String = "1"
-    @State private var tradePriceText: String = ""
-    @State private var tradeSettlementSelectionID: String? = nil
     @State private var isBreakdownExpanded: Bool = false
-    @State private var tradeShouldAffectCardBalance: Bool = true
-    @State private var tradeErrorText: String?
-    @State private var isInlineMarketEdit: Bool = false
-    @State private var editQuantityText: String = ""
-    @State private var editUnitPriceText: String = ""
-    @State private var editPurchasePriceText: String = ""
     @State private var showFullProductEditSheet: Bool = false
     @State private var showCashflowHistory: Bool = false
     @State private var cashflowViewModel: CashflowViewModel? = nil
@@ -270,14 +258,8 @@ private struct FinanceDynamicsContentView: View {
         return points.isEmpty ? nil : points
     }
 
-    private enum TradePriceMode: String, CaseIterable, Hashable {
-        case market
-        case custom
-    }
-
     private enum NavigationToolbarMode {
         case group(FinanceGroup)
-        case market(Investment)
         case account(FinanceAccount)
         case none
     }
@@ -311,9 +293,6 @@ private struct FinanceDynamicsContentView: View {
         .sheet(isPresented: $showDisplayCurrencySheet) {
             displayCurrencySheet
         }
-        .sheet(isPresented: $showTradeSheet) {
-            tradeSheetContent
-        }
         .sheet(isPresented: $showFullProductEditSheet) {
             fullProductEditSheetContent
         }
@@ -321,9 +300,6 @@ private struct FinanceDynamicsContentView: View {
             cashflowHistorySheetContent
         }
         .onAppear(perform: handleOnAppear)
-        .onChange(of: marketInvestment?.updatedAt) { _, _ in
-            handleMarketInvestmentChange()
-        }
     }
 
     private var baseContent: some View {
@@ -385,14 +361,6 @@ private struct FinanceDynamicsContentView: View {
                     },
                     onCancel: { showArchiveBalanceWarning = false }
                 )
-
-                if let tradeCelebration = financeViewModel.state.tradeCelebration {
-                    FinanceTradeCelebrationOverlay(celebration: tradeCelebration) {
-                        financeViewModel.handle(.clearTradeCelebration)
-                    }
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                    .zIndex(2)
-                }
             }
         }
     }
@@ -421,10 +389,6 @@ private struct FinanceDynamicsContentView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 singleGroupActionBar(group: group)
             }
-        case .market(let marketInvestment):
-            ToolbarItem(placement: .navigationBarTrailing) {
-                marketEditTopBar(for: marketInvestment)
-            }
         case .account(let account):
             ToolbarItem(placement: .navigationBarTrailing) {
                 singleAccountActionBar(account: account)
@@ -440,22 +404,10 @@ private struct FinanceDynamicsContentView: View {
         if let group = currentDynamicsGroup {
             return .group(group)
         }
-        if let marketInvestment,
-           viewModel.state.isSingleAccountMode,
-           initialAccount != nil {
-            return .market(marketInvestment)
-        }
         if shouldShowSingleAccountActionBar, let account = initialAccount {
             return .account(account)
         }
         return .none
-    }
-
-    @ViewBuilder
-    private var tradeSheetContent: some View {
-        if let marketInvestment = marketInvestment {
-            tradeSheet(for: marketInvestment)
-        }
     }
 
     @ViewBuilder
@@ -486,27 +438,13 @@ private struct FinanceDynamicsContentView: View {
             customEndDate = customPeriod.end
             useCustomPeriod = viewModel.state.period == .custom
         }
-        if let marketInvestment {
-            syncMarketDraft(from: marketInvestment)
-        }
         if cashflowViewModel == nil {
             cashflowViewModel = CashflowViewModel(modelContext: modelContext)
         }
     }
 
-    private func handleMarketInvestmentChange() {
-        if let marketInvestment, !isInlineMarketEdit {
-            syncMarketDraft(from: marketInvestment)
-        }
-    }
-
-    @ViewBuilder
     private var dynamicsBodyContent: some View {
-        if let marketInvestment = marketInvestment {
-            marketInvestmentDetailsView(marketInvestment)
-        } else {
-            standardDynamicsContent
-        }
+        standardDynamicsContent
     }
 
     private var standardDynamicsContent: some View {
@@ -590,225 +528,6 @@ private struct FinanceDynamicsContentView: View {
         }
     }
 
-    private var marketInvestment: Investment? {
-        guard viewModel.state.isSingleAccountMode,
-              let account = initialAccount else {
-            return nil
-        }
-        return financeViewModel.getMarketInvestment(account: account)
-    }
-
-    private func marketInvestmentDetailsView(_ investment: Investment) -> some View {
-        GeometryReader { proxy in
-            let compactLayout = proxy.size.height < 820
-            let investmentCurrency = resolvedInvestmentCurrency(investment)
-            let quantityTitle = marketQuantityTitle(for: investment)
-            let quantityValue = "\(marketNumber(investment.marketQuantity ?? 0, digits: 8)) \(marketQuantityUnit(for: investment))"
-            let currentPriceTitle = FinancesL10n.format(
-                "finances.dynamics.market.current_price_with_currency",
-                investmentCurrency
-            )
-            let currentPriceValue = money(investment.lastKnownUnitPrice ?? 0, currency: investmentCurrency)
-            let purchasePriceTitle = L("finances.add_account.investment.purchase_price")
-            let purchasePriceValue = money(investment.averagePurchaseUnitPrice ?? 0, currency: investmentCurrency)
-            let purchaseTotalTitle = L("finances.dynamics.market.purchase_total")
-            let purchaseTotalValue = money(investment.totalPurchaseCost ?? 0, currency: investmentCurrency)
-
-            ScrollView {
-                VStack(spacing: 16) {
-                    marketSummaryCard(for: investment)
-
-                    FinancesGlassCard(
-                        accentColor: Color.cyan.opacity(0.95),
-                        cornerRadius: compactLayout ? 16 : 18,
-                        contentPadding: EdgeInsets(top: compactLayout ? 10 : 14, leading: 12, bottom: compactLayout ? 10 : 14, trailing: 12)
-                    ) {
-                        VStack(alignment: .leading, spacing: compactLayout ? 8 : 12) {
-                            Text(L("finances.dynamics.market.instrument_info"))
-                                .font(.system(size: compactLayout ? 18 : 20, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-
-                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: compactLayout ? 6 : 8) {
-                                statCell(
-                                    quantityTitle,
-                                    quantityValue,
-                                    isEditable: true,
-                                    isEditing: isInlineMarketEdit,
-                                    editText: $editQuantityText,
-                                    keyboardType: .decimalPad,
-                                    compactLayout: compactLayout
-                                )
-                                statCell(
-                                    currentPriceTitle,
-                                    currentPriceValue,
-                                    isEditable: true,
-                                    isEditing: isInlineMarketEdit,
-                                    editText: $editUnitPriceText,
-                                    keyboardType: .decimalPad,
-                                    compactLayout: compactLayout
-                                )
-                                statCell(
-                                    purchasePriceTitle,
-                                    purchasePriceValue,
-                                    isEditable: true,
-                                    isEditing: isInlineMarketEdit,
-                                    editText: $editPurchasePriceText,
-                                    keyboardType: .decimalPad,
-                                    compactLayout: compactLayout
-                                )
-                                statCell(
-                                    purchaseTotalTitle,
-                                    purchaseTotalValue,
-                                    compactLayout: compactLayout
-                                )
-                            }
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: compactLayout ? 6 : 8) {
-                        Text(L("finances.dynamics.market.actions"))
-                            .font(.system(size: compactLayout ? 18 : 20, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                        FinancesGlassCard(
-                            accentColor: Color.cyan.opacity(0.95),
-                            contentPadding: EdgeInsets(top: compactLayout ? 10 : 12, leading: 12, bottom: compactLayout ? 10 : 12, trailing: 12)
-                        ) {
-                            HStack(spacing: compactLayout ? 8 : 10) {
-                                actionButton(title: L("finances.dynamics.market.action.buy"), icon: "cart.badge.plus", color: Color.green.opacity(0.88), compactLayout: compactLayout) {
-                                    tradeMode = .buy
-                                    prepareTradeDraft(for: investment)
-                                    showTradeSheet = true
-                                }
-                                actionButton(title: L("finances.dynamics.market.action.sell"), icon: "cart.badge.minus", color: Color.red.opacity(0.9), compactLayout: compactLayout) {
-                                    tradeMode = .sell
-                                    prepareTradeDraft(for: investment)
-                                    showTradeSheet = true
-                                }
-                            }
-                        }
-                    }
-
-                    if shouldShowDeleteMarketInvestmentFooter, let account = initialAccount {
-                        convertToCoreFooterButton(account: account)
-                        deleteAccountFooterButton(account: account)
-                        purgeLegacyAccountFooterButton(account: account)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, FinanceDynamicsTopBarStyle.baseScrollContentTopPadding)
-                .padding(.bottom, shouldShowDeleteMarketInvestmentFooter ? 44 : 32)
-            }
-        }
-    }
-
-    private func marketSummaryCard(for investment: Investment) -> some View {
-        let growth = investment.positionGrowthPercent ?? 0
-        let currency = resolvedInvestmentCurrency(investment)
-
-        return dynamicsSummaryCard(
-            title: financeViewModel.investmentDisplayName(investment),
-            symbol: currency,
-            value: FinanceAmountText.decimal(
-                value: investment.positionTotal ?? investment.amount,
-                maximumFractionDigits: 2
-            )
-        ) {
-            marketGrowthBadge(growth: growth)
-        }
-    }
-
-    private func marketEditTopBar(for investment: Investment) -> some View {
-        HStack(spacing: 8) {
-            let canFinish = canFinishInlineMarketEdit(for: investment)
-            if isInlineMarketEdit {
-                Button {
-                    if canFinish {
-                        finishInlineMarketEdit(for: investment)
-                    }
-                } label: {
-                    Image(systemName: FinanceDynamicsTopBarStyle.inlineEditorSymbol(isEditing: true))
-                        .symbolRenderingMode(.monochrome)
-                        .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
-                        .foregroundStyle(canFinish ? Color(red: 0.20, green: 0.92, blue: 0.49) : Color.white.opacity(0.4))
-                        .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
-                }
-                .buttonStyle(.plain)
-            } else {
-                Button {
-                    isInlineMarketEdit = true
-                    syncMarketDraft(from: investment)
-                } label: {
-                        Image(systemName: FinanceDynamicsTopBarStyle.inlineEditorSymbol(isEditing: false))
-                            .symbolRenderingMode(.monochrome)
-                            .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
-                        .foregroundStyle(FinanceDynamicsTopBarStyle.passiveIconColor)
-                            .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Divider()
-                .frame(height: FinanceDynamicsTopBarStyle.compactSeparatorHeight)
-                .overlay(FinanceDynamicsTopBarStyle.compactSeparatorColor)
-
-            Button {
-                if cashflowViewModel == nil {
-                    cashflowViewModel = CashflowViewModel(modelContext: modelContext)
-                }
-                cashflowViewModel?.handle(.loadTransactions)
-                showCashflowHistory = true
-            } label: {
-                Image(systemName: "clock.arrow.circlepath")
-                    .symbolRenderingMode(.monochrome)
-                    .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
-                    .foregroundStyle(FinanceDynamicsTopBarStyle.passiveIconColor)
-                    .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
-            }
-            .buttonStyle(.plain)
-
-            Divider()
-                .frame(height: FinanceDynamicsTopBarStyle.compactSeparatorHeight)
-                .overlay(FinanceDynamicsTopBarStyle.compactSeparatorColor)
-
-            Button {
-                showFullProductEditSheet = true
-            } label: {
-                Image(systemName: "gearshape")
-                    .symbolRenderingMode(.monochrome)
-                    .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
-                    .foregroundStyle(FinanceDynamicsTopBarStyle.passiveIconColor)
-                    .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private func marketGrowthBadge(growth: Double) -> some View {
-        let textColor: Color = growth > 0 ? .green : (growth < 0 ? .red : AppColors.textSecondary)
-        let backgroundColor: Color = growth > 0
-            ? Color.green.opacity(0.16)
-            : (growth < 0 ? Color.red.opacity(0.16) : Color.white.opacity(0.08))
-
-        return VStack(alignment: .trailing, spacing: 2) {
-            Text(L("finances.dynamics.growth"))
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(AppColors.textSecondary)
-                .lineLimit(1)
-
-            Text(formatPercent(growth))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(textColor)
-                .lineLimit(1)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(backgroundColor))
-        }
-    }
-
     private var currentDynamicsGroup: FinanceGroup? {
         guard viewModel.state.isSingleGroupMode, !viewModel.state.isSingleAccountMode else { return nil }
         guard let groupID = viewModel.state.selectedGroupIDs.first else { return nil }
@@ -864,611 +583,6 @@ private struct FinanceDynamicsContentView: View {
         showDeleteGroupConfirmation = false
         financeViewModel.handle(.hideGroupDynamics)
         financeViewModel.handle(.deleteGroup(group))
-    }
-
-    private func statCell(
-        _ title: String,
-        _ value: String,
-        isEditable: Bool = false,
-        isEditing: Bool = false,
-        editText: Binding<String>? = nil,
-        keyboardType: UIKeyboardType = .default,
-        compactLayout: Bool = false
-    ) -> some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.white.opacity(0.06))
-            .overlay {
-                VStack(spacing: 6) {
-                    Text(title)
-                        .font(.system(size: compactLayout ? 11 : 12, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-
-                    if isEditable, isEditing, let editText {
-                        TextField("0", text: Binding(
-                            get: { AmountInputFormatter.display(editText.wrappedValue, maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits) },
-                            set: { newValue in
-                                editText.wrappedValue = AmountInputFormatter.sanitize(
-                                    newValue,
-                                    maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
-                                )
-                            }
-                        ))
-                        .font(.system(size: compactLayout ? 15 : 16, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .keyboardType(keyboardType)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 8)
-                    } else {
-                        Text(value)
-                            .font(.system(size: compactLayout ? 15 : 16, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
-                    }
-                }
-                .padding(10)
-            }
-            .overlay {
-                if isEditable && isEditing {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.cyan.opacity(0.65), lineWidth: 1)
-                }
-            }
-            .frame(height: compactLayout ? 78 : 86)
-    }
-
-    private func growthCard(for investment: Investment, compactLayout: Bool) -> some View {
-        let growth = investment.positionGrowthPercent ?? 0
-        let textColor: Color = growth > 0 ? .green : (growth < 0 ? .red : AppColors.textSecondary)
-
-        return RoundedRectangle(cornerRadius: compactLayout ? 14 : 16, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.07),
-                        Color.white.opacity(0.03)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: compactLayout ? 14 : 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.16), lineWidth: 0.8)
-            )
-            .overlay {
-                VStack(spacing: compactLayout ? 3 : 5) {
-                    Text(L("finances.dynamics.growth"))
-                        .font(.system(size: compactLayout ? 13 : 14, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .lineLimit(1)
-                    Text(formatPercent(growth))
-                        .font(.system(size: compactLayout ? 17 : 18, weight: .semibold))
-                        .foregroundStyle(textColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.9)
-                }
-                .padding(.horizontal, 6)
-            }
-    }
-
-    private func actionButton(
-        title: String,
-        icon: String,
-        color: Color,
-        compactLayout: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            VStack(spacing: compactLayout ? 5 : 6) {
-                Circle()
-                    .fill(color)
-                    .frame(width: compactLayout ? 46 : 52, height: compactLayout ? 46 : 52)
-                    .overlay {
-                        Image(systemName: icon)
-                            .font(.system(size: compactLayout ? 18 : 20, weight: .semibold))
-                            .foregroundStyle(.black)
-                    }
-                Text(title)
-                    .font(.system(size: compactLayout ? 15 : 16, weight: .medium))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func tradeSheet(for investment: Investment) -> some View {
-        let investmentCurrency = resolvedInvestmentCurrency(investment)
-        let settlementAccounts = tradeSettlementAccounts(for: investment)
-        let selectedSettlementAccount = settlementAccounts.first(where: { $0.id == tradeSettlementSelectionID })
-        let quantity = AmountInputFormatter.parse(
-            tradeQuantityText,
-            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
-        ) ?? 0
-        let unitPrice = currentTradeUnitPrice(for: investment)
-
-        return NavigationStack {
-            ZStack {
-                GradientBackground()
-
-                ScrollView {
-                    VStack(spacing: 16) {
-                        Picker(L("finances.dynamics.trade.mode"), selection: $tradeMode) {
-                            Text(L("finances.dynamics.market.action.buy")).tag(InvestmentOrderSide.buy)
-                            Text(L("finances.dynamics.market.action.sell")).tag(InvestmentOrderSide.sell)
-                        }
-                        .pickerStyle(.segmented)
-
-                        FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
-                            VStack(spacing: 12) {
-                                Picker(L("finances.dynamics.trade.price_mode"), selection: $tradePriceMode) {
-                                    Text(L("finances.dynamics.trade.price_mode.market")).tag(TradePriceMode.market)
-                                    Text(L("finances.dynamics.trade.price_mode.custom")).tag(TradePriceMode.custom)
-                                }
-                                .pickerStyle(.segmented)
-
-                                tradeRow(
-                                    title: FinancesL10n.format(
-                                        "finances.dynamics.trade.price_with_currency",
-                                        resolvedInvestmentCurrency(investment)
-                                    ),
-                                    valueText: Binding(
-                                        get: { tradePriceMode == .market ? money(investment.lastKnownUnitPrice ?? 0, currency: resolvedInvestmentCurrency(investment)) : AmountInputFormatter.display(tradePriceText) },
-                                        set: { newValue in tradePriceText = AmountInputFormatter.sanitize(newValue) }
-                                    ),
-                                    editable: tradePriceMode == .custom
-                                )
-                                tradeRow(
-                                    title: marketQuantityTitle(for: investment),
-                                    valueText: Binding(
-                                        get: { AmountInputFormatter.display(tradeQuantityText, maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits) },
-                                        set: { newValue in
-                                            tradeQuantityText = AmountInputFormatter.sanitize(
-                                                newValue,
-                                                maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
-                                            )
-                                        }
-                                    ),
-                                    editable: true
-                                )
-
-                                tradeRow(
-                                    title: FinancesL10n.format(
-                                        "finances.dynamics.trade.total_with_currency",
-                                        investmentCurrency
-                                    ),
-                                    valueText: .constant(money(quantity * unitPrice, currency: resolvedInvestmentCurrency(investment))),
-                                    editable: false
-                                )
-                            }
-                        }
-
-                        FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack(spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(L("finances.dynamics.trade.funding.title"))
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundStyle(AppColors.textPrimary)
-                                        Text(
-                                            tradeMode == .buy
-                                                ? L("finances.dynamics.trade.funding.buy_subtitle")
-                                                : L("finances.dynamics.trade.funding.sell_subtitle")
-                                        )
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(AppColors.textSecondary)
-                                    }
-                                    Spacer()
-                                    Toggle("", isOn: $tradeShouldAffectCardBalance)
-                                        .labelsHidden()
-                                }
-
-                                if tradeShouldAffectCardBalance {
-                                    if settlementAccounts.isEmpty {
-                                        Text(
-                                            FinancesL10n.format(
-                                                "finances.dynamics.trade.funding.empty",
-                                                investmentCurrency
-                                            )
-                                        )
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundStyle(AppColors.textSecondary)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    } else {
-                                        tradeSettlementAccountMenu(
-                                            accounts: settlementAccounts,
-                                            selectedAccount: selectedSettlementAccount
-                                        )
-                                    }
-                                } else {
-                                    Text(L("finances.dynamics.trade.funding.ignored_hint"))
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundStyle(AppColors.textSecondary)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-
-                                if let selectedSettlementAccount, tradeShouldAffectCardBalance {
-                                    let total = quantity * unitPrice
-                                    let currentBalance = tradeSettlementAccountBalance(for: selectedSettlementAccount)
-                                    let projectedBalance = tradeMode == .buy
-                                        ? max(0, currentBalance - total)
-                                        : currentBalance + total
-                                    Text(
-                                        tradeMode == .buy
-                                            ? FinancesL10n.format(
-                                                "finances.dynamics.trade.funding.buy_balance_hint",
-                                                money(projectedBalance, currency: selectedSettlementAccount.currency)
-                                            )
-                                            : FinancesL10n.format(
-                                                "finances.dynamics.trade.funding.sell_balance_hint",
-                                                money(projectedBalance, currency: selectedSettlementAccount.currency)
-                                            )
-                                    )
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                            }
-                        }
-
-                        if let tradeErrorText, !tradeErrorText.isEmpty {
-                            Text(tradeErrorText)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(AppColors.error)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 4)
-                        }
-
-                        SwipeConfirmButton(
-                            title: tradeMode == .buy
-                                ? L("finances.dynamics.trade.swipe.buy")
-                                : L("finances.dynamics.trade.swipe.sell"),
-                            accentColor: tradeMode == .buy ? Color.green : Color.red,
-                            isEnabled: canSubmitTrade(for: investment),
-                            onConfirmed: {
-                                submitTrade(for: investment)
-                            }
-                        )
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-                    .padding(.bottom, 32)
-                }
-            }
-            .navigationTitle(L("finances.dynamics.trade.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showTradeSheet = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .foregroundStyle(AppColors.textPrimary)
-                    }
-                }
-            }
-        }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-    }
-
-    private func tradeSettlementAccountMenu(
-        accounts: [CashflowSelectableAccount],
-        selectedAccount: CashflowSelectableAccount?
-    ) -> some View {
-        Menu {
-            ForEach(accounts) { account in
-                Button(account.pickerTitle) {
-                    tradeSettlementSelectionID = account.id
-                }
-            }
-        } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(L("finances.dynamics.trade.funding.title"))
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppColors.textTertiary)
-                        .textCase(.uppercase)
-                    Text(selectedAccount?.pickerTitle ?? L("finances.dynamics.trade.error.account_required"))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(selectedAccount == nil ? AppColors.textSecondary : AppColors.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-
-                Spacer(minLength: 6)
-
-                if let selectedAccount {
-                    Text(money(tradeSettlementAccountBalance(for: selectedAccount), currency: selectedAccount.currency))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .lineLimit(1)
-                }
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppColors.textTertiary.opacity(0.9))
-            }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
-            )
-        }
-        .disabled(accounts.isEmpty)
-    }
-
-    private func tradeRow(title: String, valueText: Binding<String>, editable: Bool) -> some View {
-        HStack(spacing: 10) {
-            Text(title)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(AppColors.textSecondary)
-            Spacer()
-            if editable {
-                TextField("0", text: valueText)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .frame(maxWidth: 170)
-            } else {
-                Text(valueText.wrappedValue)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .lineLimit(1)
-            }
-        }
-        .padding(.vertical, 10)
-    }
-
-    private func prepareTradeDraft(for investment: Investment) {
-        tradeErrorText = nil
-        tradeQuantityText = "1"
-        if let lastPrice = investment.lastKnownUnitPrice {
-            tradePriceText = String(lastPrice)
-        } else {
-            tradePriceText = ""
-        }
-        tradePriceMode = .market
-        tradeShouldAffectCardBalance = true
-        tradeSettlementSelectionID = preferredTradeSettlementAccount(for: investment)?.id
-    }
-
-    private func currentTradeUnitPrice(for investment: Investment) -> Double {
-        switch tradePriceMode {
-        case .market:
-            return investment.lastKnownUnitPrice ?? 0
-        case .custom:
-            return AmountInputFormatter.parse(tradePriceText) ?? 0
-        }
-    }
-
-    private func canSubmitTrade(for investment: Investment) -> Bool {
-        let quantity = AmountInputFormatter.parse(
-            tradeQuantityText,
-            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
-        ) ?? 0
-        let unitPrice = currentTradeUnitPrice(for: investment)
-        guard quantity > 0, unitPrice > 0 else {
-            return false
-        }
-        if tradeShouldAffectCardBalance {
-            guard let settlementAccount = resolvedTradeSettlementAccount(for: investment) else {
-                return false
-            }
-            if tradeMode == .buy {
-                return quantity * unitPrice <= tradeSettlementAccountBalance(for: settlementAccount) + 0.0000001
-            }
-        }
-        if tradeMode == .sell {
-            let available = investment.marketQuantity ?? 0
-            return quantity <= available
-        }
-        return true
-    }
-
-    private func submitTrade(for investment: Investment) {
-        let quantity = AmountInputFormatter.parse(
-            tradeQuantityText,
-            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
-        ) ?? 0
-        let unitPrice = currentTradeUnitPrice(for: investment)
-        guard quantity > 0, unitPrice > 0 else {
-            tradeErrorText = L("finances.dynamics.trade.error.invalid_inputs")
-            return
-        }
-
-        let funding = currentTradeFunding(for: investment)
-        if tradeShouldAffectCardBalance {
-            guard funding.settlementAccountKind != nil else {
-                tradeErrorText = L("finances.dynamics.trade.error.account_required")
-                return
-            }
-            guard let settlementAccount = resolvedTradeSettlementAccount(for: investment) else {
-                tradeErrorText = FinancesL10n.format(
-                    "finances.dynamics.trade.error.no_accounts",
-                    resolvedInvestmentCurrency(investment)
-                )
-                return
-            }
-            if tradeMode == .buy, quantity * unitPrice > tradeSettlementAccountBalance(for: settlementAccount) + 0.0000001 {
-                tradeErrorText = L("finances.dynamics.trade.error.insufficient_account_balance")
-                return
-            }
-        }
-
-        if tradeMode == .sell, quantity > (investment.marketQuantity ?? 0) {
-            tradeErrorText = L("finances.dynamics.trade.error.insufficient_quantity")
-            return
-        }
-
-        tradeErrorText = nil
-        if let account = initialAccount {
-            financeViewModel.handle(
-                .executeInvestmentOrder(
-                    account: account,
-                    side: tradeMode,
-                    quantity: quantity,
-                    unitPrice: unitPrice,
-                    funding: funding
-                )
-            )
-        }
-        showTradeSheet = false
-    }
-
-    private func tradeSettlementAccounts(for investment: Investment) -> [CashflowSelectableAccount] {
-        FinanceViewModel.eligibleSettlementAccounts(
-            cards: financeViewModel.state.availableCards,
-            investments: financeViewModel.state.availableInvestments,
-            investmentCurrency: resolvedInvestmentCurrency(investment),
-            excludingInvestmentID: investment.investmentUniqueID
-        )
-    }
-
-    private func preferredTradeSettlementAccount(for investment: Investment) -> CashflowSelectableAccount? {
-        let accounts = tradeSettlementAccounts(for: investment)
-        return accounts.first(where: \.isFavorite) ?? accounts.first
-    }
-
-    private func currentTradeFunding(for investment: Investment) -> InvestmentOrderFunding {
-        guard tradeShouldAffectCardBalance else {
-            return .ignored
-        }
-
-        let settlementAccounts = tradeSettlementAccounts(for: investment)
-        let resolvedKind: CashflowSelectableAccount.Kind?
-        if let selected = settlementAccounts.first(where: { $0.id == tradeSettlementSelectionID }) {
-            resolvedKind = selected.kind
-        } else {
-            resolvedKind = preferredTradeSettlementAccount(for: investment)?.kind
-        }
-
-        return InvestmentOrderFunding(
-            settlementAccountKind: resolvedKind,
-            shouldAffectCardBalance: true
-        )
-    }
-
-    private func resolvedTradeSettlementAccount(for investment: Investment) -> CashflowSelectableAccount? {
-        let accounts = tradeSettlementAccounts(for: investment)
-        let funding = currentTradeFunding(for: investment)
-        guard let kind = funding.settlementAccountKind else { return nil }
-        return accounts.first(where: { $0.kind == kind })
-    }
-
-    private func tradeSettlementAccountBalance(for account: CashflowSelectableAccount) -> Double {
-        switch account.kind {
-        case .card(let cardID):
-            return financeViewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID })?.balance ?? 0
-        case .investment(let investmentID):
-            return financeViewModel.state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID })?.amount ?? 0
-        }
-    }
-
-    private func resolvedInvestmentCurrency(_ investment: Investment) -> String {
-        let code = investment.currency
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-        if !code.isEmpty { return code }
-        if let marketCurrency = investment.marketCurrency?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !marketCurrency.isEmpty {
-            return marketCurrency.uppercased()
-        }
-        return viewModel.state.displayCurrency
-    }
-
-    private func money(_ value: Double, currency: String) -> String {
-        let number = isAmountHidden
-            ? FinanceAmountText.maskedDigits(for: value)
-            : FinanceAmountText.decimal(value: value, maximumFractionDigits: 2)
-        return "\(number) \(currency)"
-    }
-
-    private func marketQuantityTitle(for investment: Investment) -> String {
-        investment.category == .crypto
-            ? L("finances.market.field_quantity_coins")
-            : L("finances.market.field_quantity")
-    }
-
-    private func marketQuantityUnit(for investment: Investment) -> String {
-        investment.category == .crypto
-            ? L("finances.quick_edit.unit.coins_short")
-            : L("finances.investment.unit.shares_short")
-    }
-
-    private func marketNumber(_ value: Double, digits: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = digits
-        return formatter.string(from: NSNumber(value: value)) ?? "0"
-    }
-
-    private func syncMarketDraft(from investment: Investment) {
-        editQuantityText = rawNumberString(
-            investment.marketQuantity ?? 0,
-            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
-        )
-        editUnitPriceText = rawNumberString(investment.lastKnownUnitPrice ?? 0, maxFractionDigits: 8)
-        editPurchasePriceText = rawNumberString(investment.averagePurchaseUnitPrice ?? 0, maxFractionDigits: 8)
-    }
-
-    private func canFinishInlineMarketEdit(for investment: Investment) -> Bool {
-        guard isInlineMarketEdit else {
-            return true
-        }
-        guard let quantity = AmountInputFormatter.parse(
-                editQuantityText,
-                maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
-              ),
-              let unitPrice = AmountInputFormatter.parse(editUnitPriceText),
-              quantity > 0, unitPrice > 0 else {
-            return false
-        }
-
-        if let purchasePrice = AmountInputFormatter.parse(editPurchasePriceText), purchasePrice < 0 {
-            return false
-        }
-
-        return true
-    }
-
-    private func finishInlineMarketEdit(for investment: Investment) {
-        guard canFinishInlineMarketEdit(for: investment),
-              let quantity = AmountInputFormatter.parse(
-                editQuantityText,
-                maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
-              ),
-              let unitPrice = AmountInputFormatter.parse(editUnitPriceText) else {
-            return
-        }
-
-        let purchasePrice = AmountInputFormatter.parse(editPurchasePriceText)
-        if let account = initialAccount {
-            financeViewModel.handle(
-                .updateMarketInvestmentDetails(
-                    account: account,
-                    quantity: quantity,
-                    unitPrice: unitPrice,
-                    purchaseUnitPrice: purchasePrice
-                )
-            )
-        }
-        isInlineMarketEdit = false
     }
 
     private func rawNumberString(_ value: Double, maxFractionDigits: Int) -> String {
@@ -2013,7 +1127,7 @@ private struct FinanceDynamicsContentView: View {
                 Spacer()
 
                 // Бейдж с дельтой (скрываем для detail-режима не-акций)
-                if viewModel.state.chartData.count >= 2 && !isSingleAccountSummaryMode && !(viewModel.state.isSingleAccountMode && marketInvestment == nil) {
+                if viewModel.state.chartData.count >= 2 && !isSingleAccountSummaryMode && !viewModel.state.isSingleAccountMode {
                     let delta = viewModel.state.periodDelta
                     let positiveText = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
                     let positiveBg = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 0.3)
@@ -2179,14 +1293,14 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private var shouldShowSingleAccountActionBar: Bool {
-        viewModel.state.isSingleAccountMode && initialAccount != nil && marketInvestment == nil
+        viewModel.state.isSingleAccountMode && initialAccount != nil
     }
 
     private var shouldShowDeleteAccountFooter: Bool {
         FinanceDynamicsDeleteLayoutPolicy.showsDeleteFooter(
             isSingleAccountMode: viewModel.state.isSingleAccountMode,
             hasInitialAccount: initialAccount != nil,
-            hasMarketInvestment: marketInvestment != nil
+            hasMarketInvestment: false
         )
     }
 
@@ -2194,7 +1308,7 @@ private struct FinanceDynamicsContentView: View {
         FinanceDynamicsDeleteLayoutPolicy.showsMarketDeleteFooter(
             isSingleAccountMode: viewModel.state.isSingleAccountMode,
             hasInitialAccount: initialAccount != nil,
-            hasMarketInvestment: marketInvestment != nil
+            hasMarketInvestment: false
         )
     }
 
@@ -3375,7 +2489,7 @@ private struct FinanceDynamicsContentView: View {
                             .frame(width: 92, alignment: .trailing)
                     }
 
-                    if !(viewModel.state.isSingleAccountMode && marketInvestment == nil) {
+                    if !viewModel.state.isSingleAccountMode {
                         let badgeColor = deltaColor(for: item)
                         let badgeBg = deltaBackground(for: item)
                         let badgeText = "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
@@ -3419,7 +2533,7 @@ private struct FinanceDynamicsContentView: View {
                             .frame(width: 92, alignment: .trailing)
                     }
 
-                    if !(viewModel.state.isSingleAccountMode && marketInvestment == nil) {
+                    if !viewModel.state.isSingleAccountMode {
                         let badgeColor = deltaColor(for: item)
                         let badgeBg = deltaBackground(for: item)
                         let badgeText = "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"

@@ -25,16 +25,7 @@ struct FinanceState {
     
     /// Показывать ли экран добавления счета
     var showAddAccountSheet: Bool = false
-    
-    /// Показывать ли экран создания карты
-    var showCreateCardSheet: Bool = false
-    
-    /// Показывать ли экран создания кредита
-    var showCreateCreditSheet: Bool = false
-    
-    /// Показывать ли экран создания актива
-    var showCreateInvestmentSheet: Bool = false
-    
+
     /// Выбранная группа для добавления счета
     var selectedGroupForAccount: FinanceGroup? = nil
     
@@ -93,24 +84,6 @@ struct FinanceState {
     /// Непривязанные активы (не добавленные ни в одну группу)
     var unattachedInvestments: [Investment] = []
     
-    /// Показывать ли редактор карты для редактирования
-    var showEditCardSheet: Bool = false
-    
-    /// Показывать ли редактор кредита для редактирования
-    var showEditCreditSheet: Bool = false
-    
-    /// Показывать ли редактор инвестиции для редактирования
-    var showEditInvestmentSheet: Bool = false
-    
-    /// ID редактируемой карты
-    var editingCardID: String? = nil
-    
-    /// ID редактируемого кредита
-    var editingCreditID: String? = nil
-    
-    /// ID редактируемой инвестиции
-    var editingInvestmentID: String? = nil
-    
     /// Множество ID групп с открытыми аккордеонами
     var expandedGroupIDs: Set<String> = []
     
@@ -157,9 +130,6 @@ struct FinanceState {
     var refreshIssueMessage: String? = nil
     var showRefreshIssue: Bool = false
 
-    /// Последняя успешно завершенная сделка по рыночному активу.
-    var tradeCelebration: FinanceTradeCelebration? = nil
-
     /// Точки спарклайна для дашборда (нормализованы [0..1])
     var dashboardSparkline: [Double] = []
 
@@ -171,46 +141,6 @@ struct FinanceState {
 }
 
 // StockRefreshIssues перемещён в FinanceMarketDataService.swift
-
-enum InvestmentOrderSide: Hashable {
-    case buy
-    case sell
-}
-
-struct InvestmentOrderFunding: Equatable {
-    var settlementAccountKind: CashflowSelectableAccount.Kind?
-    var shouldAffectCardBalance: Bool
-
-    static let ignored = InvestmentOrderFunding(
-        settlementAccountKind: nil,
-        shouldAffectCardBalance: false
-    )
-}
-
-struct FinanceTradeCelebration: Equatable, Identifiable {
-    let id: UUID
-    let side: InvestmentOrderSide
-    let investmentName: String
-    let investmentCategory: InvestmentCategory
-    let totalAmount: Double
-    let currency: String
-
-    init(
-        id: UUID = UUID(),
-        side: InvestmentOrderSide,
-        investmentName: String,
-        investmentCategory: InvestmentCategory,
-        totalAmount: Double,
-        currency: String
-    ) {
-        self.id = id
-        self.side = side
-        self.investmentName = investmentName
-        self.investmentCategory = investmentCategory
-        self.totalAmount = totalAmount
-        self.currency = currency
-    }
-}
 
 struct ArchivedFinanceAccountRow: Identifiable, Equatable {
     let id: String
@@ -244,12 +174,6 @@ enum FinanceAction {
     case physicallyDeleteLegacyAccount(FinanceAccount)
     /// Track C: перевод легаси-счёта в новое ядро (создаёт core-двойник, скрывает легаси атомарно).
     case convertAccountToCore(FinanceAccount)
-    case showCreateCardSheet
-    case hideCreateCardSheet
-    case showCreateCreditSheet
-    case hideCreateCreditSheet
-    case showCreateInvestmentSheet
-    case hideCreateInvestmentSheet
     case showDisplayCurrencySheet
     case hideDisplayCurrencySheet
     case setDisplayCurrency(String)
@@ -261,22 +185,10 @@ enum FinanceAction {
     case moveGroup(sourceGroupID: String, destinationIndex: Int)
     case moveAccount(sourceAccountID: String, destinationIndex: Int, groupID: String)
     case setGroupTotal(String, Double)
-    case editAccount(FinanceAccount)
-    case hideEditCardSheet
-    case hideEditCreditSheet
-    case hideEditInvestmentSheet
     case showQuickEditAccountSheet(FinanceAccount)
     case hideQuickEditAccountSheet
     case updateAccountAmount(FinanceAccount, Double)
     case updateCreditCardQuickFields(account: FinanceAccount, creditLimit: Double, debt: Double)
-    case executeInvestmentOrder(
-        account: FinanceAccount,
-        side: InvestmentOrderSide,
-        quantity: Double,
-        unitPrice: Double,
-        funding: InvestmentOrderFunding
-    )
-    case updateMarketInvestmentDetails(account: FinanceAccount, quantity: Double, unitPrice: Double, purchaseUnitPrice: Double?)
     case showGroupDynamics(FinanceGroup)
     case hideGroupDynamics
     case showAccountDynamics(FinanceAccount)
@@ -287,7 +199,6 @@ enum FinanceAction {
     case setSavingsGoalAmount(Double)
     case toggleAmountVisibility
     case setAccountSortMode(AccountSortMode)
-    case clearTradeCelebration
 }
 
 // MARK: - Finance ViewModel
@@ -388,6 +299,7 @@ final class FinanceViewModel: ViewModelProtocol {
             ungroupedGroupName: self.ungroupedGroupName,
             groupsProvider: { [weak self] in self?.state.groups ?? [] },
             accountInfoResolver: { [weak self] account in self?.getAccountInfo(account: account) != nil },
+            coreAccountsCount: { [weak self] group in self?.newCoreAccounts(matching: group).count ?? 0 },
             onLoadGroups: { [weak self] in self?.loadGroups() },
             onLoadAccounts: { [weak self] in self?.loadAccounts() },
             onCalculateTotal: { [weak self] in self?.calculateTotalAmount() },
@@ -439,42 +351,6 @@ final class FinanceViewModel: ViewModelProtocol {
             onDismissAddAccountSheet: { [weak self] in
                 self?.state.showAddAccountSheet = false
                 self?.state.selectedGroupForAccount = nil
-            }
-        )
-    }()
-
-    // investmentOrderService использует lazy из-за замыканий на self
-    private(set) lazy var investmentOrderService: FinanceInvestmentOrderService = {
-        FinanceInvestmentOrderService(
-            modelContext: self.modelContext,
-            nowProvider: self.nowProvider,
-            investmentByIDProvider: { [weak self] in self?.investmentByID ?? [:] },
-            cardByIDProvider: { [weak self] in self?.cardByID ?? [:] },
-            availableCardsProvider: { [weak self] in self?.state.availableCards ?? [] },
-            availableInvestmentsProvider: { [weak self] in self?.state.availableInvestments ?? [] },
-            groupsProvider: { [weak self] in self?.state.groups ?? [] },
-            resolvedInvestmentCurrency: { [weak self] investment in
-                self?.resolvedInvestmentCurrency(investment) ?? investment.currency
-            },
-            normalizedConversionCurrency: { [weak self] currency in
-                self?.normalizedConversionCurrency(currency) ?? currency
-            },
-            normalizedCurrencyCode: { [weak self] currency in
-                self?.normalizedCurrencyCode(currency) ?? currency
-            },
-            investmentDisplayName: { [weak self] investment in
-                self?.investmentDisplayName(investment) ?? investment.name
-            },
-            onLoadAccounts: { [weak self] in self?.loadAccounts() },
-            onCalculateTotalAmount: { [weak self] in self?.calculateTotalAmount() },
-            onScheduleGroupTotalRefresh: { [weak self] groupID in
-                self?.scheduleGroupTotalRefresh(for: groupID)
-            },
-            onPublishAccountChangedEvent: { [weak self] accountType in
-                self?.publishAccountChangedEvent(for: accountType)
-            },
-            onUpdateTradeCelebration: { [weak self] celebration in
-                self?.state.tradeCelebration = celebration
             }
         )
     }()
@@ -624,25 +500,7 @@ final class FinanceViewModel: ViewModelProtocol {
             physicallyDeleteLegacyAccount(account)
         case .convertAccountToCore(let account):
             convertAccountToCore(account)
-            
-        case .showCreateCardSheet:
-            state.showCreateCardSheet = true
-            
-        case .hideCreateCardSheet:
-            state.showCreateCardSheet = false
-            
-        case .showCreateCreditSheet:
-            state.showCreateCreditSheet = true
-            
-        case .hideCreateCreditSheet:
-            state.showCreateCreditSheet = false
-            
-        case .showCreateInvestmentSheet:
-            state.showCreateInvestmentSheet = true
-            
-        case .hideCreateInvestmentSheet:
-            state.showCreateInvestmentSheet = false
-            
+
         case .showDisplayCurrencySheet:
             state.showDisplayCurrencySheet = true
             
@@ -702,22 +560,7 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .setGroupTotal(let groupID, let total):
             state.groupTotals[groupID] = total
-            
-        case .editAccount(let account):
-            editAccount(account)
-            
-        case .hideEditCardSheet:
-            state.showEditCardSheet = false
-            state.editingCardID = nil
-            
-        case .hideEditCreditSheet:
-            state.showEditCreditSheet = false
-            state.editingCreditID = nil
-            
-        case .hideEditInvestmentSheet:
-            state.showEditInvestmentSheet = false
-            state.editingInvestmentID = nil
-            
+
         case .showQuickEditAccountSheet(let account):
             state.quickEditAccount = account
             state.showQuickEditAccountSheet = true
@@ -731,23 +574,6 @@ final class FinanceViewModel: ViewModelProtocol {
         case .updateCreditCardQuickFields(let account, let creditLimit, let debt):
             updateCreditCardQuickFields(account: account, creditLimit: creditLimit, debt: debt)
 
-        case .executeInvestmentOrder(let account, let side, let quantity, let unitPrice, let funding):
-            investmentOrderService.executeInvestmentOrder(
-                account: account,
-                side: side,
-                quantity: quantity,
-                unitPrice: unitPrice,
-                funding: funding
-            )
-
-        case .updateMarketInvestmentDetails(let account, let quantity, let unitPrice, let purchaseUnitPrice):
-            investmentOrderService.updateMarketInvestmentDetails(
-                account: account,
-                quantity: quantity,
-                unitPrice: unitPrice,
-                purchaseUnitPrice: purchaseUnitPrice
-            )
-            
         case .showGroupDynamics(let group):
             state.selectedGroupForDynamics = group
             state.showGroupDynamics = true
@@ -792,9 +618,6 @@ final class FinanceViewModel: ViewModelProtocol {
                 group.usesManualAccountOrdering = false
             }
             try? modelContext.save()
-
-        case .clearTradeCelebration:
-            state.tradeCelebration = nil
     }
     }
     
@@ -1057,9 +880,21 @@ final class FinanceViewModel: ViewModelProtocol {
         return (delta, pct)
     }
 
-    /// Подсчитать сумму группы в указанной валюте
+    /// Подсчитать сумму группы в указанной валюте — ОБА мира (Фаза 1.5 слияния групп): легаси-junction
+    /// (`FinanceGroup.accounts` через `totalsService`) + счета нового ядра, привязанные к одноимённой
+    /// `AccountGroup` (`newCoreAccounts(matching:)`). Пока легаси не снесена (Фаза 5) — читаются оба;
+    /// группа целиком из core-счетов больше не даёт 0 (баг §1.3a плана unified-totals).
+    ///
+    /// ВАЖНО: это ДИСПЛЕЙНЫЙ per-group тотал (карточка группы/редактор/строки). Агрегат «Общий баланс»
+    /// (`totalsService.calculateTotalsSnapshot`) вызывает `FinanceTotalsService.calculateGroupTotal`
+    /// НАПРЯМУЮ и добавляет core одним лампом через `newCoreTotalProvider` — сюда он не заходит, поэтому
+    /// core здесь НЕ задваивается в общем балансе (переключение агрегата на single-world — Фаза 2).
     func calculateGroupTotal(group: FinanceGroup, in currency: String) async -> Double {
-        await totalsService.calculateGroupTotal(group: group, in: currency)
+        let legacyTotal = await totalsService.calculateGroupTotal(group: group, in: currency)
+        let coreAccounts = newCoreAccounts(matching: group)
+        guard !coreAccounts.isEmpty else { return legacyTotal }
+        let coreTotal = await accountsTotalsService.total(for: coreAccounts, on: nowProvider(), in: currency)
+        return legacyTotal + NSDecimalNumber(decimal: coreTotal).doubleValue
     }
 
 
@@ -1274,27 +1109,6 @@ final class FinanceViewModel: ViewModelProtocol {
 
     private func resolvedInvestmentCurrency(_ investment: Investment) -> String {
         totalsService.resolvedInvestmentCurrency(investment, displayCurrency: state.displayCurrency)
-    }
-
-    static func eligibleSettlementCards(
-        from cards: [Card],
-        investmentCurrency: String
-    ) -> [Card] {
-        FinanceInvestmentOrderService.eligibleSettlementCards(from: cards, investmentCurrency: investmentCurrency)
-    }
-
-    static func eligibleSettlementAccounts(
-        cards: [Card],
-        investments: [Investment],
-        investmentCurrency: String,
-        excludingInvestmentID: String? = nil
-    ) -> [CashflowSelectableAccount] {
-        FinanceInvestmentOrderService.eligibleSettlementAccounts(
-            cards: cards,
-            investments: investments,
-            investmentCurrency: investmentCurrency,
-            excludingInvestmentID: excludingInvestmentID
-        )
     }
 
     private func formatMarketNumber(_ value: Double, maximumFractionDigits: Int) -> String {
@@ -1718,22 +1532,6 @@ final class FinanceViewModel: ViewModelProtocol {
         (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
     }
 
-    private func editAccount(_ account: FinanceAccount) {
-        switch account.accountType {
-        case .card:
-            state.editingCardID = account.accountID
-            state.showEditCardSheet = true
-            
-        case .credit:
-            state.editingCreditID = account.accountID
-            state.showEditCreditSheet = true
-            
-        case .investment:
-            state.editingInvestmentID = account.accountID
-            state.showEditInvestmentSheet = true
-        }
-    }
-    
     private func updateAccountAmount(account: FinanceAccount, newAmount: Double) {
         // Находим группу, к которой принадлежит счет
         let accountGroup = state.groups.first { group in

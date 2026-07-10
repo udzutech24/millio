@@ -118,7 +118,99 @@ final class LegacyAccountsMigrator {
             )
         }
 
+        remapCashflowHistory()
+        remapCashbackCardIDs()
+
         return summary
+    }
+
+    // MARK: - Ремап Cashback.cardIDs (Фаза 5b плана 6b «Путь B»)
+
+    /// Однократно переписывает `Cashback.cardIDs` с легаси `Card.uniqueID` на `Account.id` core-двойника
+    /// (та же денежная проверка kind, что `remapCashflowHistory`). Без этого привязка кэшбэка к карте
+    /// осиротевает после сноса легаси-моделей (Фаза 5c) — `CashbackViewModel.cleanInvalidCardIDs`
+    /// молча вычистила бы эти ID как «несуществующие». Идемпотентно по построению (см. `remapCashflowHistory`).
+    private func remapCashbackCardIDs() {
+        let cashbacks = (try? modelContext.fetch(FetchDescriptor<Cashback>())) ?? []
+        guard !cashbacks.isEmpty else { return }
+
+        var didChange = false
+        for cashback in cashbacks {
+            let remapped = cashback.cardIDs.map { remappedCashLikeAccountID(legacyUniqueID: $0) ?? $0 }
+            if remapped != cashback.cardIDs {
+                cashback.cardIDs = remapped
+                didChange = true
+            }
+        }
+
+        guard didChange else { return }
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "AccountsCore",
+                          "Legacy migration: ремап Cashback.cardIDs — \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Ремап истории Cashflow (Фаза 5a плана 6b «Путь B»)
+
+    /// Однократно переписывает `cardID`/`toCardID`/`investmentID` СУЩЕСТВУЮЩИХ `CashflowTransaction`
+    /// (созданных до миграции их счёта) с легаси-`uniqueID` на `Account.id` core-двойника.
+    /// `AccountsCoreCashflowBridge.resolveNewCoreAccount` сверяет `cardID` буквально с `Account.id`
+    /// (разные пространства UUID, см. докстринг файла) — без ремапа дотранзакционная история теряет
+    /// атрибуцию счёта после сноса легаси-моделей (Фаза 5c). Вызывается на КАЖДЫЙ прогон `migrateAll`
+    /// (не только когда что-то мигрировано в ЭТОМ вызове) — ловит счета, сконвертированные раньше
+    /// (Ф1/Ф3), для которых ремап ещё не выполнялся. Идемпотентно по построению: после первого
+    /// прогона `cardID` уже равен UUID двойника и не совпадает ни с одним легаси `uniqueID`.
+    private func remapCashflowHistory() {
+        let transactions = (try? modelContext.fetch(FetchDescriptor<CashflowTransaction>())) ?? []
+        guard !transactions.isEmpty else { return }
+
+        var didChange = false
+        for transaction in transactions {
+            if let remapped = remappedCashLikeAccountID(legacyUniqueID: transaction.cardID) {
+                transaction.cardID = remapped
+                didChange = true
+            }
+            if let remapped = remappedCashLikeAccountID(legacyUniqueID: transaction.toCardID) {
+                transaction.toCardID = remapped
+                didChange = true
+            }
+            // Кэш-подобная Investment (isCashflowAccount) хранила свой ID в отдельной колонке
+            // `investmentID` (легаси-дизайн — `Card` и `Investment` были разными таблицами).
+            // `cardID == nil` — единственный случай легаси-записи такой транзакции (income/expense
+            // на кэш-подобный счёт, а не перевод/трейд-нога, которые уже используют cardID).
+            // Рыночные/вклад/долг `investmentID` (core-двойник `.manualAsset`) НЕ трогаем — их
+            // движок не участвует в Cashflow-леджере (осознанная деградация §3 плана).
+            if transaction.cardID == nil, let remapped = remappedCashLikeAccountID(legacyUniqueID: transaction.investmentID) {
+                transaction.cardID = remapped
+                transaction.investmentID = nil
+                didChange = true
+            }
+        }
+
+        guard didChange else { return }
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "AccountsCore",
+                          "Legacy migration: ремап истории Cashflow — \(error.localizedDescription)")
+        }
+    }
+
+    /// UUID-строка core-двойника, ЕСЛИ `legacyUniqueID` сконвертирован И двойник — денежный
+    /// (`cash`/`debitCard`/`bankAccount`, тот же набор, что `CashflowViewModel+AccountsCore.cashLikeKinds`).
+    private func remappedCashLikeAccountID(legacyUniqueID: String?) -> String? {
+        guard let legacyUniqueID, let coreID = registry.coreAccountID(forLegacyUniqueID: legacyUniqueID) else {
+            return nil
+        }
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.id == coreID })
+        guard let account = try? modelContext.fetch(descriptor).first else { return nil }
+        let cashLikeKinds: Set<String> = [
+            AccountKind.cash.rawValue, AccountKind.debitCard.rawValue, AccountKind.bankAccount.rawValue
+        ]
+        guard cashLikeKinds.contains(account.kindRaw) else { return nil }
+        return coreID.uuidString
     }
 
     // MARK: - Один счёт

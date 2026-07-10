@@ -39,20 +39,37 @@ final class StockBulkImportMatcher {
 
     private func loadLocalCatalog() -> [StockBulkImportCandidate] {
         let investments = (try? modelContext.fetch(FetchDescriptor<Investment>())) ?? []
-        return Array(Set(
-            investments.compactMap { investment in
-                guard investment.category == .stocks else { return nil }
-                let symbol = resolvedTickerSymbol(from: investment.marketSymbol)
-                guard !symbol.isEmpty else { return nil }
-                return StockBulkImportCandidate(
-                    symbol: symbol,
-                    market: investment.marketExchange,
-                    displayName: investment.name.isEmpty ? symbol : investment.name,
-                    currency: "USD",
-                    providerRaw: investment.marketProviderRaw
-                )
-            }
-        ))
+        let legacyCandidates = investments.compactMap { investment -> StockBulkImportCandidate? in
+            guard investment.category == .stocks else { return nil }
+            let symbol = resolvedTickerSymbol(from: investment.marketSymbol)
+            guard !symbol.isEmpty else { return nil }
+            return StockBulkImportCandidate(
+                symbol: symbol,
+                market: investment.marketExchange,
+                displayName: investment.name.isEmpty ? symbol : investment.name,
+                currency: "USD",
+                providerRaw: investment.marketProviderRaw
+            )
+        }
+
+        // Ядро (план 6b «Путь B», Фаза 3): после перевода `persist(...)` на `AccountsCoreService`
+        // новые позиции больше не попадают в легаси `Investment` — без этого блока повторный импорт
+        // уже добавленного core-тикера не подсказывался бы автодополнением как «уже есть».
+        let coreAccounts = (try? modelContext.fetch(FetchDescriptor<Account>())) ?? []
+        let coreCandidates = coreAccounts.compactMap { account -> StockBulkImportCandidate? in
+            guard account.kind == .marketInvestment, let meta = account.marketMeta else { return nil }
+            let symbol = resolvedTickerSymbol(from: meta.symbol)
+            guard !symbol.isEmpty else { return nil }
+            return StockBulkImportCandidate(
+                symbol: symbol,
+                market: nil,
+                displayName: account.name.isEmpty ? symbol : account.name,
+                currency: "USD",
+                providerRaw: nil
+            )
+        }
+
+        return Array(Set(legacyCandidates + coreCandidates))
     }
 
     private func loadRemoteCatalog(for parsedRows: [StockBulkImportParsedRow]) async -> [String: [StockBulkImportCandidate]] {
@@ -124,6 +141,12 @@ struct StockBulkImportPersistenceService {
         self.marketDataClient = marketDataClient
     }
 
+    /// Импорт создаёт СЧЕТА НОВОГО ЯДРА (`AccountKind.marketInvestment`) — план 6b «Путь B»,
+    /// Фаза 3: перевод живых писателей легаси на `AccountsCoreService`, легаси `Investment`/
+    /// `FinanceAccount` больше не создаются. `priority` остаётся в сигнатуре ради совместимости
+    /// вызова из `StockBulkImportSheet` — ядро не хранит приоритет инвестиции, тот же осознанный
+    /// пробел, что и в `FinanceAddAccountView.createAssetAccountOnNewCore` (единственный уже
+    /// живущий core-путь создания рыночного счёта), не новая деградация.
     func persist(
         drafts: [StockBulkImportRowDraft],
         includeInTotal: Bool,
@@ -131,33 +154,37 @@ struct StockBulkImportPersistenceService {
         targetGroup: FinanceGroup?,
         mergeDuplicates: Bool
     ) async throws -> Int {
-        // Если пользователь не выбрал группу — сохраняем в системную "Без группы".
-        // Это важно: `FinanceAccount.group == nil` считается невалидным и будет очищаться нормализатором.
-        let resolvedGroup = targetGroup ?? FinanceSystemGroups.ensureUngroupedGroup(in: modelContext)
+        let resolvedGroup = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: modelContext)
+        let service = AccountsCoreService(modelContext: modelContext)
 
         let resolvedRows = mergeDuplicates
             ? Self.mergeAddableRows(from: drafts)
             : Self.resolveAddableRows(from: drafts)
         guard !resolvedRows.isEmpty else { return 0 }
 
-        let investments = (try? modelContext.fetch(FetchDescriptor<Investment>())) ?? []
-        var investmentByIdentityKey: [String: Investment] = [:]
-        investmentByIdentityKey.reserveCapacity(investments.count)
-        for investment in investments where investment.archivedAt == nil && investment.category == .stocks {
-            let normalizedAssetID = investment.assetID?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if let normalizedAssetID, !normalizedAssetID.isEmpty {
-                investmentByIdentityKey[normalizedAssetID] = investment
-            }
-
-            let legacyKey = normalizedIdentityKey(symbol: investment.marketSymbol, exchange: investment.marketExchange)
-            if !legacyKey.isEmpty {
-                investmentByIdentityKey[legacyKey] = investment
+        // Дедуп по СИМВОЛУ — единственная identity, которую хранит `MarketMeta` ядра (см.
+        // `AccountMeta.swift`). Легаси умел различать один тикер на разных биржах через
+        // `assetID`/`exchange` (`MarketAssetIdentityResolver`) — ядро этого не переносит; при
+        // 1–2 юзерах и уже принятом MVP-пробеле (план §3) это не блокер Фазы 3.
+        let existingAccounts = (try? modelContext.fetch(FetchDescriptor<Account>())) ?? []
+        var accountBySymbol: [String: Account] = [:]
+        for account in existingAccounts where account.archivedAt == nil && account.kind == .marketInvestment {
+            if let symbol = account.marketMeta?.symbol, !symbol.isEmpty {
+                accountBySymbol[symbol.uppercased()] = account
             }
         }
-        var financeAccounts = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
 
+        var importedCount = 0
         for resolvedRow in resolvedRows {
+            // Символ БЕЗ префикса биржи (`normalizedSymbol`, не `storedSymbol` вида `MARKET:TICKER`) —
+            // тот же формат, что уже хранит `MarketMeta.symbol` у единственного другого писателя
+            // ядра (`FinanceAddAccountView`, тикер-пикер кладёт `symbol.symbol` без префикса).
+            // `storedSymbol` сломал бы `AccountMarketPriceService.refreshTodayPrices()` — он шлёт
+            // `meta.symbol` в `fetchQuotes` буквально, без парсинга префикса биржи.
+            let symbol = resolvedRow.candidate.normalizedSymbol
+            guard !symbol.isEmpty else { continue }
+
+            // Синк в общий каталог тикеров — не привязан к легаси/ядру, оставлен без изменений.
             let resolvedIdentity = MarketAssetIdentityResolver.resolve(
                 category: .stocks,
                 symbol: resolvedRow.candidate.storedSymbol,
@@ -169,101 +196,39 @@ struct StockBulkImportPersistenceService {
                 country: nil,
                 providerName: resolvedRow.candidate.providerRaw
             )
-            let resolvedAssetID = resolvedIdentity?
-                .assetID
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let identityKeys: [String] = [resolvedAssetID, resolvedRow.candidate.identityKey]
-                .compactMap { $0 }
-                .filter { !$0.isEmpty }
-            let latestPrice = await fetchLatestPrice(for: resolvedRow.candidate)
-            let effectiveUnitPrice = resolvedRow.currentPrice ?? latestPrice ?? resolvedRow.buyPrice
-            let amount = resolvedRow.quantity * effectiveUnitPrice
-
-            if let existing = identityKeys.compactMap({ investmentByIdentityKey[$0] }).first {
-                existing.ensureUniqueID()
-                existing.name = existing.name.isEmpty ? resolvedRow.candidate.displayName : existing.name
-                existing.investmentType = .positive
-                existing.category = .stocks
-                existing.currency = "USD"
-                existing.assetID = resolvedIdentity?.assetID ?? existing.assetID
-                existing.marketCurrency = "USD"
-                existing.marketExchange = resolvedRow.candidate.normalizedMarket
-                existing.marketSymbol = resolvedRow.candidate.storedSymbol
-                existing.marketProviderRaw = resolvedRow.candidate.providerRaw ?? existing.marketProviderRaw ?? "market-backend"
-                existing.includeInTotal = includeInTotal
-                existing.priority = priority
-                _ = existing.applyBuy(quantity: resolvedRow.quantity, unitPrice: resolvedRow.buyPrice)
-                existing.lastKnownUnitPrice = effectiveUnitPrice
-                existing.lastKnownPriceUpdatedAt = Date()
-                existing.amount = amountFor(
-                    quantity: existing.marketQuantity ?? resolvedRow.quantity,
-                    unitPrice: effectiveUnitPrice,
-                    fallbackBuyPrice: resolvedRow.buyPrice
-                )
-                if let resolvedIdentity {
-                    AssetCatalogStore(modelContext: modelContext).syncIfSupported(identity: resolvedIdentity)
-                }
-                updateFinanceAccountLink(for: existing, in: &financeAccounts, group: resolvedGroup)
-                for identityKey in identityKeys {
-                    investmentByIdentityKey[identityKey] = existing
-                }
-                continue
-            }
-
-            let investment = Investment(
-                name: resolvedRow.candidate.displayName,
-                investmentType: .positive,
-                category: .stocks,
-                amount: amount,
-                currency: "USD",
-                includeInTotal: includeInTotal,
-                priority: priority,
-                isFavorite: false
-            )
-            investment.marketSymbol = resolvedRow.candidate.storedSymbol
-            investment.assetID = resolvedIdentity?.assetID
-            investment.marketExchange = resolvedRow.candidate.normalizedMarket
-            investment.marketCurrency = "USD"
-            investment.marketQuantity = resolvedRow.quantity
-            investment.averagePurchaseUnitPrice = resolvedRow.buyPrice
-            investment.totalPurchaseCost = resolvedRow.quantity * resolvedRow.buyPrice
-            investment.lastKnownUnitPrice = effectiveUnitPrice
-            investment.lastKnownPriceUpdatedAt = Date()
-            investment.marketProviderRaw = resolvedRow.candidate.providerRaw ?? "market-backend"
-            investment.amount = amountFor(
-                quantity: resolvedRow.quantity,
-                unitPrice: effectiveUnitPrice,
-                fallbackBuyPrice: resolvedRow.buyPrice
-            )
-
-            modelContext.insert(investment)
             if let resolvedIdentity {
                 AssetCatalogStore(modelContext: modelContext).syncIfSupported(identity: resolvedIdentity)
             }
-            for identityKey in identityKeys {
-                investmentByIdentityKey[identityKey] = investment
+
+            let quantity = Decimal(resolvedRow.quantity)
+            let unitPrice = Decimal(resolvedRow.buyPrice)
+
+            if let existing = accountBySymbol[symbol.uppercased()] {
+                existing.includeInTotal = includeInTotal
+                existing.group = resolvedGroup
+                try service.buy(account: existing, quantity: quantity, unitPrice: unitPrice)
+            } else {
+                let meta = AccountsCoreAdditionBridge.marketMeta(symbol: symbol, category: .stocks)
+                // currency жёстко "USD" — легаси-импортёр всегда так делал (`Investment(..., currency: "USD")`),
+                // не полагаясь на `candidate.currency` (может быть пустым для тикера в USD-выражении).
+                let account = try service.createAccount(
+                    name: resolvedRow.candidate.displayName.isEmpty ? symbol : resolvedRow.candidate.displayName,
+                    kind: .marketInvestment,
+                    currency: "USD",
+                    openingBalance: 0,
+                    group: resolvedGroup,
+                    marketMeta: meta
+                )
+                account.includeInTotal = includeInTotal
+                try service.buy(account: account, quantity: quantity, unitPrice: unitPrice)
+                accountBySymbol[symbol.uppercased()] = account
             }
-            let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-            account.group = resolvedGroup
-            modelContext.insert(account)
-            financeAccounts.append(account)
+
+            importedCount += 1
         }
 
         try modelContext.save()
-        return resolvedRows.count
-    }
-
-    private func fetchLatestPrice(for candidate: StockBulkImportCandidate) async -> Double? {
-        for symbol in candidate.quoteLookupSymbols {
-            do {
-                if let latestPrice = try await marketDataClient.latestPrice(symbol: symbol, forceRefresh: false) {
-                    return latestPrice
-                }
-            } catch {
-                continue
-            }
-        }
-        return nil
+        return importedCount
     }
 
     static func mergeAddableRows(from drafts: [StockBulkImportRowDraft]) -> [StockBulkImportResolvedRow] {
@@ -322,54 +287,4 @@ struct StockBulkImportPersistenceService {
             }
     }
 
-    private static func amountFor(quantity: Double, unitPrice: Double?, fallbackBuyPrice: Double) -> Double {
-        quantity * (unitPrice ?? fallbackBuyPrice)
-    }
-
-    private func amountFor(quantity: Double, unitPrice: Double?, fallbackBuyPrice: Double) -> Double {
-        Self.amountFor(quantity: quantity, unitPrice: unitPrice, fallbackBuyPrice: fallbackBuyPrice)
-    }
-
-    private func updateFinanceAccountLink(
-        for investment: Investment,
-        in existingAccounts: inout [FinanceAccount],
-        group: FinanceGroup
-    ) {
-        if let account = existingAccounts.first(where: {
-            $0.accountType == .investment && $0.accountID == investment.investmentUniqueID
-        }) {
-            account.group = group
-            account.updatedAt = Date()
-            return
-        }
-
-        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-        account.group = group
-        modelContext.insert(account)
-        existingAccounts.append(account)
-    }
-
-    private func normalizedStoredSymbol(_ value: String?) -> String {
-        value?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() ?? ""
-    }
-
-    private func normalizedIdentityKey(symbol: String?, exchange: String?) -> String {
-        let normalizedSymbol = normalizedStoredSymbol(symbol)
-        guard !normalizedSymbol.isEmpty else { return "" }
-
-        if normalizedSymbol.contains(":") {
-            let parts = normalizedSymbol.split(separator: ":", maxSplits: 1).map(String.init)
-            if parts.count == 2 {
-                let marketKey = StockBulkImportCandidate.identityMarketKey(
-                    for: StockBulkImportMarketNormalizer.normalize(parts[0])
-                )
-                return "\(marketKey)|\(parts[1])"
-            }
-        }
-
-        let marketKey = StockBulkImportCandidate.identityMarketKey(
-            for: StockBulkImportMarketNormalizer.normalize(exchange)
-        )
-        return "\(marketKey)|\(normalizedSymbol)"
-    }
 }

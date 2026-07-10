@@ -25,6 +25,10 @@ final class FinanceGroupService {
     /// Резолвер информации о счёте: используется для фильтрации видимых счетов
     private let accountInfoResolver: (FinanceAccount) -> Bool
 
+    /// Кол-во счетов нового ядра в группе (Фаза 1.5) — чтобы группа/Ungrouped из одних core-счетов
+    /// не пряталась как «пустая» (баг §1.3a: legacy-junction пуст, а счета есть в AccountGroup).
+    private let coreAccountsCount: (FinanceGroup) -> Int
+
     /// Callback: загрузить группы в VM
     private let onLoadGroups: () -> Void
     /// Callback: загрузить счета в VM
@@ -45,6 +49,7 @@ final class FinanceGroupService {
         ungroupedGroupName: String,
         groupsProvider: @escaping () -> [FinanceGroup],
         accountInfoResolver: @escaping (FinanceAccount) -> Bool,
+        coreAccountsCount: @escaping (FinanceGroup) -> Int = { _ in 0 },
         onLoadGroups: @escaping () -> Void,
         onLoadAccounts: @escaping () -> Void,
         onCalculateTotal: @escaping () -> Void,
@@ -56,6 +61,7 @@ final class FinanceGroupService {
         self.ungroupedGroupName = ungroupedGroupName
         self.groupsProvider = groupsProvider
         self.accountInfoResolver = accountInfoResolver
+        self.coreAccountsCount = coreAccountsCount
         self.onLoadGroups = onLoadGroups
         self.onLoadAccounts = onLoadAccounts
         self.onCalculateTotal = onCalculateTotal
@@ -72,7 +78,7 @@ final class FinanceGroupService {
 
     private func shouldHideGroupInList(_ group: FinanceGroup) -> Bool {
         guard group.name == ungroupedGroupName else { return false }
-        return visibleAccountsForGroup(group).isEmpty
+        return visibleAccountsForGroup(group).isEmpty && coreAccountsCount(group) == 0
     }
 
     private func visibleAccountsForGroup(_ group: FinanceGroup) -> [FinanceAccount] {
@@ -190,6 +196,9 @@ final class FinanceGroupService {
     ) {
         let groupToUpdate: FinanceGroup
         if let existing = editingGroup {
+            // Синхронизируем одноимённую AccountGroup (канон, Фаза 1.5) ДО переименования FinanceGroup —
+            // ищем по СТАРОМУ имени, иначе после смены имени связь по имени порвётся.
+            syncCoreGroup(oldName: existing.name, newName: name, colorHex: colorHex, displayCurrency: displayCurrency)
             existing.name = name
             existing.colorHex = colorHex
             existing.displayCurrency = displayCurrency
@@ -261,6 +270,23 @@ final class FinanceGroupService {
 
     func nextAccountOrder(in group: FinanceGroup) -> Int {
         ((group.accounts ?? []).map(\.order).max() ?? -1) + 1
+    }
+
+    // MARK: - Синхронизация с AccountGroup (Фаза 1.5)
+
+    /// Переносит правки редактора группы на одноимённую `AccountGroup` (канон нового ядра). Без этого
+    /// после слияния моделей правка цвета/валюты/имени в редакторе меняла бы только легаси-`FinanceGroup`,
+    /// а `AccountGroup` (по которой считаются core-счета) расходилась бы. Ищем по СТАРОМУ имени; если
+    /// группы ещё нет — не создаём (создаст `GroupsMigrator`/`resolveAccountGroup` при первом core-счёте).
+    private func syncCoreGroup(oldName: String, newName: String, colorHex: String, displayCurrency: String?) {
+        guard oldName != ungroupedGroupName, !oldName.isEmpty else { return }
+        let descriptor = FetchDescriptor<AccountGroup>(
+            predicate: #Predicate<AccountGroup> { $0.name == oldName }
+        )
+        guard let coreGroup = try? modelContext.fetch(descriptor).first else { return }
+        coreGroup.name = newName
+        coreGroup.colorHex = colorHex
+        coreGroup.displayCurrency = displayCurrency
     }
 
 }

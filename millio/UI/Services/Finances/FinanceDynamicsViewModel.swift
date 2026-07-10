@@ -136,27 +136,6 @@ struct ChartDataPoint: Identifiable, Equatable {
     static func == (lhs: ChartDataPoint, rhs: ChartDataPoint) -> Bool {
         lhs.id == rhs.id && lhs.date == rhs.date && lhs.value == rhs.value
     }
-
-    /// Поточечно добавляет к точкам старого мира вклад нового ядра event-sourcing (Фаза 1a-ui, AC3).
-    /// Для каждой точки `points` берётся значение `newCoreSeries` на СОВПАДАЮЩИЙ или ближайший
-    /// ПРЕДЫДУЩИЙ календарный день (forward-fill того же дня — у нового ядра дырок нет by design,
-    /// т.к. `AccountsTotalsService.seriesBetween` строит одну точку на каждый календарный день).
-    /// Пустой `newCoreSeries` (нет ни одного нового счёта) не меняет `points` — no-op.
-    static func mergingNewCoreSeries(_ points: [ChartDataPoint], newCoreSeries: [(Date, Decimal)]) -> [ChartDataPoint] {
-        guard !newCoreSeries.isEmpty else { return points }
-        let calendar = Calendar(identifier: .gregorian)
-        let sorted = newCoreSeries.sorted { $0.0 < $1.0 }
-
-        return points.map { point in
-            guard let match = sorted.last(where: {
-                calendar.isDate($0.0, inSameDayAs: point.date) || $0.0 < point.date
-            }) else {
-                return point
-            }
-            let addition = NSDecimalNumber(decimal: match.1).doubleValue
-            return ChartDataPoint(date: point.date, value: point.value + addition, label: point.label)
-        }
-    }
 }
 
 // MARK: - Dynamics Mode
@@ -849,6 +828,22 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             targetDate = endDate
         }
 
+        // Вклад ЯДРА в агрегат заголовка (6b Фаза 2, single-world): без скоуп-фильтров
+        // (все счета, не режим одного счёта) заголовок «Динамика» обязан сходиться с агрегатом
+        // Дашборда/«Счетов» (`AccountsTotalsService.totalAt`) — это закрывает R1 аудита 2026-07-02
+        // (три пути тотала → один). Для легаси-данных вклад = 0 (нет core-счетов), поэтому
+        // легаси-реплей не меняется. Скоупы (выбор групп/счетов, режим одного счёта) остаются на
+        // легаси-пути до порта per-account Dynamics на ядро (задача «1b»/Фаза 4).
+        let isUnscopedAggregate = state.selectedGroupIDs.isEmpty
+            && state.selectedAccountIDs.isEmpty
+            && !state.isSingleAccountMode
+        let coreCurrent: Double = isUnscopedAggregate
+            ? NSDecimalNumber(decimal: await financeViewModel.accountsTotalsService.totalAt(targetDate, in: state.displayCurrency)).doubleValue
+            : 0
+        let coreStart: Double = isUnscopedAggregate
+            ? NSDecimalNumber(decimal: await financeViewModel.accountsTotalsService.totalAt(startDate, in: state.displayCurrency)).doubleValue
+            : 0
+
         // Для single account без выбранной точки: используем live balance напрямую для всех типов,
         // кроме market-priced investments (stocks/crypto) — они идут через replay с рыночными ценами.
         if selectedDate == nil, accounts.count == 1, let account = accounts.first,
@@ -857,17 +852,17 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
            ) {
             if Task.isCancelled { return }
             if selectedDate != state.selectedDate { return }
-            state.currentBalance = liveBalance
+            state.currentBalance = liveBalance + coreCurrent
             let startBalance = await calculateBalanceAtDate(
                 accounts: accounts,
                 date: startDate,
                 accountCardIDs: Set(),
                 debtAsNegative: useNetTotals,
                 includeInitialBeforeCreation: false
-            )
+            ) + coreStart
             if Task.isCancelled { return }
             if selectedDate != state.selectedDate { return }
-            let rawDelta = liveBalance - startBalance
+            let rawDelta = state.currentBalance - startBalance
             let delta = adjustDeltaForSingleAccountIfNeeded(
                 delta: rawDelta, accounts: accounts, useNetTotals: useNetTotals
             )
@@ -881,7 +876,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             accountCardIDs: Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil }),
             debtAsNegative: useNetTotals,
             includeInitialBeforeCreation: false
-        )
+        ) + coreCurrent
         if Task.isCancelled { return }
         if selectedDate != state.selectedDate { return }
         state.currentBalance = currentBalance
@@ -895,7 +890,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             // Старт периода должен отражать фактическое состояние на эту дату.
             // Счет, созданный позже, не должен "задним числом" попадать в стартовый баланс.
             includeInitialBeforeCreation: false
-        )
+        ) + coreStart
         if Task.isCancelled { return }
         if selectedDate != state.selectedDate { return }
 
@@ -1055,6 +1050,319 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         state.currencyBreakdown = items
     }
 
+    /// Легаси-счета, индексированные по `accountID` (== легаси `uniqueID`, ключ `LegacyConversionRegistry`).
+    /// Историческая выборка (distantPast…distantFuture) включает archived-предшественников мигрированных
+    /// core-счетов, скрытых из `.currentVisible`.
+    private func legacyAccountsByUniqueID() -> [String: FinanceAccount] {
+        Dictionary(
+            getAccountsForCalculation(
+                scope: .historicalInterval(DateInterval(start: .distantPast, end: .distantFuture))
+            ).map { ($0.accountID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    /// Вклад легаси-предшественников набора core-счетов на дату (реверс `LegacyConversionRegistry`).
+    /// До миграции 6b core-двойника не существовало → `accountsTotalsService.total` = 0 на домиграционных
+    /// датах, из-за чего Start строки/группы показывался 0 при живом графике. Добавляем баланс легаси-
+    /// двойника ТЕМ ЖЕ time-aware движком, что рисует скелет графика (`calculateBalanceAtDate`: archived-
+    /// счёт отдаёт реальный баланс для дат <= archivedAt, после — 0). Двойного счёта нет: конвертированный
+    /// легаси archived и в `.currentVisible`-строки не попадает.
+    private func legacyPredecessorContribution(
+        for coreAccounts: [Account],
+        on date: Date,
+        legacyByUniqueID: [String: FinanceAccount]
+    ) async -> Double {
+        var sum: Double = 0
+        for account in coreAccounts {
+            guard let legacyUniqueID = LegacyConversionRegistry.shared.legacyUniqueID(forCoreAccountID: account.id),
+                  let legacyAccount = legacyByUniqueID[legacyUniqueID] else { continue }
+            let cardIDs: Set<String> = legacyAccount.accountType == .card ? [legacyAccount.accountID] : []
+            sum += await calculateBalanceAtDate(
+                accounts: [legacyAccount], date: date,
+                accountCardIDs: cardIDs, debtAsNegative: true, includeInitialBeforeCreation: false
+            )
+        }
+        return sum
+    }
+
+    /// Core-счета для ветки `.accounts` дашборда «Динамика»: каждый счёт — отдельная строка, суммы и
+    /// дельта в валюте экрана через тот же `accountsTotalsService`, что и per-group суммы (Фаза 1.5).
+    /// Уважает выбор групп (`selectedGroupIDs`); дедуп по `id`. Список короткий — считаем последовательно.
+    private func coreAccountDynamicsItems(startDate: Date, endDate: Date) async -> [DynamicsAccountRow] {
+        let groupsToShow = state.selectedGroupIDs.isEmpty
+            ? state.groups
+            : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
+        let currency = state.displayCurrency
+
+        var seen: Set<UUID> = []
+        var coreAccounts: [Account] = []
+        for group in groupsToShow {
+            for account in financeViewModel.newCoreAccounts(matching: group) where seen.insert(account.id).inserted {
+                coreAccounts.append(account)
+            }
+        }
+        // Ungrouped core-счета (`group == nil`) не входят ни в одну группу `state.groups` (ungrouped-
+        // псевдогруппа отфильтрована в fetchGroupsFromStore при пустой легаси-связи). Добавляем отдельными
+        // строками, чтобы Total вкладки «Счета» совпадал с вкладкой «Группы» (там — Ungrouped-строка).
+        // Только когда фильтр по группам не активен (иначе показываем лишь выбранные группы).
+        if state.selectedGroupIDs.isEmpty {
+            let ungroupedProbe = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: "#FFFFFF")
+            for account in financeViewModel.newCoreAccounts(matching: ungroupedProbe) where seen.insert(account.id).inserted {
+                coreAccounts.append(account)
+            }
+        }
+        guard !coreAccounts.isEmpty else { return [] }
+
+        // Легаси-предшественники (реверс LegacyConversionRegistry): до миграции 6b core-двойника не
+        // существовало → core.total(startDate)=0 и строка показывала Start=0 при живом графике
+        // («по графику цифры были, а показывает 0»). Добавляем баланс легаси-двойника тем же движком
+        // (legacyPredecessorContribution), что и per-group строки — итог per-account идентичен
+        // комбинированному движку графика, поэтому Total (сумма строк) согласован с первой точкой серии.
+        let legacyByUniqueID = legacyAccountsByUniqueID()
+        let ungroupedName = FinanceSystemGroups.ungroupedName
+
+        var rows: [DynamicsAccountRow] = []
+        for account in coreAccounts {
+            let start = NSDecimalNumber(
+                decimal: await financeViewModel.accountsTotalsService.total(for: [account], on: startDate, in: currency)
+            ).doubleValue + (await legacyPredecessorContribution(for: [account], on: startDate, legacyByUniqueID: legacyByUniqueID))
+            let end = NSDecimalNumber(
+                decimal: await financeViewModel.accountsTotalsService.total(for: [account], on: endDate, in: currency)
+            ).doubleValue + (await legacyPredecessorContribution(for: [account], on: endDate, legacyByUniqueID: legacyByUniqueID))
+            // Знак уже заложен в total (loan/debt отрицательны) — как в ветке .groups, дельту не переворачиваем.
+            let delta = end - start
+            let item = DynamicsBreakdownItem(
+                id: account.id.uuidString,
+                name: account.name,
+                startValue: start,
+                endValue: end,
+                delta: delta,
+                deltaPercent: calculateDeltaPercent(delta: delta, startBalance: start),
+                icon: account.kind.fallbackIconName,
+                accountType: nil,
+                isCreditCard: account.kind == .loan,
+                isArchived: false
+            )
+            // Группа core-счёта (`AccountGroup`) связана с легаси `FinanceGroup` по имени — так же матчит
+            // `newCoreAccounts(matching:)`. Резолвим в `groupUniqueID`, чтобы агрегация шла по строкам
+            // state.groups. Псевдогруппу «Без группы» и нераспознанное имя нормализуем в nil (одна ungrouped-строка).
+            let coreGroupName = account.group?.name
+            let groupUniqueID: String? = {
+                guard let coreGroupName, coreGroupName != ungroupedName else { return nil }
+                return state.groups.first(where: { $0.name == coreGroupName })?.groupUniqueID
+            }()
+            rows.append(DynamicsAccountRow(item: item, groupUniqueID: groupUniqueID))
+        }
+        return rows
+    }
+
+    /// Per-account строка динамики + принадлежность к группе (`nil` → «Без группы»).
+    /// Единый промежуточный тип: вкладка «Счета» отдаёт `item` как есть, вкладка «Группы»
+    /// агрегирует те же строки по `groupUniqueID` — один расчёт, инвариант Total(Groups)==Total(Accounts).
+    private struct DynamicsAccountRow {
+        let item: DynamicsBreakdownItem
+        let groupUniqueID: String?
+    }
+
+    /// Карта легаси-счёт → группа (`accountUniqueID` → `groupUniqueID`). Псевдогруппу «Без группы»
+    /// пропускаем: её счета остаются `nil` (ungrouped) — иначе получаем две строки «Без группы».
+    private func legacyAccountGroupMap() -> [String: String] {
+        var map: [String: String] = [:]
+        let ungroupedName = FinanceSystemGroups.ungroupedName
+        for group in state.groups where group.name != ungroupedName {
+            for account in getAccounts(for: group) {
+                map[account.accountUniqueID] = group.groupUniqueID
+            }
+        }
+        return map
+    }
+
+    /// Легаси per-account строки — тот же движок, что раньше был заинлайнен в ветке `.accounts`.
+    /// Каждая строка помечается группой из `legacyAccountGroupMap`, чтобы ветка `.groups`
+    /// агрегировала эти же значения без повторного расчёта.
+    private func legacyAccountDynamicsRows(
+        accounts: [FinanceAccount],
+        startDate: Date,
+        endDate: Date
+    ) async -> [DynamicsAccountRow] {
+        let accountsData = await MainActor.run {
+            accounts.enumerated().compactMap { index, account -> (Int, String, String, String, Bool, Bool)? in
+                guard let accountInfo = self.getAccountInfoForDynamics(account: account) else {
+                    return nil
+                }
+                let accountID = account.accountUniqueID
+                let accountCardID = account.accountID
+                let isCard = account.accountType == .card
+                let isArchived = self.isAccountArchived(account)
+                return (index, accountID, accountInfo.name, accountCardID, isCard, isArchived)
+            }
+        }
+
+        var orderedItems: [Int: DynamicsBreakdownItem] = [:]
+
+        await withTaskGroup(of: (Int, DynamicsBreakdownItem?).self) { group in
+            for (index, accountUniqueID, accountName, accountCardID, isCard, isArchived) in accountsData {
+                group.addTask { @MainActor in
+                    let accountCardIDs = isCard ? Set([accountCardID]) : Set<String>()
+
+                    let currentAccounts = self.getAccountsForCalculation(scope: .currentVisible)
+                    guard let account = currentAccounts.first(where: { $0.accountUniqueID == accountUniqueID }) else {
+                        return (index, nil)
+                    }
+
+                    async let startBalanceTask = self.calculateBalanceAtDate(
+                        accounts: [account],
+                        date: startDate,
+                        accountCardIDs: accountCardIDs,
+                        debtAsNegative: false,
+                        includeInitialBeforeCreation: false
+                    )
+                    async let endBalanceTask = self.calculateBalanceAtDate(
+                        accounts: [account],
+                        date: endDate,
+                        accountCardIDs: accountCardIDs,
+                        debtAsNegative: false,
+                        includeInitialBeforeCreation: false
+                    )
+
+                    let startBalance = await startBalanceTask
+                    var endBalance = await endBalanceTask
+                    // В single-account current view endpoint совпадает с live balance
+                    if accounts.count == 1, self.state.selectedDate == nil,
+                       let liveBalance = await self.liveConvertedBalance(
+                           for: account, displayCurrency: self.state.displayCurrency, at: endDate
+                       ) {
+                        endBalance = liveBalance
+                    }
+
+                    let isCreditCard: Bool
+                    let isCredit: Bool
+                    if account.accountType == .card {
+                        if let card = self.state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
+                            isCreditCard = card.cardType == .credit
+                            isCredit = false
+                        } else {
+                            isCreditCard = false
+                            isCredit = false
+                        }
+                    } else if account.accountType == .credit {
+                        isCreditCard = false
+                        isCredit = true
+                    } else {
+                        isCreditCard = false
+                        isCredit = false
+                    }
+
+                    let rawDelta = endBalance - startBalance
+                    let delta: Double
+                    if isCreditCard || isCredit {
+                        delta = -rawDelta
+                    } else {
+                        delta = rawDelta
+                    }
+
+                    let percent = self.calculateDeltaPercent(delta: delta, startBalance: startBalance)
+
+                    guard let accountInfo = self.getAccountInfoForDynamics(account: account) else {
+                        return (index, nil)
+                    }
+
+                    return (index, DynamicsBreakdownItem(
+                        id: accountUniqueID,
+                        name: accountName,
+                        startValue: startBalance,
+                        endValue: endBalance,
+                        delta: delta,
+                        deltaPercent: percent,
+                        icon: accountInfo.icon,
+                        accountType: account.accountType,
+                        isCreditCard: isCreditCard,
+                        isArchived: isArchived
+                    ))
+                }
+            }
+
+            for await (index, item) in group {
+                if let item {
+                    orderedItems[index] = item
+                }
+            }
+        }
+
+        let groupMap = legacyAccountGroupMap()
+        return accountsData.compactMap { data -> DynamicsAccountRow? in
+            guard let item = orderedItems[data.0] else { return nil }
+            return DynamicsAccountRow(item: item, groupUniqueID: groupMap[data.1])
+        }
+    }
+
+    /// Агрегация per-account строк в строки групп. Складываем ЗНАКОВЫЕ значения (обязательства с `-abs`)
+    /// тем же правилом, что `FinanceDynamicsPresentation.signedAccountValue` применяет к заголовку «Счета» —
+    /// поэтому Total(Groups) через `totalRow(.groups)` == Total(Accounts) на любом наборе. Строк «Без группы»
+    /// ровно одна; порядок групп — как в `state.groups`.
+    private func aggregateGroupRows(
+        from rows: [DynamicsAccountRow],
+        groupsToShow: [FinanceGroup],
+        includeUngrouped: Bool
+    ) -> [DynamicsBreakdownItem] {
+        var groupStart: [String: Double] = [:]
+        var groupEnd: [String: Double] = [:]
+        var ungroupedStart = 0.0
+        var ungroupedEnd = 0.0
+        var hasUngrouped = false
+
+        for row in rows {
+            let start = FinanceDynamicsPresentation.signedAccountValue(row.item.startValue, for: row.item)
+            let end = FinanceDynamicsPresentation.signedAccountValue(row.item.endValue, for: row.item)
+            if let groupID = row.groupUniqueID {
+                groupStart[groupID, default: 0] += start
+                groupEnd[groupID, default: 0] += end
+            } else {
+                ungroupedStart += start
+                ungroupedEnd += end
+                hasUngrouped = true
+            }
+        }
+
+        var result: [DynamicsBreakdownItem] = []
+        for group in groupsToShow {
+            guard let start = groupStart[group.groupUniqueID] else { continue }
+            let end = groupEnd[group.groupUniqueID] ?? 0
+            let delta = end - start
+            result.append(DynamicsBreakdownItem(
+                id: group.groupUniqueID,
+                name: group.name,
+                startValue: start,
+                endValue: end,
+                delta: delta,
+                deltaPercent: calculateDeltaPercent(delta: delta, startBalance: start),
+                icon: nil,
+                accountType: nil,
+                isCreditCard: false,
+                isArchived: false
+            ))
+        }
+
+        if hasUngrouped, includeUngrouped {
+            let delta = ungroupedEnd - ungroupedStart
+            result.append(DynamicsBreakdownItem(
+                id: "ungrouped",
+                name: FinanceSystemGroups.ungroupedName,
+                startValue: ungroupedStart,
+                endValue: ungroupedEnd,
+                delta: delta,
+                deltaPercent: calculateDeltaPercent(delta: delta, startBalance: ungroupedStart),
+                icon: nil,
+                accountType: nil,
+                isCreditCard: false,
+                isArchived: false
+            ))
+        }
+
+        return result
+    }
+
     /// Обновить список динамики
     func updateDynamicsBreakdown() async {
         let accounts = getAccountsForCalculation(scope: .currentVisible)
@@ -1069,209 +1377,34 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let selectedAccountIDs = state.selectedAccountIDs
         let groups = state.groups
 
+        // ЕДИНЫЙ ИСТОЧНИК: per-account строки считаются один раз (легаси + core). Вкладка «Счета»
+        // отдаёт их как есть, вкладка «Группы» агрегирует те же строки по группам. Это гарантирует
+        // Total(Groups) == Total(Accounts) и устраняет тройной Ungrouped (был второй расчёт в .groups).
+        var rows = await legacyAccountDynamicsRows(accounts: accounts, startDate: startDate, endDate: endDate)
+        // Core-счета: у ядра нет legacy-`accountUniqueID`, поэтому при фильтре по конкретным легаси-счетам
+        // их не показываем (как и раньше). coreAccountDynamicsItems уважает фильтр по группам.
+        if selectedAccountIDs.isEmpty {
+            rows.append(contentsOf: await coreAccountDynamicsItems(startDate: startDate, endDate: endDate))
+        }
+
         switch viewMode {
         case .groups:
-            // Группируем по группам - вычисляем параллельно
+            // Агрегируем per-account строки по группам (никакого второго расчёта). Порядок групп — как в
+            // state.groups; Ungrouped-строка ровно одна и только когда фильтр по группам не активен.
             let groupsToShow = selectedGroupIDs.isEmpty
                 ? groups
                 : groups.filter { selectedGroupIDs.contains($0.groupUniqueID) }
-            
-            // Подготавливаем данные для групп до входа в TaskGroup
-            let groupsData = await MainActor.run {
-                groupsToShow.enumerated().compactMap { index, groupItem -> (Int, String, String, [String], [String])? in
-                    let groupAccounts = self.getAccounts(for: groupItem)
-                    let filteredAccounts = selectedAccountIDs.isEmpty
-                        ? groupAccounts
-                        : groupAccounts.filter { selectedAccountIDs.contains($0.accountUniqueID) }
-                    if filteredAccounts.isEmpty { return nil }
-                    let accountCardIDs = Set(filteredAccounts.compactMap { account -> String? in
-                        if account.accountType == .card {
-                            return account.accountID
-                        }
-                        return nil
-                    })
-                    return (
-                        index,
-                        groupItem.groupUniqueID,
-                        groupItem.name,
-                        filteredAccounts.map(\.accountUniqueID),
-                        Array(accountCardIDs)
-                    )
-                }
-            }
+            breakdown = aggregateGroupRows(
+                from: rows,
+                groupsToShow: groupsToShow,
+                includeUngrouped: selectedGroupIDs.isEmpty
+            )
 
-            var orderedItems: [Int: DynamicsBreakdownItem] = [:]
-
-            await withTaskGroup(of: (Int, DynamicsBreakdownItem?).self) { group in
-                for (index, groupID, groupName, accountIDs, accountCardIDsArray) in groupsData {
-                    group.addTask { @MainActor in
-                        guard let groupItem = self.state.groups.first(where: { $0.groupUniqueID == groupID }) else {
-                            return (index, nil)
-                        }
-
-                        let filteredAccounts = self
-                            .getAccounts(for: groupItem)
-                            .filter { accountIDs.contains($0.accountUniqueID) }
-                        guard !filteredAccounts.isEmpty else {
-                            return (index, nil)
-                        }
-                        let accountCardIDs = Set(accountCardIDsArray)
-
-                        async let startBalanceTask = self.calculateBalanceAtDate(
-                            accounts: filteredAccounts,
-                            date: startDate,
-                            accountCardIDs: accountCardIDs,
-                            debtAsNegative: true,
-                            includeInitialBeforeCreation: false
-                        )
-                        async let endBalanceTask = self.calculateBalanceAtDate(
-                            accounts: filteredAccounts,
-                            date: endDate,
-                            accountCardIDs: accountCardIDs,
-                            debtAsNegative: true,
-                            includeInitialBeforeCreation: false
-                        )
-                        
-                        let startBalance = await startBalanceTask
-                        let endBalance = await endBalanceTask
-                        
-                        // Для групп считаем чистый баланс (долги учитываем со знаком минус)
-                        let delta = endBalance - startBalance
-                        let percent = self.calculateDeltaPercent(delta: delta, startBalance: startBalance)
-
-                        return (index, DynamicsBreakdownItem(
-                            id: groupID,
-                            name: groupName,
-                            startValue: startBalance,
-                            endValue: endBalance,
-                            delta: delta,
-                            deltaPercent: percent,
-                            icon: nil,
-                            accountType: nil,
-                            isCreditCard: false,
-                            isArchived: false
-                        ))
-                    }
-                }
-
-                for await (index, item) in group {
-                    if let item {
-                        orderedItems[index] = item
-                    }
-                }
-            }
-
-            breakdown = groupsData.compactMap { orderedItems[$0.0] }
-            
         case .accounts:
-            // Показываем каждый счет отдельно - вычисляем параллельно
-            let accountsData = await MainActor.run {
-                accounts.enumerated().compactMap { index, account -> (Int, String, String, String, Bool, Bool)? in
-                    guard let accountInfo = self.getAccountInfoForDynamics(account: account) else {
-                        return nil
-                    }
-                    let accountID = account.accountUniqueID
-                    let accountCardID = account.accountID
-                    let isCard = account.accountType == .card
-                    let isArchived = self.isAccountArchived(account)
-                    return (index, accountID, accountInfo.name, accountCardID, isCard, isArchived)
-                }
-            }
-
-            var orderedItems: [Int: DynamicsBreakdownItem] = [:]
-
-            await withTaskGroup(of: (Int, DynamicsBreakdownItem?).self) { group in
-                for (index, accountUniqueID, accountName, accountCardID, isCard, isArchived) in accountsData {
-                    group.addTask { @MainActor in
-                        let accountCardIDs = isCard ? Set([accountCardID]) : Set<String>()
-
-                        let currentAccounts = self.getAccountsForCalculation(scope: .currentVisible)
-                        guard let account = currentAccounts.first(where: { $0.accountUniqueID == accountUniqueID }) else {
-                            return (index, nil)
-                        }
-
-                        async let startBalanceTask = self.calculateBalanceAtDate(
-                            accounts: [account],
-                            date: startDate,
-                            accountCardIDs: accountCardIDs,
-                            debtAsNegative: false,
-                            includeInitialBeforeCreation: false
-                        )
-                        async let endBalanceTask = self.calculateBalanceAtDate(
-                            accounts: [account],
-                            date: endDate,
-                            accountCardIDs: accountCardIDs,
-                            debtAsNegative: false,
-                            includeInitialBeforeCreation: false
-                        )
-                        
-                        let startBalance = await startBalanceTask
-                        var endBalance = await endBalanceTask
-                        // В single-account current view endpoint совпадает с live balance
-                        if accounts.count == 1, self.state.selectedDate == nil,
-                           let liveBalance = await self.liveConvertedBalance(
-                               for: account, displayCurrency: self.state.displayCurrency, at: endDate
-                           ) {
-                            endBalance = liveBalance
-                        }
-
-                        let isCreditCard: Bool
-                        let isCredit: Bool
-                        if account.accountType == .card {
-                            if let card = self.state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
-                                isCreditCard = card.cardType == .credit
-                                isCredit = false
-                            } else {
-                                isCreditCard = false
-                                isCredit = false
-                            }
-                        } else if account.accountType == .credit {
-                            isCreditCard = false
-                            isCredit = true
-                        } else {
-                            isCreditCard = false
-                            isCredit = false
-                        }
-
-                        let rawDelta = endBalance - startBalance
-                        let delta: Double
-                        if isCreditCard || isCredit {
-                            delta = -rawDelta
-                        } else {
-                            delta = rawDelta
-                        }
-
-                        let percent = self.calculateDeltaPercent(delta: delta, startBalance: startBalance)
-
-                        guard let accountInfo = self.getAccountInfoForDynamics(account: account) else {
-                            return (index, nil)
-                        }
-
-                        return (index, DynamicsBreakdownItem(
-                            id: accountUniqueID,
-                            name: accountName,
-                            startValue: startBalance,
-                            endValue: endBalance,
-                            delta: delta,
-                            deltaPercent: percent,
-                            icon: accountInfo.icon,
-                            accountType: account.accountType,
-                            isCreditCard: isCreditCard,
-                            isArchived: isArchived
-                        ))
-                    }
-                }
-
-                for await (index, item) in group {
-                    if let item {
-                        orderedItems[index] = item
-                    }
-                }
-            }
-
-            breakdown = accountsData.compactMap { orderedItems[$0.0] }
+            // Каждый счёт отдельной строкой — те же per-account строки, что агрегирует ветка .groups.
+            breakdown = rows.map(\.item)
         }
-        
+
         await MainActor.run {
             state.dynamicsBreakdown = breakdown
         }
@@ -1328,13 +1461,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 debtAsNegative: useNetTotals,
                 liveEndBalance: liveEndBalanceAggr
             )
-            // Вклад нового ядра event-sourcing (Фаза 1a-ui, AC3) — только для агрегированного
+            // Вклад ядра event-sourcing (6b Фаза 2b, single-world) — только для агрегированного
             // "тотал-графика"; в byAccounts/singleAccount новые счета появятся в 1b вместе с
-            // переносом их выбора в общий список счетов Dynamics.
-            let newCoreSeries = await financeViewModel.accountsTotalsService.seriesBetween(
-                start: period.start, end: period.end, currency: state.displayCurrency
-            )
-            chartData = ChartDataPoint.mergingNewCoreSeries(chartData, newCoreSeries: newCoreSeries)
+            // переносом их выбора в общий список счетов Dynamics. Снесён dual-path
+            // (`mergingNewCoreSeries` + отдельный дневной `seriesBetween`-ряд с forward-fill
+            // приближением): точный запрос ядра НА ТЕ ЖЕ даты легаси-скелета, без промежуточного
+            // массива/эвристики совпадения дат.
+            chartData = await addingCoreContribution(chartData, currency: state.displayCurrency)
             guard isCurrentChartUpdateRevision(revision) else { return }
             state.chartData = chartData
 
@@ -1383,6 +1516,31 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
     }
     
+    /// 6b Фаза 2b (single-world): добавляет вклад ядра event-sourcing в каждую точку легаси-
+    /// скелета НА ТУ ЖЕ дату — точный запрос через `AccountsTotalsService.totalAt`, без
+    /// промежуточного дневного ряда и forward-fill приближения (замена снесённому
+    /// `ChartDataPoint.mergingNewCoreSeries`). Легаси-скелет (`points`, из `buildTimeSeriesData`)
+    /// остаётся источником ДОмиграционной истории — он уже time-aware (архивные счета отдают
+    /// реальный баланс только для дат `<= archivedAt`), поэтому на датах до миграции ядро
+    /// добавляет 0 (двойника ещё нет), а после миграции легаси даёт 0 (скрыт) и добавляется
+    /// ядро — итог идентичен прежнему dual-path, но без риска рассинхрона дат между двумя
+    /// независимо построенными рядами. Известное MVP-ограничение (opening-balance датой
+    /// миграции, искажение дельты на границе, см. план 6b §Ф2) не усугубляется и не устраняется —
+    /// это тот же compromise, просто без лишнего слоя приближённого слияния.
+    /// No-op на пустых `points` (нечего дополнять) — это тот же пробел «1b» (core-only счета ещё
+    /// не участвуют в списке счетов Dynamics), не регрессия этой фазы.
+    private func addingCoreContribution(_ points: [ChartDataPoint], currency: String) async -> [ChartDataPoint] {
+        guard !points.isEmpty else { return points }
+        var result: [ChartDataPoint] = []
+        result.reserveCapacity(points.count)
+        for point in points {
+            let coreValue = await financeViewModel.accountsTotalsService.totalAt(point.date, in: currency)
+            let addition = NSDecimalNumber(decimal: coreValue).doubleValue
+            result.append(ChartDataPoint(date: point.date, value: point.value + addition, label: point.label))
+        }
+        return result
+    }
+
     /// Построить временной ряд данных для графика
     func buildTimeSeriesData(
         accounts: [FinanceAccount],
@@ -1814,7 +1972,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
-                guard AccountTotalPolicy.isActive(
+                guard Self.isLegacyActiveInTotal(
                     includeInTotal: card.includeInTotal,
                     archivedAt: card.archivedAt,
                     at: date
@@ -1956,7 +2114,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
-                guard AccountTotalPolicy.isActive(
+                guard Self.isLegacyActiveInTotal(
                     includeInTotal: credit.includeInTotal,
                     archivedAt: credit.archivedAt,
                     at: date
@@ -1982,7 +2140,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                                 to: state.displayCurrency,
                                 at: date
                             )
-                            totalBalance += AccountTotalPolicy.signedContribution(
+                            totalBalance += Self.signedLegacyContribution(
                                 converted,
                                 isLiability: isLiabilityAccount(account),
                                 debtAsNegative: debtAsNegative
@@ -2005,7 +2163,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
-                guard AccountTotalPolicy.isActive(
+                guard Self.isLegacyActiveInTotal(
                     includeInTotal: investment.includeInTotal,
                     archivedAt: investment.archivedAt,
                     at: date
@@ -2100,7 +2258,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     to: state.displayCurrency,
                     at: date
                 )
-                totalBalance += AccountTotalPolicy.signedContribution(
+                totalBalance += Self.signedLegacyContribution(
                     converted,
                     isLiability: isLiabilityAccount(account),
                     debtAsNegative: debtAsNegative
@@ -2177,6 +2335,22 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         case .investment:
             return false
         }
+    }
+
+    // MARK: - Участие легаси-счёта на дату (инлайн бывшего AccountTotalPolicy, снесён в 6b Фазе 2)
+
+    /// Включён флагом И не архивирован строго до `date` (time-aware: точки истории ДО архивации
+    /// по-прежнему включают счёт). Легаси-реплей `calculateBalanceAtDate` остаётся до сноса легаси.
+    private static func isLegacyActiveInTotal(includeInTotal: Bool, archivedAt: Date?, at date: Date) -> Bool {
+        guard includeInTotal else { return false }
+        if let archivedAt, date > archivedAt { return false }
+        return true
+    }
+
+    /// Знак обязательства для net-вклада; при `debtAsNegative == false` — величина как есть.
+    private static func signedLegacyContribution(_ amount: Double, isLiability: Bool, debtAsNegative: Bool) -> Double {
+        guard debtAsNegative, isLiability else { return amount }
+        return -abs(amount)
     }
 
     private func adjustDeltaForSingleAccountIfNeeded(

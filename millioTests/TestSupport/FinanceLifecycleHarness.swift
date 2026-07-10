@@ -229,36 +229,6 @@ final class FinanceLifecycleHarness {
         return investment
     }
 
-    func executeInvestmentOrder(
-        investmentID: String,
-        side: InvestmentOrderSide,
-        quantity: Double,
-        unitPrice: Double,
-        funding: InvestmentOrderFunding
-    ) async throws {
-        guard let account = financeAccount(for: investmentID, type: .investment) else {
-            Issue.record("Expected finance account for investment \(investmentID)")
-            throw HarnessError.missingAccount
-        }
-        financeViewModel.handle(.executeInvestmentOrder(
-            account: account,
-            side: side,
-            quantity: quantity,
-            unitPrice: unitPrice,
-            funding: funding
-        ))
-        // Wait until transactions are loaded AND history reflects the position change.
-        // Waiting for state.transactions alone is insufficient: old ViewModels kept alive
-        // by retain cycles may fire loadTransactions() and transiently clear filteredTransactions
-        // between the moment transactions appears non-empty and when historyTransactions() is called.
-        try await waitUntil {
-            !self.cashflowViewModel.state.transactions.isEmpty
-                && !self.cashflowViewModel.historyTransactions(
-                    matching: CashflowHistoryQuery(typeFilter: .all)
-                ).isEmpty
-        }
-    }
-
     @discardableResult
     func persistExpense(cardID: String, amount: Double, affectsBalance: Bool = true) async throws -> CashflowTransaction {
         let expense = CashflowTransaction(

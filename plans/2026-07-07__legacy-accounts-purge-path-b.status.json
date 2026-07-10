@@ -1,14 +1,78 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-08T00:00:00Z",
+  "updated": "2026-07-10T19:40:00Z",
   "phases": [
-    { "name": "Ф1 — миграционный слой + вайринг старта", "status": "done", "note": "LegacyAccountsMigrator, 11 тестов, 0 новых красных; ветка не мержена" },
-    { "name": "Ф2 — read-switch single-world + снос AccountTotalPolicy", "status": "pending", "note": null },
-    { "name": "Ф3 — живые писатели (StockBulkImport, ScreenshotSeeder)", "status": "pending", "note": null },
-    { "name": "Ф4 — упрощение мостов + снос редакторов/VM/менеджеров", "status": "pending", "note": null },
-    { "name": "Ф5 — снос регистрации, схема V6, @Model-файлы", "status": "pending", "note": "device stress-test + бэкап обязательны" },
-    { "name": "Ф6 — редизайн экрана Счета (после сноса)", "status": "pending", "note": null }
+    {
+      "name": "Ф1 — миграционный слой + вайринг старта",
+      "status": "done",
+      "note": "LegacyAccountsMigrator, 11 тестов, 0 новых красных; ветка не мержена"
+    },
+    {
+      "name": "Ф1.5 — слияние моделей групп FinanceGroup↔AccountGroup",
+      "status": "done",
+      "note": "e90c1a3 + фикс адверс-ревью 369c57c (маркер в backup/restore, дубли имён логируются); build ок; Release-билд на симуляторе 26.5; НЕ мержено. ✅ GroupsMigratorTests container-retention баг (найден 2026-07-10 через xcresulttool, ложный ✔ в текстовом summary xcodebuild) исправлен другим агентом (3a81230)"
+    },
+    {
+      "name": "Ф2 — агрегат тотала single-world + снос AccountTotalPolicy (scoped)",
+      "status": "done",
+      "note": "80ad7cc + фикс адверс-ревью (transient «баланс≈0» на первом запуске — миграция перенесена до .ready в millioApp.swift, вариант (а)): calculateTotalsSnapshot core-only + заголовок Динамики получил ядро (закрыт gap unified-totals Ф4); AccountTotalPolicy снесён (инлайн); AC1/AC2 + LegacyMigrationOrderingTests (2) тесты, 3 FinanceViewModelTests мигрированы; build ок, релевантные сьюты 0 новых красных (проверено через xcresulttool ground truth); НЕ мержено"
+    },
+    {
+      "name": "Ф2b — снос dual-path mergingNewCoreSeries, единый core-ряд графика",
+      "status": "done",
+      "note": "49fe371: ChartDataPoint.mergingNewCoreSeries снесён, замена addingCoreContribution (точный totalAt на даты легаси-скелета, не forward-fill); буквальный «core-only seriesBetween» отвергнут (стёр бы реальную легаси-историю — хуже MVP-ограничения); 45 protected Dynamics-тестов не тронуты, ChartDataPointMergeTests удалён, новый FinanceDynamicsCoreContributionTests (2); гейты только xcresulttool: 45/45 + 2/2 + полный сьют 15 failed = 100% baseline; НЕ мержено"
+    },
+    {
+      "name": "Ф2c — остаток read-слоя (FinanceRows/orderedAccounts, VM.calculateGroupTotal, per-account Dynamics «1b»)",
+      "status": "pending",
+      "note": "переименовано из Ф2b после реализации пункта (а) отдельно; орфанит Ф4-код + нужен device stress-test"
+    },
+    {
+      "name": "Ф3 — живые писатели (StockBulkImport, ScreenshotSeeder) + create-views (не мёртвые!)",
+      "status": "done",
+      "note": "52fff71: StockBulkImportServices на AccountsCoreService (scoped). ScreenshotDataSeeder — доказанный блокер (Cashback→легаси Card), эскалирован владельцу. FinanceCreateViews — подтверждён мёртвым (Ф4). InlineCreateForms — не писатель (DTO без insert), рефакторинг типов в Ф4. Build ок, 22 failed = 16 baseline + 1 LanguageManager + 5 нового UserDefaults-flaky (задокументирован), 0 новых от диффа"
+    },
+    {
+      "name": "Ф4 — упрощение мостов + снос редакторов/VM/менеджеров (scoped)",
+      "status": "done",
+      "note": "5221736: снос доказанно-мёртвой легаси-редактор-поверхности (CardEditorView/CreditEditorView/InvestmentEditorView + FinanceEditViews/FinanceEditorWrappers/FinanceCreateViews + осиротевший тест + мёртвая обвязка FinanceViewModel/FinancesSheets, −3054 строк). DepositCashflowBridge верифицирован чистым. Escalation (доказано грепом→Ф5): гуарды isEditingLegacy живые (легаси-EDIT-путь FinanceAddAccountView через FinanceDynamicsView), CashflowBridge легаси-ветки несущие (историч. tx на легаси-ID, Card жив до Ф5), CardCatalog/CardManager/FinanceAccountService/FinanceInvestmentOrderService живут в God-VM/Cashback, легаси-VM+InlineCreateForms трогают живой экран. Cashback-узел (AC4): сквозная зависимость фичи от Card → выделенная миграция; остаточный блокер Card.swift (рекомендация б), решение владельца. Build ок, 1709 passed/26 failed = baseline/flaky (вкл. новый order-flaky GroupsMigratorTests.duplicateLegacyGroupNames — не Ф4), 0 новых красных (xcresulttool). НЕ мержено"
+    },
+    {
+      "name": "Ф5a — Cashflow: пикер cash-подобных инвестиций → ядро, ремап cardID/investmentID, снос мёртвых инвест-ордеров",
+      "status": "done",
+      "note": "7d5e906: LegacyAccountConversion — isCashflowAccount Investment → .bankAccount (не .manualAsset), попадает в пикер Cashflow. LegacyAccountsMigrator.remapCashflowHistory() — cardID/toCardID/investmentID легаси→core UUID (только денежные kind). FinanceInvestmentOrderService.swift + tradeSheet/marketInvestmentDetailsView в FinanceDynamicsView + FinanceTradeCelebration* снесены целиком (grep-доказанная мёртвость: getMarketInvestment фильтрует archivedAt, недостижимо после Ф1-миграции — портирование заменено делецией). Build SUCCEEDED. НЕ мержено"
+    },
+    {
+      "name": "Ф5b — Cashback: ремап cardIDs + фикс backup-import (scoped)",
+      "status": "done",
+      "note": "c7ef57a: remapCashbackCardIDs() в LegacyAccountsMigrator (переиспользует remappedCashLikeAccountID). CashbackImporter — валидация cardIDs расширена на core Account.id (была строго Card, иначе restore пост-ремап всегда падал бы backupCorrupted). Build SUCCEEDED. Эскалировано: пикер Cashback (CardManager/CashbackViewModel/CashbackView ~2367 строк) остаётся легаси-only — новая абстракция уровня CashflowSelectableAccount не построена (это НОВАЯ фича, не порт). cleanInvalidCardIDs не триггерит на пустом availableCards — ремап не создаёт риска. НЕ мержено"
+    },
+    {
+      "name": "Ф5c — снос регистрации, схема V6, @Model-файлы (вкл. FinanceGroup.swift)",
+      "status": "blocked",
+      "note": "НЕ НАЧАТА — остановлено ментором после Ф5a/5b: свежий grep показал 76 файлов ещё ссылаются на легаси-типы (CashbackView/ViewModel ~3500 строк, CardViewModel/CreditViewModel/InvestmentViewModel живы через EDIT-путь, FinanceAccountService 11 живых сайтов, CardCatalog/CardManager, FinanceInvestmentOrderService-класса живых мостов, MarketData/ScopeMerge/DataIntegrityCleaner/DataResetService/SheetsDataMapper/TotalBalanceWidget/RateSourcePickerView/SheetsConnectionView, InlineCreateForms DTO-рефактор, isEditingLegacy guard removal). Объём — это отдельный L-Bulletproof, не остаток одного захода поверх Ф5a/5b. Требуется декомпозиция на под-фазы с device-тестами на каждой (Cashback-порт, CardViewModel/CreditViewModel/InvestmentViewModel-снос, Core-файлы, финальная схема+модели)."
+    },
+    {
+      "name": "Багфиксы по ручной проверке владельца (Ф1–Ф5b)",
+      "status": "done",
+      "note": "350a190+2fa8b7a: карточка баланса Счетов, Динамика→Accounts, Cashflow активы — все три подключены к ядру; 800M на графике = документированное ограничение Ф2, не баг; гейт 1700/15 = 0 новых; Release проверен визуально на симуляторе 26.2. НЕ мержено"
+    },
+    {
+      "name": "Раунд 2: мерж develop (Ф3 add-flow) + старты Динамики",
+      "status": "done",
+      "note": "c7ee0e1: develop→ветка (Ф3 unified add-flow вернулся, конфликт только xcstrings; net-new красная testPlannedExpenseAutoApplies — легаси-кластер, в baseline) + 07f958c: старты строк/Total из легаси-предшественника (реверс LegacyConversionRegistry). Гейт 1718/15 = 0 новых; Release 26.2 проверен визуально. НЕ пушено"
+    },
+    {
+      "name": "Раунды 3–4: единый источник Динамики (Groups = агрегация per-account)",
+      "status": "done",
+      "note": "fbf4029: per-account строки один раз, .groups = aggregateGroupRows тех же строк, одна Ungrouped, единый знак (signedAccountValue), инвариант-тест Total(Groups)==Total(Accounts); −277 строк двойного расчёта. Гейт 1759/13 = 0 новых; визуально тоталы вкладок идентичны (3 594 478 → 9 556 765). НЕ пушено"
+    },
+    {
+      "name": "Ф6 — редизайн экрана Счета (после сноса)",
+      "status": "pending",
+      "note": "+ кастомные иконки групп (customIconName), решение владельца 2026-07-09"
+    }
   ],
   "costUsd": null,
   "etaMinutes": null

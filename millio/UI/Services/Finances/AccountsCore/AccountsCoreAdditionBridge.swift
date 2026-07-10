@@ -58,8 +58,10 @@ enum AccountsCoreAdditionBridge {
     }
 
     /// Находит `AccountGroup` с тем же именем, что у выбранной `FinanceGroup`, либо создаёт новую.
-    /// ВРЕМЕННЫЙ мэппинг по имени (до Фазы 6, когда группы старого/нового мира объединятся в одну
-    /// сущность) — см. спеку §2.7 и план, раздел «Фаза 6». `nil` (счёт без группы = Ungrouped)
+    /// Мэппинг по имени (`AccountGroup` — канон после Фазы 1.5 плана 6b «Путь B»). Перенос остальных
+    /// полей (`isFavorite`/`usesManualAccountOrdering`/`priorityRaw`/`displayCurrency`/`order`) с легаси-
+    /// группы выполняет одноразовый `GroupsMigrator` при старте — здесь только резолвит/создаёт по имени
+    /// и переносит `colorHex` для только что созданной группы. `nil` (счёт без группы = Ungrouped)
     /// не создаёт AccountGroup — совпадает с семантикой Ungrouped нового ядра (`account.group == nil`).
     static func resolveAccountGroup(matching financeGroup: FinanceGroup?, in modelContext: ModelContext) -> AccountGroup? {
         guard let financeGroup else { return nil }

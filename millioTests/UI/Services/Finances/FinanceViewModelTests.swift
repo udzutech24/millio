@@ -824,30 +824,17 @@ struct FinanceViewModelTests {
 
     @Test("Пересчет общей суммы не делает принудительный refresh курсов")
     func testCalculateTotalAmountDoesNotForceRefreshRates() async throws {
-        let modelContext = try createTestModelContext()
-
-        let group = FinanceGroup(name: "Мультивалюта", colorHex: "#00AAFF")
-        group.displayCurrency = "RUB"
-        modelContext.insert(group)
-
-        let cardUSD = Card(
-            name: "USD карта",
-            cardNumber: "1001",
-            bank: .tinkoff,
-            cardType: .debit,
-            currency: "USD",
-            balance: 10.0
-        )
-        cardUSD.includeInTotal = true
-        modelContext.insert(cardUSD)
-
-        let accountUSD = FinanceAccount(accountType: .card, accountID: cardUSD.cardUniqueID)
-        accountUSD.group = group
-        modelContext.insert(accountUSD)
-        try modelContext.save()
+        // 6b Фаза 2 (single-world): агрегат «Общий баланс» считается по ЯДРУ (`AccountsTotalsService`),
+        // поэтому фикстура — core-счёт (USD), а не легаси-карта. Инвариант теста тот же: конвертация
+        // не должна триггерить force-refresh курсов.
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let modelContext = container.mainContext
 
         let mockRateService = MockCurrencyRateService()
         mockRateService.setRate(from: "USD", to: "RUB", rate: 100.0)
+
+        let coreService = AccountsCoreService(modelContext: modelContext)
+        _ = try coreService.createAccount(name: "USD счёт", kind: .debitCard, currency: "USD", openingBalance: 10)
 
         let viewModel = FinanceViewModel(
             modelContext: modelContext,
@@ -859,6 +846,7 @@ struct FinanceViewModelTests {
 
         await viewModel.calculateTotalAmountAsync()
 
+        // 10 USD × 100 = 1000 RUB (валюта экрана по умолчанию — RUB).
         #expect(mockRateService.forceRefreshCallCount == 0)
         #expect(abs(viewModel.state.totalAmount - 1000.0) < 0.01)
     }
@@ -1179,315 +1167,6 @@ struct FinanceViewModelTests {
         #expect(transaction.exchangeRate == 1.0)
         #expect(transaction.exchangeRateCurrency == "USD")
         #expect(transaction.exchangeRateDate != nil)
-    }
-
-    @Test("Покупка и продажа рыночной инвестиции через executeInvestmentOrder обновляет cost basis и транзакции")
-    func testExecuteInvestmentOrderBuySell() throws {
-        let modelContext = try createTestModelContext()
-
-        let group = FinanceGroup(name: "Акции", colorHex: "#3366FF")
-        modelContext.insert(group)
-
-        let investment = Investment(
-            name: "AAPL",
-            investmentType: .positive,
-            category: .stocks,
-            amount: 1000,
-            currency: "USD"
-        )
-        investment.marketQuantity = 10
-        investment.lastKnownUnitPrice = 100
-        investment.averagePurchaseUnitPrice = 100
-        investment.totalPurchaseCost = 1000
-        investment.includeInTotal = true
-        modelContext.insert(investment)
-
-        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-        account.group = group
-        modelContext.insert(account)
-        try modelContext.save()
-
-        let viewModel = FinanceViewModel(
-            modelContext: modelContext,
-            currencyService: MockCurrencyRateService(),
-            skipInitialLoad: true
-        )
-        viewModel.handle(.loadGroups)
-        viewModel.handle(.loadAccounts)
-
-        viewModel.handle(.executeInvestmentOrder(
-            account: account,
-            side: .buy,
-            quantity: 10,
-            unitPrice: 200,
-            funding: .ignored
-        ))
-
-        #expect(abs((investment.marketQuantity ?? 0) - 20) < 0.0001)
-        #expect(abs((investment.averagePurchaseUnitPrice ?? 0) - 150) < 0.0001)
-        #expect(abs((investment.totalPurchaseCost ?? 0) - 3000) < 0.0001)
-        #expect(abs(investment.amount - 4000) < 0.01)
-        #expect(viewModel.state.tradeCelebration?.side == .buy)
-        #expect(viewModel.state.tradeCelebration?.investmentName == "AAPL")
-        #expect(abs((viewModel.state.tradeCelebration?.totalAmount ?? 0) - 2000) < 0.01)
-        #expect(viewModel.state.tradeCelebration?.currency == "USD")
-
-        viewModel.handle(.clearTradeCelebration)
-        #expect(viewModel.state.tradeCelebration == nil)
-
-        viewModel.handle(.executeInvestmentOrder(
-            account: account,
-            side: .sell,
-            quantity: 5,
-            unitPrice: 220,
-            funding: .ignored
-        ))
-
-        #expect(abs((investment.marketQuantity ?? 0) - 15) < 0.0001)
-        #expect(abs((investment.averagePurchaseUnitPrice ?? 0) - 150) < 0.0001)
-        #expect(abs((investment.totalPurchaseCost ?? 0) - 2250) < 0.0001)
-        #expect(abs(investment.amount - 3300) < 0.01)
-        #expect(viewModel.state.tradeCelebration?.side == .sell)
-        #expect(abs((viewModel.state.tradeCelebration?.totalAmount ?? 0) - 1100) < 0.01)
-
-        let descriptor = FetchDescriptor<CashflowTransaction>()
-        let transactions = try modelContext.fetch(descriptor)
-        #expect(transactions.count == 2)
-    }
-
-    @Test("executeInvestmentOrder списывает и зачисляет деньги только на карту в валюте инвестиции")
-    func testExecuteInvestmentOrderUpdatesSettlementCard() throws {
-        let modelContext = try createTestModelContext()
-
-        let group = FinanceGroup(name: "Акции", colorHex: "#3366FF")
-        modelContext.insert(group)
-
-        let usdCard = Card(
-            name: "USD Card",
-            cardNumber: "1111",
-            bank: .other,
-            cardType: .debit,
-            currency: "USD",
-            balance: 5_000
-        )
-        let rubCard = Card(
-            name: "RUB Card",
-            cardNumber: "2222",
-            bank: .other,
-            cardType: .debit,
-            currency: "RUB",
-            balance: 1_000
-        )
-        modelContext.insert(usdCard)
-        modelContext.insert(rubCard)
-
-        let investment = Investment(
-            name: "AAPL",
-            investmentType: .positive,
-            category: .stocks,
-            amount: 1_000,
-            currency: "USD"
-        )
-        investment.marketQuantity = 10
-        investment.lastKnownUnitPrice = 100
-        investment.averagePurchaseUnitPrice = 100
-        investment.totalPurchaseCost = 1_000
-        modelContext.insert(investment)
-
-        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-        account.group = group
-        modelContext.insert(account)
-        try modelContext.save()
-
-        let viewModel = FinanceViewModel(
-            modelContext: modelContext,
-            currencyService: MockCurrencyRateService(),
-            skipInitialLoad: true
-        )
-        viewModel.handle(.loadGroups)
-        viewModel.handle(.loadAccounts)
-
-        viewModel.handle(.executeInvestmentOrder(
-            account: account,
-            side: .buy,
-            quantity: 5,
-            unitPrice: 200,
-            funding: InvestmentOrderFunding(
-                settlementAccountKind: .card(cardID: usdCard.cardUniqueID),
-                shouldAffectCardBalance: true
-            )
-        ))
-
-        #expect(abs(usdCard.balance - 4_000) < 0.01)
-        #expect(abs(rubCard.balance - 1_000) < 0.01)
-
-        viewModel.handle(.executeInvestmentOrder(
-            account: account,
-            side: .sell,
-            quantity: 2,
-            unitPrice: 250,
-            funding: InvestmentOrderFunding(
-                settlementAccountKind: .card(cardID: usdCard.cardUniqueID),
-                shouldAffectCardBalance: true
-            )
-        ))
-
-        #expect(abs(usdCard.balance - 4_500) < 0.01)
-
-        let transactions = try modelContext.fetch(FetchDescriptor<CashflowTransaction>())
-        #expect(transactions.count == 4)
-        #expect(transactions.filter { $0.cardID == usdCard.cardUniqueID }.count == 2)
-        #expect(transactions.filter { $0.investmentID == investment.investmentUniqueID }.count == 4)
-    }
-
-    @Test("eligibleSettlementAccounts возвращает карты и cash-счета в валюте инвестиции")
-    func testEligibleSettlementAccountsFiltersByCurrency() {
-        let usdCard = Card(name: "USD", cardNumber: "1111", currency: "USD", balance: 100)
-        let archivedUsdCard = Card(name: "Archived USD", cardNumber: "2222", currency: "USD", balance: 50)
-        archivedUsdCard.archivedAt = Date()
-        let eurCard = Card(name: "EUR", cardNumber: "3333", currency: "EUR", balance: 75)
-        let usdCashAccount = Investment(
-            name: "USD Cash",
-            investmentType: .positive,
-            category: .other,
-            amount: 200,
-            currency: "USD"
-        )
-        let marketInvestment = Investment(
-            name: "SPY",
-            investmentType: .positive,
-            category: .stocks,
-            amount: 300,
-            currency: "USD"
-        )
-
-        let result = FinanceViewModel.eligibleSettlementAccounts(
-            cards: [usdCard, archivedUsdCard, eurCard],
-            investments: [usdCashAccount, marketInvestment],
-            investmentCurrency: "USD",
-            excludingInvestmentID: marketInvestment.investmentUniqueID
-        )
-
-        #expect(result.count == 2)
-        #expect(result.contains(where: { $0.kind == .card(cardID: usdCard.cardUniqueID) }))
-        #expect(result.contains(where: { $0.kind == .investment(investmentID: usdCashAccount.investmentUniqueID) }))
-    }
-
-    @Test("executeInvestmentOrder поддерживает cash-счет как источник сделки")
-    func testExecuteInvestmentOrderUpdatesSettlementInvestmentAccount() throws {
-        let modelContext = try createTestModelContext()
-
-        let group = FinanceGroup(name: "Акции", colorHex: "#3366FF")
-        modelContext.insert(group)
-
-        let settlementInvestment = Investment(
-            name: "USD Cash",
-            investmentType: .positive,
-            category: .other,
-            amount: 2_000,
-            currency: "USD"
-        )
-        modelContext.insert(settlementInvestment)
-
-        let investment = Investment(
-            name: "AAPL",
-            investmentType: .positive,
-            category: .stocks,
-            amount: 1_000,
-            currency: "USD"
-        )
-        investment.marketQuantity = 10
-        investment.lastKnownUnitPrice = 100
-        investment.averagePurchaseUnitPrice = 100
-        investment.totalPurchaseCost = 1_000
-        modelContext.insert(investment)
-
-        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-        account.group = group
-        modelContext.insert(account)
-        try modelContext.save()
-
-        let viewModel = FinanceViewModel(
-            modelContext: modelContext,
-            currencyService: MockCurrencyRateService(),
-            skipInitialLoad: true
-        )
-        viewModel.handle(.loadGroups)
-        viewModel.handle(.loadAccounts)
-
-        viewModel.handle(.executeInvestmentOrder(
-            account: account,
-            side: .buy,
-            quantity: 2,
-            unitPrice: 250,
-            funding: InvestmentOrderFunding(
-                settlementAccountKind: .investment(investmentID: settlementInvestment.investmentUniqueID),
-                shouldAffectCardBalance: true
-            )
-        ))
-
-        #expect(abs(settlementInvestment.amount - 1_500) < 0.01)
-    }
-
-    @Test("executeInvestmentOrder использует инжектированное now для дат сделки")
-    func testExecuteInvestmentOrderUsesInjectedNowForTransactionDates() throws {
-        let modelContext = try createTestModelContext()
-        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 18, hour: 16, minute: 30)) ?? Date()
-
-        let group = FinanceGroup(name: "Акции", colorHex: "#3366FF")
-        modelContext.insert(group)
-
-        let usdCard = Card(
-            name: "USD Card",
-            cardNumber: "1111",
-            bank: .other,
-            cardType: .debit,
-            currency: "USD",
-            balance: 5_000
-        )
-        modelContext.insert(usdCard)
-
-        let investment = Investment(
-            name: "SPY",
-            investmentType: .positive,
-            category: .stocks,
-            amount: 1_700,
-            currency: "USD"
-        )
-        investment.marketQuantity = 17
-        investment.lastKnownUnitPrice = 100
-        investment.averagePurchaseUnitPrice = 100
-        investment.totalPurchaseCost = 1_700
-        modelContext.insert(investment)
-
-        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-        account.group = group
-        modelContext.insert(account)
-        try modelContext.save()
-
-        let viewModel = FinanceViewModel(
-            modelContext: modelContext,
-            currencyService: MockCurrencyRateService(),
-            now: { fixedNow },
-            skipInitialLoad: true
-        )
-        viewModel.handle(.loadGroups)
-        viewModel.handle(.loadAccounts)
-
-        viewModel.handle(.executeInvestmentOrder(
-            account: account,
-            side: .buy,
-            quantity: 1,
-            unitPrice: 100,
-            funding: InvestmentOrderFunding(
-                settlementAccountKind: .card(cardID: usdCard.cardUniqueID),
-                shouldAffectCardBalance: true
-            )
-        ))
-
-        let transactions = try modelContext.fetch(FetchDescriptor<CashflowTransaction>())
-        #expect(transactions.count == 2)
-        #expect(transactions.allSatisfy { Calendar.current.compare($0.transactionDate, to: fixedNow, toGranularity: .second) == .orderedSame })
     }
 
     @Test("Обновление акций обновляет котировки только категории stocks")
@@ -2498,9 +2177,11 @@ struct FinanceViewModelTests {
         viewModel.handle(.loadGroups)
         viewModel.handle(.loadAccounts)
 
+        // 6b Фаза 2: агрегат `state.totalAmount` считается по ЯДРУ (single-world), поэтому легаси-
+        // фикстура в него не входит. Дедуп проверяем по per-group сумме (`groupTotals`, бывший
+        // легаси+core-микс) и по числу junction'ов — это и есть цель теста.
         let didPropagate = await waitForAsyncStatePropagation {
-            viewModel.state.totalAmount == 1_000
-                && viewModel.state.groupTotals[primaryGroup.groupUniqueID] == 1_000
+            viewModel.state.groupTotals[primaryGroup.groupUniqueID] == 1_000
         }
 
         #expect(didPropagate)
@@ -2508,7 +2189,6 @@ struct FinanceViewModelTests {
         let accounts = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
         #expect(accounts.count == 1)
         #expect(accounts.first?.group?.groupUniqueID == primaryGroup.groupUniqueID)
-        #expect(viewModel.state.totalAmount == 1_000)
         #expect(viewModel.state.groupTotals[primaryGroup.groupUniqueID] == 1_000)
     }
 
@@ -2567,10 +2247,13 @@ struct FinanceViewModelTests {
 
         EventBus.shared.publish(FinanceEvent.creditsUpdated)
         
+        // 6b Фаза 2: проверяем пересчёт per-group суммы (`groupTotals`) — это и есть предмет теста.
+        // Агрегат `state.totalAmount` теперь считается по ЯДРУ (single-world) и легаси-кредит в него
+        // не входит, поэтому из условия он убран.
         var didUpdate = false
         for _ in 0..<100 {
             let groupTotal = viewModel.state.groupTotals[trackedGroupID] ?? 0.0
-            if abs(groupTotal + 500.0) < 0.01, abs(viewModel.state.totalAmount + 500.0) < 0.01 {
+            if abs(groupTotal + 500.0) < 0.01 {
                 didUpdate = true
                 break
             }
