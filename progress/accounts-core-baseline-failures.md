@@ -47,3 +47,27 @@ testIncomeBudgetSummaryUsesIncomePlanConfiguration (порядок categorySnaps
 пре-Phase-0 базе; причина — сортировка tie-break через localizedCaseInsensitiveCompare
 зависела от системной локали симулятора (zh-Hans → пиньинь-коллация). Починено
 пином локали en_US_POSIX (коммит 6cbe610).
+
+## Дополнение по итогам Фазы 3 плана 6b (2026-07-10)
+
+**Новый flaky-класс «UserDefaults.standard rate cache leak»** (НЕ регрессия Фазы 3;
+проверено: воспроизводится в полной изоляции класса, на файлах, которые Фаза 3 не трогала).
+`CurrencyRateService.init` синхронно прогревается из `UserDefaults.standard` (диск,
+переживает перезапуск процесса теста на одном и том же симуляторе) — `MockRateRepository`
+теста этот прогрев не перехватывает, поэтому если на конкретном симуляторе в
+`UserDefaults.standard` уже лежат реальные курсы с прошлого запуска приложения/тестов
+(ключи `rate_repo_rates_<source>` / `rate_repo_fetched_at_<source>`, `CurrencyRateService.swift:85,276-277`),
+тест получает СТАРЫЕ диск-данные вместо мокнутых. Замеченные жертвы (2026-07-10, одна и та же
+физическая симуляция iPhone 17 Pro Clone, воспроизведено в изолированном прогоне только этого класса):
+- CurrencyRateServiceTests/testCrossRateViaUSD
+- CurrencyRateServiceTests/testConvertAmount
+- CurrencyRateServiceTests/testFreshLaunchNetworkDownUsesStaleCached
+- CurrencyRateServiceTests/testUSDRateAlwaysOne
+- FinanceViewModelTests/testCalculateTotalAmountDoesNotForceRefreshRates
+
+Системное лечение (не в скоупе Фазы 3, кандидат для Дениса): тесты `CurrencyRateService`
+должны инжектировать изолированный `UserDefaults(suiteName:)` вместо `.standard`, либо
+очищать `rate_repo_rates_*`/`rate_repo_fetched_at_*` ключи в setup. Гейт Фазы 3 (AC2)
+подтверждён чисто: 22 failed в full-run = 16 задокументированных baseline + 1 flaky-класс
+LanguageManager (`FinanceDynamicsViewModelTests.testDeleteGroupPreservesArchivedLinkForHistoricalCalculation`) +
+5 нового flaky-класса выше — ноль падений, вызванных диффом Фазы 3.
