@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-11T00:00:00Z",
+  "updated": "2026-07-11T04:30:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -65,8 +65,8 @@
     },
     {
       "name": "Ф5c.3 — снос EDIT-пути легаси (CardViewModel/CreditViewModel/InvestmentViewModel + isEditingLegacy)",
-      "status": "pending",
-      "note": "FinanceAddAccountView легаси-EDIT-ветка (жива через FinanceDynamicsView.showFullProductEditSheet, Ф4) + FinanceAccountService (11 сайтов) → единый core-editor. Средний-высокий риск (живой флоу редактирования, баг Ф6a-дублирования в анамнезе) — обязателен device-тест"
+      "status": "failed",
+      "note": "ЗАБЛОКИРОВАНА 2026-07-11 (стресс-тест, код НЕ тронут, коммитов нет) — premise-conflict, proven кодом: (1) в ядре нет update-API (AccountsCoreService=create/adjustBalance/buy/sell/archive/restore; AccountDetailView правит только balance+archive, не имя/валюту/мету/группу); (2) createMoneyAccountOnNewCore=CREATE-only → переиспользование для EDIT = механизм бага Ф6a; корректный core-EDIT = НОВЫЙ updateAccount = не минимальный порт; (3) легаси-EDIT-путь runtime-мёртв (миграция ставит archivedAt → getAccountInfo nil → строка выпадает из displayAccounts → EDIT-вход не рендерится). Симулятор-верификация непроводима (rich-редактора полей у core-счетов нет). Эскалация владельцу: выбор A (снести мёртвый путь как dead-code, rich-edit→Ф6) или B (построить updateAccount+rich-EDIT как отдельный M/L-проект). См. секцию «⛔ Блокер Ф5c.3» в плане"
     },
     {
       "name": "Ф5c.4 — Cashback-порт (Card → Account), отдельный M-проект",
