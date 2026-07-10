@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-10T22:22:59Z",
+  "updated": "2026-07-11T02:05:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -70,8 +70,8 @@
     },
     {
       "name": "Ф5c.4 — Cashback-порт (Card → Account), отдельный M-проект",
-      "status": "pending",
-      "note": "CashbackView.swift (2367) + CashbackViewModel.swift (1141) + ScreenshotDataSeeder. Новая абстракция CashflowSelectableAccount-аналог, ремап через LegacyConversionRegistry.coreAccountID (готов с Ф4). Высокий риск — рекомендация: через Александра с мини-research→plan внутри под-фазы"
+      "status": "done",
+      "note": "РЕАЛИЗОВАНА 2026-07-11 (коммит 2094126, develop, НЕ push/merge). Пикер кэшбэка → единый источник «карты легаси ∪ core cash-like» через переиспользованный CashflowSelectableAccount + CashflowSelectableAccountResolver.options (ponytail, без нового типа). VM: availableCards:[Card]→availableAccounts:[CashflowSelectableAccount], getCard→getAccount, cleanInvalidCardIDs/updateCashback валидируют против объединённого set (легаси cardUniqueID ∪ core Account.id.uuidString). View: пикер/selected/free-limit на новом типе, иконка→creditcard.fill. Presentation упрощён: title+валюта (bank/cardType/маска/баланс/лимит убраны — у core Account их нет). Закрыт функциональный пробел: после миграции легаси-карты archivedAt-скрыты→getAllCards() пуст→пикер был пуст для мигрированного юзера. Миграцию cardIDs НЕ добавлял (Ф5b remapCashbackCardIDs уже сделал). ОТКЛОНЕНИЕ: ScreenshotDataSeeder НЕ мигрирован→Ф5c.6 (ссылается на 5 легаси-типов, не только Card; скриншот-сиды работают через легаси-ветку union без правок). backup/restore не тронут (Cashback/cardIDs:[String]/CashbackImporter без изменений). Тесты: CashbackCardPresentationTests переписан (4) + CashbackViewModelAccountResolveTests (3). Гейт: build 0 ошибок; xcresulttool 1745 passed/14 failed=baseline/flaky, 0 новых красных (0 cashback-тестов в упавших); целевые 7/7. Device-верификация на реальном сторе владельца — перед мержем"
     },
     {
       "name": "Ф5c.5 — снос мостов-менеджеров (CardCatalog/CardManager/FinanceInvestmentOrderService-класс)",
