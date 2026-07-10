@@ -2,76 +2,29 @@
 //  CashbackCardPresentation.swift
 //  millio
 //
-//  Centralized card copy for cashback card selection screens.
+//  Centralized copy for cashback account selection screens.
 //
 
 import Foundation
 
+/// Тексты строки счёта в пикере кэшбэка. Работает на едином `CashflowSelectableAccount`
+/// (карты легаси ∪ core-счета нового ядра), поэтому несёт только поля, общие для обоих миров:
+/// имя и валюту. Богатая мета легаси-карты (банк/тип/маскированный номер/баланс/лимит) сюда
+/// не входит — у core `Account` её нет (баланс — производная движка, `cardType`/маска отсутствуют),
+/// а смешанный пикер должен выглядеть единообразно (6b Путь B, Ф5c.4).
 enum CashbackCardPresentation {
-    static func title(for card: Card, locale: Locale = CashbackL10n.locale) -> String {
-        card.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    static func title(for account: CashflowSelectableAccount, locale: Locale = CashbackL10n.locale) -> String {
+        account.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? CashbackL10n.text("cashback.card.unnamed", locale: locale, fallback: "Untitled card")
-            : card.name
+            : account.title
     }
 
-    static func pickerSubtitle(for card: Card, locale: Locale = CashbackL10n.locale) -> String {
-        var parts: [String] = []
-
-        if card.bank != .other {
-            parts.append(card.bank.displayName(for: locale))
-        }
-
-        parts.append(card.cardType.displayName(for: locale))
-        return parts.joined(separator: " • ")
+    /// Подзаголовок строки счёта — валюта (единственное общее поле-различитель для одноимённых счетов).
+    static func subtitle(for account: CashflowSelectableAccount, locale: Locale = CashbackL10n.locale) -> String {
+        account.currency.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    static func pickerDetail(for card: Card, locale: Locale = CashbackL10n.locale) -> String {
-        var parts = [detail(for: card, locale: locale)]
-
-        let maskedNumber = maskedNumberText(for: card)
-        if !maskedNumber.isEmpty {
-            parts.append(maskedNumber)
-        }
-
-        return parts.joined(separator: " • ")
-    }
-
-    static func subtitle(for card: Card, locale: Locale = CashbackL10n.locale) -> String {
-        var parts: [String] = []
-
-        if card.bank != .other {
-            parts.append(card.bank.displayName(for: locale))
-        }
-
-        parts.append(card.cardType.displayName(for: locale))
-
-        let maskedNumber = maskedNumberText(for: card)
-        if !maskedNumber.isEmpty {
-            parts.append(maskedNumber)
-        }
-
-        return parts.joined(separator: " • ")
-    }
-
-    static func detail(for card: Card, locale: Locale = CashbackL10n.locale) -> String {
-        let balanceTitle = CashbackL10n.text("cashback.card.detail.balance", locale: locale, fallback: "Balance")
-        let limitTitle = CashbackL10n.text("cashback.card.detail.limit", locale: locale, fallback: "Limit")
-        var parts = ["\(balanceTitle) \(amountText(card.balance, currency: card.currency))"]
-
-        if let creditLimit = card.creditLimit, card.cardType == .credit {
-            parts.append("\(limitTitle) \(amountText(creditLimit, currency: card.currency))")
-        }
-
-        return parts.joined(separator: " • ")
-    }
-
-    static func maskedNumberText(for card: Card) -> String {
-        let lastDigits = card.maskedNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !lastDigits.isEmpty else { return "" }
-        return "•••• \(lastDigits)"
-    }
-
-    private static func amountText(_ value: Double, currency: String) -> String {
-        "\(FinanceAmountText.decimal(value: value)) \(currency)"
+    static func pickerSubtitle(for account: CashflowSelectableAccount, locale: Locale = CashbackL10n.locale) -> String {
+        subtitle(for: account, locale: locale)
     }
 }

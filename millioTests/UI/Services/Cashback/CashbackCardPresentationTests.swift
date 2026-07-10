@@ -2,6 +2,10 @@
 //  CashbackCardPresentationTests.swift
 //  millioTests
 //
+//  6b Путь B, Ф5c.4: presentation кэшбэк-пикера переведён с легаси `Card` на единый
+//  `CashflowSelectableAccount` (карты ∪ core-счета). Богатая мета (банк/тип/маска/баланс/лимит)
+//  убрана — у core `Account` её нет; строка несёт имя + валюту.
+//
 
 import Foundation
 import Testing
@@ -9,158 +13,49 @@ import Testing
 
 @Suite(.serialized)
 struct CashbackCardPresentationTests {
-    @Test("Подзаголовок карты включает банк, тип и маску номера")
-    func testSubtitleIncludesBankTypeAndMaskedNumber() {
-        let locale = Locale(identifier: "en")
-        let card = Card(
-            name: "T-Bank Black",
-            cardNumber: "1234",
-            bank: .tinkoff,
-            cardType: .debit,
-            currency: "RUB",
-            balance: 1500
+    private func account(
+        title: String,
+        currency: String = "RUB",
+        cardID: String = "id-1",
+        isFavorite: Bool = false
+    ) -> CashflowSelectableAccount {
+        CashflowSelectableAccount(
+            kind: .card(cardID: cardID),
+            title: title,
+            currency: currency,
+            isFavorite: isFavorite,
+            prioritySortOrder: 0,
+            updatedAt: Date()
         )
-
-        let subtitle = CashbackCardPresentation.subtitle(for: card, locale: locale)
-
-        #expect(subtitle.contains(card.bank.displayName(for: locale)))
-        #expect(subtitle.contains(card.cardType.displayName(for: locale)))
-        #expect(subtitle.contains("•••• 1234"))
     }
 
-    @Test("Подзаголовок picker держит только банк и тип без маски номера")
-    func testPickerSubtitleKeepsPrimaryMetadataCompact() {
-        let locale = Locale(identifier: "en")
-        let card = Card(
-            name: "T-Bank Black",
-            cardNumber: "1234",
-            bank: .tinkoff,
-            cardType: .debit,
-            currency: "RUB",
-            balance: 1500
-        )
-
-        let subtitle = CashbackCardPresentation.pickerSubtitle(for: card, locale: locale)
-
-        #expect(subtitle == "\(card.bank.displayName(for: locale)) • \(card.cardType.displayName(for: locale))")
-        #expect(!subtitle.contains("1234"))
+    @Test("Заголовок возвращает имя счёта, если оно задано")
+    func testTitleReturnsName() {
+        let subject = account(title: "T-Bank Black")
+        #expect(CashbackCardPresentation.title(for: subject, locale: Locale(identifier: "en")) == "T-Bank Black")
     }
 
-    @Test("Детали кредитной карты показывают баланс и лимит")
-    func testDetailIncludesBalanceAndLimitForCreditCard() {
-        let card = Card(
-            name: "Credit",
-            cardNumber: "9876",
-            bank: .alfa,
-            cardType: .credit,
-            currency: "RUB",
-            balance: 12500,
-            creditLimit: 50000
-        )
-
-        let detail = CashbackCardPresentation.detail(for: card, locale: Locale(identifier: "ru"))
-
-        #expect(detail.contains("Баланс 12 500 RUB"))
-        #expect(detail.contains("Лимит 50 000 RUB"))
+    @Test("Пустое имя заменяется локализованным фолбэком (en / zh-Hans)")
+    func testTitleFallsBackWhenEmpty() {
+        let subject = account(title: "   ")
+        #expect(CashbackCardPresentation.title(for: subject, locale: Locale(identifier: "en")) == "Untitled card")
+        #expect(CashbackCardPresentation.title(for: subject, locale: Locale(identifier: "zh-Hans")) == "未命名卡片")
     }
 
-    @Test("Детали picker добавляют маску номера после финансовых данных")
-    func testPickerDetailAddsMaskedNumber() {
-        let card = Card(
-            name: "Credit",
-            cardNumber: "9876",
-            bank: .alfa,
-            cardType: .credit,
-            currency: "RUB",
-            balance: 12500,
-            creditLimit: 50000
-        )
-
-        let detail = CashbackCardPresentation.pickerDetail(for: card, locale: Locale(identifier: "ru"))
-
-        #expect(detail.contains("Баланс 12 500 RUB"))
-        #expect(detail.contains("Лимит 50 000 RUB"))
-        #expect(detail.contains("•••• 9876"))
+    @Test("Подзаголовок — валюта счёта")
+    func testSubtitleIsCurrency() {
+        let subject = account(title: "Wise", currency: "EUR")
+        #expect(CashbackCardPresentation.subtitle(for: subject) == "EUR")
+        #expect(CashbackCardPresentation.pickerSubtitle(for: subject) == "EUR")
     }
 
-    @Test("Явная locale для picker detail не протекает через активный язык приложения")
-    func testPickerDetailUsesRequestedLocaleEvenWhenAppLanguageDiffers() {
+    @Test("Явная locale фолбэка не протекает через активный язык приложения")
+    func testTitleUsesRequestedLocaleEvenWhenAppLanguageDiffers() {
         let previousLanguage = LanguageManager.shared.currentLanguage
         defer { LanguageManager.shared.setLanguage(previousLanguage) }
         LanguageManager.shared.setLanguage(.simplifiedChinese)
 
-        let card = Card(
-            name: "Credit",
-            cardNumber: "9876",
-            bank: .alfa,
-            cardType: .credit,
-            currency: "RUB",
-            balance: 12500,
-            creditLimit: 50000
-        )
-
-        let detail = CashbackCardPresentation.pickerDetail(for: card, locale: Locale(identifier: "ru"))
-
-        #expect(detail.contains("Баланс 12 500 RUB"))
-        #expect(detail.contains("Лимит 50 000 RUB"))
-        #expect(detail.contains("•••• 9876"))
-    }
-
-    @Test("Детали карты локализуются для английского и zh-Hans")
-    func testDetailUsesRequestedLocale() {
-        let card = Card(
-            name: "",
-            cardNumber: "5555",
-            bank: .other,
-            cardType: .credit,
-            currency: "USD",
-            balance: 1200,
-            creditLimit: 5000
-        )
-
-        let english = CashbackCardPresentation.detail(for: card, locale: Locale(identifier: "en"))
-        let chinese = CashbackCardPresentation.detail(for: card, locale: Locale(identifier: "zh-Hans"))
-        let chineseTitle = CashbackCardPresentation.title(for: card, locale: Locale(identifier: "zh-Hans"))
-
-        #expect(english.contains("Balance 1 200 USD"))
-        #expect(english.contains("Limit 5 000 USD"))
-        #expect(chinese.contains("余额 1 200 USD"))
-        #expect(chinese.contains("额度 5 000 USD"))
-        #expect(chineseTitle == "未命名卡片")
-    }
-
-    @Test("Если банк не задан, подзаголовок не засоряется other")
-    func testSubtitleSkipsOtherBank() {
-        let locale = Locale(identifier: "en")
-        let card = Card(
-            name: "Free Card",
-            cardNumber: "",
-            bank: .other,
-            cardType: .debit,
-            currency: "USD",
-            balance: 0
-        )
-
-        let subtitle = CashbackCardPresentation.subtitle(for: card, locale: locale)
-
-        #expect(!subtitle.contains(card.bank.displayName(for: locale)))
-        #expect(subtitle == card.cardType.displayName(for: locale))
-    }
-
-    @Test("Если банк не задан, picker подзаголовок показывает только тип")
-    func testPickerSubtitleSkipsOtherBank() {
-        let locale = Locale(identifier: "en")
-        let card = Card(
-            name: "Free Card",
-            cardNumber: "",
-            bank: .other,
-            cardType: .debit,
-            currency: "USD",
-            balance: 0
-        )
-
-        let subtitle = CashbackCardPresentation.pickerSubtitle(for: card, locale: locale)
-
-        #expect(subtitle == card.cardType.displayName(for: locale))
+        let subject = account(title: "")
+        #expect(CashbackCardPresentation.title(for: subject, locale: Locale(identifier: "en")) == "Untitled card")
     }
 }

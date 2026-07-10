@@ -29,7 +29,7 @@ struct CashbackState {
     var showCardPicker: Bool = false
     
     /// Все доступные карты
-    var availableCards: [Card] = []
+    var availableAccounts: [CashflowSelectableAccount] = []
 
     /// Пользовательские категории кешбэка
     var customCategories: [CashbackCustomCategory] = []
@@ -116,7 +116,7 @@ final class CashbackViewModel: ViewModelProtocol {
         loadCashbacks()
         
         #if DEBUG
-        AppLogger.log(.debug, category: "Cashback", "Loaded \(state.availableCards.count) cards, \(state.cashbacks.count) cashbacks")
+        AppLogger.log(.debug, category: "Cashback", "Loaded \(state.availableAccounts.count) accounts, \(state.cashbacks.count) cashbacks")
         #endif
         
         // Автоматически проверяем и очищаем невалидные связи при первом запуске
@@ -579,24 +579,26 @@ final class CashbackViewModel: ViewModelProtocol {
         }
     }
     
-    /// Очищает несуществующие cardIDs из кешбэков
+    /// Очищает несуществующие cardIDs из кешбэков.
+    ///
+    /// Валидный набор — объединение легаси-карт (`cardUniqueID`) и core-счетов (`Account.id.uuidString`)
+    /// (6b Путь B, Ф5c.4): `state.availableAccounts` уже содержит оба мира. Так живое правило,
+    /// чей `cardID` был переписан на core-UUID мигратором (`remapCashbackCardIDs`, Ф5b), не считается
+    /// «несуществующим» и не обнуляется.
     private func cleanInvalidCardIDs(in cashbacks: [Cashback]) {
-        let cardUniqueIDMap: [String: Card] = Dictionary(
-            state.availableCards.map { ($0.cardUniqueID, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        
-        AppLogger.log(.info, category: "Cashback", "Available \(state.availableCards.count) cards with unique IDs")
-        
+        let validIDs = Set(state.availableAccounts.compactMap(\.cardID))
+
+        AppLogger.log(.info, category: "Cashback", "Available \(state.availableAccounts.count) accounts with unique IDs")
+
         var hasChanges = false
-        
+
         for cashback in cashbacks {
             let originalCount = cashback.cardIDs.count
             let validCardIDs = cashback.cardIDs.compactMap { cardIDString -> String? in
-                if let card = cardUniqueIDMap[cardIDString] {
-                    return card.cardUniqueID
+                if validIDs.contains(cardIDString) {
+                    return cardIDString
                 }
-                
+
                 AppLogger.log(.info, category: "Cashback", "Invalid cardID '\(cardIDString.prefix(50))...' in cashback '\(cashback.displayCategoryName)'")
                 return nil
             }
@@ -622,9 +624,9 @@ final class CashbackViewModel: ViewModelProtocol {
     }
     
     private func loadCards() {
-        let oldCardIDs = Set(state.availableCards.map(\.cardUniqueID))
-        state.availableCards = CardManager.shared.getAllCards()
-        let newCardIDs = Set(state.availableCards.map(\.cardUniqueID))
+        let oldCardIDs = Set(state.availableAccounts.compactMap(\.cardID))
+        state.availableAccounts = buildAvailableAccounts()
+        let newCardIDs = Set(state.availableAccounts.compactMap(\.cardID))
         
         // Очищаем несуществующие cardIDs если:
         // 1. Карты действительно удалены (список уменьшился)
@@ -648,6 +650,33 @@ final class CashbackViewModel: ViewModelProtocol {
         }
     }
     
+    /// Единый источник счетов-целей кэшбэка: карты легаси (`CardManager`) ∪ денежные счета
+    /// нового ядра. Переиспользует резолвер Cashflow (`.expense`, без фильтра валюты — кэшбэк
+    /// не ограничивает валюту на этапе выбора). После сноса легаси-карт (Ф5c.6) первый источник
+    /// станет пустым и останутся только core-счета — сигнатура не меняется.
+    private func buildAvailableAccounts() -> [CashflowSelectableAccount] {
+        CashflowSelectableAccountResolver.options(
+            cards: CardManager.shared.getAllCards(),
+            investments: [],
+            linkedInvestmentIDs: [],
+            transactionType: .expense,
+            currency: "",
+            newCoreAccounts: cashLikeCoreAccounts()
+        )
+    }
+
+    /// Активные денежные счета ядра (cash/debitCard/bankAccount) — те же kind, что участвуют в
+    /// Cashflow-пикере (`CashflowViewModel.newCoreAccountsForCashflowPicker`). Вклады/кредиты/долги/
+    /// рынок не являются целью кэшбэка.
+    private func cashLikeCoreAccounts() -> [Account] {
+        let cashLikeKinds: Set<String> = [
+            AccountKind.cash.rawValue, AccountKind.debitCard.rawValue, AccountKind.bankAccount.rawValue
+        ]
+        guard let accounts = try? modelContext.fetch(FetchDescriptor<Account>()) else { return [] }
+        let today = now()
+        return accounts.filter { cashLikeKinds.contains($0.kindRaw) && $0.participates(on: today) }
+    }
+
     private func applyFilters() {
         let selectedMonthKey = Cashback.monthKey(for: state.selectedMonth)
         state.visibleCashbacks = state.cashbacks
@@ -684,7 +713,7 @@ final class CashbackViewModel: ViewModelProtocol {
     private func updateCashback(category: CashbackCategory, percentage: Double, cardIDs: [String]) {
         // Фильтруем только существующие карты перед сохранением
         // Используем cardUniqueID для стабильной идентификации
-        let availableUniqueIDs = Set(state.availableCards.map { $0.cardUniqueID })
+        let availableUniqueIDs = Set(state.availableAccounts.compactMap(\.cardID))
         let selectedMonthKey = Cashback.monthKey(for: state.selectedMonth)
         let validCardIDs = cardIDs.compactMap { cardIDString -> String? in
             if availableUniqueIDs.contains(cardIDString) {
@@ -723,19 +752,15 @@ final class CashbackViewModel: ViewModelProtocol {
         }
     }
     
-    /// Получить карту по ID
-    func getCard(byID cardID: String?) -> Card? {
+    /// Получить счёт-цель кэшбэка по ID (легаси-карта или core-счёт — единый список).
+    func getAccount(byID cardID: String?) -> CashflowSelectableAccount? {
         guard let cardID = cardID else { return nil }
-        return state.availableCards.first(where: { $0.cardUniqueID == cardID })
+        return state.availableAccounts.first(where: { $0.cardID == cardID })
     }
-    
-    /// Получить карты, которые можно использовать для получения кешбэка
-    func getCardsForCashback(_ cashback: Cashback) -> [Card] {
-        // Всегда показываем только привязанные карты (если они есть)
-        // Фильтруем несуществующие карты
-        return cashback.cardIDs.compactMap { cardID in
-            getCard(byID: cardID)
-        }
+
+    /// Получить счета, привязанные к кэшбэку (несуществующие отфильтровываются).
+    func getCardsForCashback(_ cashback: Cashback) -> [CashflowSelectableAccount] {
+        cashback.cardIDs.compactMap { getAccount(byID: $0) }
     }
 
     func projectedCategoryCountForMonth(
@@ -908,9 +933,9 @@ final class CashbackViewModel: ViewModelProtocol {
     ) {
         let validCashbacks = cashbacks.filter { $0.percentage > 0 }
 
-        // Проверяем, что карта существует
-        guard let card = getCard(byID: cardID) else { return }
-        let validCardID = card.cardUniqueID
+        // Проверяем, что счёт существует
+        guard let account = getAccount(byID: cardID) else { return }
+        let validCardID = account.cardID ?? cardID
         let selectedMonthKey = Cashback.monthKey(for: state.selectedMonth)
 
         let validCategoryRaws = Set(validCashbacks.map(\.categoryRaw))

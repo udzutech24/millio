@@ -107,7 +107,7 @@ private struct CashbackContentViewInternal: View {
                 for: cashback.categoryRaw,
                 fallbackName: cashback.name
             )
-            let cardNames = viewModel.getCardsForCashback(cashback).map(\.name)
+            let cardNames = viewModel.getCardsForCashback(cashback).map(\.title)
 
             if categoryOption.displayName.localizedCaseInsensitiveContains(query) {
                 return true
@@ -837,7 +837,7 @@ private struct CashbackRowView: View {
     private var cardSubtitle: String {
         let names = viewModel
             .getCardsForCashback(cashback)
-            .map(\.name)
+            .map(\.title)
         guard !names.isEmpty else { return CashbackL10n.noLinkedCard }
         let preview = Array(names.prefix(2))
         if names.count <= 2 {
@@ -928,14 +928,17 @@ private struct CashbackEditorView: View {
         )
     }
 
-    private var limitedFreeCards: [Card] {
-        let sorted = viewModel.state.availableCards.sorted { $0.createdAt < $1.createdAt }
+    private var limitedFreeCards: [CashflowSelectableAccount] {
+        // Стабильный набор «бесплатных» счетов: сортируем по updatedAt (проксирует createdAt —
+        // у единого типа нет отдельного поля создания), чтобы toggle favorite/priority не
+        // переопределял, какие счета доступны free-плану.
+        let sorted = viewModel.state.availableAccounts.sorted { $0.updatedAt < $1.updatedAt }
         return Array(sorted.prefix(EntitlementPolicy.freeCashbackCardLimit))
     }
 
-    private var availableCardsForPicker: [Card] {
+    private var availableCardsForPicker: [CashflowSelectableAccount] {
         if !EntitlementPolicy.isCashbackCardsProOnly || appState.isPro {
-            return viewModel.state.availableCards
+            return viewModel.state.availableAccounts
         }
         return limitedFreeCards
     }
@@ -943,7 +946,7 @@ private struct CashbackEditorView: View {
     private var cashbackCardsAreLimited: Bool {
         EntitlementPolicy.isCashbackCardsProOnly
             && !appState.isPro
-            && viewModel.state.availableCards.count > EntitlementPolicy.freeCashbackCardLimit
+            && viewModel.state.availableAccounts.count > EntitlementPolicy.freeCashbackCardLimit
     }
 
     private var isScreenshotImportLocked: Bool {
@@ -1020,7 +1023,7 @@ private struct CashbackEditorView: View {
             .onAppear {
                 if let editing = viewModel.state.editingCashback {
                     selectedCardID = editing.cardIDs.first { cardID in
-                        viewModel.getCard(byID: cardID) != nil
+                        viewModel.getAccount(byID: cardID) != nil
                     }
                 }
 
@@ -1085,13 +1088,13 @@ private struct CashbackEditorView: View {
             } label: {
                 FinancesGlassCard(accentColor: CashbackScreenStyle.accent, cornerRadius: 20) {
                     HStack(spacing: 14) {
-                        if let cardID = selectedCardID, let card = viewModel.getCard(byID: cardID) {
+                        if let cardID = selectedCardID, let account = viewModel.getAccount(byID: cardID) {
                             HStack(spacing: 14) {
                                 ZStack {
                                     Circle()
                                         .fill(CashbackScreenStyle.iconTintFill)
 
-                                    Image(systemName: card.cardType.icon)
+                                    Image(systemName: "creditcard.fill")
                                         .font(.system(size: 22, weight: .semibold))
                                         .foregroundStyle(
                                             LinearGradient(
@@ -1105,7 +1108,7 @@ private struct CashbackEditorView: View {
 
                                 VStack(alignment: .leading, spacing: 6) {
                                     HStack(spacing: 8) {
-                                        Text(CashbackCardPresentation.title(for: card))
+                                        Text(CashbackCardPresentation.title(for: account))
                                             .font(.system(size: 17, weight: .semibold))
                                             .foregroundStyle(AppColors.textPrimary)
                                             .lineLimit(1)
@@ -1117,15 +1120,10 @@ private struct CashbackEditorView: View {
                                         )
                                     }
 
-                                    Text(CashbackCardPresentation.subtitle(for: card))
+                                    Text(CashbackCardPresentation.subtitle(for: account))
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundStyle(AppColors.textSecondary)
                                         .lineLimit(2)
-
-                                    Text(CashbackCardPresentation.detail(for: card))
-                                        .font(.system(size: 12, weight: .regular))
-                                        .foregroundStyle(AppColors.textTertiary)
-                                        .lineLimit(1)
                                 }
 
                                 Spacer(minLength: 0)
@@ -2054,11 +2052,11 @@ private struct CashbackCategoryEditorSheet: View {
     }
 }
 
-// MARK: - Cashback Single Card Picker View
+// MARK: - Cashback Single Account Picker View
 
 private struct CashbackSingleCardPickerView: View {
     @Binding var selectedCardID: String
-    let availableCards: [Card]
+    let availableCards: [CashflowSelectableAccount]
     let hasFreeLimit: Bool
     let onTapUpgrade: () -> Void
     let onCardsChanged: () -> Void
@@ -2102,15 +2100,15 @@ private struct CashbackSingleCardPickerView: View {
                                 freeLimitHint
                             }
 
-                            ForEach(availableCards) { card in
-                                let cardID = card.cardUniqueID
+                            ForEach(availableCards) { account in
+                                let cardID = account.cardID ?? ""
                                 let isSelected = selectedCardID == cardID
 
                                 Button {
                                     selectedCardID = cardID
                                     dismiss()
                                 } label: {
-                                    cardRow(card: card, isSelected: isSelected)
+                                    cardRow(account: account, isSelected: isSelected)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -2163,7 +2161,7 @@ private struct CashbackSingleCardPickerView: View {
                 .foregroundStyle(AppColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if let selectedCard = availableCards.first(where: { $0.cardUniqueID == selectedCardID }) {
+            if let selectedCard = availableCards.first(where: { $0.cardID == selectedCardID }) {
                 HStack(spacing: 8) {
                     Text(CashbackL10n.selectedBadge)
                         .font(.system(size: 12, weight: .semibold))
@@ -2214,9 +2212,9 @@ private struct CashbackSingleCardPickerView: View {
         .frame(width: 30, height: 30)
     }
 
-    private func favoriteMarker(for card: Card) -> some View {
+    private func favoriteMarker(for account: CashflowSelectableAccount) -> some View {
         Group {
-            if card.isFavorite {
+            if account.isFavorite {
                 Label(CashbackL10n.favoriteMarker, systemImage: "star.fill")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
@@ -2276,21 +2274,21 @@ private struct CashbackSingleCardPickerView: View {
         )
     }
 
-    private func cardRow(card: Card, isSelected: Bool) -> some View {
+    private func cardRow(account: CashflowSelectableAccount, isSelected: Bool) -> some View {
         HStack(spacing: 12) {
             selectionIndicator(isSelected: isSelected)
 
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
-                    Text(CashbackCardPresentation.title(for: card))
+                    Text(CashbackCardPresentation.title(for: account))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
 
-                    favoriteMarker(for: card)
+                    favoriteMarker(for: account)
                 }
 
-                Text(CashbackCardPresentation.pickerSubtitle(for: card))
+                Text(CashbackCardPresentation.pickerSubtitle(for: account))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
                     .lineLimit(1)
