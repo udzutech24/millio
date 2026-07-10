@@ -36,6 +36,14 @@ final class LegacyConversionRegistry {
         coreAccountID(forLegacyUniqueID: legacyUniqueID) != nil
     }
 
+    /// Легаси `uniqueID`, сконвертированный в указанный core-счёт (реверс `coreAccountID`).
+    /// Нужен, чтобы восстановить домиграционный баланс core-строки в Динамике: до 6b core-двойника
+    /// не существовало, а легаси-предшественник (archived) ещё жив в сторе до Ф5c.
+    func legacyUniqueID(forCoreAccountID coreAccountID: UUID) -> String? {
+        let target = coreAccountID.uuidString
+        return load().first(where: { $0.value == target })?.key
+    }
+
     func record(legacyUniqueID: String, coreAccountID: UUID) {
         var map = load()
         map[legacyUniqueID] = coreAccountID.uuidString

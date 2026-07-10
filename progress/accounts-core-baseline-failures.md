@@ -92,3 +92,12 @@ order-dependence»** (НЕ регрессия Фазы 4; файл Ф4-дифф�
 rate-cache + 2 `FinanceDynamicsCoreContributionTests` (Ф2b; зелёные в изолированном
 прогоне — параллельная интерференция) + 1 GroupsMigrator order-flaky выше. **Ноль падений,
 вызванных диффом Фазы 4** (снос дохлого UI-кода, логика не тронута).
+
+## UPD 2026-07-10 (вечер): после мержа develop (c7ee0e1, Ф3 unified add-flow)
+
+Net-new красный: `CashflowViewModelTests.testPlannedExpenseAutoAppliesOnDueDate`
+(:2415, `card.balance` = 1000 вместо 750) — кластер легаси `Card.balance`
+scheduled/auto-apply, в котором на pre-merge ветке (488763a) УЖЕ падало 5 тестов
+(включая соседний :2290). Причина — незавершённый перевод scheduled-семантики на
+single-world 6b, не сам мерж. Чинить кластером (все 6 вместе) отдельной 6b-задачей.
+Итого baseline CashflowViewModelTests после мержа: 6 failed.

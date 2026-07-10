@@ -1068,14 +1068,42 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         guard !coreAccounts.isEmpty else { return [] }
 
+        // Легаси-предшественники (реверс LegacyConversionRegistry): до миграции 6b core-двойника не
+        // существовало, поэтому core.total(startDate)=0 и строка показывала Start=0 при живом графике
+        // («по графику цифры были, а показывает 0»). Добавляем баланс легаси-двойника ТЕМ ЖЕ time-aware
+        // движком, что рисует скелет графика (calculateBalanceAtDate: archived-счёт отдаёт реальный
+        // баланс только для дат <= archivedAt, после миграции — 0). Итог per-account идентичен
+        // комбинированному движку графика (легаси-скелет + core totalAt), поэтому и Total (сумма строк)
+        // согласован с первой точкой серии. Двойного счёта нет: конвертированный легаси archived и в
+        // .accounts-строки (scope .currentVisible) не попадает.
+        // Ключ реестра — легаси `uniqueID` (== `FinanceAccount.accountID`), а не `accountUniqueID`.
+        let legacyByUniqueID: [String: FinanceAccount] = Dictionary(
+            getAccountsForCalculation(
+                scope: .historicalInterval(DateInterval(start: .distantPast, end: .distantFuture))
+            ).map { ($0.accountID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
         var items: [DynamicsBreakdownItem] = []
         for account in coreAccounts {
-            let start = NSDecimalNumber(
+            var start = NSDecimalNumber(
                 decimal: await financeViewModel.accountsTotalsService.total(for: [account], on: startDate, in: currency)
             ).doubleValue
-            let end = NSDecimalNumber(
+            var end = NSDecimalNumber(
                 decimal: await financeViewModel.accountsTotalsService.total(for: [account], on: endDate, in: currency)
             ).doubleValue
+            if let legacyUniqueID = LegacyConversionRegistry.shared.legacyUniqueID(forCoreAccountID: account.id),
+               let legacyAccount = legacyByUniqueID[legacyUniqueID] {
+                let cardIDs: Set<String> = legacyAccount.accountType == .card ? [legacyAccount.accountID] : []
+                start += await calculateBalanceAtDate(
+                    accounts: [legacyAccount], date: startDate,
+                    accountCardIDs: cardIDs, debtAsNegative: true, includeInitialBeforeCreation: false
+                )
+                end += await calculateBalanceAtDate(
+                    accounts: [legacyAccount], date: endDate,
+                    accountCardIDs: cardIDs, debtAsNegative: true, includeInitialBeforeCreation: false
+                )
+            }
             // Знак уже заложен в total (loan/debt отрицательны) — как в ветке .groups, дельту не переворачиваем.
             let delta = end - start
             items.append(DynamicsBreakdownItem(

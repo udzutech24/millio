@@ -203,4 +203,69 @@ struct FinanceDynamicsCoreContributionTests {
         let core = try #require(breakdown.first { $0.name == "Наличные" })
         #expect(abs(core.endValue - 200_000) < 0.01, "Баланс core-счёта должен прийти от accountsTotalsService (200 000)")
     }
+
+    // MARK: - Start строки core-счёта: домиграционный баланс от легаси-предшественника (не 0)
+
+    @Test("Мигрированный счёт на вкладке «Счета»: Start строки = легаси-баланс до миграции (не 0), Total согласован с графиком")
+    func migratedAccount_rowStartUsesLegacyPredecessor_andTotalMatchesChart() async throws {
+        let ctx = try makeContext()
+        let now = Date()
+        // Счёт создан 20 дней назад, миграция 6b — 5 дней назад. Период начинается 10 дней назад:
+        // строго ПОСЛЕ создания и ДО миграции — точь-в-точь сценарий владельца (период через границу
+        // миграции). До фикса core.total(start)=0 → Start строки и Total=0 при живом графике.
+        let createdAt = now.addingTimeInterval(-20 * 86_400)
+        let migratedAt = now.addingTimeInterval(-5 * 86_400)
+
+        let card = Card(name: "Легаси карта", cardNumber: "1234", cardType: .debit, currency: "RUB", balance: 100_000)
+        card.createdAt = createdAt
+        card.updatedAt = migratedAt
+        card.initialBalance = 100_000
+        card.hasInitialBalance = true
+        ctx.insert(card)
+
+        let group = FinanceGroup(name: "Основная", colorHex: "#FFFFFF")
+        ctx.insert(group)
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        ctx.insert(account)
+        try ctx.save()
+
+        // Мигратор пишет в `.shared` — тот же реестр, что читает VM (reverse-lookup); чистим в defer.
+        let legacyUniqueID = card.cardUniqueID
+        defer { LegacyConversionRegistry.shared.remove(legacyUniqueID: legacyUniqueID) }
+        let flagDefaults = UserDefaults(suiteName: "core-predecessor-flag-\(UUID().uuidString)")!
+        let migrator = LegacyAccountsMigrator(
+            modelContext: ctx, registry: .shared, defaults: flagDefaults, nowProvider: { migratedAt }
+        )
+        #expect(migrator.migrateAll().migrated == 1)
+        #expect(LegacyConversionRegistry.shared.coreAccountID(forLegacyUniqueID: legacyUniqueID) != nil)
+
+        let financeViewModel = FinanceViewModel(modelContext: ctx, currencyService: MockCurrencyRateService(), skipInitialLoad: true)
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: ctx, financeViewModel: financeViewModel, currencyService: MockCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        // Явный период через границу миграции (start после создания, до миграции).
+        dynamicsViewModel.state.customPeriod = (start: now.addingTimeInterval(-10 * 86_400), end: now)
+        dynamicsViewModel.state.dynamicsMode = .aggregated
+        dynamicsViewModel.state.viewMode = .accounts
+        await dynamicsViewModel.updateDynamicsBreakdown()
+
+        let breakdown = dynamicsViewModel.state.dynamicsBreakdown
+        let row = try #require(breakdown.first { $0.name == "Легаси карта" }, "core-строка должна быть в breakdown")
+        // Start строки = легаси-баланс на начало периода (100 000), а НЕ 0 (баг «+∞»/«показывает 0»).
+        #expect(abs(row.startValue - 100_000) < 0.01, "Start строки должен взять баланс легаси-предшественника до миграции (100 000), не 0")
+        #expect(abs(row.endValue - 100_000) < 0.01, "End строки приходит от ядра после миграции (100 000)")
+
+        // Total (сумма строк) согласован с первой точкой серии графика — требование владельца.
+        let total = try #require(FinanceDynamicsPresentation.totalRow(from: breakdown, viewMode: .accounts))
+        await dynamicsViewModel.updateChartDataAsync()
+        let firstPoint = try #require(dynamicsViewModel.state.chartData.sorted { $0.date < $1.date }.first)
+        #expect(abs(total.startValue - firstPoint.value) < 0.01, "Total Start должен совпасть с первой точкой графика (\(firstPoint.value)), а не быть 0")
+    }
 }
