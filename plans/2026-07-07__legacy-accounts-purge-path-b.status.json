@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-10T19:40:00Z",
+  "updated": "2026-07-10T23:30:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -49,9 +49,39 @@
       "note": "c7ef57a: remapCashbackCardIDs() в LegacyAccountsMigrator (переиспользует remappedCashLikeAccountID). CashbackImporter — валидация cardIDs расширена на core Account.id (была строго Card, иначе restore пост-ремап всегда падал бы backupCorrupted). Build SUCCEEDED. Эскалировано: пикер Cashback (CardManager/CashbackViewModel/CashbackView ~2367 строк) остаётся легаси-only — новая абстракция уровня CashflowSelectableAccount не построена (это НОВАЯ фича, не порт). cleanInvalidCardIDs не триггерит на пустом availableCards — ремап не создаёт риска. НЕ мержено"
     },
     {
-      "name": "Ф5c — снос регистрации, схема V6, @Model-файлы (вкл. FinanceGroup.swift)",
-      "status": "blocked",
-      "note": "НЕ НАЧАТА — остановлено ментором после Ф5a/5b: свежий grep показал 76 файлов ещё ссылаются на легаси-типы (CashbackView/ViewModel ~3500 строк, CardViewModel/CreditViewModel/InvestmentViewModel живы через EDIT-путь, FinanceAccountService 11 живых сайтов, CardCatalog/CardManager, FinanceInvestmentOrderService-класса живых мостов, MarketData/ScopeMerge/DataIntegrityCleaner/DataResetService/SheetsDataMapper/TotalBalanceWidget/RateSourcePickerView/SheetsConnectionView, InlineCreateForms DTO-рефактор, isEditingLegacy guard removal). Объём — это отдельный L-Bulletproof, не остаток одного захода поверх Ф5a/5b. Требуется декомпозиция на под-фазы с device-тестами на каждой (Cashback-порт, CardViewModel/CreditViewModel/InvestmentViewModel-снос, Core-файлы, финальная схема+модели)."
+      "name": "Ф5c.1 — Core-периферия: liveness-аудит + лёгкие порты",
+      "status": "done",
+      "note": "Liveness-аудит 9 файлов/групп (grep -nwE, callers подтверждены живыми). 6 уже чистые (ScopeMerge{Worker,Snapshot,Marker,Engine,Types}, TotalBalanceWidget, RateSourcePickerView, AccountMarketPriceService — только UI-MARK-комменты/докстринги). 1 запортирован: PortfolioHeldSymbolsProvider Investment→core Account.marketInvestment (единый набор символов с AccountMarketPriceService, попутно закрыт латентный баг held-symbols-sync пост-миграционных счетов; тест переписан, 3 кейса). 4 snapshot-исключения→5c.6-кластер (ScopeMergeReader/Dedup, DataIntegrityCleaner, DataResetService — оперируют @Model-строками). Sheets вынесен в новую 5c.1a (M-проект). Гейт: build 0 ошибок; xcresulttool 1782 passed/14 failed = весь baseline+flaky, 0 новых красных. Коммит на develop, НЕ push/merge"
+    },
+    {
+      "name": "Ф5c.1a — Sheets-экспорт-порт (Card/Investment → Account)",
+      "status": "pending",
+      "note": "Выделена из 5c.1: SheetsDataMapper + SheetsConnectionView:190-193 + CashflowViewModel:449. Порт Card/Investment→Account row-mapping, 2 сайта (один в god-VM). Блокер пред-гейта 5c.6. Средний риск (живая экспорт-фича, формат строк)"
+    },
+    {
+      "name": "Ф5c.2 — InlineCreateForms DTO-рефактор",
+      "status": "pending",
+      "note": "Card/Credit/Investment-структуры формы добавления → простые struct без @Model. Не писатель (доказано Ф3), UX не меняется"
+    },
+    {
+      "name": "Ф5c.3 — снос EDIT-пути легаси (CardViewModel/CreditViewModel/InvestmentViewModel + isEditingLegacy)",
+      "status": "pending",
+      "note": "FinanceAddAccountView легаси-EDIT-ветка (жива через FinanceDynamicsView.showFullProductEditSheet, Ф4) + FinanceAccountService (11 сайтов) → единый core-editor. Средний-высокий риск (живой флоу редактирования, баг Ф6a-дублирования в анамнезе) — обязателен device-тест"
+    },
+    {
+      "name": "Ф5c.4 — Cashback-порт (Card → Account), отдельный M-проект",
+      "status": "pending",
+      "note": "CashbackView.swift (2367) + CashbackViewModel.swift (1141) + ScreenshotDataSeeder. Новая абстракция CashflowSelectableAccount-аналог, ремап через LegacyConversionRegistry.coreAccountID (готов с Ф4). Высокий риск — рекомендация: через Александра с мини-research→plan внутри под-фазы"
+    },
+    {
+      "name": "Ф5c.5 — снос мостов-менеджеров (CardCatalog/CardManager/FinanceInvestmentOrderService-класс)",
+      "status": "pending",
+      "note": "Снос после подтверждения zero live sites (требует 5c.3+5c.4 done). Низкий риск"
+    },
+    {
+      "name": "Ф5c.6 — финальный снос: схема V6, @Model-файлы, миграторы",
+      "status": "pending",
+      "note": "Card/Credit/Investment/FinanceAccount/FinanceGroup.swift + миграторы/конвертер/реестр, ОДНОВРЕМЕННО (SwiftData-ограничение). Пред-гейт: grep за пределами скоупа = 0 хитов. Критический риск — апгрейд-путь обязателен (юзер должен пройти билд Ф1–5b перед 5c.6), полный device stress-test перед мержем"
     },
     {
       "name": "Багфиксы по ручной проверке владельца (Ф1–Ф5b)",
