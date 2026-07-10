@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-07__legacy-accounts-purge-path-b.md",
   "title": "6b Путь B — миграция и снос легаси-счетов",
-  "updated": "2026-07-10T18:40:00Z",
+  "updated": "2026-07-10T19:40:00Z",
   "phases": [
     {
       "name": "Ф1 — миграционный слой + вайринг старта",
@@ -62,6 +62,11 @@
       "name": "Раунд 2: мерж develop (Ф3 add-flow) + старты Динамики",
       "status": "done",
       "note": "c7ee0e1: develop→ветка (Ф3 unified add-flow вернулся, конфликт только xcstrings; net-new красная testPlannedExpenseAutoApplies — легаси-кластер, в baseline) + 07f958c: старты строк/Total из легаси-предшественника (реверс LegacyConversionRegistry). Гейт 1718/15 = 0 новых; Release 26.2 проверен визуально. НЕ пушено"
+    },
+    {
+      "name": "Раунды 3–4: единый источник Динамики (Groups = агрегация per-account)",
+      "status": "done",
+      "note": "fbf4029: per-account строки один раз, .groups = aggregateGroupRows тех же строк, одна Ungrouped, единый знак (signedAccountValue), инвариант-тест Total(Groups)==Total(Accounts); −277 строк двойного расчёта. Гейт 1759/13 = 0 новых; визуально тоталы вкладок идентичны (3 594 478 → 9 556 765). НЕ пушено"
     },
     {
       "name": "Ф6 — редизайн экрана Счета (после сноса)",
