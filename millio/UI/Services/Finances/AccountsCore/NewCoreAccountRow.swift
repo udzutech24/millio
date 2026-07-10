@@ -63,7 +63,7 @@ struct NewCoreAccountRow: View {
     }
 }
 
-private extension AccountKind {
+extension AccountKind {
     /// SF Symbol по умолчанию для новых счетов — до появления кастомных иконок нового ядра
     /// (та же зона ответственности, что `CardType.icon`/`Bank.icon` у старого мира).
     var fallbackIconName: String {

@@ -155,4 +155,52 @@ struct FinanceDynamicsCoreContributionTests {
             #expect(abs(point.value - 50_000) < 0.01, "Без core-счетов addingCoreContribution добавляет 0 — график равен чистому легаси-скелету")
         }
     }
+
+    // MARK: - Ветка .accounts: только core-счета (Фаза 6b, баг «No products»)
+
+    @Test("Вкладка «Счета»: при пустых легаси-таблицах core-счёт даёт непустой breakdown (не «No products»)")
+    func accountsBreakdown_includesCoreAccountsWhenLegacyEmpty() async throws {
+        let ctx = try makeContext()
+        let createdAt = Date().addingTimeInterval(-60 * 86_400)
+
+        // Легаси-группа и мирронная AccountGroup — одно имя (мост по имени, newCoreAccounts(matching:)).
+        let financeGroup = FinanceGroup(name: "Основная", colorHex: "#FFFFFF")
+        ctx.insert(financeGroup)
+        let coreGroup = AccountGroup(name: "Основная", colorHex: "#FFFFFF")
+        ctx.insert(coreGroup)
+
+        // Чистый core-счёт с балансом. Легаси-счетов (FinanceAccount) НЕ создаём — эмулируем состояние
+        // после Ф1–Ф5b, когда легаси-таблицы пусты.
+        let accountsService = AccountsCoreService(modelContext: ctx)
+        let coreAccount = try accountsService.createAccount(
+            name: "Наличные",
+            kind: .cash,
+            currency: "RUB",
+            openingBalance: 200_000,
+            group: coreGroup,
+            date: createdAt
+        )
+        _ = coreAccount
+        try ctx.save()
+
+        let financeViewModel = FinanceViewModel(modelContext: ctx, currencyService: MockCurrencyRateService(), skipInitialLoad: true)
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: ctx,
+            financeViewModel: financeViewModel,
+            currencyService: MockCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.period = .month
+        dynamicsViewModel.state.viewMode = .accounts
+        await dynamicsViewModel.updateDynamicsBreakdown()
+
+        let breakdown = dynamicsViewModel.state.dynamicsBreakdown
+        #expect(!breakdown.isEmpty, "Ветка .accounts должна показать core-счёт, а не пустой список (баг «No products»)")
+        let core = try #require(breakdown.first { $0.name == "Наличные" })
+        #expect(abs(core.endValue - 200_000) < 0.01, "Баланс core-счёта должен прийти от accountsTotalsService (200 000)")
+    }
 }

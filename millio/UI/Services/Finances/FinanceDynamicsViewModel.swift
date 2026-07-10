@@ -1050,6 +1050,50 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         state.currencyBreakdown = items
     }
 
+    /// Core-счета для ветки `.accounts` дашборда «Динамика»: каждый счёт — отдельная строка, суммы и
+    /// дельта в валюте экрана через тот же `accountsTotalsService`, что и per-group суммы (Фаза 1.5).
+    /// Уважает выбор групп (`selectedGroupIDs`); дедуп по `id`. Список короткий — считаем последовательно.
+    private func coreAccountDynamicsItems(startDate: Date, endDate: Date) async -> [DynamicsBreakdownItem] {
+        let groupsToShow = state.selectedGroupIDs.isEmpty
+            ? state.groups
+            : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
+        let currency = state.displayCurrency
+
+        var seen: Set<UUID> = []
+        var coreAccounts: [Account] = []
+        for group in groupsToShow {
+            for account in financeViewModel.newCoreAccounts(matching: group) where seen.insert(account.id).inserted {
+                coreAccounts.append(account)
+            }
+        }
+        guard !coreAccounts.isEmpty else { return [] }
+
+        var items: [DynamicsBreakdownItem] = []
+        for account in coreAccounts {
+            let start = NSDecimalNumber(
+                decimal: await financeViewModel.accountsTotalsService.total(for: [account], on: startDate, in: currency)
+            ).doubleValue
+            let end = NSDecimalNumber(
+                decimal: await financeViewModel.accountsTotalsService.total(for: [account], on: endDate, in: currency)
+            ).doubleValue
+            // Знак уже заложен в total (loan/debt отрицательны) — как в ветке .groups, дельту не переворачиваем.
+            let delta = end - start
+            items.append(DynamicsBreakdownItem(
+                id: account.id.uuidString,
+                name: account.name,
+                startValue: start,
+                endValue: end,
+                delta: delta,
+                deltaPercent: calculateDeltaPercent(delta: delta, startBalance: start),
+                icon: account.kind.fallbackIconName,
+                accountType: nil,
+                isCreditCard: account.kind == .loan,
+                isArchived: false
+            ))
+        }
+        return items
+    }
+
     /// Обновить список динамики
     func updateDynamicsBreakdown() async {
         let accounts = getAccountsForCalculation(scope: .currentVisible)
@@ -1281,8 +1325,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
 
             breakdown = accountsData.compactMap { orderedItems[$0.0] }
+
+            // Core-счета отдельными строками — зеркально ветке .groups (:1084). Легаси-таблицы пусты
+            // (Фаза 6b), поэтому без этого вкладка «Счета» показывает «No products» при живом тотале.
+            // Фильтр по конкретным легаси-счетам отключает core — у ядра нет legacy-`accountUniqueID`.
+            if selectedAccountIDs.isEmpty {
+                breakdown.append(contentsOf: await coreAccountDynamicsItems(startDate: startDate, endDate: endDate))
+            }
         }
-        
+
         await MainActor.run {
             state.dynamicsBreakdown = breakdown
         }
