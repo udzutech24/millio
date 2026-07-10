@@ -25,24 +25,6 @@ struct SheetsModifier: ViewModifier {
                 FinanceAddAccountView(viewModel: viewModel)
             }
             .sheet(isPresented: Binding(
-                get: { viewModel.state.showCreateCardSheet },
-                set: { if !$0 { viewModel.handle(.hideCreateCardSheet) } }
-            )) {
-                FinanceCreateCardView(viewModel: viewModel)
-            }
-            .sheet(isPresented: Binding(
-                get: { viewModel.state.showCreateCreditSheet },
-                set: { if !$0 { viewModel.handle(.hideCreateCreditSheet) } }
-            )) {
-                FinanceCreateCreditView(viewModel: viewModel)
-            }
-            .sheet(isPresented: Binding(
-                get: { viewModel.state.showCreateInvestmentSheet },
-                set: { if !$0 { viewModel.handle(.hideCreateInvestmentSheet) } }
-            )) {
-                FinanceCreateInvestmentView(viewModel: viewModel)
-            }
-            .sheet(isPresented: Binding(
                 get: { viewModel.state.showDisplayCurrencySheet },
                 set: { if !$0 { viewModel.handle(.hideDisplayCurrencySheet) } }
             )) {
@@ -53,33 +35,6 @@ struct SheetsModifier: ViewModifier {
                 set: { if !$0 { viewModel.handle(.hideSecondaryDisplayCurrencySheet) } }
             )) {
                 DisplayCurrencySheet(viewModel: viewModel, isSecondary: true)
-            }
-            .sheet(isPresented: Binding(
-                get: { viewModel.state.showEditCardSheet },
-                set: { if !$0 { viewModel.handle(.hideEditCardSheet) } }
-            )) {
-                if let cardID = viewModel.state.editingCardID,
-                   let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
-                    FinanceEditCardView(card: card, viewModel: viewModel)
-                }
-            }
-            .sheet(isPresented: Binding(
-                get: { viewModel.state.showEditCreditSheet },
-                set: { if !$0 { viewModel.handle(.hideEditCreditSheet) } }
-            )) {
-                if let creditID = viewModel.state.editingCreditID,
-                   let credit = viewModel.state.availableCredits.first(where: { $0.creditUniqueID == creditID }) {
-                    FinanceEditCreditView(credit: credit, viewModel: viewModel)
-                }
-            }
-            .sheet(isPresented: Binding(
-                get: { viewModel.state.showEditInvestmentSheet },
-                set: { if !$0 { viewModel.handle(.hideEditInvestmentSheet) } }
-            )) {
-                if let investmentID = viewModel.state.editingInvestmentID,
-                   let investment = viewModel.state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID }) {
-                    FinanceEditInvestmentView(investment: investment, viewModel: viewModel)
-                }
             }
             .sheet(isPresented: Binding(
                 get: { viewModel.state.showQuickEditAccountSheet },

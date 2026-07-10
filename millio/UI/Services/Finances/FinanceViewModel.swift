@@ -25,16 +25,7 @@ struct FinanceState {
     
     /// Показывать ли экран добавления счета
     var showAddAccountSheet: Bool = false
-    
-    /// Показывать ли экран создания карты
-    var showCreateCardSheet: Bool = false
-    
-    /// Показывать ли экран создания кредита
-    var showCreateCreditSheet: Bool = false
-    
-    /// Показывать ли экран создания актива
-    var showCreateInvestmentSheet: Bool = false
-    
+
     /// Выбранная группа для добавления счета
     var selectedGroupForAccount: FinanceGroup? = nil
     
@@ -92,24 +83,6 @@ struct FinanceState {
     
     /// Непривязанные активы (не добавленные ни в одну группу)
     var unattachedInvestments: [Investment] = []
-    
-    /// Показывать ли редактор карты для редактирования
-    var showEditCardSheet: Bool = false
-    
-    /// Показывать ли редактор кредита для редактирования
-    var showEditCreditSheet: Bool = false
-    
-    /// Показывать ли редактор инвестиции для редактирования
-    var showEditInvestmentSheet: Bool = false
-    
-    /// ID редактируемой карты
-    var editingCardID: String? = nil
-    
-    /// ID редактируемого кредита
-    var editingCreditID: String? = nil
-    
-    /// ID редактируемой инвестиции
-    var editingInvestmentID: String? = nil
     
     /// Множество ID групп с открытыми аккордеонами
     var expandedGroupIDs: Set<String> = []
@@ -244,12 +217,6 @@ enum FinanceAction {
     case physicallyDeleteLegacyAccount(FinanceAccount)
     /// Track C: перевод легаси-счёта в новое ядро (создаёт core-двойник, скрывает легаси атомарно).
     case convertAccountToCore(FinanceAccount)
-    case showCreateCardSheet
-    case hideCreateCardSheet
-    case showCreateCreditSheet
-    case hideCreateCreditSheet
-    case showCreateInvestmentSheet
-    case hideCreateInvestmentSheet
     case showDisplayCurrencySheet
     case hideDisplayCurrencySheet
     case setDisplayCurrency(String)
@@ -261,10 +228,6 @@ enum FinanceAction {
     case moveGroup(sourceGroupID: String, destinationIndex: Int)
     case moveAccount(sourceAccountID: String, destinationIndex: Int, groupID: String)
     case setGroupTotal(String, Double)
-    case editAccount(FinanceAccount)
-    case hideEditCardSheet
-    case hideEditCreditSheet
-    case hideEditInvestmentSheet
     case showQuickEditAccountSheet(FinanceAccount)
     case hideQuickEditAccountSheet
     case updateAccountAmount(FinanceAccount, Double)
@@ -625,25 +588,7 @@ final class FinanceViewModel: ViewModelProtocol {
             physicallyDeleteLegacyAccount(account)
         case .convertAccountToCore(let account):
             convertAccountToCore(account)
-            
-        case .showCreateCardSheet:
-            state.showCreateCardSheet = true
-            
-        case .hideCreateCardSheet:
-            state.showCreateCardSheet = false
-            
-        case .showCreateCreditSheet:
-            state.showCreateCreditSheet = true
-            
-        case .hideCreateCreditSheet:
-            state.showCreateCreditSheet = false
-            
-        case .showCreateInvestmentSheet:
-            state.showCreateInvestmentSheet = true
-            
-        case .hideCreateInvestmentSheet:
-            state.showCreateInvestmentSheet = false
-            
+
         case .showDisplayCurrencySheet:
             state.showDisplayCurrencySheet = true
             
@@ -703,22 +648,7 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .setGroupTotal(let groupID, let total):
             state.groupTotals[groupID] = total
-            
-        case .editAccount(let account):
-            editAccount(account)
-            
-        case .hideEditCardSheet:
-            state.showEditCardSheet = false
-            state.editingCardID = nil
-            
-        case .hideEditCreditSheet:
-            state.showEditCreditSheet = false
-            state.editingCreditID = nil
-            
-        case .hideEditInvestmentSheet:
-            state.showEditInvestmentSheet = false
-            state.editingInvestmentID = nil
-            
+
         case .showQuickEditAccountSheet(let account):
             state.quickEditAccount = account
             state.showQuickEditAccountSheet = true
@@ -1731,22 +1661,6 @@ final class FinanceViewModel: ViewModelProtocol {
         (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
     }
 
-    private func editAccount(_ account: FinanceAccount) {
-        switch account.accountType {
-        case .card:
-            state.editingCardID = account.accountID
-            state.showEditCardSheet = true
-            
-        case .credit:
-            state.editingCreditID = account.accountID
-            state.showEditCreditSheet = true
-            
-        case .investment:
-            state.editingInvestmentID = account.accountID
-            state.showEditInvestmentSheet = true
-        }
-    }
-    
     private func updateAccountAmount(account: FinanceAccount, newAmount: Double) {
         // Находим группу, к которой принадлежит счет
         let accountGroup = state.groups.first { group in

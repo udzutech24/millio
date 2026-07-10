@@ -153,4 +153,34 @@ struct AllPresetsOnNewCoreTests {
         )
         #expect(kind == .manualAsset)
     }
+
+    /// Гард сноса Фазы 4 (план 6b «Путь B»). В edit-режиме (`isEditingLegacy: true`) ВСЕ kind-резолверы
+    /// моста ОБЯЗАНЫ вернуть nil — именно этот nil маршрутизирует `FinanceAddAccountView.addAccount()`
+    /// в легаси-edit-путь (`updateCardAndGroup`/`updateCreditAndGroup`/`updateInvestmentAndGroup`,
+    /// живой через `FinanceDynamicsView.showFullProductEditSheet`). Легаси-EDIT — единственный
+    /// оставшийся легаси-писатель после Ф4 (легаси-CREATE-путь мёртв: см. `eachPresetResolvesToExactlyOneNewCoreKind`,
+    /// где create-режим всегда даёт ровно один core-kind). Поэтому гуарды `isEditingLegacy` НЕ удалены
+    /// в Ф4 (вопреки исходной посылке плана §4): их снос воскресил бы баг Фазы 6a — правка легаси-счёта
+    /// создавала бы дубль-Account нового ядра. Тест падает, если гуард `guard !isEditingLegacy` убрать.
+    @Test("Edit-режим (isEditingLegacy) — все резолверы моста возвращают nil", arguments: FinanceAddAccountProductOption.allCases)
+    func editingLegacyReturnsNilForEveryResolver(option: FinanceAddAccountProductOption) {
+        let selection = option.selection(locale: Locale(identifier: "ru_RU"))
+
+        #expect(AccountsCoreAdditionBridge.moneyKind(
+            accountType: selection.accountType, investmentPreset: selection.investmentPreset,
+            bank: .sberbank, isEditingLegacy: true
+        ) == nil)
+        #expect(AccountsCoreAdditionBridge.depositKind(
+            accountType: selection.accountType, investmentPreset: selection.investmentPreset,
+            isEditingLegacy: true
+        ) == nil)
+        #expect(AccountsCoreAdditionBridge.obligationKind(
+            accountType: selection.accountType, investmentCategory: selection.investmentCategory,
+            isEditingLegacy: true
+        ) == nil)
+        #expect(AccountsCoreAdditionBridge.assetKind(
+            accountType: selection.accountType, investmentCategory: selection.investmentCategory,
+            investmentPreset: selection.investmentPreset, hasTicker: true, isEditingLegacy: true
+        ) == nil)
+    }
 }
