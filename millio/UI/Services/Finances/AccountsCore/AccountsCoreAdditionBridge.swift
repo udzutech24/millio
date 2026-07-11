@@ -67,6 +67,16 @@ enum AccountsCoreAdditionBridge {
         guard let financeGroup else { return nil }
         let targetName = financeGroup.name
 
+        // Инвариант Ф5c.7.1: канонический Ungrouped ядра = `account.group == nil`, отдельной
+        // `AccountGroup` для «Без группы» НЕ существует. Если сюда передали системную Ungrouped-группу
+        // (или пустое имя) — не материализуем core-сущность, иначе на «Счетах» появляется второй
+        // Ungrouped (корень: `QuickSetupApplier` слал легаси-Ungrouped в этот мост). Гард
+        // централизован здесь, чтобы инвариант не зависел от памяти каждого вызывающего (ср. ручной
+        // guard в `GroupsMigrator`). `allKnownUngroupedNames` — на случай, если группа была создана
+        // на другом языке.
+        guard !targetName.isEmpty,
+              !FinanceSystemGroups.allKnownUngroupedNames.contains(targetName) else { return nil }
+
         let descriptor = FetchDescriptor<AccountGroup>(
             predicate: #Predicate<AccountGroup> { $0.name == targetName }
         )

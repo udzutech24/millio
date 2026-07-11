@@ -118,7 +118,10 @@ final class QuickSetupApplierTests: XCTestCase {
 
         let accounts = try context.fetch(FetchDescriptor<Account>())
         XCTAssertEqual(accounts.count, 1)
-        XCTAssertEqual(accounts.first?.group?.name, FinanceSystemGroups.ungroupedName)
+        // Ф5c.7.1: «без группы» на ядре = канонический `group == nil`, а НЕ отдельная core-`AccountGroup`
+        // с именем Ungrouped. Раньше `resolveAccountGroup` материализовал вторую Ungrouped-сущность
+        // (корень дубля на «Счетах») — теперь мост возвращает nil для системной Ungrouped-группы.
+        XCTAssertNil(accounts.first?.group)
     }
 
     func testApplyExpenseCategoriesDoesNotModifyCashbackCategories() throws {

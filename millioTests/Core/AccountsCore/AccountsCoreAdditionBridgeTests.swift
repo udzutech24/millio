@@ -67,6 +67,35 @@ struct AccountsCoreAdditionBridgeTests {
         #expect(allGroups.count == 1) // не задублировали
     }
 
+    /// Ф5c.7.1: системная Ungrouped-группа НЕ материализует core-`AccountGroup` — канон ядра
+    /// «без группы» = `account.group == nil`. Иначе на «Счетах» возникает второй Ungrouped
+    /// (корень бага: `QuickSetupApplier` слал легаси-Ungrouped в этот мост при онбординге без группы).
+    @Test @MainActor
+    func resolveAccountGroupReturnsNilForUngroupedSystemGroup() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let ungrouped = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: "#3C4B5E")
+        ctx.insert(ungrouped)
+
+        let resolved = AccountsCoreAdditionBridge.resolveAccountGroup(matching: ungrouped, in: ctx)
+        #expect(resolved == nil)
+
+        // Ключевое: НИ ОДНА core-`AccountGroup` не создана — иначе получаем вторую Ungrouped-сущность.
+        let allGroups = try ctx.fetch(FetchDescriptor<AccountGroup>())
+        #expect(allGroups.isEmpty)
+    }
+
+    @Test @MainActor
+    func resolveAccountGroupReturnsNilForEmptyName() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let empty = FinanceGroup(name: "", colorHex: "#000000")
+        ctx.insert(empty)
+
+        #expect(AccountsCoreAdditionBridge.resolveAccountGroup(matching: empty, in: ctx) == nil)
+        #expect(try ctx.fetch(FetchDescriptor<AccountGroup>()).isEmpty)
+    }
+
     // MARK: - loanMeta/debtMeta (Фаза 2 — формы «Кредит»/«Долг» → new-core meta)
 
     @Test
