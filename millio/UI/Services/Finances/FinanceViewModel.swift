@@ -497,6 +497,13 @@ final class FinanceViewModel: ViewModelProtocol {
         case .hideAddAccountSheet:
             state.showAddAccountSheet = false
             state.selectedGroupForAccount = nil
+            // Компаньон-фикс миграции `FinanceRows` (Ф5c.7 expand-contract), НЕ дублирует общий
+            // EventBus-рефреш в `subscribeToFinanceEvents`: core-CREATE-методы
+            // (`createMoneyAccountOnNewCore` и т.д. в `FinanceAddAccountView`) — единственный путь
+            // мутации core-стора, который НЕ публикует `investmentsUpdated` вообще (в отличие от
+            // archive/edit/restore/physicallyDelete/QuickSetup) — раньше это маскировалось живым
+            // fetch внутри `FinanceRows.newCoreAccounts`. Нужен свой триггер именно здесь.
+            loadCoreEntities()
             
         case .addAccountToGroup(let accountType, let accountID, let group):
             addAccountToGroup(accountType: accountType, accountID: accountID, group: group)
@@ -756,6 +763,13 @@ final class FinanceViewModel: ViewModelProtocol {
                 self.handleCreditsUpdated()
             case FinanceEvent.cardsUpdated, FinanceEvent.investmentsUpdated:
                 self.loadAccounts()
+                // [Ф5c.7 expand-contract, root-фикс] Общая точка рефреша `state.coreAccounts`/`coreGroups`
+                // для ВСЕХ core-мутаций, публикующих этот канал: archiveAccount/performEdit
+                // (AccountDetailView), restore/physicallyDelete (ArchivedAccountsView),
+                // QuickSetupApplier — вместо точечного релоада в каждом вызывающем месте.
+                // Без этого снапшот держит: архивный счёт как ghost-строку, устаревший бакет
+                // группы после смены группы, ВИСЯЧУЮ ссылку на физически удалённый @Model.
+                self.loadCoreEntities()
                 self.scheduleBackgroundTask { viewModel in
                     await viewModel.refreshGroupTotalsAndAmounts()
                 }

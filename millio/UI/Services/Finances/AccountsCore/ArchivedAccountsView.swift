@@ -131,6 +131,10 @@ struct ArchivedAccountsView: View {
     private func restore(_ account: Account) {
         do {
             try service.restoreAccount(account)
+            // Этот экран не хранит ссылку на FinanceViewModel — без события `state.coreAccounts`
+            // не узнает о возврате счёта из архива до случайного несвязанного `loadGroups()`
+            // (тот же канал, что `AccountDetailView.archiveAccount()`, см. комментарий там).
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             refreshToken = UUID()
         } catch {
             errorMessage = error.localizedDescription
@@ -142,6 +146,9 @@ struct ArchivedAccountsView: View {
         pendingPhysicalDeletion = nil
         do {
             try service.physicallyDelete(account)
+            // Без события `state.coreAccounts` держит ссылку на физически удалённый @Model —
+            // риск краша в `FinanceRows`/`NewCoreAccountRow` при следующем рендере (Fable-находка).
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             refreshToken = UUID()
         } catch {
             errorMessage = error.localizedDescription

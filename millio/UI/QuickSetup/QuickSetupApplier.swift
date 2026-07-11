@@ -15,6 +15,11 @@ struct QuickSetupApplier {
         SettingsManager.shared.quickSetupExpenseCategoryIDs = selection.selectedExpenseCategoryIDs
         SettingsManager.shared.isQuickSetupCompleted = true
         SettingsManager.shared.isQuickSetupBannerHidden = false
+
+        // `applyProducts` может создавать core-счета (`AccountsCoreAdditionBridge`), но сам сервис
+        // не публикует события — экран (онбординг ИЛИ повторный запуск из настроек) не держит
+        // ссылку на `FinanceViewModel`. Тот же канал, что `AccountDetailView.archiveAccount()`.
+        EventBus.shared.publish(FinanceEvent.investmentsUpdated)
     }
 
     private func applyLanguageAndCurrencies(_ selection: QuickSetupSelection) {
