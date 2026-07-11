@@ -62,6 +62,18 @@ struct FinanceState {
     /// Доступные активы
     var availableInvestments: [Investment] = []
 
+    // MARK: - [Ф5c.7 expand-contract, шаг 1] Поля нового ядра РЯДОМ с легаси
+    // Пока dead-read: потребителей нет, populate — в `loadCoreEntities()`. Мигрируются пофайлово
+    // (plans/2026-07-11__phase-5c7-finances-replatform.md §5c.7.4), легаси-поля сносятся последним
+    // contract-шагом, когда grep докажет 0 потребителей.
+
+    /// Группы нового ядра. Канон Ungrouped = `account.group == nil`, поэтому здесь НЕТ Ungrouped-
+    /// сущности — счета без группы видны через `coreAccounts.filter { $0.group == nil }`.
+    var coreGroups: [AccountGroup] = []
+
+    /// Счета нового ядра, участвующие сегодня (архивные скрыты — как у `newCoreAccounts`).
+    var coreAccounts: [Account] = []
+
     /// Архивные карты
     var archivedCards: [Card] = []
 
@@ -682,8 +694,29 @@ final class FinanceViewModel: ViewModelProtocol {
             updateUnattachedItems()
             calculateTotalAmount()
         }
+        loadCoreEntities()
     }
-    
+
+    /// [Ф5c.7 expand-contract, шаг 1] Populate `state.coreGroups`/`state.coreAccounts` из нового ядра
+    /// параллельно легаси-`loadGroups`. Тот же fetch-паттерн, что `newCoreAccounts(matching:)`
+    /// (участвующие сегодня, сортировка order→createdAt) — не второй путь агрегации (инвариант 2 §2.1),
+    /// а плоский срез store для будущих потребителей. Канон Ungrouped = `account.group == nil`:
+    /// coreGroups исключает любую `AccountGroup` с известным Ungrouped-именем (защита от сущности-дубля).
+    private func loadCoreEntities() {
+        let today = nowProvider()
+
+        let accounts = (try? modelContext.fetch(FetchDescriptor<Account>())) ?? []
+        state.coreAccounts = accounts
+            .filter { $0.participates(on: today) }
+            .sorted { $0.order != $1.order ? $0.order < $1.order : $0.createdAt < $1.createdAt }
+
+        let ungroupedNames = FinanceSystemGroups.allKnownUngroupedNames
+        let groups = (try? modelContext.fetch(FetchDescriptor<AccountGroup>())) ?? []
+        state.coreGroups = groups
+            .filter { !ungroupedNames.contains($0.name) }
+            .sorted { $0.order != $1.order ? $0.order < $1.order : $0.name < $1.name }
+    }
+
     private func loadAccounts() {
         accountService.loadAccounts()
     }
