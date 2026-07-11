@@ -1284,18 +1284,38 @@ struct FinanceAddAccountView: View {
         // после сноса EDIT-пути (6b Ф5c.3). Сюда управление в норме не доходит.
     }
 
-    private var currentTrackedTickerCount: Int {
-        viewModel.state.availableInvestments.reduce(into: 0) { partialResult, investment in
+    // [Ф5c.7 Gate C] Не `private` — минимально доступная точка для characterization-тестов
+    // (SwiftUI View как обычный struct, `@testable import` не видит `private`). Поведение не менялось.
+    //
+    // Дедуп twin-пар (легаси↔core) «по построению»: конвертированный легаси архивируется
+    // (`archivedAt` выставлен мигратором) и поэтому исключён из `available*` (эти массивы уже не
+    // включают архивные — см. `FinanceAccountService.loadAccounts`); core-двойник учтён через
+    // `state.coreAccounts`, который заполняется `participates(on:)`-фильтром (`archivedAt`+
+    // `includeInTotal`, `FinanceViewModel.loadCoreEntities`) — тот же принцип исключения архива,
+    // что и у `available*`. Одна и та же учётная единица не может одновременно быть в обоих
+    // множествах — сложение без пересечения.
+    var currentTrackedTickerCount: Int {
+        let legacyCount = viewModel.state.availableInvestments.reduce(into: 0) { partialResult, investment in
             if investment.category.isMarketTickerCategory {
                 partialResult += 1
             }
         }
+        // Паритет с легаси: считаются ТОЛЬКО акции/крипта (`isMarketTickerCategory`), не
+        // облигации/металлы — те же 2 из 4 `MarketAssetClass`, что и `InvestmentCategory`.
+        let coreCount = viewModel.state.coreAccounts.filter { account in
+            guard account.kind == .marketInvestment, let assetClass = account.marketMeta?.assetClass else {
+                return false
+            }
+            return assetClass == .stock || assetClass == .crypto
+        }.count
+        return legacyCount + coreCount
     }
 
-    private var currentFinanceProductCount: Int {
+    var currentFinanceProductCount: Int {
         viewModel.state.availableCards.count
         + viewModel.state.availableCredits.count
         + viewModel.state.availableInvestments.count
+        + viewModel.state.coreAccounts.count
     }
 
     private var isCreatingNewTrackedTicker: Bool {
