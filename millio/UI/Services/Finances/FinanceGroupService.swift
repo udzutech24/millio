@@ -85,6 +85,7 @@ final class FinanceGroupService {
         name: String,
         colorHex: String,
         displayCurrency: String?,
+        customIconName: String?,
         editingGroup: AccountGroup?,
         displayCurrencyFallback: String
     ) {
@@ -96,10 +97,12 @@ final class FinanceGroupService {
             existing.name = name
             existing.colorHex = colorHex
             existing.displayCurrency = displayCurrency
+            existing.customIconName = customIconName
             groupToUpdate = existing
         } else {
             let maxOrder = groupsProvider().map { $0.order }.max() ?? -1
             let newGroup = AccountGroup(name: name, colorHex: colorHex, displayCurrency: displayCurrency, order: maxOrder + 1)
+            newGroup.customIconName = customIconName
             modelContext.insert(newGroup)
             groupToUpdate = newGroup
         }

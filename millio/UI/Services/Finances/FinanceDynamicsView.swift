@@ -2411,6 +2411,17 @@ private struct FinanceDynamicsContentView: View {
                                 : LinearGradient(colors: AppColors.financesGradient, startPoint: .topLeading, endPoint: .bottomTrailing)
                         )
                         .frame(width: 20, height: 20)
+                } else if viewModel.state.viewMode == .groups,
+                          let group = dynamicsGroup(for: item),
+                          let customIcon = group.customIconName {
+                    // Только кастомная иконка группы — при nil breakdown-строка остаётся без иконки
+                    // (поведение по умолчанию не меняется).
+                    AccountIconBadgeView(
+                        iconName: customIcon,
+                        iconColor: group.colorHex,
+                        fallback: "square.grid.2x2.fill",
+                        size: AppSpacing.xl
+                    )
                 }
 
                 Text(item.name)

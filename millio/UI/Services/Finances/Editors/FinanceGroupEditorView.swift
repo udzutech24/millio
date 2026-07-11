@@ -32,7 +32,9 @@ struct FinanceGroupEditorView: View {
     @State private var archiveBalanceWarningCurrency: String = ""
     @State private var pendingAccountDeletionAfterWarning: FinanceAccount? = nil
     @State private var isColorPaletteExpanded: Bool = false
-    
+    @State private var selectedIconName: String? = nil
+    @State private var showIconPicker: Bool = false
+
     private let predefinedColors: [Color] = [
         .blue, .cyan, .green, .mint, .purple, .pink,
         .indigo, .orange, .red, .yellow, .teal, .brown
@@ -56,6 +58,7 @@ struct FinanceGroupEditorView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         nameSection
+                        iconSection
                         colorSection
                         currencySection
                         managementSection
@@ -164,6 +167,7 @@ struct FinanceGroupEditorView: View {
                 if let editing = currentEditingGroup {
                     name = editing.name
                     selectedCurrency = editing.displayCurrency
+                    selectedIconName = editing.customIconName
                     // Находим соответствующий цвет из predefinedColors по hex-значению
                     let editingColorHex = (editing.colorHex ?? "#FFFFFF").uppercased()
                     if let matchingColor = predefinedColors.first(where: { color in
@@ -221,6 +225,13 @@ struct FinanceGroupEditorView: View {
                 message: .key("monetization.crypto.pro_message"),
                 onSubscribe: { router.push(.subscription) }
             )
+            .sheet(isPresented: $showIconPicker) {
+                // Цвет иконки у группы — это её единый `colorHex` (тот же акцент, что рендерит бейдж),
+                // поэтому пикер редактирует общий `selectedColor`, а не отдельное поле цвета.
+                AccountIconPickerSheet(iconName: $selectedIconName, iconColor: iconColorBinding)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
 
         if presentationStyle.wrapsInNavigationStack {
             NavigationStack {
@@ -269,6 +280,63 @@ struct FinanceGroupEditorView: View {
         }
     }
     
+    private var iconSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.m) {
+            FinancesSectionHeader(title: L("finances.group_editor.section.icon"))
+            FinancesGlassCard {
+                Button {
+                    showIconPicker = true
+                } label: {
+                    HStack(spacing: AppSpacing.m) {
+                        RoundedRectangle(
+                            cornerRadius: FinancesMainLayoutPolicy.groupRowTypeIconCornerRadius,
+                            style: .continuous
+                        )
+                        .fill(selectedColor.opacity(0.16))
+                        .frame(
+                            width: FinancesMainLayoutPolicy.groupRowTypeIconSize,
+                            height: FinancesMainLayoutPolicy.groupRowTypeIconSize
+                        )
+                        .overlay(
+                            // nil → нейтральный fallback (иконка «прочее»); заданная кастомная иконка
+                            // рендерится в акценте группы (тот же цвет, что бейдж на «Счетах»).
+                            AccountIconBadgeView(
+                                iconName: selectedIconName,
+                                iconColor: selectedColor.toHex(),
+                                fallback: "square.grid.2x2.fill",
+                                size: FinancesMainLayoutPolicy.groupRowTypeIconSize
+                            )
+                        )
+
+                        Text(L("finances.group_editor.icon.select"))
+                            .font(.millioHeadline)
+                            .foregroundStyle(AppColors.textPrimary)
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.millioCaption)
+                            .foregroundStyle(AppColors.textTertiary)
+                    }
+                    .padding(.vertical, AppSpacing.ml)
+                    .padding(.horizontal, AppSpacing.l)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// Мост цвета для пикера: у группы цвет иконки — это её общий `colorHex`, отдельного поля нет.
+    private var iconColorBinding: Binding<String?> {
+        Binding(
+            get: { selectedColor.toHex() },
+            set: { hex in
+                // nil у пикера = «дефолтный градиент»; у группы всегда есть цвет — nil игнорируем.
+                if let hex { selectedColor = Color(hex: hex) }
+            }
+        )
+    }
+
     private var colorSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: L("finances.group_editor.section.color"))
@@ -590,7 +658,13 @@ struct FinanceGroupEditorView: View {
     private func saveGroup() {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let colorHex = selectedColor.toHex()
-        viewModel.handle(.updateGroup(name: normalizedName, colorHex: colorHex, displayCurrency: selectedCurrency))
+        let normalizedIcon = selectedIconName.flatMap { $0.isEmpty ? nil : $0 }
+        viewModel.handle(.updateGroup(
+            name: normalizedName,
+            colorHex: colorHex,
+            displayCurrency: selectedCurrency,
+            customIconName: normalizedIcon
+        ))
         dismiss()
     }
 

@@ -13,6 +13,11 @@ final class AccountGroup: Persistable {
     var displayCurrency: String?
     var order: Int = 0
 
+    /// Кастомная иконка группы (SF Symbol, "monogram:XX" или эмодзи). nil = вычисляемая иконка по
+    /// доминирующему типу счетов (`FinanceGroupTypeIconView`). Аддитивное optional-поле →
+    /// lightweight-миграция, V6/version-gate не требуется (паттерн `Account`/`Card.customIconName`).
+    var customIconName: String?
+
     // Поля, унаследованные от легаси-`FinanceGroup` при слиянии моделей (Фаза 1.5 плана 6b «Путь B»).
     // Все три — аддитивные с дефолтами → lightweight-миграция схемы (V6 не требуется).
     /// Избранная группа.
@@ -66,6 +71,7 @@ final class AccountGroup: Persistable {
             "name": name,
             "colorHex": colorHex ?? NSNull(),
             "displayCurrency": displayCurrency ?? NSNull(),
+            "customIconName": customIconName ?? NSNull(),
             "order": order,
             "isFavorite": isFavorite,
             "usesManualAccountOrdering": usesManualAccountOrdering,

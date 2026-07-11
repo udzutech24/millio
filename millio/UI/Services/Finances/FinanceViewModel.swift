@@ -175,7 +175,7 @@ enum FinanceAction {
     case addGroup
     case editGroup(AccountGroup)
     case deleteGroup(AccountGroup)
-    case updateGroup(name: String, colorHex: String, displayCurrency: String?)
+    case updateGroup(name: String, colorHex: String, displayCurrency: String?, customIconName: String?)
     case hideGroupEditor
     case showAddAccountSheet(AccountGroup?)
     case hideAddAccountSheet
@@ -493,11 +493,12 @@ final class FinanceViewModel: ViewModelProtocol {
         case .deleteGroup(let group):
             groupService.deleteGroup(group)
 
-        case .updateGroup(let name, let colorHex, let displayCurrency):
+        case .updateGroup(let name, let colorHex, let displayCurrency, let customIconName):
             groupService.updateGroup(
                 name: name,
                 colorHex: colorHex,
                 displayCurrency: displayCurrency,
+                customIconName: customIconName,
                 editingGroup: state.editingGroup,
                 displayCurrencyFallback: state.displayCurrency
             )

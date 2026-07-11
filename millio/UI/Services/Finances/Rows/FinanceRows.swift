@@ -158,19 +158,35 @@ private enum FinanceGroupProductCategory: Hashable {
 private struct FinanceGroupTypeIconView: View {
     let category: FinanceGroupProductCategory
     let accentColor: Color
+    /// Кастомная иконка группы (SF Symbol / "monogram:XX" / эмодзи). nil = иконка по типу продукта.
+    var customIconName: String? = nil
+
+    private var iconName: String { customIconName ?? category.iconName }
+    private var isMonogram: Bool { AccountIconSet.isMonogram(iconName) }
 
     var body: some View {
         RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.groupRowTypeIconCornerRadius, style: .continuous)
             .fill(accentColor.opacity(0.16))
-            .overlay(
-                Image(systemName: category.iconName)
-                    .font(.system(size: FinancesMainLayoutPolicy.groupRowTypeIconSize * 0.44, weight: .semibold))
-                    .foregroundStyle(accentColor)
-            )
+            .overlay(glyph)
             .frame(
                 width: FinancesMainLayoutPolicy.groupRowTypeIconSize,
                 height: FinancesMainLayoutPolicy.groupRowTypeIconSize
             )
+    }
+
+    @ViewBuilder
+    private var glyph: some View {
+        if isMonogram {
+            Text(AccountIconSet.monogramText(iconName))
+                .font(.system(size: FinancesMainLayoutPolicy.groupRowTypeIconSize * 0.40, weight: .bold, design: .rounded))
+                .foregroundStyle(accentColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        } else {
+            Image(systemName: iconName)
+                .font(.system(size: FinancesMainLayoutPolicy.groupRowTypeIconSize * 0.44, weight: .semibold))
+                .foregroundStyle(accentColor)
+        }
     }
 }
 
@@ -260,7 +276,11 @@ struct FinanceGroupRow: View {
     private var groupHeader: some View {
         GeometryReader { proxy in
             HStack(spacing: AppSpacing.m) {
-                FinanceGroupTypeIconView(category: dominantProductCategory, accentColor: group.color)
+                FinanceGroupTypeIconView(
+                    category: dominantProductCategory,
+                    accentColor: group.color,
+                    customIconName: group.customIconName
+                )
 
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {

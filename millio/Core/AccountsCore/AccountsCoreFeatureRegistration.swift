@@ -46,6 +46,8 @@ struct AccountGroupImporter: ModelImporter {
         }
         let colorHex = data["colorHex"] as? String
         let displayCurrency = data["displayCurrency"] as? String
+        // Аддитивное поле (5c.7.6) — старый бэкап без него декодируется в nil, без краша.
+        let customIconName = data["customIconName"] as? String
         let order = data["order"] as? Int ?? 0
         // Поля Фазы 1.5 (слияние с легаси-FinanceGroup) — с дефолтами для старых бэкапов без них.
         let isFavorite = data["isFavorite"] as? Bool ?? false
@@ -61,6 +63,7 @@ struct AccountGroupImporter: ModelImporter {
             existing.name = name
             existing.colorHex = colorHex
             existing.displayCurrency = displayCurrency
+            existing.customIconName = customIconName
             existing.order = order
             existing.isFavorite = isFavorite
             existing.usesManualAccountOrdering = usesManualAccountOrdering
@@ -73,6 +76,7 @@ struct AccountGroupImporter: ModelImporter {
             id: id, name: name, colorHex: colorHex, displayCurrency: displayCurrency, order: order,
             isFavorite: isFavorite, usesManualAccountOrdering: usesManualAccountOrdering, priorityRaw: priorityRaw
         )
+        group.customIconName = customIconName
         group.legacyFieldsMigratedAt = legacyFieldsMigratedAt
         context.insert(group)
     }

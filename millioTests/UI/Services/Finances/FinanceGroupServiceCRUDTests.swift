@@ -43,6 +43,7 @@ struct FinanceGroupServiceCRUDTests {
             name: "Вклады",
             colorHex: "#222222",
             displayCurrency: nil,
+            customIconName: nil,
             editingGroup: nil,
             displayCurrencyFallback: "RUB"
         )
@@ -71,6 +72,7 @@ struct FinanceGroupServiceCRUDTests {
             name: "Брокеры",
             colorHex: "#00AAFF",
             displayCurrency: "USD",
+            customIconName: nil,
             editingGroup: coreGroup,
             displayCurrencyFallback: "RUB"
         )
