@@ -64,17 +64,20 @@ enum AccountsCoreAdditionBridge {
     /// и переносит `colorHex` для только что созданной группы. `nil` (счёт без группы = Ungrouped)
     /// не создаёт AccountGroup — совпадает с семантикой Ungrouped нового ядра (`account.group == nil`).
     static func resolveAccountGroup(matching financeGroup: FinanceGroup?, in modelContext: ModelContext) -> AccountGroup? {
-        guard let financeGroup else { return nil }
-        let targetName = financeGroup.name
+        resolveAccountGroup(matchingName: financeGroup?.name, colorHex: financeGroup?.colorHex, in: modelContext)
+    }
 
-        // Инвариант Ф5c.7.1: канонический Ungrouped ядра = `account.group == nil`, отдельной
-        // `AccountGroup` для «Без группы» НЕ существует. Если сюда передали системную Ungrouped-группу
-        // (или пустое имя) — не материализуем core-сущность, иначе на «Счетах» появляется второй
-        // Ungrouped (корень: `QuickSetupApplier` слал легаси-Ungrouped в этот мост). Гард
-        // централизован здесь, чтобы инвариант не зависел от памяти каждого вызывающего (ср. ручной
-        // guard в `GroupsMigrator`). `allKnownUngroupedNames` — на случай, если группа была создана
-        // на другом языке.
-        guard !targetName.isEmpty,
+    /// Резолв/создание `AccountGroup` по ИМЕНИ легаси-группы — общая точка для всех, у кого на руках
+    /// только имя (не сама `FinanceGroup`). Единственная реализация Ungrouped-гарда ядра: `nil`/пустое
+    /// имя/любое из `allKnownUngroupedNames` → `nil` (счёт без группы, `account.group == nil`), core-
+    /// сущность НЕ материализуется. Ф5c.7.3: сюда сведены `FinanceViewModel.resolveCoreGroup` и
+    /// `LegacyAccountsMigrator.resolveCoreGroup`, ранее гардившие Ungrouped только по имени ТЕКУЩЕЙ
+    /// локали (`ungroupedName`) — кросс-локальный легаси-Ungrouped там материализовался второй
+    /// core-сущностью мимо этого гарда (Fable-резидуал 5c.7.1). Инвариант больше не зависит от памяти
+    /// вызывающего и от текущего языка.
+    static func resolveAccountGroup(matchingName name: String?, colorHex: String? = nil, in modelContext: ModelContext) -> AccountGroup? {
+        guard let targetName = name,
+              !targetName.isEmpty,
               !FinanceSystemGroups.allKnownUngroupedNames.contains(targetName) else { return nil }
 
         let descriptor = FetchDescriptor<AccountGroup>(
@@ -84,7 +87,7 @@ enum AccountsCoreAdditionBridge {
             return existing
         }
 
-        let newGroup = AccountGroup(name: targetName, colorHex: financeGroup.colorHex)
+        let newGroup = AccountGroup(name: targetName, colorHex: colorHex)
         modelContext.insert(newGroup)
         return newGroup
     }

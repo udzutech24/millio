@@ -283,17 +283,11 @@ final class LegacyAccountsMigrator {
         return map
     }
 
-    /// Core-группа двойника: находим/создаём `AccountGroup` по имени легаси-группы (мост по имени,
-    /// как `FinanceViewModel.resolveCoreGroup`). Ungrouped / без группы → nil.
+    /// Core-группа двойника: находим/создаём `AccountGroup` по имени легаси-группы (мост по имени).
+    /// Ф5c.7.3: сведён на `AccountsCoreAdditionBridge` — единый Ungrouped-гард по `allKnownUngroupedNames`
+    /// (раньше здесь был локаль-зависимый `ungroupedName`, пропускавший кросс-локальный Ungrouped).
     private func resolveCoreGroup(name: String?) -> AccountGroup? {
-        guard let name, name != FinanceSystemGroups.ungroupedName, !name.isEmpty else { return nil }
-        let descriptor = FetchDescriptor<AccountGroup>(predicate: #Predicate<AccountGroup> { $0.name == name })
-        if let existing = try? modelContext.fetch(descriptor).first {
-            return existing
-        }
-        let group = AccountGroup(name: name)
-        modelContext.insert(group)
-        return group
+        AccountsCoreAdditionBridge.resolveAccountGroup(matchingName: name, in: modelContext)
     }
 
     // MARK: - Валюта вклада

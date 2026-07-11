@@ -96,6 +96,43 @@ struct AccountsCoreAdditionBridgeTests {
         #expect(try ctx.fetch(FetchDescriptor<AccountGroup>()).isEmpty)
     }
 
+    // MARK: - resolveAccountGroup(matchingName:) — Ф5c.7.3 унификация resolveCoreGroup
+
+    /// Ф5c.7.3: name-overload (на который сведены `FinanceViewModel`/`LegacyAccountsMigrator`) держит
+    /// ШИРОКИЙ Ungrouped-гард — ЛЮБОЕ из `allKnownUngroupedNames` (кросс-локально) → nil, core-сущность
+    /// не материализуется. Это закрывает Fable-резидуал 5c.7.1: раньше оба сайта гардили Ungrouped
+    /// только по имени текущей локали, и Ungrouped, созданный на другом языке, проходил мимо гарда.
+    @Test @MainActor
+    func resolveAccountGroupByNameReturnsNilForEveryKnownUngroupedName() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+
+        for name in FinanceSystemGroups.allKnownUngroupedNames {
+            #expect(AccountsCoreAdditionBridge.resolveAccountGroup(matchingName: name, in: ctx) == nil)
+        }
+        #expect(AccountsCoreAdditionBridge.resolveAccountGroup(matchingName: nil, in: ctx) == nil)
+        #expect(AccountsCoreAdditionBridge.resolveAccountGroup(matchingName: "", in: ctx) == nil)
+        // Ни один вызов не создал core-`AccountGroup`.
+        #expect(try ctx.fetch(FetchDescriptor<AccountGroup>()).isEmpty)
+    }
+
+    /// name-overload резолвит/создаёт по имени и НЕ дублирует существующую (та же семантика, что у
+    /// FinanceGroup-overload — обе теперь одна реализация).
+    @Test @MainActor
+    func resolveAccountGroupByNameCreatesThenReusesByName() throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+
+        let created = AccountsCoreAdditionBridge.resolveAccountGroup(matchingName: "Инвестиции", colorHex: "#ABCDEF", in: ctx)
+        #expect(created?.name == "Инвестиции")
+        #expect(created?.colorHex == "#ABCDEF")
+        try ctx.save()
+
+        let reused = AccountsCoreAdditionBridge.resolveAccountGroup(matchingName: "Инвестиции", in: ctx)
+        #expect(reused?.id == created?.id)
+        #expect(try ctx.fetch(FetchDescriptor<AccountGroup>()).count == 1)
+    }
+
     // MARK: - loanMeta/debtMeta (Фаза 2 — формы «Кредит»/«Долг» → new-core meta)
 
     @Test

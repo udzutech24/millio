@@ -1439,17 +1439,10 @@ final class FinanceViewModel: ViewModelProtocol {
 
     /// Core-группа для двойника: находим/создаём `AccountGroup` по имени легаси-группы (тот же
     /// мост по имени, что `newCoreAccounts(matching:)`). Ungrouped/без группы → nil.
+    /// Ф5c.7.3: сведён на `AccountsCoreAdditionBridge` — единый Ungrouped-гард по `allKnownUngroupedNames`
+    /// (раньше здесь был локаль-зависимый `ungroupedName`, пропускавший кросс-локальный Ungrouped).
     private func resolveCoreGroup(for account: FinanceAccount) -> AccountGroup? {
-        guard let groupName = account.group?.name,
-              groupName != FinanceSystemGroups.ungroupedName,
-              !groupName.isEmpty else { return nil }
-        let descriptor = FetchDescriptor<AccountGroup>(predicate: #Predicate<AccountGroup> { $0.name == groupName })
-        if let existing = try? modelContext.fetch(descriptor).first {
-            return existing
-        }
-        let group = AccountGroup(name: groupName)
-        modelContext.insert(group)
-        return group
+        AccountsCoreAdditionBridge.resolveAccountGroup(matching: account.group, in: modelContext)
     }
 
     func archivedAccountRows() -> [ArchivedFinanceAccountRow] {
