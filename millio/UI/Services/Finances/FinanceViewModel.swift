@@ -1051,6 +1051,19 @@ final class FinanceViewModel: ViewModelProtocol {
             }
     }
 
+    /// [Ф5c.7 expand-contract, файл №2] Тот же мост-по-имени, что `newCoreAccounts(matching:)`, но
+    /// БЕЗ живого FetchDescriptor — читает pre-populated `state.coreAccounts` (наполняется в
+    /// `loadCoreEntities()`). Единая точка фильтра для ВСЕХ потребителей (`FinanceRows`,
+    /// `FinanceGroupEditorView`), чтобы имя-сопоставление не дублировалось в каждом View
+    /// (инвариант 2 §2.1 плана — один источник, не второй путь агрегации).
+    func coreAccountsSnapshot(matching group: FinanceGroup) -> [Account] {
+        if group.name == FinanceSystemGroups.ungroupedName {
+            return state.coreAccounts.filter { $0.group == nil }
+        }
+        let targetName = group.name
+        return state.coreAccounts.filter { $0.group?.name == targetName }
+    }
+
     /// Есть ли хоть один архивный счёт нового ядра — дешёвая проверка для показа пункта «Архив»
     /// в настройках (Фаза 5, задача 2 брифинга), без загрузки самих объектов.
     func hasArchivedNewCoreAccounts() -> Bool {

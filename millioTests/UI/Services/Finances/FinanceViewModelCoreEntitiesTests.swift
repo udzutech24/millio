@@ -289,4 +289,56 @@ struct FinanceViewModelCoreEntitiesTests {
 
         #expect(vm.newCoreBalanceToday(accountInSnapshot) == 1_500)
     }
+
+    // MARK: - Миграция потребителя `FinanceGroupEditorView` (Ф5c.7.4, файл №2)
+
+    /// `coreAccountsSnapshot(matching:)` — единая точка, которую теперь зовут И `FinanceRows`,
+    /// И `accountsSection` в `FinanceGroupEditorView` — обязана показать core-счёт легаси-группы
+    /// (ровно то, что увидит пользователь в редакторе группы).
+    @Test("expand#2 FinanceGroupEditorView: coreAccountsSnapshot показывает core-счёт группы редактора")
+    func coreAccountsSnapshotVisibleInGroupEditorScenario() throws {
+        let ctx = try makeContext()
+        let legacyGroup = FinanceGroup(name: "Ипотека", colorHex: "#444444", order: 0)
+        ctx.insert(legacyGroup)
+        let coreGroup = AccountGroup(name: "Ипотека")
+        ctx.insert(coreGroup)
+
+        let coreService = AccountsCoreService(modelContext: ctx)
+        let account = try coreService.createAccount(name: "Счёт в редакторе", kind: .debitCard, currency: "RUB", openingBalance: 2_000, group: coreGroup)
+        try ctx.save()
+
+        let vm = makeViewModel(ctx)
+        vm.handle(.loadGroups)
+
+        #expect(vm.coreAccountsSnapshot(matching: legacyGroup).map(\.id) == [account.id])
+    }
+
+    /// Компаньон-фикс `.onDisappear { viewModel.handle(.loadGroups) }` на NavigationLink «Добавить
+    /// счёт» в `FinanceGroupEditorView`: та же находка, что `.hideAddAccountSheet` у sheet-варианта —
+    /// пуш-путь тоже не публикует событий, поэтому свежесозданный через push-флоу core-счёт обязан
+    /// стать виден после `.loadGroups` (симулируем именно этот вызов, не сам SwiftUI-колбэк).
+    @Test("expand#2: .loadGroups после push-CREATE делает core-счёт видимым в coreAccountsSnapshot редактора")
+    func loadGroupsAfterPushedCreateRevealsAccountInEditorSnapshot() throws {
+        let ctx = try makeContext()
+        let legacyGroup = FinanceGroup(name: "Авто", colorHex: "#555555", order: 0)
+        ctx.insert(legacyGroup)
+        let coreGroup = AccountGroup(name: "Авто")
+        ctx.insert(coreGroup)
+        try ctx.save()
+
+        let vm = makeViewModel(ctx)
+        vm.handle(.loadGroups)
+        #expect(vm.coreAccountsSnapshot(matching: legacyGroup).isEmpty)
+
+        // Симулируем createMoneyAccountOnNewCore из пуш-флоу FinanceAddAccountView(.pushed) —
+        // тот же путь, что и в sheet-варианте, событий не публикует.
+        let coreService = AccountsCoreService(modelContext: ctx)
+        let created = try coreService.createAccount(name: "Пуш-счёт", kind: .debitCard, currency: "RUB", openingBalance: 3_000, group: coreGroup)
+
+        #expect(!vm.coreAccountsSnapshot(matching: legacyGroup).map(\.id).contains(created.id)) // до рефреша ещё не видно
+
+        vm.handle(.loadGroups) // как .onDisappear на NavigationLink в accountsSection
+
+        #expect(vm.coreAccountsSnapshot(matching: legacyGroup).map(\.id).contains(created.id))
+    }
 }

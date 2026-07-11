@@ -62,7 +62,10 @@ struct FinanceGroupEditorView: View {
                         
                         if let editingGroup = currentEditingGroup {
                             let orderedAccounts = viewModel.orderedAccounts(for: editingGroup)
-                            accountsSection(orderedAccounts)
+                            // [Ф5c.7 expand-contract, файл №2] core-счета группы (мост по имени,
+                            // единая точка `coreAccountsSnapshot` — не второй фильтр, см. FinanceRows).
+                            let coreAccounts = viewModel.coreAccountsSnapshot(matching: editingGroup)
+                            accountsSection(orderedAccounts, coreAccounts: coreAccounts)
                         }
                     }
                     .padding(.top, 20)
@@ -388,7 +391,7 @@ struct FinanceGroupEditorView: View {
         }
     }
     
-    private func accountsSection(_ accounts: [FinanceAccount]) -> some View {
+    private func accountsSection(_ accounts: [FinanceAccount], coreAccounts: [Account]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: L("finances.group_editor.section.accounts"))
             FinancesGlassCard {
@@ -400,6 +403,15 @@ struct FinanceGroupEditorView: View {
                                 preselectedGroup: editingGroup,
                                 presentationStyle: .pushed
                             )
+                            // onDisappear ИМЕННО на destination, не на NavigationLink/label (source):
+                            // в NavigationStack onDisappear source-view срабатывает при push ВПЕРЁД
+                            // (в момент тапа, до создания счёта), а на pop-back — нет. Destination же
+                            // исчезает ровно при pop-back — единственный корректный момент рефреша
+                            // (добавление core-счёта пуш-путём не публикует событий в EventBus, см.
+                            // компаньон-фикс .hideAddAccountSheet у sheet-варианта). НЕ переносить на label.
+                            .onDisappear {
+                                viewModel.handle(.loadGroups)
+                            }
                         }
                     } label: {
                         HStack(spacing: 12) {
@@ -424,12 +436,12 @@ struct FinanceGroupEditorView: View {
                     }
                     .buttonStyle(.plain)
 
-                    if !accounts.isEmpty {
+                    if !accounts.isEmpty || !coreAccounts.isEmpty {
                         FinancesRowDivider(leadingPadding: 0)
                             .padding(.horizontal, 16)
                     }
 
-                    if accounts.isEmpty {
+                    if accounts.isEmpty && coreAccounts.isEmpty {
                         Text(L("finances.main.empty_products.title"))
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
@@ -493,10 +505,31 @@ struct FinanceGroupEditorView: View {
                             }
                             .padding(.vertical, 14)
                             .padding(.horizontal, 16)
-                            
-                            if account.id != accounts.last?.id {
+
+                            if account.id != accounts.last?.id || !coreAccounts.isEmpty {
                                 FinancesRowDivider(leadingPadding: 52)
                             }
+                        }
+                    }
+
+                    // [Ф5c.7 expand-contract, файл №2] core-счета группы — READ-ONLY в этом шаге
+                    // (без кнопки удаления): `.removeAccountFromGroup(FinanceAccount)` легаси-типизирован
+                    // (VM action-флип отложен на 5c.7.4+5c.7.5 по плану), а обходной прямой вызов
+                    // `AccountsCoreService.archiveAccount` в обход VM-экшена завёл бы второй мутационный
+                    // путь без баланс-warning'а, который есть у легаси-удаления — сознательно не тяну
+                    // каскад ради этого шага (см. отчёт).
+                    ForEach(coreAccounts, id: \.id) { account in
+                        HStack(spacing: 12) {
+                            NewCoreAccountRow(
+                                account: account,
+                                balance: viewModel.newCoreBalanceToday(account),
+                                isAmountHidden: viewModel.state.isAmountHidden
+                            )
+                        }
+                        .padding(.horizontal, 16)
+
+                        if account.id != coreAccounts.last?.id {
+                            FinancesRowDivider(leadingPadding: 52)
                         }
                     }
                 }

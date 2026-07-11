@@ -415,18 +415,13 @@ struct FinanceGroupRow: View {
     }
 
     /// [Ф5c.7 expand-contract, миграция потребителя] Раньше — живой `viewModel.newCoreAccounts(matching:)`
-    /// (свежий FetchDescriptor на каждый рендер). Теперь — срез `state.coreAccounts`, наполняемый
-    /// один раз в `loadGroups()`. Семантика ИДЕНТИЧНА: то же имя-сопоставление (мост до Фазы 6),
-    /// Ungrouped-канон = `account.group == nil`, сортировка уже применена при populate.
+    /// (свежий FetchDescriptor на каждый рендер). Теперь — единый `viewModel.coreAccountsSnapshot(matching:)`
+    /// (файл №2: та же точка переиспользована `FinanceGroupEditorView`, не второй дублированный фильтр).
     /// Свежесть данных после CREATE обеспечена компаньон-фиксом в `FinanceViewModel.hideAddAccountSheet`
     /// (см. комментарий там) — без него список тут показывал бы устаревший срез сразу после создания
     /// core-счёта.
     private var newCoreAccounts: [Account] {
-        if group.name == FinanceSystemGroups.ungroupedName {
-            return viewModel.state.coreAccounts.filter { $0.group == nil }
-        }
-        let targetName = group.name
-        return viewModel.state.coreAccounts.filter { $0.group?.name == targetName }
+        viewModel.coreAccountsSnapshot(matching: group)
     }
 
     private var dragChevron: some View {
