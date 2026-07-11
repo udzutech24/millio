@@ -1,6 +1,6 @@
 # План: Ф5c.7 — реплатформинг Finances-слоя на AccountsCore (слито с Ф6)
 
-**Дата создания:** 2026-07-11 · **Статус:** RESEARCH+SPEC+PLAN готовы, РЕАЛИЗАЦИЯ НЕ НАЧАТА · **Тип:** L (2-3 сессии) · **Родитель:** `plans/2026-07-07__legacy-accounts-purge-path-b.md`, секция «⛔ Блокер Ф5c.6», remaining-scope 5c.7. Разблокирует Ф2c (унификация `orderedAccounts`/`calculateGroupTotal`/per-account chart-modes) и открывает путь к 5c.8–5c.11 (снос @Model).
+**Дата создания:** 2026-07-11 · **Статус (обновлено 2026-07-11 вечер):** 5c.7.0–5c.7.3 РЕАЛИЗОВАНЫ, Fable-подтверждены, закоммичены в develop локально (5 коммитов поверх `dda6b5e`, НЕ запушено). 5c.7.4+5c.7.5 (объединённый type-flip) — СТОП ДО КОДА, research задокументирован, ждёт отдельной сессии. 5c.7.6/5c.7.7 — заблокированы, зависят от 5c.7.4+5c.7.5. · **Тип:** L (2-3 сессии) · **Родитель:** `plans/2026-07-07__legacy-accounts-purge-path-b.md`, секция «⛔ Блокер Ф5c.6», remaining-scope 5c.7. Разблокирует Ф2c (унификация `orderedAccounts`/`calculateGroupTotal`/per-account chart-modes) и открывает путь к 5c.8–5c.11 (снос @Model).
 
 **Baseline для всех гейтов этого плана:** `xcrun xcresulttool` **1745 passed / 14 failed** (develop @ `aea084a`, HEAD на момент старта Ф5c.7 — `dda6b5e`, docs-only поверх `aea084a`, baseline не меняется). Любая под-фаза обязана дать 0 новых красных относительно этого числа — **сравнивать список идентификаторов упавших тестов, не только счётчик** (Fable-риск №10: миграция одного из 14 baseline-красных на другую причину не должна маскироваться как «то же самое число»).
 
@@ -139,17 +139,41 @@
 - Mixed-store fixture (инвариант 9, §2.1) — обязательная часть regression-сьюта этой под-фазы, не только 5c.7.4.
 - Гейт: characterization-тесты (сняты ДО порта) зелёные после порта; `FinanceViewModelTests` полностью зелёные; 0 новых красных в остальном сьюте.
 
-### 5c.7.4 — `FinanceDynamicsViewModel` → core (L)
-- `FetchDescriptor<Card/Credit/Investment>()` `:523-529` → `FetchDescriptor<Account>`.
-- Per-account chart-modes (byAccounts/singleAccount, Ф2c-блокер «1b») — порт на `Account`, сохранить `aggregateGroupRows`/`signedAccountValue`-паттерн без изменений семантики.
-- **[Fable-ревью]** Mixed-store fixture (инвариант 9, §2.1) обязателен в этой под-фазе — `FetchDescriptor<Account>`-миграция не должна тихо терять непроконвертированный legacy-хвост из графика/breakdown (Fable-риск №6).
-- Гейт: **обязательный полный прогон 6-файлового protected-кластера Dynamics-тестов** (~3347 строк) — 0 новых красных; `FinanceTotalsServiceFilterConsistencyTests` зелёный; mixed-store fixture зелёный.
+### 5c.7.4+5c.7.5 (ОБЪЕДИНЕНО, 2026-07-11) — атомарный type-flip FinanceViewModel+FinanceDynamicsViewModel+Views (XL, самый рискованный гейт плана) — [ ] СТОП, КОД НЕ НАЧАТ — отдельная сессия, research задокументирован ниже
 
-### 5c.7.5 — Views + декаплинг CREATE-формы + полноценный rich-edit UI (M)
-- `FinancesView`/`FinanceRows`/`FinanceOverviewCardView`/`FinanceAddAccountView`/`FinanceGroupEditorView`/`FinanceQuickEditAccountView`/`ArchivedAccountsView` — привести сигнатуры к core-типам вслед за VM (в основном механический порт после 5c.7.3/4).
-- Декаплинг `InlineCreateForms` от `CardViewModel`/`CreditViewModel`/`InvestmentViewModel` (отложено в Ф5c.3, теперь самое время — они уже не нужны нигде, кроме этой формы).
-- **[Fable-ревью, перенесено из 5c.7.0]** Полноценный rich-edit UI в `AccountDetailView`: переиспользовать теперь уже core-типизированную `FinanceAddAccountView` в режиме prefill-from-core вместо минимальной формы 5c.7.0. Строится ПОСЛЕ перетипизации формы (не до), чтобы не делать работу дважды и не трогать CREATE-путь раньше готовности — снижает риск реинкарнации Ф6a-дубликат-бага (Fable-риск №3).
-- Гейт: UI device-проверка полного flow «создать → отредактировать (полноценный rich-edit) → архивировать → восстановить → удалить» на 3 типах счетов.
+> **Ментор-стоп ДО кода (Александр, 2026-07-11) — подтверждён владельцем.** Александр провёл research и отказался начинать правку без явного решения — реальный охват флипа оказался существенно больше, чем описано в плане, у него нет безопасного промежуточного билдящегося состояния, начинать 150-250-site правку без гарантии докончить в этой же сессии = риск оставить движок тоталов небилдящимся. Владелец подтвердил (после уточняющего вопроса): остановиться, отдельная сессия. **Не грайндить это без свежей сессии + полного бюджета + в идеале доступа к устройству.**
+>
+> **Находки research'а (важны для следующей сессии, не терять):**
+> 1. **Формулировка плана «снять легаси-терм» — ОШИБОЧНА, зафиксировать design fix.** `calculateGroupTotal` = `legacyTotal + coreTotal` (`FinanceViewModel.swift:892-898`). Простое удаление легаси-терма даёт `mixedStoreGroupTotal`: 17000→7000 — деньги юзера пропадают из тотала. **Правильный дизайн: инверсия primary/fallback** — core становится primary-источником, легаси остаётся fallback-по-имени для непроконвертированных записей, а не выбрасывается.
+> 2. **Хорошая новость, снижает реальный риск:** главный агрегат «Общий баланс» в шапке (`FinanceTotalsService.swift:69-83`) УЖЕ core-only (легаси-цикл снят в 6b Ф2). Dual-render остался только в per-group display/строках — самый заметный юзеру расчёт флип не трогает.
+> 3. **Скоуп шире плана.** `state.groups`/`availableCards` питают не только Views, а провайдеры сервисов: `FinanceTotalsService`/`AccountBalanceSnapshotService`/`FinanceGroupService` (`FinanceViewModel.swift:255/272/300`; `FinanceTotalsService.swift:27,44,258-260` — `cardByID/creditByID/investmentByID`). Флип = переписывание account-info резолвинга (`getAccountInfo:906`, `getAccountInfoForDynamics`, `cardsCache`) с легаси-словарей на core.
+> 4. **Кросс-скоуп связь, не была в плане:** `FDVM.getAccountsForCalculation()→[FinanceAccount]` (`:908/:980`) и `calculateBalanceAtDate(accounts:)` (`:1979`) потребляются **Cashflow** (`CashflowViewModel+Categories.swift:364-383`) — вне скоупа 5c.7 (Cashback-миграция — отдельный эскалированный скоуп). Флип FDVM обязан СОХРАНИТЬ эти сигнатуры легаси-типизированными — не трогать транзитивно.
+> 5. **Оценка реального объёма:** ~150-250 сайтов в ~16 файлах (2 God-VM 1867+2915 строк, `FinanceDynamicsView` 3202 строки, + сервисы + Views) — не помещается в один атомарный гейт автономной сессии без device.
+>
+> **Рекомендация для следующей сессии:** отдельная сессия, полный бюджет, реализовать по исправленному дизайну (п.1) с сохранением Cashflow-сигнатур (п.4). Research выше = карта сайтов, грайнд должен быть быстрее благодаря этому.
+
+> **Слияние по Fable-находке из 5c.7.3.** Разбивка 5c.7.4/5c.7.5 на раздельно гейтуемые под-фазы физически нереализуема под правилом «build 0 ошибок на каждом гейте» — published-типы `state.groups`/`availableCards`/`FinanceGroupService`-return читаются одновременно из `FinanceDynamicsViewModel`, `FinanceDynamicsView`, `FinanceOverviewCardView`, `FinanceAddAccountView`, `StockBulkImportSheet`, `FinancesView`, `FinanceRows`, `FinanceGroupEditorView` — смена типа компайл-фейлит их все разом (полное доказательство file:line — журнал 5c.7.3 выше). Fable независимо подтвердил: инкрементальный shim невозможен без второго источника правды (инвариант 2) или фантомных SwiftData-инстансов. Владелец подтвердил (2026-07-11, на связи): продолжать сегодня одним гейтом.
+
+**Скоуп (объединяет исходные 5c.7.4 + 5c.7.5 + перенесённые пункты из 5c.7.1/5c.7.2/5c.7.3 — см. их журналы выше):**
+- `state.groups`→`[AccountGroup]`, `availableCards/Credits/Investments`→единый `[Account]`, кэши по `Account.id` (`FinanceViewModel`).
+- `editGroup`/`removeAccountFromGroup`/`showAccountDynamics` — параметры на `Account`/`AccountGroup`.
+- `calculateGroupTotal` — снять легаси-терм (безопасно теперь, VM core-typed) — схлопывает dual-render легаси+core в single-render.
+- `physicallyDeleteLegacyAccount`-экшен — развести на core-путь (`AccountsCoreService.physicallyDelete`) + legacy-fallback только если легаси-запись реально есть (не мёртвый код — теперь VM core-typed, маршрутизация реальна).
+- Type-flip `FinanceGroupService`/`FinanceAccountService` публичного API на call sites VM/Views (уже унифицированные в 5c.7.1/5c.7.2/5c.7.3 внутренности переиспользовать как есть).
+- `FinanceDynamicsViewModel`: `FetchDescriptor<Card/Credit/Investment>()` `:523-529` → `FetchDescriptor<Account>`; per-account chart-modes (byAccounts/singleAccount) — порт на `Account`, `aggregateGroupRows`/`signedAccountValue`-паттерн без изменений семантики.
+- Views: `FinancesView`/`FinanceRows`/`FinanceOverviewCardView`/`FinanceAddAccountView`/`FinanceGroupEditorView`/`FinanceQuickEditAccountView`/`ArchivedAccountsView`/`FinanceDynamicsView`/`StockBulkImportSheet` — сигнатуры на core-типы.
+- Декаплинг `InlineCreateForms` от `CardViewModel`/`CreditViewModel`/`InvestmentViewModel`.
+- Полноценный rich-edit UI в `AccountDetailView` (переиспользовать теперь core-типизированную `FinanceAddAccountView` в режиме prefill-from-core вместо минимальной формы 5c.7.0).
+- Mixed-store fixture (инвариант 9) — `FetchDescriptor<Account>`-миграция не должна тихо терять непроконвертированный legacy-хвост из графика/breakdown (Fable-риск №6); characterization-тесты из 5c.7.3 обязаны пройти с ТЕМИ ЖЕ числами после адаптации сигнатур (Fable-риск №5).
+
+**Гейт (объединённый, самый строгий во всём плане):**
+1. build 0 ошибок.
+2. **Обязательный полный прогон 6-файлового protected-кластера Dynamics-тестов** (~3347 строк) — 0 новых красных (протокол git-stash ID-сетов из плашки).
+3. `FinanceTotalsServiceFilterConsistencyTests` зелёный (инвариант `Total(Groups)==Total(Accounts)`).
+4. `FinanceViewModelCharacterizationTests` (5c.7.3) — те же числа после порта.
+5. Mixed-store fixture зелёный (и для FVM, и для FDVM).
+6. UI-проверка (симулятор — device PENDING) полного flow «создать → отредактировать (rich-edit) → архивировать → восстановить → удалить» на 3 типах счетов.
+7. Fable-независимая верификация ОБЯЗАТЕЛЬНА перед коммитом (как и все гейты дня) — здесь особенно строго ввиду рискованности.
 
 ### 5c.7.6 — Редизайн «Счета» (Ф6 proper, M) — слито сюда по решению плана-родителя
 - Stacked-полоса активы/обязательства с нетто; секции «Активы»/«Обязательства» с подытогами; `AccountGroup.customIconName` (паттерн `AccountIconPickerSheet`/`FinanceOverviewLedgerPresentation`, additive-поле, без V6).
