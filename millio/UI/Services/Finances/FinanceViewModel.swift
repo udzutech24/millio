@@ -685,6 +685,13 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private func loadGroups() {
+        // [Ф5c.7 core-aware Ungrouped фикс] loadCoreEntities() ПЕРЕД fetch/filter легаси-групп, не
+        // в конце: фильтр ниже обязан видеть АКТУАЛЬНОЕ state.coreAccounts (core-счета без группы),
+        // иначе он схлопывает Ungrouped по устаревшему срезу с предыдущего цикла (или пустому на
+        // первой загрузке). Сам метод самодостаточен (собственные фетчи, не зависит от легаси state)
+        // — переставить безопасно, порядок внутри него не меняется.
+        loadCoreEntities()
+
         let descriptor = FetchDescriptor<FinanceGroup>()
         if let groups = try? modelContext.fetch(descriptor) {
             state.groups = groups.sorted { group1, group2 in
@@ -693,15 +700,20 @@ final class FinanceViewModel: ViewModelProtocol {
                 }
                 return group1.createdAt < group2.createdAt
             }
-            // Пустая системная группа "Без группы" не должна отображаться в списке.
+            // Пустая системная группа "Без группы" не должна отображаться в списке — НО только если
+            // она пуста И по легаси, И по ядру. Раньше проверялся только `group.accounts` (легаси
+            // junction) — core-счета с `group == nil` не учитывались, из-за чего Ungrouped исчезала
+            // из `state.groups`, а зависимый `coreAccountsCount`-гард в `FinanceGroupService.
+            // shouldHideGroupInList` не успевал сработать (группы нет во входном массиве вообще).
             .filter { group in
                 guard group.name == ungroupedGroupName else { return true }
-                return !(group.accounts?.isEmpty ?? true)
+                let hasLegacyAccounts = !(group.accounts?.isEmpty ?? true)
+                let hasCoreUngroupedAccounts = state.coreAccounts.contains { $0.group == nil }
+                return hasLegacyAccounts || hasCoreUngroupedAccounts
             }
             updateUnattachedItems()
             calculateTotalAmount()
         }
-        loadCoreEntities()
     }
 
     /// [Ф5c.7 expand-contract, шаг 1] Populate `state.coreGroups`/`state.coreAccounts` из нового ядра

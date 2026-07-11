@@ -436,4 +436,74 @@ struct FinanceViewModelCoreEntitiesTests {
         let afterGroupChange = tokenPart(account)
         #expect(afterRename != afterGroupChange) // group?.id сменился
     }
+
+    // MARK: - Core-aware Ungrouped фикс (Fable-находка, `FinanceViewModel.loadGroups`)
+
+    /// (а) core-only Ungrouped: НЕТ ни одного легаси-счёта в системе, но ЕСТЬ core-счёт с
+    /// `group == nil`. Раньше легаси-Ungrouped-группа схлопывалась из `state.groups` (фильтр видел
+    /// только `group.accounts`) — теперь обязана остаться, и ledger-цикл обязан видеть счёт.
+    @Test("Ungrouped-фикс (а): core-only Ungrouped — группа в state.groups, coreAccountsSnapshot видит счёт")
+    func coreOnlyUngroupedGroupStaysVisibleAndLedgerSeesAccount() throws {
+        let ctx = try makeContext()
+        let ungrouped = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: FinanceSystemGroups.ungroupedColorHex, order: 0)
+        ctx.insert(ungrouped) // легаси Ungrouped-группа существует, но БЕЗ легаси-счетов внутри
+        let coreService = AccountsCoreService(modelContext: ctx)
+        let account = try coreService.createAccount(name: "Core без группы", kind: .debitCard, currency: "RUB", openingBalance: 777, group: nil)
+        try ctx.save()
+
+        let vm = makeViewModel(ctx)
+        vm.handle(.loadGroups)
+
+        let groupInList = try #require(vm.state.groups.first(where: { $0.name == FinanceSystemGroups.ungroupedName }))
+        #expect(vm.coreAccountsSnapshot(matching: groupInList).map(\.id) == [account.id])
+    }
+
+    /// (б) оба мира пусты — Ungrouped обязана оставаться скрытой (регресс-guard старого поведения,
+    /// дублирует семантику `FinanceViewModelCharacterizationTests.visibleGroupsHidesEmptyUngrouped`,
+    /// но уже через `state.groups` напрямую, не через `visibleGroupsForList()`).
+    @Test("Ungrouped-фикс (б): легаси И core пусты — Ungrouped скрыта в state.groups")
+    func bothEmptyUngroupedStaysHidden() throws {
+        let ctx = try makeContext()
+        let ungrouped = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: FinanceSystemGroups.ungroupedColorHex, order: 0)
+        ctx.insert(ungrouped)
+        try ctx.save()
+
+        let vm = makeViewModel(ctx)
+        vm.handle(.loadGroups)
+
+        #expect(!vm.state.groups.map(\.name).contains(FinanceSystemGroups.ungroupedName))
+    }
+
+    /// (г) анти-дубль: РОВНО один Ungrouped-бакет — `state.groups` содержит легаси-Ungrouped-группу
+    /// не более одного раза (единственная @Model-сущность), и `coreAccountsSnapshot(matching:)` по
+    /// НЕЙ отдаёт core-счета без группы РОВНО один раз (нет второго пути рендера — grep подтвердил:
+    /// `FinanceRows`/`FinancesView` не имеют отдельного Ungrouped-блока, единственный путь —
+    /// generic `FinanceGroupRow` → `coreAccountsSnapshot`, см. отчёт гейта).
+    @Test("Ungrouped-фикс (г): анти-дубль — ровно один Ungrouped-бакет, счёт без группы виден 1 раз")
+    func exactlyOneUngroupedBucketNoDuplicateRender() throws {
+        let ctx = try makeContext()
+        let ungrouped = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: FinanceSystemGroups.ungroupedColorHex, order: 0)
+        ctx.insert(ungrouped)
+        let namedGroup = FinanceGroup(name: "Именная", colorHex: "#888888", order: 1)
+        ctx.insert(namedGroup)
+        let coreService = AccountsCoreService(modelContext: ctx)
+        let ungroupedAccount = try coreService.createAccount(name: "Без группы", kind: .debitCard, currency: "RUB", openingBalance: 300, group: nil)
+        try ctx.save()
+
+        let vm = makeViewModel(ctx)
+        vm.handle(.loadGroups)
+
+        // Ровно одна Ungrouped-сущность в списке групп (не дубль).
+        let ungroupedMatches = vm.state.groups.filter { $0.name == FinanceSystemGroups.ungroupedName }
+        #expect(ungroupedMatches.count == 1)
+
+        // Реплика ledger-цикла (FinanceOverviewCardView.buildLedgerPresentation): один проход по
+        // state.groups, coreAccountsSnapshot(matching:) на каждую группу — счёт без группы
+        // встречается РОВНО один раз суммарно по всем группам (не в двух местах одновременно).
+        var totalOccurrences = 0
+        for group in vm.state.groups {
+            totalOccurrences += vm.coreAccountsSnapshot(matching: group).filter { $0.id == ungroupedAccount.id }.count
+        }
+        #expect(totalOccurrences == 1)
+    }
 }
