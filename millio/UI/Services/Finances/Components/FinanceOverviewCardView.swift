@@ -129,12 +129,31 @@ struct FinanceOverviewCardView: View {
         let investments = financeViewModel.state.availableInvestments.map {
             "\($0.investmentUniqueID)_\($0.amount)_\($0.updatedAt.timeIntervalSince1970)"
         }.joined(separator: "|")
+
+        // [Ф5c.7 expand-contract, файл №5] Без core-части токен «слеп» к core-мутациям: adjustBalance/
+        // archiveAccount/updateAccount(группа) не публикуют изменений в легаси-поля, поэтому карточка
+        // не узнала бы о новом балансе/архиве/переносе core-счёта до случайного внешнего триггера.
+        // events?.count — дешёвый прокси на баланс (adjustBalance/buy/sell/revalue добавляют событие),
+        // без синхронного реплея истории на каждый рендер.
+        // name — updateAccount (rename) мутирует поле напрямую (AccountsCoreService.swift:496-498),
+        // а accountName попадает в ledger (:320) — без name в токене rename без смены группы не
+        // бампал бы рефреш (Fable-находка). note/meta в ledger НЕ рендерятся (grep подтвердил) —
+        // не добавляю, чтобы не раздувать токен полями без видимого эффекта.
+        let coreAccountsPart = financeViewModel.state.coreAccounts.map {
+            "\($0.id)_\($0.name)_\($0.events?.count ?? 0)_\($0.archivedAt?.timeIntervalSince1970 ?? 0)_\($0.group?.id.uuidString ?? "nil")"
+        }.sorted().joined(separator: "|")
+        let coreGroupsPart = financeViewModel.state.coreGroups.map {
+            "\($0.id)_\($0.name)_\($0.order)"
+        }.sorted().joined(separator: "|")
+
         return [
             financeViewModel.state.displayCurrency,
             groupPart,
             cards,
             credits,
-            investments
+            investments,
+            coreAccountsPart,
+            coreGroupsPart
         ].joined(separator: "~")
     }
 
@@ -173,7 +192,9 @@ struct FinanceOverviewCardView: View {
             }
             // Счета нового ядра той же группы (мост по имени, как в Динамике :1084). Легаси-таблицы
             // пусты (Фаза 6b) — без этого ledger «Saldo» всегда показывал empty state при живом тотале.
-            for coreAccount in financeViewModel.newCoreAccounts(matching: group) {
+            // [Ф5c.7 expand-contract, файл №5] coreAccountsSnapshot — единая точка (см. FinanceRows/
+            // FinanceGroupEditorView/FinancesView), не живой newCoreAccounts(matching:) на каждый рендер.
+            for coreAccount in financeViewModel.coreAccountsSnapshot(matching: group) {
                 if let item = await makeCoreLedgerItem(
                     account: coreAccount,
                     groupID: group.groupUniqueID,

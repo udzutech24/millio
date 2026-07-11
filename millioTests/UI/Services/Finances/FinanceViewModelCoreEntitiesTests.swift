@@ -365,4 +365,75 @@ struct FinanceViewModelCoreEntitiesTests {
         #expect(vm.orderedAccounts(for: legacyGroup).isEmpty)
         #expect(!vm.coreAccountsSnapshot(matching: legacyGroup).isEmpty)
     }
+
+    // MARK: - Миграция потребителя `FinanceOverviewCardView` (Ф5c.7.4, файл №5)
+
+    /// `buildLedgerPresentation` теперь зовёт `coreAccountsSnapshot(matching:)` вместо живого
+    /// `newCoreAccounts(matching:)` в цикле по группам — core-счёт группы обязан попасть в ledger
+    /// той же группы (та же семантика, что раньше давал живой fetch).
+    @Test("expand#5 FinanceOverviewCardView: coreAccountsSnapshot отдаёт core-счёт группы для ledger-цикла")
+    func coreAccountsSnapshotVisibleInLedgerGroupLoop() throws {
+        let ctx = try makeContext()
+        let legacyGroup = FinanceGroup(name: "Дашборд", colorHex: "#777777", order: 0)
+        ctx.insert(legacyGroup)
+        let coreGroup = AccountGroup(name: "Дашборд")
+        ctx.insert(coreGroup)
+        let coreService = AccountsCoreService(modelContext: ctx)
+        let account = try coreService.createAccount(name: "В ledger", kind: .debitCard, currency: "RUB", openingBalance: 500, group: coreGroup)
+        try ctx.save()
+
+        let vm = makeViewModel(ctx)
+        vm.handle(.loadGroups)
+
+        // Реплика цикла buildLedgerPresentation: `for group in state.groups { coreAccountsSnapshot(matching: group) }`.
+        let groupInList = try #require(vm.state.groups.first(where: { $0.name == "Дашборд" }))
+        #expect(vm.coreAccountsSnapshot(matching: groupInList).map(\.id) == [account.id])
+    }
+
+    /// `reloadToken` (FinanceOverviewCardView) строит дешёвый прокси-хеш из `events.count`/
+    /// `archivedAt`/`group?.id` core-счетов — без core-части токен «слеп» к core-мутациям
+    /// (adjustBalance/archiveAccount/updateAccount(группа) не публикуют легаси-события). Тест
+    /// реплицирует формулу токена и доказывает, что каждая мутация меняет строку — регресс-guard
+    /// на саму идею прокси, не на приватное свойство View (недоступно из теста).
+    @Test("expand#5: прокси-компоненты reloadToken (events.count/archivedAt/group) меняются при core-мутациях")
+    func reloadTokenCoreProxyChangesOnMutations() throws {
+        let ctx = try makeContext()
+        let groupA = AccountGroup(name: "А")
+        let groupB = AccountGroup(name: "Б")
+        ctx.insert(groupA); ctx.insert(groupB)
+        let coreService = AccountsCoreService(modelContext: ctx)
+        let account = try coreService.createAccount(name: "Прокси", kind: .debitCard, currency: "RUB", openingBalance: 1_000, group: groupA)
+        try ctx.save()
+
+        let vm = makeViewModel(ctx)
+        vm.handle(.loadGroups)
+
+        func tokenPart(_ acc: Account) -> String {
+            "\(acc.id)_\(acc.name)_\(acc.events?.count ?? 0)_\(acc.archivedAt?.timeIntervalSince1970 ?? 0)_\(acc.group?.id.uuidString ?? "nil")"
+        }
+
+        let before = tokenPart(account)
+
+        _ = try coreService.adjustBalance(account: account, to: 1_500)
+        let afterBalance = tokenPart(account)
+        #expect(before != afterBalance) // events.count вырос
+
+        try coreService.archiveAccount(account)
+        let afterArchive = tokenPart(account)
+        #expect(afterBalance != afterArchive) // archivedAt заполнился
+
+        try coreService.restoreAccount(account)
+        let afterRestore = tokenPart(account)
+        #expect(afterArchive != afterRestore) // archivedAt снова nil
+
+        // Fable-находка: rename БЕЗ смены группы — updateAccount мутирует name напрямую
+        // (AccountsCoreService.swift:496-498), а accountName рендерится в ledger (:320).
+        _ = try coreService.updateAccount(account, name: "Переименован", group: groupA)
+        let afterRename = tokenPart(account)
+        #expect(afterRestore != afterRename) // name сменился, группа та же
+
+        _ = try coreService.updateAccount(account, name: account.name, group: groupB)
+        let afterGroupChange = tokenPart(account)
+        #expect(afterRename != afterGroupChange) // group?.id сменился
+    }
 }
