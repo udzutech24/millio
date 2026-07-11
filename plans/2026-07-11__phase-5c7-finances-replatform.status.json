@@ -1,0 +1,18 @@
+{
+  "planFile": "2026-07-11__phase-5c7-finances-replatform.md",
+  "title": "Ф5c.7 — реплатформинг Finances на AccountsCore (+ Ф6)",
+  "updated": "2026-07-11T18:00:00Z",
+  "phases": [
+    { "name": "Ф0 — Fable ревью+стресс-тест плана", "status": "done", "note": "10 рисков; план скорректирован — Ungrouped=group==nil (не сущность), rich-edit UI перенесён в 5c.7.5, characterization-тесты до порта 5c.7.3, mixed-store fixture 5c.7.3/5c.7.4, currency-change запрещена в v1" },
+    { "name": "5c.7.0 — AccountsCoreService.updateAccount + минимальный UI", "status": "in_progress", "note": "Александр: реализовано (updateAccount прямой мутацией полей, не событие; валюта/иконка вне API; минимальная форма rename/группа/заметка). Build 0 ошибок, 4 новых теста зелёные, 0 новых красных (13 flaky-baseline подтверждён 3 прогонами). Ждёт Fable-верификации + device-теста, НЕ закоммичено. Отклонение: иконка исключена (нет backing-поля в ядре), инвалидация кэша при смене группы не добавлена (group-keyed кэша нет — доказано тестом)." },
+    { "name": "5c.7.1 — FinanceGroupService → AccountGroup (+ canonical Ungrouped)", "status": "pending" },
+    { "name": "5c.7.2 — FinanceAccountService → AccountsCoreService-обёртка", "status": "pending" },
+    { "name": "5c.7.3 — FinanceViewModel → core", "status": "pending" },
+    { "name": "5c.7.4 — FinanceDynamicsViewModel → core", "status": "pending" },
+    { "name": "5c.7.5 — Views + декаплинг CREATE-формы + rich-edit UI", "status": "pending" },
+    { "name": "5c.7.6 — Редизайн «Счета» (Ф6 proper)", "status": "pending" },
+    { "name": "5c.7.7 — Финальный regression-гейт под-проекта", "status": "pending" }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}
