@@ -341,4 +341,28 @@ struct FinanceViewModelCoreEntitiesTests {
 
         #expect(vm.coreAccountsSnapshot(matching: legacyGroup).map(\.id).contains(created.id))
     }
+
+    // MARK: - Миграция потребителя `FinancesView` (Ф5c.7.4, файл №3)
+
+    /// `FinancesView.isGroupEmpty` теперь зовёт `coreAccountsSnapshot(matching:)` вместо живого
+    /// `newCoreAccounts(matching:)` — группа БЕЗ легаси-счетов, но С core-счётом (мост по имени),
+    /// обязана считаться НЕ пустой (та же семантика, что раньше давал живой fetch).
+    @Test("expand#3 FinancesView: группа без легаси-счетов, но с core-счётом — не пустая (coreAccountsSnapshot)")
+    func groupWithOnlyCoreAccountIsNotEmptyViaSnapshot() throws {
+        let ctx = try makeContext()
+        let legacyGroup = FinanceGroup(name: "Только core", colorHex: "#666666", order: 0)
+        ctx.insert(legacyGroup) // нет ни одного FinanceAccount-junction внутри — легаси-часть пуста
+        let coreGroup = AccountGroup(name: "Только core")
+        ctx.insert(coreGroup)
+        let coreService = AccountsCoreService(modelContext: ctx)
+        _ = try coreService.createAccount(name: "Core-счёт", kind: .debitCard, currency: "RUB", openingBalance: 100, group: coreGroup)
+        try ctx.save()
+
+        let vm = makeViewModel(ctx)
+        vm.handle(.loadGroups)
+
+        // Реплика isGroupEmpty (FinancesView.swift) — легаси-часть пуста, core-часть — нет.
+        #expect(vm.orderedAccounts(for: legacyGroup).isEmpty)
+        #expect(!vm.coreAccountsSnapshot(matching: legacyGroup).isEmpty)
+    }
 }

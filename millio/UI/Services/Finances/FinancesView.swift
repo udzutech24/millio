@@ -854,8 +854,12 @@ struct FinancesMainTabView: View {
 
     /// Группа считается пустой, если в ней нет ни легаси-счетов, ни счетов нового ядра —
     /// такие группы сворачиваются в одну строку, чтобы не засорять список пустыми заголовками.
+    /// [Ф5c.7 expand-contract, файл №3] core-часть — `coreAccountsSnapshot(matching:)` (единая точка,
+    /// та же, что `FinanceRows`/`FinanceGroupEditorView`), не живой `newCoreAccounts(matching:)`:
+    /// эта функция зовётся на каждый элемент `groups` при каждом рендере `groupsListView` — живой
+    /// FetchDescriptor здесь был лишним повторным чтением стора без надобности.
     private func isGroupEmpty(_ group: FinanceGroup) -> Bool {
-        viewModel.orderedAccounts(for: group).isEmpty && viewModel.newCoreAccounts(matching: group).isEmpty
+        viewModel.orderedAccounts(for: group).isEmpty && viewModel.coreAccountsSnapshot(matching: group).isEmpty
     }
 
     private func groupsListView(_ groups: [FinanceGroup]) -> some View {
