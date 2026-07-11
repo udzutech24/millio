@@ -241,7 +241,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     var transactionsByInvestmentCache: [String: [CashflowTransaction]] = [:]
     var initialBalancesCache: [String: Double] = [:]
     var balanceCache: [String: Double] = [:] // Кэш для calculateBalanceAtDate: "accountID_date" -> balance
-    
+
     init(
         modelContext: ModelContext,
         financeViewModel: FinanceViewModel,
@@ -1016,6 +1016,31 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 currency = inv.currency
             }
             nativeTotals[currency, default: 0] += signed
+        }
+
+        // [Ф5c.7 Gate A] Core-счета (вклады/кредиты/маркет-инвестиции, созданные через
+        // `AccountsCoreService`) раньше не участвовали в разбивке по валютам вообще — для
+        // мигрированного юзера давало 0/занижение. Используем ТУ ЖЕ единую точку сбора счетов
+        // (`coreAccountsForDynamics()`), что per-account/per-group строки Динамики (инвариант
+        // «один источник правды»), и ТОТ ЖЕ движок баланса (`accountsTotalsService`), что
+        // `coreAccountDynamicsItems`/`coreContributionWithLegacyPredecessor` — не вводим второй
+        // путь агрегации. Валюта — нативная (`account.currency` как target для `total`, без FX).
+        // Дедуп: `FinanceNetWorthSignedAmount.signedValue` (выше) БЕЗУСЛОВНО возвращает nil для
+        // archived-счёта (card/credit/investment — каждый гардит `archivedAt == nil` независимо
+        // от `state.showArchivedAccounts`/scope-фильтра) — мигрированный легаси-двойник поэтому
+        // НИКОГДА не попадает в `nativeTotals` выше, ни при каком состоянии тумблера «показать
+        // архивные». Доп. проверка по `LegacyConversionRegistry` здесь была бы недостижимым кодом
+        // (доказано мутационным тестом: отключение такой проверки не роняет
+        // `migratedTwinNotDoubleCountedWhenArchivedAccountsShown`) — не добавляем.
+        // [Известное ограничение, унаследовано] `coreAccountsForDynamics()` не уважает
+        // `selectedAccountIDs`/`isSingleAccountMode` — общая функция для нескольких потребителей
+        // (per-account/per-group строки Динамики), каскад правки вне скоупа этого фикса.
+        for coreAccount in coreAccountsForDynamics() {
+            let value = NSDecimalNumber(
+                decimal: await financeViewModel.accountsTotalsService.total(for: [coreAccount], on: Date(), in: coreAccount.currency)
+            ).doubleValue
+            guard abs(value) > 0.01 else { continue }
+            nativeTotals[coreAccount.currency, default: 0] += value
         }
 
         // Для сегодняшней даты CurrencyRateService.getHistoricalRate деградирует
