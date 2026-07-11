@@ -7,6 +7,8 @@ import SwiftData
 @MainActor
 struct BackupRestoreIntegrityTests {
     private func makeContainer() -> ModelContainer {
+        // [Ф5c.7 contract] Account/AccountGroup/AccountEvent/AccountDailySnapshot добавлены — без них
+        // core-фикстуры молча не сохраняются/не читаются (тип не в Schema, не ошибка insert/save).
         let schema = Schema([
             Item.self,
             Card.self,
@@ -16,7 +18,11 @@ struct BackupRestoreIntegrityTests {
             FinanceAccount.self,
             CashflowTransaction.self,
             CashflowCustomCategory.self,
-            HistoricalRate.self
+            HistoricalRate.self,
+            Account.self,
+            AccountGroup.self,
+            AccountEvent.self,
+            AccountDailySnapshot.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: [config])
@@ -307,6 +313,9 @@ struct BackupRestoreIntegrityTests {
     }
 
     @Test("FinanceViewModel: state.groups и availableCards видны после restoreCompleted")
+    /// [Ф5c.7 contract] `state.groups` теперь core-primary (`[AccountGroup]`) — добавлена core-фикстура
+    /// + `AccountsCoreFeatureRegistration.register()` (иначе `Account`/`AccountGroup` не участвуют в
+    /// backup export/import). Легаси `availableCards` — fallback-хвост, проверяется отдельно (не изменилось).
     func testFinanceViewModelShowsDataAfterRestoreRoundTrip() async throws {
         let registryState = ModelTypeRegistry.shared.captureState()
         defer { ModelTypeRegistry.shared.restoreState(registryState) }
@@ -315,6 +324,7 @@ struct BackupRestoreIntegrityTests {
         CardFeatureRegistration.register()
         CreditFeatureRegistration.register()
         InvestmentFeatureRegistration.register()
+        AccountsCoreFeatureRegistration.register()
 
         let container = makeContainer()
         let context = container.mainContext
@@ -334,6 +344,11 @@ struct BackupRestoreIntegrityTests {
         let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
         account.group = group
         context.insert(account)
+
+        let coreGroup = AccountGroup(name: "Core Основная")
+        context.insert(coreGroup)
+        let coreService = AccountsCoreService(modelContext: context)
+        _ = try coreService.createAccount(name: "Core Тест", kind: .debitCard, currency: "RUB", openingBalance: 300, group: coreGroup)
         try context.save()
 
         let backupData = try DataRepository.exportAllData(from: context)
@@ -357,9 +372,9 @@ struct BackupRestoreIntegrityTests {
             try? await Task.sleep(for: .milliseconds(20))
         }
 
-        #expect(stateVisible, "FinanceViewModel.state.groups должны появиться после restoreCompleted")
-        #expect(viewModel.state.groups.first?.name == "Основная")
-        #expect(!viewModel.state.availableCards.isEmpty, "availableCards должны появиться после restoreCompleted")
+        #expect(stateVisible, "FinanceViewModel.state.groups (core) должны появиться после restoreCompleted")
+        #expect(viewModel.state.groups.first?.name == "Core Основная")
+        #expect(!viewModel.state.availableCards.isEmpty, "availableCards (легаси-fallback) должны появиться после restoreCompleted")
     }
 
     @Test("runIfNeeded выполняется только один раз и выставляет флаг в UserDefaults")

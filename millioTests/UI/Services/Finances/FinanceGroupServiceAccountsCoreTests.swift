@@ -3,10 +3,13 @@ import SwiftData
 import Testing
 @testable import millio
 
-/// Задача 7 брифинга Фазы 5: `deleteGroup` (старый мир) должен убирать и МИРРОРНУЮ `AccountGroup`
-/// нового ядра (мэппинг по имени, см. `AccountsCoreAdditionBridge.resolveAccountGroup`) — иначе
-/// счета нового ядра остаются «привязанными» к группе, которой больше нет в UI, и не попадают ни
-/// в старый мир, ни в Ungrouped (регрессия, найденная при аудите Фазы 5).
+/// [Ф5c.7 contract, владелец 2026-07-12] Инвертировано относительно исходного (было: удаление
+/// легаси-`FinanceGroup` чистит мирронную `AccountGroup`). Теперь `FinanceGroupService.deleteGroup` —
+/// core-primary: АРХИВИРУЕТ счета группы (`AccountsCoreService.archiveAccount` — возврат легаси-
+/// поведения, отмена случайного регресса контрактного флипа) и переводит их в Ungrouped
+/// (`group = nil`, канон), + best-effort чистит ПУСТУЮ мирронную легаси-`FinanceGroup` того же имени
+/// (`syncLegacyGroupDeletion`) — та же защита от «осиротевшей» ссылки, что была раньше, в обратном
+/// направлении.
 @MainActor
 struct FinanceGroupServiceAccountsCoreTests {
 
@@ -15,30 +18,27 @@ struct FinanceGroupServiceAccountsCoreTests {
         return (container, container.mainContext)
     }
 
-    private func makeService(modelContext: ModelContext, groups: [FinanceGroup]) -> FinanceGroupService {
+    private func makeService(modelContext: ModelContext, groups: [AccountGroup]) -> FinanceGroupService {
         FinanceGroupService(
             modelContext: modelContext,
-            ungroupedGroupName: FinanceSystemGroups.ungroupedName,
             groupsProvider: { groups },
-            accountInfoResolver: { _ in true },
             onLoadGroups: {},
             onLoadAccounts: {},
             onCalculateTotal: {},
             onScheduleGroupTotalRefresh: { _, _ in },
-            onDismissGroupEditor: {},
-            onArchiveUnderlying: { _, _ in }
+            onDismissGroupEditor: {}
         )
     }
 
-    @Test("Удаление старой группы удаляет мирронную AccountGroup нового ядра, счета уходят в Ungrouped (group=nil)")
-    func deletingFinanceGroupRemovesMirroredAccountGroupAndNullifiesAccounts() throws {
+    @Test("Удаление core-группы удаляет ПУСТУЮ мирронную легаси-FinanceGroup, счета уходят в Ungrouped (group=nil)")
+    func deletingAccountGroupRemovesEmptyMirroredFinanceGroupAndNullifiesAccounts() throws {
         let (container, ctx) = try makeContext()
         _ = container
 
+        // Мирронная легаси-группа — ТО ЖЕ имя, ПУСТАЯ (нет FinanceAccount-junction внутри).
         let financeGroup = FinanceGroup(name: "Инвестиции", colorHex: "#FF0000")
         ctx.insert(financeGroup)
 
-        // Мирронная AccountGroup нового ядра — ТО ЖЕ имя, как создаёт `AccountsCoreAdditionBridge`.
         let coreGroup = AccountGroup(name: "Инвестиции", colorHex: "#FF0000")
         ctx.insert(coreGroup)
 
@@ -49,37 +49,63 @@ struct FinanceGroupServiceAccountsCoreTests {
 
         #expect(coreAccount.group?.name == "Инвестиции")
 
-        let service = makeService(modelContext: ctx, groups: [financeGroup])
-        service.deleteGroup(financeGroup)
+        let service = makeService(modelContext: ctx, groups: [coreGroup])
+        service.deleteGroup(coreGroup)
 
-        // Мирронная группа физически удалена — не осталась «осиротевшей» ссылкой.
-        let remainingCoreGroups = try ctx.fetch(FetchDescriptor<AccountGroup>(
-            predicate: #Predicate<AccountGroup> { $0.name == "Инвестиции" }
+        // Мирронная легаси-группа была пуста → физически удалена, не осталась «осиротевшей» ссылкой.
+        let remainingLegacyGroups = try ctx.fetch(FetchDescriptor<FinanceGroup>(
+            predicate: #Predicate<FinanceGroup> { $0.name == "Инвестиции" }
         ))
-        #expect(remainingCoreGroups.isEmpty)
+        #expect(remainingLegacyGroups.isEmpty)
 
-        // Счёт нового ядра ЖИВ (AC7: удаление группы — не архивация и не удаление счёта),
-        // но group == nil — нашёл дорогу в Ungrouped, а не остался привязан к удалённой группе.
+        // Счёт нового ядра АРХИВИРОВАН (возврат легаси-поведения, владелец 2026-07-12) и переведён
+        // в Ungrouped (group == nil) — не остался привязан к удалённой группе.
         let accountID = coreAccount.id
         let refreshedAccount = try ctx.fetch(FetchDescriptor<Account>(
             predicate: #Predicate<Account> { $0.id == accountID }
         )).first
         #expect(refreshedAccount != nil)
         #expect(refreshedAccount?.group == nil)
-        #expect(refreshedAccount?.archivedAt == nil) // не архивация, счёт остаётся активным
+        #expect(refreshedAccount?.archivedAt != nil)
     }
 
-    @Test("Удаление группы без соответствующей AccountGroup нового ядра — no-op, не падает")
-    func deletingFinanceGroupWithoutMirroredAccountGroupIsNoop() throws {
+    @Test("Удаление НЕ-пустой мирронной легаси-FinanceGroup — легаси-группа сохраняется (invariant 5 fallback)")
+    func deletingAccountGroupWithNonEmptyMirroredFinanceGroupKeepsLegacyGroup() throws {
         let (container, ctx) = try makeContext()
         _ = container
 
-        let financeGroup = FinanceGroup(name: "Только старый мир", colorHex: "#00FF00")
+        let financeGroup = FinanceGroup(name: "Микс", colorHex: "#00FF00")
         ctx.insert(financeGroup)
+        let card = Card(name: "Легаси-карта", cardNumber: "1234", bank: .other, cardType: .debit, currency: "RUB", balance: 100)
+        ctx.insert(card)
+        let junction = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        junction.group = financeGroup
+        ctx.insert(junction)
+
+        let coreGroup = AccountGroup(name: "Микс")
+        ctx.insert(coreGroup)
         try ctx.save()
 
-        let service = makeService(modelContext: ctx, groups: [financeGroup])
-        service.deleteGroup(financeGroup) // не должно кидать/падать
+        let service = makeService(modelContext: ctx, groups: [coreGroup])
+        service.deleteGroup(coreGroup) // не должно кидать/падать; легаси-хвост остаётся жив (invariant 5)
+
+        let remainingLegacyGroups = try ctx.fetch(FetchDescriptor<FinanceGroup>(
+            predicate: #Predicate<FinanceGroup> { $0.name == "Микс" }
+        ))
+        #expect(remainingLegacyGroups.count == 1)
+    }
+
+    @Test("Удаление core-группы без соответствующей легаси-FinanceGroup — no-op, не падает")
+    func deletingAccountGroupWithoutMirroredFinanceGroupIsNoop() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+
+        let coreGroup = AccountGroup(name: "Только новый мир")
+        ctx.insert(coreGroup)
+        try ctx.save()
+
+        let service = makeService(modelContext: ctx, groups: [coreGroup])
+        service.deleteGroup(coreGroup) // не должно кидать/падать
 
         let remaining = try ctx.fetch(FetchDescriptor<AccountGroup>())
         #expect(remaining.isEmpty)

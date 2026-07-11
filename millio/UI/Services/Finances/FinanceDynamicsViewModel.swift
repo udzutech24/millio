@@ -544,13 +544,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         state.isLoading = false
     }
 
+    /// [Ф5c.7 contract] `financeViewModel.state.groups` теперь `[AccountGroup]` (core primary) —
+    /// FDVM легаси-группы (per-account chart-modes, вне скоупа этого гейта) читаются НАПРЯМУЮ, без
+    /// быстрого пути через FVM-кэш (был микро-оптимизацией, не семантикой). `forceStoreFetch` больше
+    /// не влияет на путь — оставлен в сигнатуре ради совместимости вызывающих.
     private func loadGroupsSnapshot(forceStoreFetch: Bool = false) -> [FinanceGroup] {
-        let currentGroups = financeViewModel.state.groups
-        if !forceStoreFetch, !currentGroups.isEmpty {
-            return currentGroups
-        }
-
-        return fetchGroupsFromStore()
+        fetchGroupsFromStore()
     }
 
     private func fetchGroupsFromStore() -> [FinanceGroup] {
@@ -1123,7 +1122,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         var seen: Set<UUID> = []
         var coreAccounts: [Account] = []
         for group in groupsToShow {
-            for account in financeViewModel.newCoreAccounts(matching: group) where seen.insert(account.id).inserted {
+            for account in financeViewModel.newCoreAccounts(matchingName: group.name) where seen.insert(account.id).inserted {
                 coreAccounts.append(account)
             }
         }
@@ -1132,8 +1131,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         // строками, чтобы Total вкладки «Счета» совпадал с вкладкой «Группы» (там — Ungrouped-строка).
         // Только когда фильтр по группам не активен (иначе показываем лишь выбранные группы).
         if state.selectedGroupIDs.isEmpty {
-            let ungroupedProbe = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: "#FFFFFF")
-            for account in financeViewModel.newCoreAccounts(matching: ungroupedProbe) where seen.insert(account.id).inserted {
+            for account in financeViewModel.newCoreAccounts(matchingName: FinanceSystemGroups.ungroupedName) where seen.insert(account.id).inserted {
                 coreAccounts.append(account)
             }
         }

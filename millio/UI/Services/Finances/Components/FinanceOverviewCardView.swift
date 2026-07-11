@@ -110,15 +110,15 @@ struct FinanceOverviewCardView: View {
     }
 
     private var reloadToken: String {
-        let groupPart = financeViewModel.state.groups.map {
-            let accountPart = ($0.accounts ?? []).map {
-                "\($0.accountTypeRaw)_\($0.accountID)_\($0.updatedAt.timeIntervalSince1970)"
-            }
-            .sorted()
-            .joined(separator: "|")
-            return "\($0.groupUniqueID)_\($0.updatedAt.timeIntervalSince1970)_\(accountPart)"
-        }
-        .joined(separator: "#")
+        // [Ф5c.7 contract] `state.accounts`/`state.groups` теперь ПЕРВИЧНЫЙ источник (было
+        // отдельными coreAccounts/coreGroups рядом с легаси). Легаси availableCards/Credits/
+        // Investments остаются в токене как fallback-хвост (invariant 9 §2.1).
+        let accountsPart = financeViewModel.state.accounts.map {
+            "\($0.id)_\($0.name)_\($0.events?.count ?? 0)_\($0.archivedAt?.timeIntervalSince1970 ?? 0)_\($0.group?.id.uuidString ?? "nil")"
+        }.sorted().joined(separator: "|")
+        let groupsPart = financeViewModel.state.groups.map {
+            "\($0.id)_\($0.name)_\($0.order)"
+        }.sorted().joined(separator: "|")
 
         let cards = financeViewModel.state.availableCards.map {
             "\($0.cardUniqueID)_\($0.balance)_\($0.updatedAt.timeIntervalSince1970)"
@@ -130,30 +130,13 @@ struct FinanceOverviewCardView: View {
             "\($0.investmentUniqueID)_\($0.amount)_\($0.updatedAt.timeIntervalSince1970)"
         }.joined(separator: "|")
 
-        // [Ф5c.7 expand-contract, файл №5] Без core-части токен «слеп» к core-мутациям: adjustBalance/
-        // archiveAccount/updateAccount(группа) не публикуют изменений в легаси-поля, поэтому карточка
-        // не узнала бы о новом балансе/архиве/переносе core-счёта до случайного внешнего триггера.
-        // events?.count — дешёвый прокси на баланс (adjustBalance/buy/sell/revalue добавляют событие),
-        // без синхронного реплея истории на каждый рендер.
-        // name — updateAccount (rename) мутирует поле напрямую (AccountsCoreService.swift:496-498),
-        // а accountName попадает в ledger (:320) — без name в токене rename без смены группы не
-        // бампал бы рефреш (Fable-находка). note/meta в ledger НЕ рендерятся (grep подтвердил) —
-        // не добавляю, чтобы не раздувать токен полями без видимого эффекта.
-        let coreAccountsPart = financeViewModel.state.coreAccounts.map {
-            "\($0.id)_\($0.name)_\($0.events?.count ?? 0)_\($0.archivedAt?.timeIntervalSince1970 ?? 0)_\($0.group?.id.uuidString ?? "nil")"
-        }.sorted().joined(separator: "|")
-        let coreGroupsPart = financeViewModel.state.coreGroups.map {
-            "\($0.id)_\($0.name)_\($0.order)"
-        }.sorted().joined(separator: "|")
-
         return [
             financeViewModel.state.displayCurrency,
-            groupPart,
+            accountsPart,
+            groupsPart,
             cards,
             credits,
-            investments,
-            coreAccountsPart,
-            coreGroupsPart
+            investments
         ].joined(separator: "~")
     }
 
@@ -175,7 +158,19 @@ struct FinanceOverviewCardView: View {
         }
 
         for group in groups {
-            for account in sortedAccounts(group.accounts ?? []) {
+            // Core-счета группы — ПЕРВИЧНЫЙ источник (было: легаси-junction + отдельный core-луп).
+            for account in sortedCoreAccounts(group.accounts ?? []) {
+                if let item = await makeCoreLedgerItem(
+                    account: account,
+                    groupID: group.groupUniqueID,
+                    groupName: group.name,
+                    groupColorHex: group.colorHex
+                ) {
+                    items.append(item)
+                }
+            }
+            // Легаси-fallback: непроконвертированный хвост в одноимённой `FinanceGroup` (invariant 9).
+            for account in sortedAccounts(financeViewModel.legacyAccountsMatchingGroupName(group.name)) {
                 attachedKeys.insert(accountKey(type: account.accountType, id: account.accountID))
                 if let item = await makeLedgerItem(
                     account: account,
@@ -190,19 +185,17 @@ struct FinanceOverviewCardView: View {
                     items.append(item)
                 }
             }
-            // Счета нового ядра той же группы (мост по имени, как в Динамике :1084). Легаси-таблицы
-            // пусты (Фаза 6b) — без этого ledger «Saldo» всегда показывал empty state при живом тотале.
-            // [Ф5c.7 expand-contract, файл №5] coreAccountsSnapshot — единая точка (см. FinanceRows/
-            // FinanceGroupEditorView/FinancesView), не живой newCoreAccounts(matching:) на каждый рендер.
-            for coreAccount in financeViewModel.coreAccountsSnapshot(matching: group) {
-                if let item = await makeCoreLedgerItem(
-                    account: coreAccount,
-                    groupID: group.groupUniqueID,
-                    groupName: group.name,
-                    groupColorHex: group.colorHex
-                ) {
-                    items.append(item)
-                }
+        }
+
+        // Ungrouped core-счета (канон `group == nil`, не сущность).
+        for account in sortedCoreAccounts(financeViewModel.ungroupedAccounts()) {
+            if let item = await makeCoreLedgerItem(
+                account: account,
+                groupID: FinanceSystemGroups.ungroupedName,
+                groupName: FinanceSystemGroups.ungroupedName,
+                groupColorHex: nil
+            ) {
+                items.append(item)
             }
         }
 
@@ -235,6 +228,10 @@ struct FinanceOverviewCardView: View {
             let rhsName = financeViewModel.getAccountInfo(account: rhs)?.name ?? rhs.accountID
             return lhsName.localizedCaseInsensitiveCompare(rhsName) == .orderedAscending
         }
+    }
+
+    private func sortedCoreAccounts(_ accounts: [Account]) -> [Account] {
+        accounts.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     private func makeLedgerItem(

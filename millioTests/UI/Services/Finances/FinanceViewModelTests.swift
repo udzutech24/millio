@@ -191,6 +191,9 @@ private func makeMarketQuote(
 @Suite(.serialized)
 @MainActor
 struct FinanceViewModelTests {
+    // [Ф5c.7 contract] `Account`/`AccountGroup`/`AccountEvent`/`AccountDailySnapshot` добавлены —
+    // без них `AccountGroup`/`Account`-фикстуры (портированные тесты reorder/ordering/mixed-store)
+    // молча не сохраняются/не читаются (тип не зарегистрирован в Schema, не ошибка insert/save).
     private static let schema = Schema([
         Card.self,
         Credit.self,
@@ -200,6 +203,10 @@ struct FinanceViewModelTests {
         FinanceGroup.self,
         FinanceAccount.self,
         CashflowTransaction.self,
+        Account.self,
+        AccountEvent.self,
+        AccountGroup.self,
+        AccountDailySnapshot.self,
     ])
     private static var retainedContainers: [ModelContainer] = []
 
@@ -249,7 +256,7 @@ struct FinanceViewModelTests {
     @Test("FinanceViewModel открывает редактор для выбранной группы")
     func testEditGroupShowsGroupEditorForSelectedGroup() throws {
         let modelContext = try createTestModelContext()
-        let group = FinanceGroup(name: "Накопления", colorHex: "#00AAFF")
+        let group = AccountGroup(name: "Накопления", colorHex: "#00AAFF")
         modelContext.insert(group)
         try modelContext.save()
 
@@ -264,7 +271,7 @@ struct FinanceViewModelTests {
     @Test("FinanceViewModel предвыбирает группу при открытии добавления счета")
     func testShowAddAccountSheetStoresSelectedGroup() throws {
         let modelContext = try createTestModelContext()
-        let group = FinanceGroup(name: "Инвестиции", colorHex: "#22CC88")
+        let group = AccountGroup(name: "Инвестиции", colorHex: "#22CC88")
         modelContext.insert(group)
         try modelContext.save()
 
@@ -378,7 +385,11 @@ struct FinanceViewModelTests {
         #expect(accounts[0].accountID == credit.creditUniqueID)
         #expect(accounts[0].group?.name == L("finances.group.ungrouped"))
 
-        let total = await viewModel.calculateGroupTotal(group: groups[0], in: "RUB")
+        // Пустая core-точка входа для calculateGroupTotal(AccountGroup) — легаси-хвост считается по имени.
+        let coreUngroupedEntry = AccountGroup(name: groups[0].name)
+        modelContext.insert(coreUngroupedEntry)
+        try modelContext.save()
+        let total = await viewModel.calculateGroupTotal(group: coreUngroupedEntry, in: "RUB")
         #expect(abs(total + 2_500) < 0.01)
     }
 
@@ -453,13 +464,14 @@ struct FinanceViewModelTests {
         #expect(viewModel.state.expandedGroupIDs.contains(groupID) == false)
     }
 
+    /// [Ф5c.7 contract] Портировано на core-фикстуры — `.moveGroup` теперь core-primary.
     @Test("FinanceViewModel сохраняет ручной порядок групп после перетаскивания")
     func testMoveGroupReordersVisibleGroups() throws {
         let modelContext = try createTestModelContext()
 
-        let first = FinanceGroup(name: "Первая", colorHex: "#111111", order: 0)
-        let second = FinanceGroup(name: "Вторая", colorHex: "#222222", order: 1)
-        let third = FinanceGroup(name: "Третья", colorHex: "#333333", order: 2)
+        let first = AccountGroup(name: "Первая", order: 0)
+        let second = AccountGroup(name: "Вторая", order: 1)
+        let third = AccountGroup(name: "Третья", order: 2)
         modelContext.insert(first)
         modelContext.insert(second)
         modelContext.insert(third)
@@ -474,72 +486,31 @@ struct FinanceViewModelTests {
         #expect(viewModel.state.groups.map(\.order) == [0, 1, 2])
     }
 
+    /// [Ф5c.7 contract] Портировано на core-фикстуры — `orderedAccounts`/`moveAccount` теперь
+    /// core-primary (было: легаси `FinanceAccount`). Контракт сохранён: сортировка по сумме убыв.,
+    /// ручной порядок после `.moveAccount` — [small, large, medium].
     @Test("FinanceViewModel по умолчанию сортирует счета в группе по сумме по убыванию и сохраняет ручной порядок")
     func testOrderedAccountsUseAmountThenManualOrder() throws {
         let modelContext = try createTestModelContext()
 
-        let group = FinanceGroup(name: "Основная", colorHex: "#FFFFFF", order: 0)
+        let group = AccountGroup(name: "Основная", order: 0)
         modelContext.insert(group)
 
-        let small = Card(
-            name: "Small",
-            cardNumber: "1111",
-            bank: .other,
-            cardType: .debit,
-            currency: "RUB",
-            balance: 100
-        )
-        let large = Card(
-            name: "Large",
-            cardNumber: "2222",
-            bank: .other,
-            cardType: .debit,
-            currency: "RUB",
-            balance: 300
-        )
-        let medium = Credit(
-            name: "Medium debt",
-            amount: 1_000,
-            interestRate: 10,
-            monthlyPayment: 100,
-            startDate: Date(),
-            termMonths: 12,
-            currency: "RUB",
-            bank: .other,
-            creditType: .consumer
-        )
-        medium.remainingAmount = 200
-
-        modelContext.insert(small)
-        modelContext.insert(large)
-        modelContext.insert(medium)
-
-        let smallAccount = FinanceAccount(accountType: .card, accountID: small.cardUniqueID)
-        smallAccount.group = group
-        let largeAccount = FinanceAccount(accountType: .card, accountID: large.cardUniqueID)
-        largeAccount.group = group
-        let mediumAccount = FinanceAccount(accountType: .credit, accountID: medium.creditUniqueID)
-        mediumAccount.group = group
-
-        modelContext.insert(smallAccount)
-        modelContext.insert(largeAccount)
-        modelContext.insert(mediumAccount)
+        let coreService = AccountsCoreService(modelContext: modelContext)
+        let small = try coreService.createAccount(name: "Small", kind: .debitCard, currency: "RUB", openingBalance: 100, group: group)
+        let large = try coreService.createAccount(name: "Large", kind: .debitCard, currency: "RUB", openingBalance: 300, group: group)
+        let medium = try coreService.createAccount(name: "Medium debt", kind: .debitCard, currency: "RUB", openingBalance: 200, group: group)
         try modelContext.save()
 
         let viewModel = FinanceViewModel(modelContext: modelContext, skipInitialLoad: true)
         viewModel.handle(.loadGroups)
-        viewModel.handle(.loadAccounts)
 
         let loadedGroup = try #require(viewModel.state.groups.first)
-        #expect(viewModel.orderedAccounts(for: loadedGroup).map(\.accountID) == [
-            large.cardUniqueID,
-            medium.creditUniqueID,
-            small.cardUniqueID,
-        ])
+        #expect(viewModel.orderedAccounts(for: loadedGroup).map(\.id) == [large.id, medium.id, small.id])
 
         viewModel.handle(
             .moveAccount(
-                sourceAccountID: smallAccount.accountUniqueID,
+                sourceAccountID: small.accountUniqueID,
                 destinationIndex: 0,
                 groupID: loadedGroup.groupUniqueID
             )
@@ -547,11 +518,7 @@ struct FinanceViewModelTests {
 
         let reorderedGroup = try #require(viewModel.state.groups.first)
         #expect(reorderedGroup.usesManualAccountOrdering)
-        #expect(viewModel.orderedAccounts(for: reorderedGroup).map(\.accountID) == [
-            small.cardUniqueID,
-            large.cardUniqueID,
-            medium.creditUniqueID,
-        ])
+        #expect(viewModel.orderedAccounts(for: reorderedGroup).map(\.id) == [small.id, large.id, medium.id])
     }
 
     @Test("FinanceViewModel пересчитывает сумму цели накопления при смене display валюты")
@@ -651,6 +618,8 @@ struct FinanceViewModelTests {
         let group = FinanceGroup(name: "Тестовая группа", colorHex: "#FF0000")
         group.displayCurrency = "RUB"
         modelContext.insert(group)
+        let coreGroup655 = AccountGroup(name: "Тестовая группа") // пустая core-точка входа для calculateGroupTotal
+        modelContext.insert(coreGroup655)
 
         // Создаем карту в RUB
         let cardRUB = Card(
@@ -723,7 +692,7 @@ struct FinanceViewModelTests {
         // - USD: 100.0 * 100.0 = 10000.0 RUB
         // - EUR: 500.0 * 111.11 = 55555.0 RUB
         // Итого: 10000 + 10000 + 55555 = 75555.0 RUB
-        let total = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        let total = await viewModel.calculateGroupTotal(group: coreGroup655, in: "RUB")
 
         #expect(total > 10000.0, "Сумма должна быть больше суммы только в RUB, что означает успешную конвертацию")
         #expect(total >= 10000.0, "Сумма должна включать хотя бы сумму в RUB")
@@ -741,6 +710,8 @@ struct FinanceViewModelTests {
         let group = FinanceGroup(name: "Группа с разными валютами", colorHex: "#00FF00")
         group.displayCurrency = "USD"
         modelContext.insert(group)
+        let coreGroup745 = AccountGroup(name: "Группа с разными валютами") // пустая core-точка входа для calculateGroupTotal
+        modelContext.insert(coreGroup745)
 
         // Создаем счета в разных валютах
         let cardRUB = Card(
@@ -809,7 +780,7 @@ struct FinanceViewModelTests {
         viewModel.handle(.loadAccounts)
 
         // Рассчитываем сумму группы в USD
-        let total = await viewModel.calculateGroupTotal(group: group, in: "USD")
+        let total = await viewModel.calculateGroupTotal(group: coreGroup745, in: "USD")
 
         // Ожидаемый результат:
         // - RUB 5000 * 0.01 = 50 USD
@@ -859,6 +830,8 @@ struct FinanceViewModelTests {
         let group = FinanceGroup(name: "Группа с неизвестной валютой", colorHex: "#0000FF")
         group.displayCurrency = "RUB"
         modelContext.insert(group)
+        let coreGroup863 = AccountGroup(name: "Группа с неизвестной валютой") // пустая core-точка входа для calculateGroupTotal
+        modelContext.insert(coreGroup863)
 
         // Создаем карту в известной валюте
         let cardRUB = Card(
@@ -910,7 +883,7 @@ struct FinanceViewModelTests {
         viewModel.handle(.loadAccounts)
 
         // Рассчитываем сумму группы
-        let total = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        let total = await viewModel.calculateGroupTotal(group: coreGroup863, in: "RUB")
 
         // Сумма должна включать только RUB (XXX пропущена)
         #expect(total >= 1000.0, "Сумма должна включать хотя бы сумму в RUB")
@@ -924,6 +897,8 @@ struct FinanceViewModelTests {
         let group = FinanceGroup(name: "Крипто группа", colorHex: "#00AAFF")
         group.displayCurrency = "RUB"
         modelContext.insert(group)
+        let coreGroup928 = AccountGroup(name: "Крипто группа") // пустая core-точка входа для calculateGroupTotal
+        modelContext.insert(coreGroup928)
 
         let usdtInvestment = Investment(
             name: "BTC/USDT",
@@ -951,7 +926,7 @@ struct FinanceViewModelTests {
         )
         viewModel.handle(.loadAccounts)
 
-        let total = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        let total = await viewModel.calculateGroupTotal(group: coreGroup928, in: "RUB")
         #expect(abs(total - 10000.0) < 0.01, "USDT должен конвертироваться как USD")
     }
 
@@ -1152,7 +1127,7 @@ struct FinanceViewModelTests {
         }
         defer { EventBus.shared.unsubscribe(subscriptionID) }
 
-        viewModel.handle(.updateAccountAmount(account, 3.5))
+        viewModel.updateLegacyAccountAmount(account: account, newAmount: 3.5)
 
         #expect(abs((investment.marketQuantity ?? 0) - 3.5) < 0.000001)
         #expect(abs(investment.amount - 3500) < 0.01)
@@ -1783,7 +1758,7 @@ struct FinanceViewModelTests {
         }
         defer { EventBus.shared.unsubscribe(subscriptionID) }
 
-        viewModel.handle(.updateCreditCardQuickFields(account: account, creditLimit: 12_000, debt: 4_500))
+        viewModel.updateLegacyCreditCardQuickFields(account: account, creditLimit: 12_000, debt: 4_500)
 
         #expect(abs((card.creditLimit ?? 0) - 12_000) < 0.01)
         #expect(abs(card.balance - 7_500) < 0.01)
@@ -1845,7 +1820,7 @@ struct FinanceViewModelTests {
         }
         defer { EventBus.shared.unsubscribe(subscriptionID) }
 
-        viewModel.handle(.updateCreditCardQuickFields(account: account, creditLimit: 700_000, debt: 0))
+        viewModel.updateLegacyCreditCardQuickFields(account: account, creditLimit: 700_000, debt: 0)
 
         #expect(abs((card.creditLimit ?? 0) - 700_000) < 0.01)
         #expect(abs(card.balance - 700_000) < 0.01)
@@ -2145,6 +2120,10 @@ struct FinanceViewModelTests {
         let staleGroup = FinanceGroup(name: L("finances.group.ungrouped"), colorHex: "#654321")
         modelContext.insert(primaryGroup)
         modelContext.insert(staleGroup)
+        // Пустая core-точка входа — `refreshGroupTotalsAndAmounts`/`groupTotals` теперь итерируют
+        // `state.groups` (core primary), легаси-сумма считается fallback'ом по имени.
+        let corePrimaryGroup = AccountGroup(name: "Основная")
+        modelContext.insert(corePrimaryGroup)
 
         let card = Card(
             name: "Карта",
@@ -2181,7 +2160,7 @@ struct FinanceViewModelTests {
         // фикстура в него не входит. Дедуп проверяем по per-group сумме (`groupTotals`, бывший
         // легаси+core-микс) и по числу junction'ов — это и есть цель теста.
         let didPropagate = await waitForAsyncStatePropagation {
-            viewModel.state.groupTotals[primaryGroup.groupUniqueID] == 1_000
+            viewModel.state.groupTotals[corePrimaryGroup.groupUniqueID] == 1_000
         }
 
         #expect(didPropagate)
@@ -2189,7 +2168,7 @@ struct FinanceViewModelTests {
         let accounts = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
         #expect(accounts.count == 1)
         #expect(accounts.first?.group?.groupUniqueID == primaryGroup.groupUniqueID)
-        #expect(viewModel.state.groupTotals[primaryGroup.groupUniqueID] == 1_000)
+        #expect(viewModel.state.groupTotals[corePrimaryGroup.groupUniqueID] == 1_000)
     }
 
     @Test("Событие обновления кредитов пересчитывает суммы групп")
@@ -2209,6 +2188,9 @@ struct FinanceViewModelTests {
 
         let group = FinanceGroup(name: "Группа", colorHex: "#123456")
         modelContext.insert(group)
+        // Пустая core-точка входа — `groupTotals` теперь считается по `state.groups` (core primary).
+        let coreGroup = AccountGroup(name: "Группа")
+        modelContext.insert(coreGroup)
 
         let credit = Credit(
             name: "Кредит",
@@ -2239,7 +2221,7 @@ struct FinanceViewModelTests {
         )
         viewModel.handle(.loadGroups)
         viewModel.handle(.loadAccounts)
-        let trackedGroupID = try #require(viewModel.state.groups.first(where: { $0.name == group.name })?.groupUniqueID)
+        let trackedGroupID = coreGroup.groupUniqueID
 
         credit.remainingAmount = 500.0
         credit.updatedAt = Date()
@@ -2301,7 +2283,7 @@ struct FinanceViewModelTests {
         }
         defer { EventBus.shared.unsubscribe(subscriptionID) }
 
-        viewModel.handle(.deleteAccountPermanently(account))
+        viewModel.deleteLegacyAccountPermanently(account)
 
         #expect(didPublish, "При удалении карты должно публиковаться событие обновления списка карт")
     }
@@ -2366,8 +2348,9 @@ struct FinanceViewModelTests {
         viewModel.handle(.loadGroups)
         viewModel.handle(.loadAccounts)
 
-        let groupToDelete = try #require(viewModel.state.groups.first)
-        viewModel.handle(.deleteGroup(groupToDelete))
+        // [Ф5c.7 contract] Легаси-группа не входит в `state.groups` (теперь `[AccountGroup]`) —
+        // легаси-путь удаления (архивирует underlying, invariant 5) дергается напрямую.
+        viewModel.deleteLegacyGroup(group)
 
         let groups = (try? modelContext.fetch(FetchDescriptor<FinanceGroup>())) ?? []
         #expect(!groups.contains { $0.groupUniqueID == group.groupUniqueID })
@@ -2421,12 +2404,13 @@ struct FinanceViewModelTests {
         viewModel.handle(.loadGroups)
         viewModel.handle(.loadAccounts)
 
-        let targetGroup = try #require(viewModel.state.groups.first)
-        viewModel.handle(.restoreArchivedAccountToGroup(
+        // [Ф5c.7 contract] Легаси-группа не входит в `state.groups` (теперь `[AccountGroup]`) —
+        // легаси-путь восстановления (invariant 5) дергается напрямую.
+        viewModel.restoreLegacyArchivedAccountToGroup(
             accountType: .card,
             accountID: card.cardUniqueID,
-            group: targetGroup
-        ))
+            group: group
+        )
 
         let cardsAfterRestore = (try? modelContext.fetch(FetchDescriptor<Card>())) ?? []
         let restoredCard = try #require(cardsAfterRestore.first { $0.cardUniqueID == card.cardUniqueID })
@@ -2435,7 +2419,7 @@ struct FinanceViewModelTests {
         let linksAfterRestore = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
         let link = try #require(linksAfterRestore.first { $0.accountType == .card && $0.accountID == card.cardUniqueID })
 
-        viewModel.handle(.removeAccountFromGroup(link))
+        viewModel.removeLegacyAccountFromGroup(link)
 
         let cardsAfterReArchive = (try? modelContext.fetch(FetchDescriptor<Card>())) ?? []
         let reArchivedCard = try #require(cardsAfterReArchive.first { $0.cardUniqueID == card.cardUniqueID })
@@ -2448,6 +2432,8 @@ struct FinanceViewModelTests {
         let modelContext = try createTestModelContext()
         let group = FinanceGroup(name: "Кредиты", colorHex: "#112233")
         modelContext.insert(group)
+        let coreGroup2455 = AccountGroup(name: "Кредиты") // пустая core-точка входа для calculateGroupTotal
+        modelContext.insert(coreGroup2455)
 
         let credit = Credit(
             name: "Тестовый кредит",
@@ -2475,7 +2461,7 @@ struct FinanceViewModelTests {
         viewModel.handle(.loadGroups)
         viewModel.handle(.loadAccounts)
 
-        let total = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        let total = await viewModel.calculateGroupTotal(group: coreGroup2455, in: "RUB")
         #expect(abs(total + 700) < 0.01)
 
         let credits = (try? modelContext.fetch(FetchDescriptor<Credit>())) ?? []
@@ -2488,6 +2474,8 @@ struct FinanceViewModelTests {
         let modelContext = try createTestModelContext()
         let group = FinanceGroup(name: "Долги", colorHex: "#445566")
         modelContext.insert(group)
+        let coreGroup2495 = AccountGroup(name: "Долги") // пустая core-точка входа для calculateGroupTotal
+        modelContext.insert(coreGroup2495)
 
         let credit = Credit(
             name: "Кредит остаток",
@@ -2515,7 +2503,7 @@ struct FinanceViewModelTests {
         viewModel.handle(.loadGroups)
         viewModel.handle(.loadAccounts)
 
-        let total = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        let total = await viewModel.calculateGroupTotal(group: coreGroup2495, in: "RUB")
         #expect(abs(total + 2_500) < 0.01)
         #expect(abs(total + credit.amount) > 0.01)
     }
@@ -2529,6 +2517,10 @@ struct FinanceViewModelTests {
         let regularGroup = FinanceGroup(name: "Основная", colorHex: "#112233")
         modelContext.insert(ungroupedGroup)
         modelContext.insert(regularGroup)
+        // Core-версия обычной группы — `state.groups` теперь core primary (легаси-Ungrouped
+        // структурно исключён из core, поэтому вторая проверка ниже верна по построению).
+        let coreRegularGroup = AccountGroup(name: "Основная")
+        modelContext.insert(coreRegularGroup)
         try modelContext.save()
 
         let viewModel = FinanceViewModel(
@@ -2600,12 +2592,10 @@ struct FinanceViewModelTests {
             skipInitialLoad: true
         )
 
-        viewModel.handle(
-            .addAccountToGroup(
-                accountType: .card,
-                accountID: card.cardUniqueID,
-                group: nil
-            )
+        viewModel.addLegacyAccountToGroup(
+            accountType: .card,
+            accountID: card.cardUniqueID,
+            group: nil
         )
 
         let links = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
@@ -2642,7 +2632,7 @@ struct FinanceViewModelTests {
         let linksBefore = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
         #expect(linksBefore.count == 1)
 
-        viewModel.handle(.removeAccountFromGroup(accountLink))
+        viewModel.removeLegacyAccountFromGroup(accountLink)
 
         let linksAfter = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
         #expect(linksAfter.count == 1)
@@ -2686,7 +2676,7 @@ struct FinanceViewModelTests {
         )
         _ = await waitForAsyncStatePropagation(until: { !viewModel.state.groups.isEmpty })
 
-        viewModel.handle(.removeAccountFromGroup(accountLink))
+        viewModel.removeLegacyAccountFromGroup(accountLink)
 
         let linksAfter = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
         #expect(linksAfter.count == 1)
@@ -2720,7 +2710,7 @@ struct FinanceViewModelTests {
         )
         _ = await waitForAsyncStatePropagation(until: { !viewModel.state.groups.isEmpty })
 
-        viewModel.handle(.removeAccountFromGroup(accountLink))
+        viewModel.removeLegacyAccountFromGroup(accountLink)
 
         let linksAfter = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
         #expect(linksAfter.count == 1)
@@ -2739,11 +2729,13 @@ struct FinanceViewModelTests {
         let currencyService = MockCurrencyRateService()
 
         let group = FinanceGroup(name: "Test Group")
+        let coreGroupEntry = AccountGroup(name: "Test Group") // пустая точка входа для calculateGroupTotal(AccountGroup)
         let investment = Investment(name: "Актив на удаление", category: .other, amount: 500, currency: "RUB")
         let accountLink = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
         accountLink.group = group
 
         modelContext.insert(group)
+        modelContext.insert(coreGroupEntry)
         modelContext.insert(investment)
         modelContext.insert(accountLink)
         try modelContext.save()
@@ -2758,10 +2750,10 @@ struct FinanceViewModelTests {
 
         // До удаления актив виден и учтён в тотале группы.
         #expect(viewModel.getAccountInfo(account: accountLink) != nil)
-        let totalBefore = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        let totalBefore = await viewModel.calculateGroupTotal(group: coreGroupEntry, in: "RUB")
         #expect(totalBefore == 500.0)
 
-        viewModel.handle(.removeAccountFromGroup(accountLink))
+        viewModel.removeLegacyAccountFromGroup(accountLink)
 
         // Регрессия Track D1: до фикса investmentByID не пересобирался здесь (только в
         // addAccountToGroup/restoreArchivedAccountToGroup) — getAccountInfo продолжал находить
@@ -2770,7 +2762,7 @@ struct FinanceViewModelTests {
             viewModel.getAccountInfo(account: accountLink) == nil,
             "После removeAccountFromGroup актив должен сразу пропасть из списка без повторного loadAccounts"
         )
-        let totalAfter = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        let totalAfter = await viewModel.calculateGroupTotal(group: coreGroupEntry, in: "RUB")
         #expect(totalAfter == 0.0, "После removeAccountFromGroup тотал группы должен сразу исключить архивированный актив")
     }
 
@@ -2780,11 +2772,13 @@ struct FinanceViewModelTests {
         let currencyService = MockCurrencyRateService()
 
         let group = FinanceGroup(name: "Test Group")
+        let coreGroupEntry = AccountGroup(name: "Test Group") // пустая точка входа для calculateGroupTotal(AccountGroup)
         let investment = Investment(name: "Актив на полное удаление", category: .other, amount: 300, currency: "RUB")
         let accountLink = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
         accountLink.group = group
 
         modelContext.insert(group)
+        modelContext.insert(coreGroupEntry)
         modelContext.insert(investment)
         modelContext.insert(accountLink)
         try modelContext.save()
@@ -2798,16 +2792,16 @@ struct FinanceViewModelTests {
         _ = await waitForAsyncStatePropagation(until: { !viewModel.state.groups.isEmpty })
 
         #expect(viewModel.getAccountInfo(account: accountLink) != nil)
-        let totalBefore = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        let totalBefore = await viewModel.calculateGroupTotal(group: coreGroupEntry, in: "RUB")
         #expect(totalBefore == 300.0)
 
-        viewModel.handle(.deleteAccountPermanently(accountLink))
+        viewModel.deleteLegacyAccountPermanently(accountLink)
 
         #expect(
             viewModel.getAccountInfo(account: accountLink) == nil,
             "После deleteAccountPermanently актив должен сразу пропасть из списка без повторного loadAccounts"
         )
-        let totalAfter = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        let totalAfter = await viewModel.calculateGroupTotal(group: coreGroupEntry, in: "RUB")
         #expect(totalAfter == 0.0, "После deleteAccountPermanently тотал группы должен сразу исключить архивированный актив")
     }
 
@@ -2977,7 +2971,7 @@ struct FinanceViewModelTests {
         let infoBefore = viewModel.getAccountInfo(account: account)
         #expect(infoBefore?.amount == 1_311_111.0, "Исходный баланс должен быть 1 311 111")
 
-        viewModel.handle(.updateAccountAmount(account, 13_111.0))
+        viewModel.updateLegacyAccountAmount(account: account, newAmount: 13_111.0)
 
         let infoAfter = viewModel.getAccountInfo(account: account)
         #expect(infoAfter?.amount == 13_111.0, "После updateAccountAmount getAccountInfo должен вернуть новый баланс без дополнительного loadAccounts")
@@ -3009,20 +3003,18 @@ struct FinanceViewModelTests {
         modelContext.insert(card)
         try modelContext.save()
 
-        viewModel.handle(.addAccountToGroup(
+        // [Ф5c.7 contract] `.addAccountToGroup` теперь core-типизирован — легаси-путь напрямую.
+        viewModel.addLegacyAccountToGroup(
             accountType: .card,
             accountID: card.cardUniqueID,
             group: nil
-        ))
+        )
 
-        let visibleGroup = try #require(viewModel.visibleGroupsForList().first)
-        #expect(visibleGroup.name == L("finances.group.ungrouped"))
-
-        let orderedAccounts = viewModel.orderedAccounts(for: visibleGroup)
-        let addedAccount = try #require(orderedAccounts.first)
-
-        #expect(addedAccount.accountID == card.cardUniqueID)
-        #expect(viewModel.getAccountInfo(account: addedAccount)?.amount == 42_000.0)
+        // `visibleGroupsForList()` теперь core-only и структурно НЕ содержит Ungrouped (канон
+        // `group == nil`) — проверяем легаси-привязку напрямую через junction.
+        let link = try #require(viewModel.legacyAccountsMatchingGroupName(L("finances.group.ungrouped")).first)
+        #expect(link.accountID == card.cardUniqueID)
+        #expect(viewModel.getAccountInfo(account: link)?.amount == 42_000.0)
     }
 
     @Test("FinanceAccountService.addAccountToGroup обновляет кэш перед группами")

@@ -177,7 +177,7 @@ private struct FinanceGroupTypeIconView: View {
 // MARK: - Finance Group Row
 
 struct FinanceGroupRow: View {
-    let group: FinanceGroup
+    let group: AccountGroup
     @ObservedObject var viewModel: FinanceViewModel
     @Binding var draggedGroupID: String?
 
@@ -199,9 +199,10 @@ struct FinanceGroupRow: View {
         viewModel.state.groupTotals[groupID] ?? 0.0
     }
 
-    /// Счета группы обоих миров (легаси FinanceAccount + новое ядро event-sourcing).
+    /// [Ф5c.7 contract] Легаси-fallback-хвост (invariant 9 §2.1) — непроконвертированные записи
+    /// одноимённой `FinanceGroup`. Primary-рендер группы теперь `newCoreAccounts` ниже.
     private var legacyAccounts: [FinanceAccount] {
-        viewModel.orderedAccounts(for: group)
+        viewModel.legacyAccountsMatchingGroupName(group.name)
     }
 
     private var totalAccountsCount: Int {
@@ -343,7 +344,7 @@ struct FinanceGroupRow: View {
                 .padding(.leading, expandedDividerLeadingInset)
                 .padding(.trailing, contentTrailingInset)
 
-            let displayAccounts: [(account: FinanceAccount, info: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool), customIconName: String?, customIconColor: String?)] = viewModel.orderedAccounts(for: group).compactMap { account in
+            let displayAccounts: [(account: FinanceAccount, info: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool), customIconName: String?, customIconColor: String?)] = legacyAccounts.compactMap { account in
                 guard let info = viewModel.getAccountInfo(account: account) else { return nil }
                 let iconInfo = viewModel.customIconInfo(for: account)
                 return (account: account, info: info, customIconName: iconInfo.iconName, customIconColor: iconInfo.iconColor)
@@ -370,12 +371,15 @@ struct FinanceGroupRow: View {
                         customIconColor: item.customIconColor,
                         accountType: item.account.accountType,
                         isCreditCardDebt: item.info.isCreditCardDebt,
+                        // [Ф5c.7 contract] `.showAccountDynamics` остаётся легаси-типизированным
+                        // (ментор-находка — реальный потребитель неотделимо легаси). Quick-edit
+                        // недоступен для легаси fallback-хвоста (invariant 9) — мёртвый
+                        // `FinanceQuickEditAccountView`/`.showQuickEditAccountSheet` снесён (владелец
+                        // 2026-07-12): редактирование доступно через AccountDetailView/AccountAdjustBalanceSheet.
                         onEdit: {
                             viewModel.handle(.showAccountDynamics(item.account))
                         },
-                        onQuickEditAmount: {
-                            viewModel.handle(.showQuickEditAccountSheet(item.account))
-                        }
+                        onQuickEditAmount: {}
                     )
 
                     if index != displayAccounts.count - 1 || !newCoreAccounts.isEmpty {
@@ -414,14 +418,10 @@ struct FinanceGroupRow: View {
         .padding(.bottom, 10)
     }
 
-    /// [Ф5c.7 expand-contract, миграция потребителя] Раньше — живой `viewModel.newCoreAccounts(matching:)`
-    /// (свежий FetchDescriptor на каждый рендер). Теперь — единый `viewModel.coreAccountsSnapshot(matching:)`
-    /// (файл №2: та же точка переиспользована `FinanceGroupEditorView`, не второй дублированный фильтр).
-    /// Свежесть данных после CREATE обеспечена компаньон-фиксом в `FinanceViewModel.hideAddAccountSheet`
-    /// (см. комментарий там) — без него список тут показывал бы устаревший срез сразу после создания
-    /// core-счёта.
+    /// [Ф5c.7 contract] Primary-рендер группы — `orderedAccounts(for:)` читает `group.accounts`
+    /// напрямую (core, была отдельная снапшот-точка `coreAccountsSnapshot` до флипа типов).
     private var newCoreAccounts: [Account] {
-        viewModel.coreAccountsSnapshot(matching: group)
+        viewModel.orderedAccounts(for: group)
     }
 
     private var dragChevron: some View {
@@ -501,7 +501,7 @@ struct FinanceGroupRow: View {
 
 private struct GroupRowModifiers: ViewModifier {
     let isExpanded: Bool
-    let group: FinanceGroup
+    let group: AccountGroup
     @ObservedObject var viewModel: FinanceViewModel
     let groupID: String
     let loadGroupTotal: () async -> Void

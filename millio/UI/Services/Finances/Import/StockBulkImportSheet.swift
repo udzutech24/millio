@@ -306,7 +306,7 @@ final class StockBulkImportViewModel: ObservableObject {
         }
     }
 
-    @Published var selectedGroup: FinanceGroup?
+    @Published var selectedGroup: AccountGroup?
 
     func addManualRow() {
         let nextIndex = (rows.map(\.sourceOrderIndex).max() ?? -1) + 1
@@ -1559,7 +1559,7 @@ struct StockBulkImportSheet: View {
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 
-    private var selectableGroups: [FinanceGroup] {
+    private var selectableGroups: [AccountGroup] {
         let ungroupedName = FinancesL10n.tr("finances.group.ungrouped")
         return financeViewModel.state.groups.filter { $0.name != ungroupedName }
     }

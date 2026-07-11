@@ -836,7 +836,7 @@ struct FinancesMainTabView: View {
     
     // MARK: - Groups List Section
     
-    private func groupsListSection(_ visibleGroups: [FinanceGroup]) -> some View {
+    private func groupsListSection(_ visibleGroups: [AccountGroup]) -> some View {
         return VStack(alignment: .leading, spacing: 10) {
             if visibleGroups.isEmpty {
                 emptyGroupsCallToAction
@@ -858,11 +858,11 @@ struct FinancesMainTabView: View {
     /// та же, что `FinanceRows`/`FinanceGroupEditorView`), не живой `newCoreAccounts(matching:)`:
     /// эта функция зовётся на каждый элемент `groups` при каждом рендере `groupsListView` — живой
     /// FetchDescriptor здесь был лишним повторным чтением стора без надобности.
-    private func isGroupEmpty(_ group: FinanceGroup) -> Bool {
-        viewModel.orderedAccounts(for: group).isEmpty && viewModel.coreAccountsSnapshot(matching: group).isEmpty
+    private func isGroupEmpty(_ group: AccountGroup) -> Bool {
+        viewModel.orderedAccounts(for: group).isEmpty && viewModel.legacyAccountsMatchingGroupName(group.name).isEmpty
     }
 
-    private func groupsListView(_ groups: [FinanceGroup]) -> some View {
+    private func groupsListView(_ groups: [AccountGroup]) -> some View {
         let nonEmptyGroups = groups.filter { !isGroupEmpty($0) }
         let emptyGroups = groups.filter { isGroupEmpty($0) }
 
@@ -873,6 +873,14 @@ struct FinancesMainTabView: View {
                     viewModel: viewModel,
                     draggedGroupID: $draggedGroupID
                 )
+            }
+
+            // [Ф5c.7 contract] Ungrouped — канон `account.group == nil`, НЕ сущность `AccountGroup`
+            // (структурно исключена из `groups` в `loadCoreEntities`), поэтому не рендерится через
+            // generic `FinanceGroupRow` — отдельный блок (регресс-guard: без него core-счета без
+            // группы становятся невидимы на экране «Счета», найдено `FinanceViewModelCoreEntitiesTests`).
+            if !isUngroupedSectionEmpty {
+                ungroupedSectionRow
             }
 
             if !emptyGroups.isEmpty {
@@ -889,6 +897,80 @@ struct FinancesMainTabView: View {
                 }
             }
         }
+    }
+
+    private var isUngroupedSectionEmpty: Bool {
+        viewModel.ungroupedAccounts().isEmpty
+            && viewModel.legacyAccountsMatchingGroupName(FinanceSystemGroups.ungroupedName).isEmpty
+    }
+
+    private static let ungroupedSectionKey = "finances.ungrouped.section"
+
+    private var isUngroupedSectionExpanded: Bool {
+        viewModel.state.expandedGroupIDs.contains(Self.ungroupedSectionKey)
+    }
+
+    private var ungroupedSectionRow: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    viewModel.handle(.toggleGroupExpanded(Self.ungroupedSectionKey))
+                }
+            } label: {
+                HStack(spacing: AppSpacing.m) {
+                    Text(FinanceSystemGroups.ungroupedName)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.textTertiary.opacity(0.9))
+                        .rotationEffect(.degrees(isUngroupedSectionExpanded ? 90 : 0))
+                }
+                .padding(.horizontal, FinancesMainLayoutPolicy.horizontalPadding)
+                .padding(.vertical, AppSpacing.m)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isUngroupedSectionExpanded {
+                VStack(spacing: 0) {
+                    ForEach(viewModel.ungroupedAccounts(), id: \.id) { account in
+                        NewCoreAccountRow(
+                            account: account,
+                            balance: viewModel.newCoreBalanceToday(account),
+                            isAmountHidden: viewModel.state.isAmountHidden
+                        )
+                        .padding(.horizontal, FinancesMainLayoutPolicy.horizontalPadding)
+                    }
+                    // Легаси-fallback-хвост (invariant 9 §2.1) — минимальный ряд (не reuse приватного
+                    // `FinanceAccountRow` из `FinanceRows.swift`, read-only: dynamics/edit доступны
+                    // через deep-link на «Динамика» не проведён в этом гейте, как и у core-строк выше).
+                    ForEach(viewModel.legacyAccountsMatchingGroupName(FinanceSystemGroups.ungroupedName), id: \.accountUniqueID) { account in
+                        if let info = viewModel.getAccountInfo(account: account) {
+                            HStack(spacing: AppSpacing.m) {
+                                Image(systemName: info.icon)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                Text(info.name)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Text(formatBalance(info.amount, isHidden: viewModel.state.isAmountHidden))
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(info.isCreditCardDebt ? AppColors.error : AppColors.textPrimary)
+                            }
+                            .padding(.horizontal, FinancesMainLayoutPolicy.horizontalPadding)
+                            .padding(.vertical, AppSpacing.s)
+                        }
+                    }
+                }
+            }
+        }
+        .background(
+            FinanceChromeCardBackground(cornerRadius: FinanceScreenChrome.groupRowCornerRadius)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: FinanceScreenChrome.groupRowCornerRadius, style: .continuous))
     }
 
     private func hiddenGroupsRow(count: Int) -> some View {

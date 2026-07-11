@@ -258,7 +258,7 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private enum NavigationToolbarMode {
-        case group(FinanceGroup)
+        case group(AccountGroup)
         case account(FinanceAccount)
         case none
     }
@@ -509,13 +509,13 @@ private struct FinanceDynamicsContentView: View {
         }
     }
 
-    private var currentDynamicsGroup: FinanceGroup? {
+    private var currentDynamicsGroup: AccountGroup? {
         guard viewModel.state.isSingleGroupMode, !viewModel.state.isSingleAccountMode else { return nil }
         guard let groupID = viewModel.state.selectedGroupIDs.first else { return nil }
         return financeViewModel.state.groups.first { $0.groupUniqueID == groupID }
     }
 
-    private func singleGroupActionBar(group: FinanceGroup) -> some View {
+    private func singleGroupActionBar(group: AccountGroup) -> some View {
         HStack(spacing: 8) {
             NavigationLink {
                 FinanceAddAccountView(
@@ -1316,7 +1316,7 @@ private struct FinanceDynamicsContentView: View {
         return FinanceDeleteProductCopy.confirmationMessage(for: account.accountType)
     }
 
-    private var currentGroup: FinanceGroup? {
+    private var currentGroup: AccountGroup? {
         guard viewModel.state.isSingleGroupMode,
               let groupID = viewModel.state.selectedGroupIDs.first else {
             return nil
@@ -1410,7 +1410,8 @@ private struct FinanceDynamicsContentView: View {
     private func confirmDeleteAccount() {
         guard let account = initialAccount else { return }
         showDeleteAccountConfirmation = false
-        financeViewModel.handle(.removeAccountFromGroup(account))
+        // [Ф5c.7 contract] `.removeAccountFromGroup` теперь core-типизирован — легаси-путь напрямую.
+        financeViewModel.removeLegacyAccountFromGroup(account)
         dismiss()
     }
 
@@ -1602,13 +1603,14 @@ private struct FinanceDynamicsContentView: View {
 
     private func finishInlineAccountEdit(for account: FinanceAccount) {
         guard canSaveInlineAccountEdit(for: account) else { return }
+        // [Ф5c.7 contract] Легаси инлайн-редактор — actions теперь core-типизированы, легаси-путь напрямую.
         if inlineCreditCard(for: account) != nil {
             let limit = AmountInputFormatter.parse(inlineCreditLimitText) ?? 0
             let debt = AmountInputFormatter.parse(inlineCreditDebtText) ?? 0
-            financeViewModel.handle(.updateCreditCardQuickFields(account: account, creditLimit: limit, debt: debt))
+            financeViewModel.updateLegacyCreditCardQuickFields(account: account, creditLimit: limit, debt: debt)
         } else {
             let amount = AmountInputFormatter.parse(inlineAmountText) ?? 0
-            financeViewModel.handle(.updateAccountAmount(account, amount))
+            financeViewModel.updateLegacyAccountAmount(account: account, newAmount: amount)
         }
         viewModel.handle(.loadData)
         isInlineAccountEdit = false
@@ -2510,7 +2512,7 @@ private struct FinanceDynamicsContentView: View {
         )
     }
 
-    private func dynamicsGroup(for item: DynamicsBreakdownItem) -> FinanceGroup? {
+    private func dynamicsGroup(for item: DynamicsBreakdownItem) -> AccountGroup? {
         guard viewModel.state.viewMode == .groups, item.id != "total" else { return nil }
         return financeViewModel.state.groups.first { $0.groupUniqueID == item.id }
     }

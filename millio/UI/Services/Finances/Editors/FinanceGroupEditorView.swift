@@ -9,7 +9,7 @@ import SwiftUI
 
 struct FinanceGroupEditorView: View {
     @ObservedObject var viewModel: FinanceViewModel
-    let editingGroupOverride: FinanceGroup?
+    let editingGroupOverride: AccountGroup?
     let presentationStyle: FinanceEditorPresentationStyle
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
@@ -40,7 +40,7 @@ struct FinanceGroupEditorView: View {
 
     init(
         viewModel: FinanceViewModel,
-        editingGroupOverride: FinanceGroup? = nil,
+        editingGroupOverride: AccountGroup? = nil,
         presentationStyle: FinanceEditorPresentationStyle = .modal
     ) {
         self.viewModel = viewModel
@@ -61,11 +61,12 @@ struct FinanceGroupEditorView: View {
                         managementSection
                         
                         if let editingGroup = currentEditingGroup {
-                            let orderedAccounts = viewModel.orderedAccounts(for: editingGroup)
-                            // [Ф5c.7 expand-contract, файл №2] core-счета группы (мост по имени,
-                            // единая точка `coreAccountsSnapshot` — не второй фильтр, см. FinanceRows).
-                            let coreAccounts = viewModel.coreAccountsSnapshot(matching: editingGroup)
-                            accountsSection(orderedAccounts, coreAccounts: coreAccounts)
+                            // [Ф5c.7 contract] `orderedAccounts` теперь ПЕРВИЧНЫЙ источник (core,
+                            // редактируемый — было read-only). Легаси — fallback-хвост по имени
+                            // (invariant 9 §2.1), остаётся read-only (как раньше).
+                            let legacyAccounts = viewModel.legacyAccountsMatchingGroupName(editingGroup.name)
+                            let coreAccounts = viewModel.orderedAccounts(for: editingGroup)
+                            accountsSection(legacyAccounts, coreAccounts: coreAccounts)
                         }
                     }
                     .padding(.top, 20)
@@ -164,7 +165,7 @@ struct FinanceGroupEditorView: View {
                     name = editing.name
                     selectedCurrency = editing.displayCurrency
                     // Находим соответствующий цвет из predefinedColors по hex-значению
-                    let editingColorHex = editing.colorHex.uppercased()
+                    let editingColorHex = (editing.colorHex ?? "#FFFFFF").uppercased()
                     if let matchingColor = predefinedColors.first(where: { color in
                         color.toHex().uppercased() == editingColorHex
                     }) {
@@ -230,7 +231,7 @@ struct FinanceGroupEditorView: View {
         }
     }
 
-    private var currentEditingGroup: FinanceGroup? {
+    private var currentEditingGroup: AccountGroup? {
         editingGroupOverride ?? viewModel.state.editingGroup
     }
     
@@ -619,7 +620,7 @@ struct FinanceGroupEditorView: View {
     private func confirmDeleteAccount() {
         guard let account = pendingAccountDeletion else { return }
         pendingAccountDeletion = nil
-        viewModel.handle(.removeAccountFromGroup(account))
+        viewModel.removeLegacyAccountFromGroup(account)
     }
 
     private var deleteAccountConfirmationTitle: String {

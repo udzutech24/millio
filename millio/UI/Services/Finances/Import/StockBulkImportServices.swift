@@ -151,10 +151,11 @@ struct StockBulkImportPersistenceService {
         drafts: [StockBulkImportRowDraft],
         includeInTotal: Bool,
         priority: InvestmentPriority,
-        targetGroup: FinanceGroup?,
+        targetGroup: AccountGroup?,
         mergeDuplicates: Bool
     ) async throws -> Int {
-        let resolvedGroup = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: modelContext)
+        // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен.
+        let resolvedGroup = targetGroup
         let service = AccountsCoreService(modelContext: modelContext)
 
         let resolvedRows = mergeDuplicates

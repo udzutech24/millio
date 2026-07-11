@@ -303,7 +303,7 @@ struct FinanceDynamicsViewModelTests {
         )
         #expect(abs(beforeArchive - 10_000) < 0.01)
 
-        financeViewModel.handle(.removeAccountFromGroup(account))
+        financeViewModel.removeLegacyAccountFromGroup(account)
         dynamicsViewModel.handle(.loadData)
         await waitUntil { !dynamicsViewModel.state.isLoading }
 
@@ -390,7 +390,7 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(balanceBefore - 10_000) < 0.01)
 
         // Архивируем
-        financeViewModel.handle(.removeAccountFromGroup(account))
+        financeViewModel.removeLegacyAccountFromGroup(account)
         dynamicsViewModel.handle(.loadData)
         await waitUntil { !dynamicsViewModel.state.isLoading }
 
@@ -454,7 +454,7 @@ struct FinanceDynamicsViewModelTests {
             currencyService: MockDynamicsCurrencyRateService(),
             skipInitialLoad: false
         )
-        financeViewModel.handle(.deleteGroup(group))
+        financeViewModel.deleteLegacyGroup(group)
 
         let dynamicsViewModel = FinanceDynamicsViewModel(
             modelContext: modelContext,
@@ -645,7 +645,7 @@ struct FinanceDynamicsViewModelTests {
         // порядка эвентов между removeAccountFromGroup и перестройкой cardsCache
         archivedLaterCard.archivedAt = now
 
-        financeViewModel.handle(.removeAccountFromGroup(archivedLaterAccount))
+        financeViewModel.removeLegacyAccountFromGroup(archivedLaterAccount)
         dynamicsViewModel.handle(.loadData)
         // FIX #5: state.dynamicsMode и viewMode выставляем строго ПОСЛЕ второго waitUntil
         await waitUntil { !dynamicsViewModel.state.isLoading }
@@ -2340,18 +2340,16 @@ struct FinanceDynamicsViewModelTests {
         )
         financeViewModel.handle(.loadGroups)
         financeViewModel.handle(.loadAccounts)
-        financeViewModel.handle(.moveGroup(sourceGroupID: secondGroup.groupUniqueID, destinationIndex: 0))
-
-        let reorderedSecondGroup = try #require(
-            financeViewModel.state.groups.first(where: { $0.groupUniqueID == secondGroup.groupUniqueID })
-        )
-        financeViewModel.handle(
-            .moveAccount(
-                sourceAccountID: gammaAccount.accountUniqueID,
-                destinationIndex: 0,
-                groupID: reorderedSecondGroup.groupUniqueID
-            )
-        )
+        // [Ф5c.7 contract] `.moveGroup`/`.moveAccount` теперь core-типизированы (`AccountGroup`/
+        // `Account`) — FDVM читает СВОЙ, легаси-типизированный `state.groups` (own fetch, вне скоупа
+        // флипа). Реордер легаси-фикстуры выставляем напрямую полями `.order` (то же самое действие,
+        // что делали бы core-экшены, только на легаси-моделях).
+        firstGroup.order = 1
+        secondGroup.order = 0
+        secondGroup.usesManualAccountOrdering = true
+        gammaAccount.order = 0
+        betaAccount.order = 1
+        try modelContext.save()
 
         let dynamicsViewModel = FinanceDynamicsViewModel(
             modelContext: modelContext,

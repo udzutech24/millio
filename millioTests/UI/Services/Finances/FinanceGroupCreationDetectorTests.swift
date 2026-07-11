@@ -8,16 +8,13 @@ import Foundation
 @testable import millio
 
 struct FinanceGroupCreationDetectorTests {
-    @Test("Новая группа после создания корректно детектится по diff-у ID и самой свежей createdAt")
+    // [Ф5c.7 contract] `AccountGroup` не хранит `createdAt` — тай-брейкер на `order` (см. коммент
+    // в `FinanceGroupCreationDetector`).
+    @Test("Новая группа после создания корректно детектится по diff-у ID и самому большому order")
     func detectsMostRecentCreatedGroup() {
-        let existing = FinanceGroup(name: "Existing", colorHex: "#000000")
-        existing.createdAt = Date(timeIntervalSince1970: 10)
-
-        let createdOlder = FinanceGroup(name: "Created 1", colorHex: "#111111")
-        createdOlder.createdAt = Date(timeIntervalSince1970: 20)
-
-        let createdNewer = FinanceGroup(name: "Created 2", colorHex: "#222222")
-        createdNewer.createdAt = Date(timeIntervalSince1970: 30)
+        let existing = AccountGroup(name: "Existing", colorHex: "#000000", order: 0)
+        let createdOlder = AccountGroup(name: "Created 1", colorHex: "#111111", order: 1)
+        let createdNewer = AccountGroup(name: "Created 2", colorHex: "#222222", order: 2)
 
         let previousIDs: Set<String> = [existing.groupUniqueID]
         let groups = [existing, createdOlder, createdNewer]
@@ -28,11 +25,10 @@ struct FinanceGroupCreationDetectorTests {
 
     @Test("Если новых групп нет — возвращается nil")
     func returnsNilWhenNoNewGroups() {
-        let existing = FinanceGroup(name: "Existing", colorHex: "#000000")
+        let existing = AccountGroup(name: "Existing", colorHex: "#000000")
         let previousIDs: Set<String> = [existing.groupUniqueID]
 
         let detected = FinanceGroupCreationDetector.detectCreatedGroup(previousGroupIDs: previousIDs, groups: [existing])
         #expect(detected == nil)
     }
 }
-

@@ -3,7 +3,9 @@
 //  millio
 //
 //  Создан в рамках Phase 5 декомпозиции FinanceViewModel.
-//  Отвечает за CRUD групп счетов: создание, переименование, удаление, порядок.
+//  [Ф5c.7 contract] Флип на core-типы: CRUD групп теперь на `AccountGroup`/`Account`.
+//  Легаси-`FinanceGroup` синхронизируется ПО ИМЕНИ как fallback-хвост (не первичный источник) —
+//  см. `syncLegacyGroup`, инвариант 9 §2.1 плана 5c.7.
 //
 
 import Foundation
@@ -17,17 +19,9 @@ final class FinanceGroupService {
     // MARK: - Dependencies
 
     private let modelContext: ModelContext
-    private let ungroupedGroupName: String
 
-    /// Провайдер текущих групп из FinanceState
-    private let groupsProvider: () -> [FinanceGroup]
-
-    /// Резолвер информации о счёте: используется для фильтрации видимых счетов
-    private let accountInfoResolver: (FinanceAccount) -> Bool
-
-    /// Кол-во счетов нового ядра в группе (Фаза 1.5) — чтобы группа/Ungrouped из одних core-счетов
-    /// не пряталась как «пустая» (баг §1.3a: legacy-junction пуст, а счета есть в AccountGroup).
-    private let coreAccountsCount: (FinanceGroup) -> Int
+    /// Провайдер текущих core-групп из FinanceState
+    private let groupsProvider: () -> [AccountGroup]
 
     /// Callback: загрузить группы в VM
     private let onLoadGroups: () -> Void
@@ -39,149 +33,49 @@ final class FinanceGroupService {
     private let onScheduleGroupTotalRefresh: (String, String?) -> Void
     /// Callback: закрыть редактор группы в state
     private let onDismissGroupEditor: () -> Void
-    /// Callback: архивировать underlying-счёт при удалении группы
-    private let onArchiveUnderlying: (FinanceAccount, Date) -> Void
 
     // MARK: - Init
 
     init(
         modelContext: ModelContext,
-        ungroupedGroupName: String,
-        groupsProvider: @escaping () -> [FinanceGroup],
-        accountInfoResolver: @escaping (FinanceAccount) -> Bool,
-        coreAccountsCount: @escaping (FinanceGroup) -> Int = { _ in 0 },
+        groupsProvider: @escaping () -> [AccountGroup],
         onLoadGroups: @escaping () -> Void,
         onLoadAccounts: @escaping () -> Void,
         onCalculateTotal: @escaping () -> Void,
         onScheduleGroupTotalRefresh: @escaping (String, String?) -> Void,
-        onDismissGroupEditor: @escaping () -> Void,
-        onArchiveUnderlying: @escaping (FinanceAccount, Date) -> Void
+        onDismissGroupEditor: @escaping () -> Void
     ) {
         self.modelContext = modelContext
-        self.ungroupedGroupName = ungroupedGroupName
         self.groupsProvider = groupsProvider
-        self.accountInfoResolver = accountInfoResolver
-        self.coreAccountsCount = coreAccountsCount
         self.onLoadGroups = onLoadGroups
         self.onLoadAccounts = onLoadAccounts
         self.onCalculateTotal = onCalculateTotal
         self.onScheduleGroupTotalRefresh = onScheduleGroupTotalRefresh
         self.onDismissGroupEditor = onDismissGroupEditor
-        self.onArchiveUnderlying = onArchiveUnderlying
-    }
-
-    // MARK: - Visibility
-
-    func visibleGroupsForList() -> [FinanceGroup] {
-        groupsProvider().filter { !shouldHideGroupInList($0) }
-    }
-
-    private func shouldHideGroupInList(_ group: FinanceGroup) -> Bool {
-        guard group.name == ungroupedGroupName else { return false }
-        return visibleAccountsForGroup(group).isEmpty && coreAccountsCount(group) == 0
-    }
-
-    private func visibleAccountsForGroup(_ group: FinanceGroup) -> [FinanceAccount] {
-        orderedAccounts(for: group).filter { accountInfoResolver($0) }
-    }
-
-    func orderedAccounts(
-        for group: FinanceGroup,
-        sortMode: AccountSortMode = .amountDescending,
-        amountResolver: ((FinanceAccount) -> Double)? = nil,
-        nameResolver: ((FinanceAccount) -> String)? = nil
-    ) -> [FinanceAccount] {
-        let accounts = (group.accounts ?? []).filter { accountInfoResolver($0) }
-        if group.usesManualAccountOrdering {
-            return accounts.sorted { lhs, rhs in
-                if lhs.order != rhs.order { return lhs.order < rhs.order }
-                return lhs.createdAt < rhs.createdAt
-            }
-        }
-
-        return accounts.sorted { lhs, rhs in
-            switch sortMode {
-            case .amountDescending:
-                let lhsAmt = amountResolver?(lhs) ?? 0
-                let rhsAmt = amountResolver?(rhs) ?? 0
-                if lhsAmt != rhsAmt { return lhsAmt > rhsAmt }
-            case .amountAscending:
-                let lhsAmt = amountResolver?(lhs) ?? 0
-                let rhsAmt = amountResolver?(rhs) ?? 0
-                if lhsAmt != rhsAmt { return lhsAmt < rhsAmt }
-            case .nameAscending:
-                let lhsName = nameResolver?(lhs) ?? ""
-                let rhsName = nameResolver?(rhs) ?? ""
-                let cmp = lhsName.localizedCompare(rhsName)
-                if cmp != .orderedSame { return cmp == .orderedAscending }
-            case .nameDescending:
-                let lhsName = nameResolver?(lhs) ?? ""
-                let rhsName = nameResolver?(rhs) ?? ""
-                let cmp = lhsName.localizedCompare(rhsName)
-                if cmp != .orderedSame { return cmp == .orderedDescending }
-            }
-            return lhs.createdAt < rhs.createdAt
-        }
     }
 
     // MARK: - CRUD
 
-    func deleteGroup(_ group: FinanceGroup) {
+    /// Удалить группу — счета АРХИВИРУЮТСЯ (core-путь `AccountsCoreService.archiveAccount`) и
+    /// переводятся в Ungrouped (`account.group = nil`, канон). [Ф5c.7 contract, владелец 2026-07-12]
+    /// Возврат легаси-поведения (было отменено при контрактном флипе как "излишняя мутация" —
+    /// пересмотрено: это отмена случайного регресса, а не новая фича — удаление группы в старом мире
+    /// ВСЕГДА архивировало её счета, тот же контракт сохраняется для core).
+    func deleteGroup(_ group: AccountGroup) {
+        let accountsService = AccountsCoreService(modelContext: modelContext)
         let now = Date()
-        var didAffectCards = false
-        var didAffectCredits = false
-        let archiveGroup = FinanceSystemGroups.ensureUngroupedGroup(in: modelContext)
-        let shouldDeleteGroup = archiveGroup.groupUniqueID != group.groupUniqueID
-        var nextArchiveOrder = nextAccountOrder(in: archiveGroup)
-
-        if let accounts = group.accounts {
-            for account in accounts {
-                onArchiveUnderlying(account, now)
-                account.group = archiveGroup
-                account.order = nextArchiveOrder
-                account.updatedAt = now
-                nextArchiveOrder += 1
-
-                switch account.accountType {
-                case .card:
-                    didAffectCards = true
-                case .credit:
-                    didAffectCredits = true
-                case .investment:
-                    break
-                }
-            }
+        for account in group.accounts ?? [] {
+            try? accountsService.archiveAccount(account, on: now)
+            account.group = nil
         }
-
-        if shouldDeleteGroup {
-            modelContext.delete(group)
-            // Мост Cashflow→новое ядро (задача 7, Фаза 5): `AccountGroup` нового мира мэппится на
-            // `FinanceGroup` ПО ИМЕНИ (см. `AccountsCoreAdditionBridge.resolveAccountGroup`). Без этой
-            // строки удаление старой группы оставляло бы счета нового ядра «привязанными» к группе,
-            // которой больше нет в UI старого мира — они не появлялись бы ни в старой, ни в Ungrouped.
-            // Удаление АккаунтГруппы каскадом `.nullify` переводит её счета в Ungrouped (group = nil),
-            // сами счета и их события НЕ трогает (AC7: это не архивация и не удаление счёта).
-            let groupName = group.name
-            let coreGroupDescriptor = FetchDescriptor<AccountGroup>(
-                predicate: #Predicate<AccountGroup> { $0.name == groupName }
-            )
-            if let coreGroup = try? modelContext.fetch(coreGroupDescriptor).first {
-                modelContext.delete(coreGroup)
-            }
-        }
+        modelContext.delete(group)
+        syncLegacyGroupDeletion(named: group.name)
 
         do {
             try modelContext.save()
             onLoadGroups()
             onLoadAccounts()
             onCalculateTotal()
-
-            if didAffectCards {
-                EventBus.shared.publish(FinanceEvent.cardsUpdated)
-            }
-            if didAffectCredits {
-                EventBus.shared.publish(FinanceEvent.creditsUpdated)
-            }
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to delete group: \(error.localizedDescription)")
         }
@@ -191,23 +85,21 @@ final class FinanceGroupService {
         name: String,
         colorHex: String,
         displayCurrency: String?,
-        editingGroup: FinanceGroup?,
+        editingGroup: AccountGroup?,
         displayCurrencyFallback: String
     ) {
-        let groupToUpdate: FinanceGroup
+        let groupToUpdate: AccountGroup
         if let existing = editingGroup {
-            // Синхронизируем одноимённую AccountGroup (канон, Фаза 1.5) ДО переименования FinanceGroup —
-            // ищем по СТАРОМУ имени, иначе после смены имени связь по имени порвётся.
-            syncCoreGroup(oldName: existing.name, newName: name, colorHex: colorHex, displayCurrency: displayCurrency)
+            // Синхронизируем одноимённую легаси-`FinanceGroup` (fallback-хвост, invariant 9) ДО
+            // переименования — ищем по СТАРОМУ имени, иначе связь по имени порвётся.
+            syncLegacyGroup(oldName: existing.name, newName: name, colorHex: colorHex, displayCurrency: displayCurrency)
             existing.name = name
             existing.colorHex = colorHex
             existing.displayCurrency = displayCurrency
-            existing.updatedAt = Date()
             groupToUpdate = existing
         } else {
             let maxOrder = groupsProvider().map { $0.order }.max() ?? -1
-            let newGroup = FinanceGroup(name: name, colorHex: colorHex, order: maxOrder + 1)
-            newGroup.displayCurrency = displayCurrency
+            let newGroup = AccountGroup(name: name, colorHex: colorHex, displayCurrency: displayCurrency, order: maxOrder + 1)
             modelContext.insert(newGroup)
             groupToUpdate = newGroup
         }
@@ -226,7 +118,7 @@ final class FinanceGroupService {
     }
 
     func moveGroup(sourceGroupID: String, destinationIndex: Int) {
-        var groups = visibleGroupsForList()
+        var groups = groupsProvider()
         guard let sourceIndex = groups.firstIndex(where: { $0.groupUniqueID == sourceGroupID }) else {
             return
         }
@@ -237,10 +129,7 @@ final class FinanceGroupService {
 
         for (index, group) in groups.enumerated() {
             group.order = index
-            group.updatedAt = Date()
         }
-
-        normalizeHiddenGroupOrders(excluding: groups.map(\.groupUniqueID))
 
         do {
             try modelContext.save()
@@ -250,43 +139,29 @@ final class FinanceGroupService {
         }
     }
 
-    // MARK: - Order Helpers
+    // MARK: - Синхронизация с легаси-`FinanceGroup` (invariant 9 §2.1 — fallback-хвост по имени)
 
-    func normalizeHiddenGroupOrders(excluding visibleGroupIDs: [String]) {
-        let hiddenGroups = groupsProvider()
-            .filter { !visibleGroupIDs.contains($0.groupUniqueID) }
-            .sorted { lhs, rhs in
-                if lhs.order != rhs.order {
-                    return lhs.order < rhs.order
-                }
-                return lhs.createdAt < rhs.createdAt
-            }
+    /// Переносит правки редактора группы (сore, primary) на одноимённую легаси-`FinanceGroup`, если
+    /// она ещё существует (непроконвертированный хвост). Инверсия направления sync относительно
+    /// expand-фазы (была core←legacy, теперь legacy←core, т.к. core стал primary).
+    private func syncLegacyGroup(oldName: String, newName: String, colorHex: String, displayCurrency: String?) {
+        guard !oldName.isEmpty else { return }
+        let descriptor = FetchDescriptor<FinanceGroup>(predicate: #Predicate<FinanceGroup> { $0.name == oldName })
+        guard let legacyGroup = try? modelContext.fetch(descriptor).first else { return }
+        legacyGroup.name = newName
+        legacyGroup.colorHex = colorHex
+        legacyGroup.displayCurrency = displayCurrency
+        legacyGroup.updatedAt = Date()
+    }
 
-        let startIndex = visibleGroupIDs.count
-        for (offset, group) in hiddenGroups.enumerated() {
-            group.order = startIndex + offset
+    /// Удаление core-группы: если одноимённая легаси-`FinanceGroup` существует И пуста (нет
+    /// непроконвертированного хвоста), удаляем и её — иначе оставляем (легаси archive/restore
+    /// продолжает работать для её содержимого, invariant 5).
+    private func syncLegacyGroupDeletion(named name: String) {
+        let descriptor = FetchDescriptor<FinanceGroup>(predicate: #Predicate<FinanceGroup> { $0.name == name })
+        guard let legacyGroup = try? modelContext.fetch(descriptor).first else { return }
+        if legacyGroup.accounts?.isEmpty ?? true {
+            modelContext.delete(legacyGroup)
         }
     }
-
-    func nextAccountOrder(in group: FinanceGroup) -> Int {
-        ((group.accounts ?? []).map(\.order).max() ?? -1) + 1
-    }
-
-    // MARK: - Синхронизация с AccountGroup (Фаза 1.5)
-
-    /// Переносит правки редактора группы на одноимённую `AccountGroup` (канон нового ядра). Без этого
-    /// после слияния моделей правка цвета/валюты/имени в редакторе меняла бы только легаси-`FinanceGroup`,
-    /// а `AccountGroup` (по которой считаются core-счета) расходилась бы. Ищем по СТАРОМУ имени; если
-    /// группы ещё нет — не создаём (создаст `GroupsMigrator`/`resolveAccountGroup` при первом core-счёте).
-    private func syncCoreGroup(oldName: String, newName: String, colorHex: String, displayCurrency: String?) {
-        guard oldName != ungroupedGroupName, !oldName.isEmpty else { return }
-        let descriptor = FetchDescriptor<AccountGroup>(
-            predicate: #Predicate<AccountGroup> { $0.name == oldName }
-        )
-        guard let coreGroup = try? modelContext.fetch(descriptor).first else { return }
-        coreGroup.name = newName
-        coreGroup.colorHex = colorHex
-        coreGroup.displayCurrency = displayCurrency
-    }
-
 }

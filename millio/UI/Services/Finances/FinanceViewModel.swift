@@ -10,24 +10,39 @@ import SwiftData
 import SwiftUI
 import Combine
 
+// MARK: - [Ф5c.7 contract] Совместимость идентичности core-типов с легаси-паттерном `*UniqueID: String`
+// `AccountGroup`/`Account` уже имеют стабильный `.id: UUID` — алиас нужен ТОЛЬКО чтобы widely-used
+// String-keyed словари/сравнения (`groupTotals`, `selectedGroupIDs`, dictionary-keys по всему
+// FDVM/View-слою) не переписывались поштучно на UUID. Не второй источник идентичности — просто вид.
+extension AccountGroup {
+    var groupUniqueID: String { id.uuidString }
+    /// Легаси-паттерн `FinanceGroup.color` (`colorHex` там non-optional) — `AccountGroup.colorHex`
+    /// опционален, дефолт белый как у легаси-инициализатора.
+    var color: Color { Color(hex: colorHex ?? "#FFFFFF") }
+}
+extension Account {
+    var accountUniqueID: String { id.uuidString }
+}
+
 // MARK: - Finance State
 
 struct FinanceState {
-    /// Все группы
-    var groups: [FinanceGroup] = []
-    
-    
+    /// Все группы (нового ядра, [Ф5c.7 contract] — было `[FinanceGroup]`, флип из `coreGroups`).
+    /// Канон Ungrouped = `account.group == nil`, поэтому здесь НЕТ Ungrouped-сущности.
+    var groups: [AccountGroup] = []
+
+
     /// Показывать ли экран создания/редактирования группы
     var showGroupEditor: Bool = false
-    
+
     /// Редактируемая группа (nil = новая группа)
-    var editingGroup: FinanceGroup? = nil
-    
+    var editingGroup: AccountGroup? = nil
+
     /// Показывать ли экран добавления счета
     var showAddAccountSheet: Bool = false
 
     /// Выбранная группа для добавления счета
-    var selectedGroupForAccount: FinanceGroup? = nil
+    var selectedGroupForAccount: AccountGroup? = nil
     
     /// Показывать ли sheet выбора валюты для отображения
     var showDisplayCurrencySheet: Bool = false
@@ -53,26 +68,23 @@ struct FinanceState {
     /// Время последнего успешного принудительного обновления
     var lastRefreshedAt: Date? = nil
 
-    /// Доступные карты
+    /// Счета нового ядра, участвующие сегодня ([Ф5c.7 contract] — флип из `coreAccounts`).
+    /// ПЕРВИЧНЫЙ источник рендера списка/группы. Архивные скрыты — как у `newCoreAccounts`.
+    var accounts: [Account] = []
+
+    // MARK: - Легаси-fallback (invariant 5/9 §2.1 плана 5c.7) — ОСТАЁТСЯ активной для НЕМИГРИРОВАННОГО
+    // остатка Card/Credit/Investment @Model (mixed-store хвост в графике/breakdown/списке). Больше НЕ
+    // первичный источник группы/списка (тот теперь `state.accounts`) — читается ТОЛЬКО как
+    // «дополнительная строка», если легаси-запись ещё не сконвертирована в core.
+
+    /// Активные легаси-карты (fallback-хвост, не первичный источник)
     var availableCards: [Card] = []
-    
-    /// Доступные кредиты
+
+    /// Активные легаси-кредиты (fallback-хвост)
     var availableCredits: [Credit] = []
-    
-    /// Доступные активы
+
+    /// Активные легаси-активы (fallback-хвост)
     var availableInvestments: [Investment] = []
-
-    // MARK: - [Ф5c.7 expand-contract, шаг 1] Поля нового ядра РЯДОМ с легаси
-    // Пока dead-read: потребителей нет, populate — в `loadCoreEntities()`. Мигрируются пофайлово
-    // (plans/2026-07-11__phase-5c7-finances-replatform.md §5c.7.4), легаси-поля сносятся последним
-    // contract-шагом, когда grep докажет 0 потребителей.
-
-    /// Группы нового ядра. Канон Ungrouped = `account.group == nil`, поэтому здесь НЕТ Ungrouped-
-    /// сущности — счета без группы видны через `coreAccounts.filter { $0.group == nil }`.
-    var coreGroups: [AccountGroup] = []
-
-    /// Счета нового ядра, участвующие сегодня (архивные скрыты — как у `newCoreAccounts`).
-    var coreAccounts: [Account] = []
 
     /// Архивные карты
     var archivedCards: [Card] = []
@@ -86,38 +98,27 @@ struct FinanceState {
     var hasArchivedAccounts: Bool {
         !archivedCards.isEmpty || !archivedCredits.isEmpty || !archivedInvestments.isEmpty
     }
-    
-    /// Непривязанные карты (не добавленные ни в одну группу)
-    var unattachedCards: [Card] = []
-    
-    /// Непривязанные кредиты (не добавленные ни в одну группу)
-    var unattachedCredits: [Credit] = []
-    
-    /// Непривязанные активы (не добавленные ни в одну группу)
-    var unattachedInvestments: [Investment] = []
-    
+
     /// Множество ID групп с открытыми аккордеонами
     var expandedGroupIDs: Set<String> = []
     
     /// Словарь сумм групп по их ID
     var groupTotals: [String: Double] = [:]
     
-    /// Показывать ли sheet быстрого редактирования суммы счета
-    var showQuickEditAccountSheet: Bool = false
-    
-    /// Счет для быстрого редактирования суммы
-    var quickEditAccount: FinanceAccount? = nil
-    
     /// Показывать ли динамику группы
     var showGroupDynamics: Bool = false
-    
+
     /// Группа для отображения динамики
-    var selectedGroupForDynamics: FinanceGroup? = nil
-    
+    var selectedGroupForDynamics: AccountGroup? = nil
+
     /// Показывать ли динамику счета
     var showAccountDynamics: Bool = false
-    
+
     /// Счет для отображения динамики
+    /// [Ф5c.7 contract, ментор-находка] ОСТАЁТСЯ легаси-типизированным — реальный потребитель
+    /// (`FinanceDynamicsView.initialAccount`: convert-to-core/purge-легаси/inline-кредитка-edit)
+    /// неотделимо легаси-ориентирован. Core-счета уже имеют СВОЙ путь (`AccountDetailView` через
+    /// прямой `NavigationLink`, richer UI) — дублировать сюда не нужно (Challenge Loop #3).
     var selectedAccountForDynamics: FinanceAccount? = nil
     
     /// Показывать ли sheet настроек цели накопления
@@ -172,19 +173,25 @@ enum FinanceAction {
     case loadGroups
     case loadAccounts
     case addGroup
-    case editGroup(FinanceGroup)
-    case deleteGroup(FinanceGroup)
+    case editGroup(AccountGroup)
+    case deleteGroup(AccountGroup)
     case updateGroup(name: String, colorHex: String, displayCurrency: String?)
     case hideGroupEditor
-    case showAddAccountSheet(FinanceGroup?)
+    case showAddAccountSheet(AccountGroup?)
     case hideAddAccountSheet
-    case addAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?)
-    case restoreArchivedAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?)
-    case removeAccountFromGroup(FinanceAccount)
-    case deleteAccountPermanently(FinanceAccount)
-    /// Ручная зачистка: физически удалить легаси-счёт + junction + связанные операции Cashflow. Необратимо.
+    /// Привязать существующий core-счёт к группе (nil = Ungrouped, `account.group = nil`).
+    case addAccountToGroup(account: Account, group: AccountGroup?)
+    /// Восстановить архивный core-счёт в группу (nil = Ungrouped).
+    case restoreArchivedAccountToGroup(account: Account, group: AccountGroup?)
+    case removeAccountFromGroup(Account)
+    /// Физическое удаление core-счёта (`AccountsCoreService.physicallyDelete`). Необратимо.
+    case deleteAccountPermanently(Account)
+    /// Ручная зачистка: физически удалить ОСТАВШИЙСЯ немигрированный легаси-счёт + junction +
+    /// связанные операции Cashflow. Необратимо. Легаси-fallback путь (invariant 5 §2.1 плана 5c.7) —
+    /// достижим ТОЛЬКО для непроконвертированных leftover-записей.
     case physicallyDeleteLegacyAccount(FinanceAccount)
     /// Track C: перевод легаси-счёта в новое ядро (создаёт core-двойник, скрывает легаси атомарно).
+    /// Легаси-типизирован осознанно — владелец 2026-07-12 решил оставить как есть.
     case convertAccountToCore(FinanceAccount)
     case showDisplayCurrencySheet
     case hideDisplayCurrencySheet
@@ -197,12 +204,11 @@ enum FinanceAction {
     case moveGroup(sourceGroupID: String, destinationIndex: Int)
     case moveAccount(sourceAccountID: String, destinationIndex: Int, groupID: String)
     case setGroupTotal(String, Double)
-    case showQuickEditAccountSheet(FinanceAccount)
-    case hideQuickEditAccountSheet
-    case updateAccountAmount(FinanceAccount, Double)
-    case updateCreditCardQuickFields(account: FinanceAccount, creditLimit: Double, debt: Double)
-    case showGroupDynamics(FinanceGroup)
+    case updateAccountAmount(Account, Double)
+    case updateCreditCardQuickFields(account: Account, creditLimit: Double, debt: Double)
+    case showGroupDynamics(AccountGroup)
     case hideGroupDynamics
+    /// [Ф5c.7 contract, ментор-находка] Легаси-типизирован — см. коммент `selectedAccountForDynamics`.
     case showAccountDynamics(FinanceAccount)
     case hideAccountDynamics
     case showSavingsGoalSheet
@@ -260,11 +266,15 @@ final class FinanceViewModel: ViewModelProtocol {
     }()
 
     // MARK: - Services
-    // totalsService использует lazy из-за замыканий на self
+    // totalsService использует lazy из-за замыканий на self. [Ф5c.7 contract] Остаётся легаси-
+    // типизированным ЦЕЛИКОМ (per-group display fallback-терм + AccountBalanceSnapshotService legacy-
+    // writer) — `groupsProvider` больше не `state.groups`, прямой fetch независимо от core-состояния.
     private(set) lazy var totalsService: FinanceTotalsService = {
         FinanceTotalsService(
             currencyService: self.currencyService,
-            groupsProvider: { [weak self] in self?.state.groups ?? [] },
+            groupsProvider: { [weak self] in
+                (try? self?.modelContext.fetch(FetchDescriptor<FinanceGroup>())) ?? []
+            },
             displayCurrencyProvider: { [weak self] in self?.state.displayCurrency ?? "USD" },
             secondaryDisplayCurrencyProvider: { [weak self] in self?.state.secondaryDisplayCurrency },
             cardByIDProvider: { [weak self] in self?.cardByID ?? [:] },
@@ -277,11 +287,14 @@ final class FinanceViewModel: ViewModelProtocol {
         )
     }()
 
-    // snapshotService использует lazy из-за зависимости от totalsService
+    // snapshotService использует lazy из-за зависимости от totalsService. Легаси-writer (feature gap
+    // для core-строк зафиксирован в Gate A журнале — не дублируется здесь).
     private(set) lazy var snapshotService: AccountBalanceSnapshotService = {
         AccountBalanceSnapshotService(
             totalsService: self.totalsService,
-            groupsProvider: { [weak self] in self?.state.groups ?? [] }
+            groupsProvider: { [weak self] in
+                (try? self?.modelContext.fetch(FetchDescriptor<FinanceGroup>())) ?? []
+            }
         )
     }()
 
@@ -304,14 +317,14 @@ final class FinanceViewModel: ViewModelProtocol {
         )
     }()
 
-    // groupService использует lazy из-за замыканий на self
+    // groupService использует lazy из-за замыканий на self. [Ф5c.7 contract] Core-типизирован:
+    // `groupsProvider`/`accountInfoResolver`/`orderedAccounts` теперь на `AccountGroup`/`Account`.
+    // `coreAccountsCount`/Ungrouped-hide-развилка убраны — Ungrouped структурно не входит в
+    // `state.groups` (канон `group == nil`), рендерится отдельным UI-путём в View (не сущность).
     private(set) lazy var groupService: FinanceGroupService = {
         FinanceGroupService(
             modelContext: self.modelContext,
-            ungroupedGroupName: self.ungroupedGroupName,
             groupsProvider: { [weak self] in self?.state.groups ?? [] },
-            accountInfoResolver: { [weak self] account in self?.getAccountInfo(account: account) != nil },
-            coreAccountsCount: { [weak self] group in self?.newCoreAccounts(matching: group).count ?? 0 },
             onLoadGroups: { [weak self] in self?.loadGroups() },
             onLoadAccounts: { [weak self] in self?.loadAccounts() },
             onCalculateTotal: { [weak self] in self?.calculateTotalAmount() },
@@ -321,9 +334,6 @@ final class FinanceViewModel: ViewModelProtocol {
             onDismissGroupEditor: { [weak self] in
                 self?.state.showGroupEditor = false
                 self?.state.editingGroup = nil
-            },
-            onArchiveUnderlying: { [weak self] account, date in
-                self?.accountService.updateUnderlyingArchiveState(for: account, archivedAt: date)
             }
         )
     }()
@@ -333,13 +343,19 @@ final class FinanceViewModel: ViewModelProtocol {
         LegacyAccountConverter(modelContext: self.modelContext, registry: .shared)
     }()
 
-    // accountService использует lazy из-за замыканий на self
+    // accountService использует lazy из-за замыканий на self. [Ф5c.7 contract] Остаётся ЛЕГАСИ-
+    // типизированным внутри (invariant 5 §2.1 — легаси archive/restore/CRUD для непроконвертированного
+    // leftover). `groupsProvider` больше не читает `state.groups` (теперь `[AccountGroup]`) — прямой
+    // fetch легаси-`FinanceGroup`, независимый от core-состояния (доказано 5c.7.2: этот CRUD
+    // недостижим для core-двойников, маршрут остаётся полностью легаси-локальным).
     private(set) lazy var accountService: FinanceAccountService = {
         FinanceAccountService(
             modelContext: self.modelContext,
             ungroupedGroupName: self.ungroupedGroupName,
-            groupsProvider: { [weak self] in self?.state.groups ?? [] },
-            nextOrderProvider: { [weak self] group in self?.groupService.nextAccountOrder(in: group) ?? 0 },
+            groupsProvider: { [weak self] in
+                (try? self?.modelContext.fetch(FetchDescriptor<FinanceGroup>())) ?? []
+            },
+            nextOrderProvider: { [weak self] group in self?.legacyNextAccountOrder(in: group) ?? 0 },
             onAccountsLoaded: { [weak self] payload in
                 self?.state.availableCards = payload.availableCards
                 self?.state.archivedCards = payload.archivedCards
@@ -355,7 +371,7 @@ final class FinanceViewModel: ViewModelProtocol {
             },
             onLoadAccounts: { [weak self] in self?.loadAccounts() },
             onLoadGroups: { [weak self] in self?.loadGroups() },
-            onUpdateUnattachedItems: { [weak self] in self?.updateUnattachedItems() },
+            onUpdateUnattachedItems: { },
             onCalculateTotal: { [weak self] in self?.calculateTotalAmount() },
             onScheduleGroupTotalRefresh: { [weak self] groupID in
                 self?.scheduleGroupTotalRefresh(for: groupID)
@@ -505,12 +521,13 @@ final class FinanceViewModel: ViewModelProtocol {
             // fetch внутри `FinanceRows.newCoreAccounts`. Нужен свой триггер именно здесь.
             loadCoreEntities()
             
-        case .addAccountToGroup(let accountType, let accountID, let group):
-            addAccountToGroup(accountType: accountType, accountID: accountID, group: group)
+        case .addAccountToGroup(let account, let group):
+            addAccountToGroup(account, group: group)
 
-        case .restoreArchivedAccountToGroup(let accountType, let accountID, let group):
-            restoreArchivedAccountToGroup(accountType: accountType, accountID: accountID, group: group)
-            
+        case .restoreArchivedAccountToGroup(let account, let group):
+            restoreArchivedAccountToGroup(account, group: group)
+
+
         case .removeAccountFromGroup(let account):
             removeAccountFromGroup(account)
         case .deleteAccountPermanently(let account):
@@ -580,14 +597,6 @@ final class FinanceViewModel: ViewModelProtocol {
         case .setGroupTotal(let groupID, let total):
             state.groupTotals[groupID] = total
 
-        case .showQuickEditAccountSheet(let account):
-            state.quickEditAccount = account
-            state.showQuickEditAccountSheet = true
-            
-        case .hideQuickEditAccountSheet:
-            state.showQuickEditAccountSheet = false
-            state.quickEditAccount = nil
-            
         case .updateAccountAmount(let account, let newAmount):
             updateAccountAmount(account: account, newAmount: newAmount)
         case .updateCreditCardQuickFields(let account, let creditLimit, let debt):
@@ -692,79 +701,35 @@ final class FinanceViewModel: ViewModelProtocol {
         // — переставить безопасно, порядок внутри него не меняется.
         loadCoreEntities()
 
-        let descriptor = FetchDescriptor<FinanceGroup>()
-        if let groups = try? modelContext.fetch(descriptor) {
-            state.groups = groups.sorted { group1, group2 in
-                if group1.order != group2.order {
-                    return group1.order < group2.order
-                }
-                return group1.createdAt < group2.createdAt
-            }
-            // Пустая системная группа "Без группы" не должна отображаться в списке — НО только если
-            // она пуста И по легаси, И по ядру. Раньше проверялся только `group.accounts` (легаси
-            // junction) — core-счета с `group == nil` не учитывались, из-за чего Ungrouped исчезала
-            // из `state.groups`, а зависимый `coreAccountsCount`-гард в `FinanceGroupService.
-            // shouldHideGroupInList` не успевал сработать (группы нет во входном массиве вообще).
-            .filter { group in
-                guard group.name == ungroupedGroupName else { return true }
-                let hasLegacyAccounts = !(group.accounts?.isEmpty ?? true)
-                let hasCoreUngroupedAccounts = state.coreAccounts.contains { $0.group == nil }
-                return hasLegacyAccounts || hasCoreUngroupedAccounts
-            }
-            updateUnattachedItems()
-            calculateTotalAmount()
-        }
+        // [Ф5c.7 contract] Primary populate — ядро (было loadCoreEntities). Легаси-`FinanceGroup`
+        // больше НЕ первичный источник `state.groups`; Ungrouped структурно исключён на стороне
+        // `AccountGroup` (канон — `account.group == nil`, `loadCoreEntities` уже гардил это раньше).
+        loadCoreEntities()
+        calculateTotalAmount()
     }
 
-    /// [Ф5c.7 expand-contract, шаг 1] Populate `state.coreGroups`/`state.coreAccounts` из нового ядра
-    /// параллельно легаси-`loadGroups`. Тот же fetch-паттерн, что `newCoreAccounts(matching:)`
-    /// (участвующие сегодня, сортировка order→createdAt) — не второй путь агрегации (инвариант 2 §2.1),
-    /// а плоский срез store для будущих потребителей. Канон Ungrouped = `account.group == nil`:
-    /// coreGroups исключает любую `AccountGroup` с известным Ungrouped-именем (защита от сущности-дубля).
+    /// [Ф5c.7 contract] Populate `state.groups`/`state.accounts` из ядра — единственный первичный
+    /// источник рендера списка/группы. Участвующие сегодня, сортировка order→createdAt (тот же
+    /// паттерн, что был у `newCoreAccounts(matching:)`, не второй путь агрегации — инвариант 2 §2.1).
+    /// Канон Ungrouped = `account.group == nil`: `state.groups` исключает любую `AccountGroup` с
+    /// известным Ungrouped-именем (защита от сущности-дубля).
     private func loadCoreEntities() {
         let today = nowProvider()
 
         let accounts = (try? modelContext.fetch(FetchDescriptor<Account>())) ?? []
-        state.coreAccounts = accounts
+        state.accounts = accounts
             .filter { $0.participates(on: today) }
             .sorted { $0.order != $1.order ? $0.order < $1.order : $0.createdAt < $1.createdAt }
 
         let ungroupedNames = FinanceSystemGroups.allKnownUngroupedNames
         let groups = (try? modelContext.fetch(FetchDescriptor<AccountGroup>())) ?? []
-        state.coreGroups = groups
+        state.groups = groups
             .filter { !ungroupedNames.contains($0.name) }
             .sorted { $0.order != $1.order ? $0.order < $1.order : $0.name < $1.name }
     }
 
     private func loadAccounts() {
         accountService.loadAccounts()
-    }
-
-    /// Обновить списки непривязанных элементов
-    private func updateUnattachedItems() {
-        // Получаем все привязанные счета из всех групп
-        var attachedCardIDs: Set<String> = []
-        var attachedCreditIDs: Set<String> = []
-        var attachedInvestmentIDs: Set<String> = []
-        
-        for group in state.groups {
-            guard let accounts = group.accounts else { continue }
-            for account in accounts {
-                switch account.accountType {
-                case .card:
-                    attachedCardIDs.insert(account.accountID)
-                case .credit:
-                    attachedCreditIDs.insert(account.accountID)
-                case .investment:
-                    attachedInvestmentIDs.insert(account.accountID)
-                }
-            }
-        }
-        
-        // Фильтруем непривязанные элементы
-        state.unattachedCards = state.availableCards.filter { !attachedCardIDs.contains($0.cardUniqueID) }
-        state.unattachedCredits = state.availableCredits.filter { !attachedCreditIDs.contains($0.creditUniqueID) }
-        state.unattachedInvestments = state.availableInvestments.filter { !attachedInvestmentIDs.contains($0.investmentUniqueID) }
     }
 
     private func subscribeToFinanceEvents() {
@@ -939,21 +904,44 @@ final class FinanceViewModel: ViewModelProtocol {
         return (delta, pct)
     }
 
-    /// Подсчитать сумму группы в указанной валюте — ОБА мира (Фаза 1.5 слияния групп): легаси-junction
-    /// (`FinanceGroup.accounts` через `totalsService`) + счета нового ядра, привязанные к одноимённой
-    /// `AccountGroup` (`newCoreAccounts(matching:)`). Пока легаси не снесена (Фаза 5) — читаются оба;
-    /// группа целиком из core-счетов больше не даёт 0 (баг §1.3a плана unified-totals).
+    /// Подсчитать сумму группы в указанной валюте — [Ф5c.7 contract] core PRIMARY + легаси FALLBACK
+    /// по имени (design fix журнала плана, п.1: снятие легаси-терма БЕЗ инверсии обнуляло
+    /// mixed-store тотал — 17000→7000, деньги юзера пропадали). Легаси считается ТОЛЬКО если
+    /// одноимённая `FinanceGroup` ещё существует (непроконвертированный хвост, invariant 9 §2.1).
     ///
     /// ВАЖНО: это ДИСПЛЕЙНЫЙ per-group тотал (карточка группы/редактор/строки). Агрегат «Общий баланс»
-    /// (`totalsService.calculateTotalsSnapshot`) вызывает `FinanceTotalsService.calculateGroupTotal`
-    /// НАПРЯМУЮ и добавляет core одним лампом через `newCoreTotalProvider` — сюда он не заходит, поэтому
-    /// core здесь НЕ задваивается в общем балансе (переключение агрегата на single-world — Фаза 2).
-    func calculateGroupTotal(group: FinanceGroup, in currency: String) async -> Double {
-        let legacyTotal = await totalsService.calculateGroupTotal(group: group, in: currency)
-        let coreAccounts = newCoreAccounts(matching: group)
-        guard !coreAccounts.isEmpty else { return legacyTotal }
+    /// (`totalsService.calculateTotalsSnapshot`) — отдельный single-world путь, сюда не заходит.
+    func calculateGroupTotal(group: AccountGroup, in currency: String) async -> Double {
+        let coreAccounts = orderedAccounts(for: group)
         let coreTotal = await accountsTotalsService.total(for: coreAccounts, on: nowProvider(), in: currency)
-        return legacyTotal + NSDecimalNumber(decimal: coreTotal).doubleValue
+        var total = NSDecimalNumber(decimal: coreTotal).doubleValue
+
+        if let legacyGroup = fetchLegacyGroup(named: group.name) {
+            total += await totalsService.calculateGroupTotal(group: legacyGroup, in: currency)
+        }
+        return total
+    }
+
+    /// Тотал Ungrouped (core-only — легаси Ungrouped-fallback считается отдельно `archivedAccountRows`/
+    /// `getAccountInfo`-путём в списке, а не здесь: у Ungrouped нет единой легаси-`FinanceGroup`,
+    /// с которой можно смэтчиться по имени однозначно — только системная, уже покрытая core-стороной).
+    func calculateUngroupedTotal(in currency: String) async -> Double {
+        let accounts = state.accounts.filter { $0.group == nil }
+        let total = await accountsTotalsService.total(for: accounts, on: nowProvider(), in: currency)
+        return NSDecimalNumber(decimal: total).doubleValue
+    }
+
+    /// Легаси-`FinanceGroup` с тем же именем, что core-группа (fallback-мост по имени, invariant 9).
+    /// Прямой fetch — НЕ через `state.groups` (тот теперь `[AccountGroup]`).
+    private func fetchLegacyGroup(named name: String) -> FinanceGroup? {
+        let descriptor = FetchDescriptor<FinanceGroup>(predicate: #Predicate<FinanceGroup> { $0.name == name })
+        return try? modelContext.fetch(descriptor).first
+    }
+
+    /// Легаси-счета (junction) одноимённой `FinanceGroup` — fallback-хвост для View-рендера
+    /// (invariant 9 §2.1). Публичный, т.к. используется вне VM (`FinanceOverviewCardView` и т.п.).
+    func legacyAccountsMatchingGroupName(_ name: String) -> [FinanceAccount] {
+        fetchLegacyGroup(named: name)?.accounts ?? []
     }
 
 
@@ -1020,39 +1008,63 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
 
-    /// Группы, которые нужно показывать в списке финансов.
-    /// Системная "Без группы" скрывается, если в ней нет видимых счетов.
-    func visibleGroupsForList() -> [FinanceGroup] {
-        groupService.visibleGroupsForList()
+    /// Группы, которые нужно показывать в списке финансов. [Ф5c.7 contract] `state.groups` уже
+    /// структурно исключает Ungrouped (канон `group == nil`, гард в `loadCoreEntities`) — отдельной
+    /// hide-развилки больше не нужно, Ungrouped рендерится отдельным UI-путём (`ungroupedAccounts()`).
+    func visibleGroupsForList() -> [AccountGroup] {
+        state.groups
     }
 
-    func orderedAccounts(for group: FinanceGroup) -> [FinanceAccount] {
-        groupService.orderedAccounts(
-            for: group,
-            sortMode: state.accountSortMode,
-            amountResolver: { [weak self] account in
-                self?.getAccountInfo(account: account)?.amount ?? 0
-            },
-            nameResolver: { [weak self] account in
-                self?.getAccountInfo(account: account)?.name ?? ""
+    /// Счета группы, отсортированные по режиму `state.accountSortMode` (или ручному порядку).
+    /// [Ф5c.7 contract] Прямое чтение `AccountGroup.accounts` — без FinanceAccount-моста/резолверов
+    /// (Account уже несёт имя/сумму инлайн).
+    func orderedAccounts(for group: AccountGroup) -> [Account] {
+        let today = nowProvider()
+        let accounts = (group.accounts ?? []).filter { $0.participates(on: today) }
+        return sortedAccounts(accounts, group: group)
+    }
+
+    /// Core-счета БЕЗ группы (канон Ungrouped — `account.group == nil`, не сущность).
+    func ungroupedAccounts() -> [Account] {
+        let today = nowProvider()
+        let accounts = state.accounts.filter { $0.group == nil && $0.participates(on: today) }
+        return sortedAccounts(accounts, group: nil)
+    }
+
+    private func sortedAccounts(_ accounts: [Account], group: AccountGroup?) -> [Account] {
+        if group?.usesManualAccountOrdering == true {
+            return accounts.sorted { lhs, rhs in
+                lhs.order != rhs.order ? lhs.order < rhs.order : lhs.createdAt < rhs.createdAt
             }
-        )
+        }
+        return accounts.sorted { lhs, rhs in
+            switch state.accountSortMode {
+            case .amountDescending:
+                let l = newCoreBalanceToday(lhs); let r = newCoreBalanceToday(rhs)
+                if l != r { return l > r }
+            case .amountAscending:
+                let l = newCoreBalanceToday(lhs); let r = newCoreBalanceToday(rhs)
+                if l != r { return l < r }
+            case .nameAscending:
+                let cmp = lhs.name.localizedCompare(rhs.name)
+                if cmp != .orderedSame { return cmp == .orderedAscending }
+            case .nameDescending:
+                let cmp = lhs.name.localizedCompare(rhs.name)
+                if cmp != .orderedSame { return cmp == .orderedDescending }
+            }
+            return lhs.createdAt < rhs.createdAt
+        }
     }
 
-    // MARK: - Новое ядро event-sourcing (Фаза 1a-ui) — сосуществование со старым миром
+    // MARK: - Новое ядро event-sourcing — [Ф5c.7 contract] `state.accounts`/`state.groups` теперь
+    // ПЕРВИЧНЫЙ источник (было "сосуществование со старым миром"). Легаси читается ТОЛЬКО через
+    // fallback-fetch (`fetchLegacyGroup`/`getAccountInfo`-семейство) для непроконвертированного хвоста.
 
-    /// Счета нового ядра, сопоставленные со старой `FinanceGroup` ПО ИМЕНИ (временный мост до
-    /// Фазы 6, см. `AccountsCoreAdditionBridge`). Ungrouped — счета БЕЗ `AccountGroup`
-    /// (`account.group == nil`), а не реальная группа с именем "Ungrouped".
-    /// Только участвующие сегодня (`participates(on:)`) — архивные скрыты, как у старых счетов.
-    func newCoreAccounts(matching group: FinanceGroup) -> [Account] {
-        let descriptor: FetchDescriptor<Account>
-        if group.name == FinanceSystemGroups.ungroupedName {
-            descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.group == nil })
-        } else {
-            let targetName = group.name
-            descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.group?.name == targetName })
-        }
+    /// Core-счета, привязанные к группе (живой fetch — для мест вне `state.accounts`, напр. после
+    /// прямой мутации до следующего `loadGroups()`). Ungrouped — `group == nil`, не сущность.
+    func newCoreAccounts(matching group: AccountGroup) -> [Account] {
+        let groupID = group.id
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.group?.id == groupID })
         guard let accounts = try? modelContext.fetch(descriptor) else { return [] }
 
         let today = nowProvider()
@@ -1063,17 +1075,32 @@ final class FinanceViewModel: ViewModelProtocol {
             }
     }
 
-    /// [Ф5c.7 expand-contract, файл №2] Тот же мост-по-имени, что `newCoreAccounts(matching:)`, но
-    /// БЕЗ живого FetchDescriptor — читает pre-populated `state.coreAccounts` (наполняется в
-    /// `loadCoreEntities()`). Единая точка фильтра для ВСЕХ потребителей (`FinanceRows`,
-    /// `FinanceGroupEditorView`), чтобы имя-сопоставление не дублировалось в каждом View
-    /// (инвариант 2 §2.1 плана — один источник, не второй путь агрегации).
-    func coreAccountsSnapshot(matching group: FinanceGroup) -> [Account] {
-        if group.name == FinanceSystemGroups.ungroupedName {
-            return state.coreAccounts.filter { $0.group == nil }
+    /// Снапшот-версия `newCoreAccounts(matching:)` без живого FetchDescriptor — читает pre-populated
+    /// `state.accounts`. Единая точка для View-потребителей (`FinanceRows`/`FinanceGroupEditorView`).
+    func coreAccountsSnapshot(matching group: AccountGroup) -> [Account] {
+        let groupID = group.id
+        return state.accounts.filter { $0.group?.id == groupID }
+    }
+
+    /// [Ф5c.7 contract] NAME-based мост (был единственной формой `newCoreAccounts` ДО флипа) —
+    /// сохранён для потребителей, у которых на руках легаси-`FinanceGroup` (FDVM per-account
+    /// chart-modes, вне скоупа этого гейта, свой параллельный `state.groups: [FinanceGroup]`).
+    /// Ungrouped-имя → `group == nil` (канон), НЕ ищет core-сущность с этим именем.
+    func newCoreAccounts(matchingName name: String) -> [Account] {
+        let descriptor: FetchDescriptor<Account>
+        if FinanceSystemGroups.allKnownUngroupedNames.contains(name) {
+            descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.group == nil })
+        } else {
+            descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.group?.name == name })
         }
-        let targetName = group.name
-        return state.coreAccounts.filter { $0.group?.name == targetName }
+        guard let accounts = try? modelContext.fetch(descriptor) else { return [] }
+
+        let today = nowProvider()
+        return accounts
+            .filter { $0.participates(on: today) }
+            .sorted { lhs, rhs in
+                lhs.order != rhs.order ? lhs.order < rhs.order : lhs.createdAt < rhs.createdAt
+            }
     }
 
     /// Есть ли хоть один архивный счёт нового ядра — дешёвая проверка для показа пункта «Архив»
@@ -1350,6 +1377,13 @@ final class FinanceViewModel: ViewModelProtocol {
         return normalized.isEmpty ? nil : normalized
     }
 
+    /// Следующий `order` для НОВОГО легаси-junction внутри `FinanceGroup` — нужен только
+    /// `accountService` (легаси CRUD fallback, invariant 5 §2.1), у core-групп своя логика
+    /// (`(group?.accounts ?? []).map(\.order).max()`, инлайн в `addAccountToGroup`/`restoreArchivedAccountToGroup`).
+    private func legacyNextAccountOrder(in group: FinanceGroup) -> Int {
+        ((group.accounts ?? []).map(\.order).max() ?? -1) + 1
+    }
+
     private func moveAccount(sourceAccountID: String, destinationIndex: Int, groupID: String) {
         guard let group = state.groups.first(where: { $0.groupUniqueID == groupID }) else {
             return
@@ -1367,9 +1401,7 @@ final class FinanceViewModel: ViewModelProtocol {
 
         for (index, account) in accounts.enumerated() {
             account.order = index
-            account.updatedAt = Date()
         }
-        group.updatedAt = Date()
 
         do {
             try modelContext.save()
@@ -1379,20 +1411,132 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
 
-    private func addAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
+    /// Привязать существующий core-счёт к группе (nil = Ungrouped, `account.group = nil` — канон,
+    /// не сущность). Прямая мутация + save — у `Account` нет CRUD-обёртки для смены группы в
+    /// `AccountsCoreService` (это НЕ event, group — обычное поле, как в `updateAccount`).
+    private func addAccountToGroup(_ account: Account, group: AccountGroup?) {
+        account.group = group
+        account.order = ((group?.accounts ?? []).map(\.order).max() ?? -1) + 1
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to add account to group: \(error.localizedDescription)")
+            return
+        }
+        loadGroups()
+        calculateTotalAmount()
+    }
+
+    private func removeAccountFromGroup(_ account: Account) {
+        account.group = nil
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to remove account from group: \(error.localizedDescription)")
+            return
+        }
+        loadGroups()
+        calculateTotalAmount()
+    }
+
+    /// Физическое удаление core-счёта. Необратимо (`AccountsCoreService.physicallyDelete`).
+    private func deleteAccountPermanently(_ account: Account) {
+        let service = AccountsCoreService(modelContext: modelContext)
+        do {
+            try service.physicallyDelete(account)
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to delete account: \(error.localizedDescription)")
+            return
+        }
+        EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+        EventBus.shared.publish(FinanceEvent.transactionsUpdated)
+    }
+
+    /// Привязать легаси-счёт к легаси-группе (fallback-путь, invariant 5 §2.1) — `.addAccountToGroup`
+    /// экшен теперь core-типизирован, легаси-версия дергается напрямую, не через `handle()`.
+    func addLegacyAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
         accountService.addAccountToGroup(accountType: accountType, accountID: accountID, group: group)
     }
 
-    private func removeAccountFromGroup(_ account: FinanceAccount) {
+    /// Восстановить архивный легаси-счёт в легаси-группу (fallback-путь, invariant 5 §2.1) —
+    /// `.restoreArchivedAccountToGroup` экшен теперь core-типизирован.
+    func restoreLegacyArchivedAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
+        accountService.restoreArchivedAccountToGroup(accountType: accountType, accountID: accountID, group: group)
+        loadAccounts()
+        loadGroups()
+        calculateTotalAmount()
+        if accountType == .card { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
+        if accountType == .credit { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
+    }
+
+    /// Физическое удаление легаси-счёта (junction + Cashflow-операции) — `.deleteAccountPermanently`
+    /// экшен теперь core-типизирован (invariant 5 §2.1, легаси-fallback).
+    @discardableResult
+    func deleteLegacyAccountPermanently(_ account: FinanceAccount) -> UnderlyingAccountKind {
+        let kind = accountService.deleteAccountPermanently(account)
+        if kind == .card { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
+        if kind == .credit { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
+        return kind
+    }
+
+    /// Убрать легаси-счёт из его легаси-группы (fallback-путь, invariant 5 §2.1) — `.removeAccountFromGroup`
+    /// экшен теперь core-типизирован, легаси-версия дергается напрямую, не через `handle()`.
+    func removeLegacyAccountFromGroup(_ account: FinanceAccount) {
         let kind = accountService.removeAccountFromGroup(account)
         if kind == .card { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
         if kind == .credit { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
     }
 
-    private func deleteAccountPermanently(_ account: FinanceAccount) {
-        let kind = accountService.deleteAccountPermanently(account)
-        if kind == .card { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
-        if kind == .credit { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
+    /// Удалить легаси-группу (fallback-путь, invariant 5 §2.1) — `.deleteGroup` экшен теперь
+    /// core-типизирован. Легаси-семантика СОХРАНЕНА байт-в-байт (архивирует underlying-счета, не
+    /// просто ungroup — нужно для historical replay Cashflow, см. characterization-тест
+    /// `FinanceDynamicsViewModelTests`), в отличие от core `FinanceGroupService.deleteGroup`
+    /// (только `.nullify` в Ungrouped — осознанно другая семантика, core-архив отдельный lifecycle).
+    func deleteLegacyGroup(_ group: FinanceGroup) {
+        let now = Date()
+        var didAffectCards = false
+        var didAffectCredits = false
+        let archiveGroup = FinanceSystemGroups.ensureUngroupedGroup(in: modelContext)
+        let shouldDeleteGroup = archiveGroup.groupUniqueID != group.groupUniqueID
+        var nextArchiveOrder = (archiveGroup.accounts ?? []).map(\.order).max().map { $0 + 1 } ?? 0
+
+        if let accounts = group.accounts {
+            for account in accounts {
+                accountService.updateUnderlyingArchiveState(for: account, archivedAt: now)
+                account.group = archiveGroup
+                account.order = nextArchiveOrder
+                account.updatedAt = now
+                nextArchiveOrder += 1
+
+                switch account.accountType {
+                case .card: didAffectCards = true
+                case .credit: didAffectCredits = true
+                case .investment: break
+                }
+            }
+        }
+
+        if shouldDeleteGroup {
+            modelContext.delete(group)
+            let groupName = group.name
+            let coreGroupDescriptor = FetchDescriptor<AccountGroup>(
+                predicate: #Predicate<AccountGroup> { $0.name == groupName }
+            )
+            if let coreGroup = try? modelContext.fetch(coreGroupDescriptor).first, (coreGroup.accounts ?? []).isEmpty {
+                modelContext.delete(coreGroup)
+            }
+        }
+
+        do {
+            try modelContext.save()
+            loadGroups()
+            loadAccounts()
+            calculateTotalAmount()
+            if didAffectCards { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
+            if didAffectCredits { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to delete legacy group: \(error.localizedDescription)")
+        }
     }
 
     /// Кол-во операций Cashflow, привязанных к легаси-счёту (для алерта подтверждения удаления).
@@ -1418,13 +1562,26 @@ final class FinanceViewModel: ViewModelProtocol {
         accountService.updateUnderlyingArchiveState(for: account, archivedAt: archivedAt)
     }
 
-    private func restoreArchivedAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
-        accountService.restoreArchivedAccountToGroup(accountType: accountType, accountID: accountID, group: group)
+    /// Восстановить архивный core-счёт в группу (nil = Ungrouped).
+    private func restoreArchivedAccountToGroup(_ account: Account, group: AccountGroup?) {
+        let service = AccountsCoreService(modelContext: modelContext)
+        do {
+            try service.restoreAccount(account)
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to restore account: \(error.localizedDescription)")
+            return
+        }
+        account.group = group
+        account.order = ((group?.accounts ?? []).map(\.order).max() ?? -1) + 1
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to save restored account group: \(error.localizedDescription)")
+        }
         loadAccounts()
         loadGroups()
         calculateTotalAmount()
-        if accountType == .card { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
-        if accountType == .credit { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
+        EventBus.shared.publish(FinanceEvent.investmentsUpdated)
     }
 
     // MARK: - Track C: конвертация легаси-счёта в новое ядро
@@ -1583,8 +1740,15 @@ final class FinanceViewModel: ViewModelProtocol {
             unconvertAccountFromCore(accountType: row.accountType, accountID: row.accountID)
             return
         }
+        // Легаси-fallback путь (invariant 5 §2.1) — НАПРЯМУЮ в accountService, не через `handle()`:
+        // `.restoreArchivedAccountToGroup` теперь core-типизированный экшен (см. Action enum).
         let targetGroup = preferredRestoreGroup(accountType: row.accountType, accountID: row.accountID)
-        handle(.restoreArchivedAccountToGroup(accountType: row.accountType, accountID: row.accountID, group: targetGroup))
+        accountService.restoreArchivedAccountToGroup(accountType: row.accountType, accountID: row.accountID, group: targetGroup)
+        loadAccounts()
+        loadGroups()
+        calculateTotalAmount()
+        if row.accountType == .card { EventBus.shared.publish(FinanceEvent.cardsUpdated) }
+        if row.accountType == .credit { EventBus.shared.publish(FinanceEvent.creditsUpdated) }
     }
 
     private func preferredRestoreGroup(accountType: FinanceAccountType, accountID: String) -> FinanceGroup? {
@@ -1597,7 +1761,37 @@ final class FinanceViewModel: ViewModelProtocol {
         (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
     }
 
-    private func updateAccountAmount(account: FinanceAccount, newAmount: Double) {
+    /// [Ф5c.7 contract] Флип на `AccountsCoreService.adjustBalance` — ПОЛНАЯ карта расхождений
+    /// legacy↔core задокументирована в шапке `FinanceViewModelUpdateAccountAmountCharacterizationTests`
+    /// (Gate B). Core `adjustBalance` НИКОГДА не инвертирует знак по kind — сырая дельта идёт в
+    /// `AccountEvent`, интерпретацию берёт `AccountBalanceEngine`-signMap при реплее. Поэтому `newAmount`
+    /// здесь ожидается УЖЕ в net-worth (знаковой) конвенции — как `AccountAdjustBalanceSheet`
+    /// (`AccountDetailView.swift`) уже передаёт `balanceToday`, а НЕ в конвенции легаси quick-edit
+    /// «положительный долг» (это UX-обязанность вызывающего View, не VM — задокументировано в Gate B
+    /// как «не просто rename»). ИЗВЕСТНЫЙ ПРОБЕЛ (Gate B, не решён parity-таблицей): для
+    /// `.marketInvestment` `adjustBalance` создаёт `.adjustment`-событие ПОВЕРХ quantity-реплея вместо
+    /// legacy-семантики «новое количество» — quick-edit суммы для market-счетов остаётся риском
+    /// двойного смысла до отдельного решения (не в скоупе этого флипа, см. Gate B журнал).
+    private func updateAccountAmount(account: Account, newAmount: Double) {
+        let service = AccountsCoreService(modelContext: modelContext)
+        do {
+            _ = try service.adjustBalance(account: account, to: Decimal(newAmount))
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to adjust balance: \(error.localizedDescription)")
+            return
+        }
+        loadCoreEntities()
+        calculateTotalAmount()
+        if let groupID = account.group?.groupUniqueID {
+            scheduleGroupTotalRefresh(for: groupID)
+        }
+        EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+    }
+
+    /// [Ф5c.7 contract] Легаси-версия (ментор-находка) — реальный потребитель `FinanceDynamicsView`
+    /// inline-edit одного легаси-счёта (credit-card-поля, рыночное количество). `.updateAccountAmount`
+    /// action теперь core-типизирован (`adjustBalance`, Gate B) — легаси вызывается напрямую, не через `handle()`.
+    func updateLegacyAccountAmount(account: FinanceAccount, newAmount: Double) {
         // Находим группу, к которой принадлежит счет
         let accountGroup = state.groups.first { group in
             group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
@@ -1867,7 +2061,7 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
 
-    private func updateCreditCardQuickFields(account: FinanceAccount, creditLimit: Double, debt: Double) {
+    func updateLegacyCreditCardQuickFields(account: FinanceAccount, creditLimit: Double, debt: Double) {
         guard account.accountType == .card,
               let card = cardByID[account.accountID],
               card.cardType == .credit else {
@@ -1924,6 +2118,35 @@ final class FinanceViewModel: ViewModelProtocol {
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to update credit card quick fields: \(error.localizedDescription)")
         }
+    }
+
+    /// [Ф5c.7 contract] Core-эквивалент: `cardMeta.creditLimit` — обычное поле (прямая мутация), долг —
+    /// через `adjustBalance` в net-worth конвенции (см. коммент `updateAccountAmount` выше). Работает
+    /// только для `.debitCard` — единственный core kind с `cardMeta` (кредитки — тот же kind + лимит).
+    private func updateCreditCardQuickFields(account: Account, creditLimit: Double, debt: Double) {
+        guard account.kind == .debitCard else { return }
+
+        let normalizedLimit = max(0, creditLimit)
+        let normalizedDebt = min(max(0, debt), normalizedLimit)
+
+        var meta = account.cardMeta ?? CardMeta()
+        meta.creditLimit = Decimal(normalizedLimit)
+        account.cardMeta = meta
+
+        let service = AccountsCoreService(modelContext: modelContext)
+        do {
+            try modelContext.save()
+            _ = try service.adjustBalance(account: account, to: Decimal(-normalizedDebt))
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to update credit card quick fields: \(error.localizedDescription)")
+            return
+        }
+        loadCoreEntities()
+        calculateTotalAmount()
+        if let groupID = account.group?.groupUniqueID {
+            scheduleGroupTotalRefresh(for: groupID)
+        }
+        EventBus.shared.publish(FinanceEvent.investmentsUpdated)
     }
 
     private func publishAccountChangedEvent(for accountType: FinanceAccountType) {

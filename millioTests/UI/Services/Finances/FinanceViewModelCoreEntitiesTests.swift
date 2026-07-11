@@ -3,7 +3,7 @@ import SwiftData
 import Testing
 @testable import millio
 
-/// Ф5c.7.4 expand-шаг №1 — populate `state.coreGroups`/`state.coreAccounts` РЯДОМ с легаси-полями.
+/// Ф5c.7.4 expand-шаг №1 — populate `state.groups`/`state.accounts` РЯДОМ с легаси-полями.
 ///
 /// Назначение: зафиксировать, что новые core-поля наполняются в том же lifecycle, что `state.groups`,
 /// БЕЗ смены легаси-поведения (потребителей ещё нет — dead-read до пофайловой миграции). Инвариант 9
@@ -57,6 +57,10 @@ struct FinanceViewModelCoreEntitiesTests {
         let legacyGroup = FinanceGroup(name: "Легаси", colorHex: "#123456", order: 0)
         legacyGroup.displayCurrency = "RUB"
         ctx.insert(legacyGroup)
+        // Пустая одноимённая core-группа — точка входа для `calculateGroupTotal(group: AccountGroup,...)`
+        // (легаси-хвост считается fallback'ом по имени, coreTotal здесь 0).
+        let legacyGroupCoreEntry = AccountGroup(name: "Легаси")
+        ctx.insert(legacyGroupCoreEntry)
         let legacyCard = Card(name: "ЛегасиКарта", cardNumber: "9999", bank: .other, cardType: .debit, currency: "RUB", balance: 10_000)
         legacyCard.includeInTotal = true
         ctx.insert(legacyCard)
@@ -70,22 +74,22 @@ struct FinanceViewModelCoreEntitiesTests {
         vm.handle(.loadAccounts)
 
         // (1) coreAccounts содержит оба core-счёта.
-        let coreIDs = Set(vm.state.coreAccounts.map(\.id))
+        let coreIDs = Set(vm.state.accounts.map(\.id))
         #expect(coreIDs.contains(grouped.id))
         #expect(coreIDs.contains(ungrouped.id))
 
         // (2) coreGroups содержит реальную группу и НЕ содержит Ungrouped-сущности.
-        #expect(vm.state.coreGroups.map(\.name).contains("Инвест"))
-        #expect(!vm.state.coreGroups.map(\.name).contains(FinanceSystemGroups.ungroupedName))
+        #expect(vm.state.groups.map(\.name).contains("Инвест"))
+        #expect(!vm.state.groups.map(\.name).contains(FinanceSystemGroups.ungroupedName))
 
         // (3) Счёт без группы виден через канон `group == nil`.
-        let ungroupedCore = vm.state.coreAccounts.filter { $0.group == nil }
+        let ungroupedCore = vm.state.accounts.filter { $0.group == nil }
         #expect(ungroupedCore.map(\.id) == [ungrouped.id])
 
         // (4) Легаси-поля не изменились относительно characterization-ожиданий: группа видна,
         //     тотал по легаси-группе = 10000 (легаси-карта; core-счёта с именем "Легаси" нет).
         #expect(vm.state.groups.map(\.name).contains("Легаси"))
-        let legacyTotal = await vm.calculateGroupTotal(group: legacyGroup, in: "RUB")
+        let legacyTotal = await vm.calculateGroupTotal(group: legacyGroupCoreEntry, in: "RUB")
         #expect(abs(legacyTotal - 10_000) < 0.01)
     }
 
@@ -95,8 +99,8 @@ struct FinanceViewModelCoreEntitiesTests {
         let ctx = try makeContext()
         let vm = makeViewModel(ctx)
         vm.handle(.loadGroups)
-        #expect(vm.state.coreAccounts.isEmpty)
-        #expect(vm.state.coreGroups.isEmpty)
+        #expect(vm.state.accounts.isEmpty)
+        #expect(vm.state.groups.isEmpty)
     }
 
     /// Архивный core-счёт не попадает в coreAccounts (participates-семантика, как у `newCoreAccounts`).
@@ -112,7 +116,7 @@ struct FinanceViewModelCoreEntitiesTests {
         let vm = makeViewModel(ctx)
         vm.handle(.loadGroups)
 
-        let ids = Set(vm.state.coreAccounts.map(\.id))
+        let ids = Set(vm.state.accounts.map(\.id))
         #expect(ids.contains(active.id))
         #expect(!ids.contains(archived.id))
     }
@@ -122,8 +126,8 @@ struct FinanceViewModelCoreEntitiesTests {
     /// Паритет: новый локальный фильтр `FinanceRows.newCoreAccounts` (реплицирован здесь, т.к. View
     /// напрямую не юнит-тестируется) обязан отдавать ТЕ ЖЕ ID, что старый живой
     /// `vm.newCoreAccounts(matching:)`, на фикстуре с ДВУМЯ именованными группами + Ungrouped-канон —
-    /// доказывает, что смена источника данных (state.coreAccounts вместо fetch) поведенчески нейтральна.
-    @Test("expand#1 FinanceRows-паритет: filter(state.coreAccounts) == newCoreAccounts(matching:) для 2 групп + Ungrouped")
+    /// доказывает, что смена источника данных (state.accounts вместо fetch) поведенчески нейтральна.
+    @Test("expand#1 FinanceRows-паритет: filter(state.accounts) == newCoreAccounts(matching:) для 2 групп + Ungrouped")
     func financeRowsFilterParityWithLiveFetch() throws {
         let ctx = try makeContext()
         let groupA = FinanceGroup(name: "Группа А", colorHex: "#111111", order: 0)
@@ -143,31 +147,31 @@ struct FinanceViewModelCoreEntitiesTests {
         // Реплика фильтра FinanceRows.newCoreAccounts (см. FinanceRows.swift) — сверяем с живым методом.
         func rowsFilter(for group: FinanceGroup) -> [Account] {
             if group.name == FinanceSystemGroups.ungroupedName {
-                return vm.state.coreAccounts.filter { $0.group == nil }
+                return vm.state.accounts.filter { $0.group == nil }
             }
             let targetName = group.name
-            return vm.state.coreAccounts.filter { $0.group?.name == targetName }
+            return vm.state.accounts.filter { $0.group?.name == targetName }
         }
 
-        #expect(Set(rowsFilter(for: groupA).map(\.id)) == Set(vm.newCoreAccounts(matching: groupA).map(\.id)))
+        #expect(Set(rowsFilter(for: groupA).map(\.id)) == Set(vm.newCoreAccounts(matchingName: groupA.name).map(\.id)))
         #expect(rowsFilter(for: groupA).map(\.id) == [inA.id])
-        #expect(Set(rowsFilter(for: groupB).map(\.id)) == Set(vm.newCoreAccounts(matching: groupB).map(\.id)))
+        #expect(Set(rowsFilter(for: groupB).map(\.id)) == Set(vm.newCoreAccounts(matchingName: groupB.name).map(\.id)))
         #expect(rowsFilter(for: groupB).isEmpty)
 
         let ungroupedLegacy = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: "#333333", order: 2)
         #expect(rowsFilter(for: ungroupedLegacy).map(\.id) == [ungrouped.id])
-        #expect(Set(rowsFilter(for: ungroupedLegacy).map(\.id)) == Set(vm.newCoreAccounts(matching: ungroupedLegacy).map(\.id)))
+        #expect(Set(rowsFilter(for: ungroupedLegacy).map(\.id)) == Set(vm.newCoreAccounts(matchingName: ungroupedLegacy.name).map(\.id)))
     }
 
-    /// Компаньон-фикс: `.hideAddAccountSheet` обязан освежать `state.coreAccounts`, иначе core-счёт,
+    /// Компаньон-фикс: `.hideAddAccountSheet` обязан освежать `state.accounts`, иначе core-счёт,
     /// созданный в открытом sheet'е (EventBus/`loadGroups` там не вызывается), не появится в
-    /// `FinanceRows` после перевода на `state.coreAccounts` (регресс, которого не было при живом fetch).
-    @Test("expand#1: .hideAddAccountSheet освежает state.coreAccounts (регресс-guard компаньон-фикса)")
+    /// `FinanceRows` после перевода на `state.accounts` (регресс, которого не было при живом fetch).
+    @Test("expand#1: .hideAddAccountSheet освежает state.accounts (регресс-guard компаньон-фикса)")
     func hideAddAccountSheetRefreshesCoreAccounts() throws {
         let ctx = try makeContext()
         let vm = makeViewModel(ctx)
         vm.handle(.loadGroups)
-        #expect(vm.state.coreAccounts.isEmpty)
+        #expect(vm.state.accounts.isEmpty)
 
         // Симулируем создание core-счёта, пока sheet был открыт (тем же путём, что
         // `FinanceAddAccountView.createMoneyAccountOnNewCore` — минуя EventBus/loadGroups).
@@ -175,18 +179,18 @@ struct FinanceViewModelCoreEntitiesTests {
         let created = try coreService.createAccount(name: "Новый", kind: .debitCard, currency: "RUB", openingBalance: 500, group: nil)
 
         // Без reload — состояние ещё не видит новый счёт (доказывает, что регресс был бы реальным).
-        #expect(!vm.state.coreAccounts.map(\.id).contains(created.id))
+        #expect(!vm.state.accounts.map(\.id).contains(created.id))
 
         vm.handle(.hideAddAccountSheet)
-        #expect(vm.state.coreAccounts.map(\.id).contains(created.id))
+        #expect(vm.state.accounts.map(\.id).contains(created.id))
     }
 
     // MARK: - Root-фикс (Fable-находка): общий EventBus-рефреш для archive/restore/delete/update/QuickSetup
 
     /// archiveAccount публикует `investmentsUpdated` (см. `AccountDetailView.archiveAccount()`) —
-    /// `subscribeToFinanceEvents` обязан освежить `state.coreAccounts`, иначе архивный счёт остаётся
+    /// `subscribeToFinanceEvents` обязан освежить `state.accounts`, иначе архивный счёт остаётся
     /// ghost-строкой в `FinanceRows` (Fable-находка №2).
-    @Test("root-фикс: archive исключает счёт из state.coreAccounts после investmentsUpdated")
+    @Test("root-фикс: archive исключает счёт из state.accounts после investmentsUpdated")
     func archiveViaEventPublishExcludesAccountFromCoreAccounts() throws {
         let ctx = try makeContext()
         let coreService = AccountsCoreService(modelContext: ctx)
@@ -194,17 +198,17 @@ struct FinanceViewModelCoreEntitiesTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadGroups)
-        #expect(vm.state.coreAccounts.map(\.id).contains(account.id))
+        #expect(vm.state.accounts.map(\.id).contains(account.id))
 
         try coreService.archiveAccount(account) // как AccountDetailView.archiveAccount()
         EventBus.shared.publish(FinanceEvent.investmentsUpdated)
 
-        #expect(!vm.state.coreAccounts.map(\.id).contains(account.id))
+        #expect(!vm.state.accounts.map(\.id).contains(account.id))
     }
 
     /// restoreAccount (ArchivedAccountsView) теперь публикует то же событие — счёт обязан вернуться
     /// в снапшот (Fable-находка №3, было: "НЕ публикуют событий вообще, только refreshToken").
-    @Test("root-фикс: restore возвращает счёт в state.coreAccounts после investmentsUpdated")
+    @Test("root-фикс: restore возвращает счёт в state.accounts после investmentsUpdated")
     func restoreViaEventPublishReappearsInCoreAccounts() throws {
         let ctx = try makeContext()
         let coreService = AccountsCoreService(modelContext: ctx)
@@ -214,17 +218,17 @@ struct FinanceViewModelCoreEntitiesTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadGroups)
-        #expect(!vm.state.coreAccounts.map(\.id).contains(account.id))
+        #expect(!vm.state.accounts.map(\.id).contains(account.id))
 
         try coreService.restoreAccount(account)
         EventBus.shared.publish(FinanceEvent.investmentsUpdated) // как ArchivedAccountsView.restore()
 
-        #expect(vm.state.coreAccounts.map(\.id).contains(account.id))
+        #expect(vm.state.accounts.map(\.id).contains(account.id))
     }
 
     /// physicallyDelete теперь публикует событие — счёт обязан пропасть из снапшота БЕЗ висячей
     /// ссылки на удалённый @Model (Fable-находка №3: риск краша NavigationLink в FinanceRows).
-    @Test("root-фикс: physicallyDelete убирает счёт из state.coreAccounts, висячей ссылки нет")
+    @Test("root-фикс: physicallyDelete убирает счёт из state.accounts, висячей ссылки нет")
     func physicallyDeleteViaEventPublishLeavesNoDanglingReference() throws {
         let ctx = try makeContext()
         let coreService = AccountsCoreService(modelContext: ctx)
@@ -238,7 +242,7 @@ struct FinanceViewModelCoreEntitiesTests {
         try coreService.physicallyDelete(account)
         EventBus.shared.publish(FinanceEvent.investmentsUpdated) // как ArchivedAccountsView.confirmPhysicalDeletion()
 
-        #expect(vm.state.coreAccounts.first(where: { $0.id == account.id }) == nil)
+        #expect(vm.state.accounts.first(where: { $0.id == account.id }) == nil)
     }
 
     /// updateAccount со сменой группы (performEdit) обязан переносить счёт в новый бакет
@@ -256,7 +260,7 @@ struct FinanceViewModelCoreEntitiesTests {
         vm.handle(.loadGroups)
 
         func bucket(_ name: String) -> [Account] {
-            vm.state.coreAccounts.filter { $0.group?.name == name }
+            vm.state.accounts.filter { $0.group?.name == name }
         }
         #expect(bucket("А").map(\.id) == [account.id])
         #expect(bucket("Б").isEmpty)
@@ -269,7 +273,7 @@ struct FinanceViewModelCoreEntitiesTests {
     }
 
     /// adjustBalance (perform(), без публикации событий) — баланс в строке обязан обновляться БЕЗ
-    /// рефреша снапшота: `state.coreAccounts` хранит ту же @Model-ссылку, что и `modelContext`
+    /// рефреша снапшота: `state.accounts` хранит ту же @Model-ссылку, что и `modelContext`
     /// (единый контекст), поэтому `newCoreBalanceToday` пересчитывает по актуальным `.events`
     /// даже без `loadCoreEntities()`. Доказывает Fable-предположение №6 тестом, не пересказом.
     @Test("root-фикс: adjustBalance обновляет баланс в снапшоте без явного рефреша (живая @Model-ссылка)")
@@ -280,7 +284,7 @@ struct FinanceViewModelCoreEntitiesTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadGroups)
-        let accountInSnapshot = try #require(vm.state.coreAccounts.first)
+        let accountInSnapshot = try #require(vm.state.accounts.first)
         #expect(vm.newCoreBalanceToday(accountInSnapshot) == 1_000)
 
         // Мутируем ТУ ЖЕ @Model-ссылку через сервис на том же modelContext — намеренно НЕ вызываем
@@ -310,7 +314,7 @@ struct FinanceViewModelCoreEntitiesTests {
         let vm = makeViewModel(ctx)
         vm.handle(.loadGroups)
 
-        #expect(vm.coreAccountsSnapshot(matching: legacyGroup).map(\.id) == [account.id])
+        #expect(vm.coreAccountsSnapshot(matching: coreGroup).map(\.id) == [account.id])
     }
 
     /// Компаньон-фикс `.onDisappear { viewModel.handle(.loadGroups) }` на NavigationLink «Добавить
@@ -328,18 +332,18 @@ struct FinanceViewModelCoreEntitiesTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadGroups)
-        #expect(vm.coreAccountsSnapshot(matching: legacyGroup).isEmpty)
+        #expect(vm.coreAccountsSnapshot(matching: coreGroup).isEmpty)
 
         // Симулируем createMoneyAccountOnNewCore из пуш-флоу FinanceAddAccountView(.pushed) —
         // тот же путь, что и в sheet-варианте, событий не публикует.
         let coreService = AccountsCoreService(modelContext: ctx)
         let created = try coreService.createAccount(name: "Пуш-счёт", kind: .debitCard, currency: "RUB", openingBalance: 3_000, group: coreGroup)
 
-        #expect(!vm.coreAccountsSnapshot(matching: legacyGroup).map(\.id).contains(created.id)) // до рефреша ещё не видно
+        #expect(!vm.coreAccountsSnapshot(matching: coreGroup).map(\.id).contains(created.id)) // до рефреша ещё не видно
 
         vm.handle(.loadGroups) // как .onDisappear на NavigationLink в accountsSection
 
-        #expect(vm.coreAccountsSnapshot(matching: legacyGroup).map(\.id).contains(created.id))
+        #expect(vm.coreAccountsSnapshot(matching: coreGroup).map(\.id).contains(created.id))
     }
 
     // MARK: - Миграция потребителя `FinancesView` (Ф5c.7.4, файл №3)
@@ -362,8 +366,8 @@ struct FinanceViewModelCoreEntitiesTests {
         vm.handle(.loadGroups)
 
         // Реплика isGroupEmpty (FinancesView.swift) — легаси-часть пуста, core-часть — нет.
-        #expect(vm.orderedAccounts(for: legacyGroup).isEmpty)
-        #expect(!vm.coreAccountsSnapshot(matching: legacyGroup).isEmpty)
+        #expect(vm.legacyAccountsMatchingGroupName(legacyGroup.name).isEmpty)
+        #expect(!vm.coreAccountsSnapshot(matching: coreGroup).isEmpty)
     }
 
     // MARK: - Миграция потребителя `FinanceOverviewCardView` (Ф5c.7.4, файл №5)
@@ -439,14 +443,13 @@ struct FinanceViewModelCoreEntitiesTests {
 
     // MARK: - Core-aware Ungrouped фикс (Fable-находка, `FinanceViewModel.loadGroups`)
 
-    /// (а) core-only Ungrouped: НЕТ ни одного легаси-счёта в системе, но ЕСТЬ core-счёт с
-    /// `group == nil`. Раньше легаси-Ungrouped-группа схлопывалась из `state.groups` (фильтр видел
-    /// только `group.accounts`) — теперь обязана остаться, и ledger-цикл обязан видеть счёт.
-    @Test("Ungrouped-фикс (а): core-only Ungrouped — группа в state.groups, coreAccountsSnapshot видит счёт")
+    /// (а) [Ф5c.7 contract, портировано] core-only Ungrouped: НЕТ ни одного легаси-счёта в системе,
+    /// но ЕСТЬ core-счёт с `group == nil`. Канон Ungrouped = `group == nil`, НЕ сущность — `state.groups`
+    /// СТРУКТУРНО исключает Ungrouped-имя (было: легаси-Ungrouped-группа оставалась видна в
+    /// `state.groups` через смешанный легаси/core фильтр). Счёт доступен через `ungroupedAccounts()`.
+    @Test("Ungrouped-фикс (а): core-only Ungrouped НЕ в state.groups (канон), виден через ungroupedAccounts()")
     func coreOnlyUngroupedGroupStaysVisibleAndLedgerSeesAccount() throws {
         let ctx = try makeContext()
-        let ungrouped = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: FinanceSystemGroups.ungroupedColorHex, order: 0)
-        ctx.insert(ungrouped) // легаси Ungrouped-группа существует, но БЕЗ легаси-счетов внутри
         let coreService = AccountsCoreService(modelContext: ctx)
         let account = try coreService.createAccount(name: "Core без группы", kind: .debitCard, currency: "RUB", openingBalance: 777, group: nil)
         try ctx.save()
@@ -454,8 +457,8 @@ struct FinanceViewModelCoreEntitiesTests {
         let vm = makeViewModel(ctx)
         vm.handle(.loadGroups)
 
-        let groupInList = try #require(vm.state.groups.first(where: { $0.name == FinanceSystemGroups.ungroupedName }))
-        #expect(vm.coreAccountsSnapshot(matching: groupInList).map(\.id) == [account.id])
+        #expect(!vm.state.groups.map(\.name).contains(FinanceSystemGroups.ungroupedName))
+        #expect(vm.ungroupedAccounts().map(\.id) == [account.id])
     }
 
     /// (б) оба мира пусты — Ungrouped обязана оставаться скрытой (регресс-guard старого поведения,
@@ -474,17 +477,15 @@ struct FinanceViewModelCoreEntitiesTests {
         #expect(!vm.state.groups.map(\.name).contains(FinanceSystemGroups.ungroupedName))
     }
 
-    /// (г) анти-дубль: РОВНО один Ungrouped-бакет — `state.groups` содержит легаси-Ungrouped-группу
-    /// не более одного раза (единственная @Model-сущность), и `coreAccountsSnapshot(matching:)` по
-    /// НЕЙ отдаёт core-счета без группы РОВНО один раз (нет второго пути рендера — grep подтвердил:
-    /// `FinanceRows`/`FinancesView` не имеют отдельного Ungrouped-блока, единственный путь —
-    /// generic `FinanceGroupRow` → `coreAccountsSnapshot`, см. отчёт гейта).
-    @Test("Ungrouped-фикс (г): анти-дубль — ровно один Ungrouped-бакет, счёт без группы виден 1 раз")
+    /// (г) [Ф5c.7 contract, портировано] анти-дубль: `state.groups` НЕ содержит Ungrouped вообще
+    /// (структурно, канон `group == nil`, не сущность) — 0 совпадений по имени, не «не более одного
+    /// раза». Счёт без группы встречается РОВНО один раз — в `ungroupedAccounts()`, не задвоен ни в
+    /// одной именной группе (grep подтвердил: `FinancesView`/`FinanceOverviewCardView` — Ungrouped
+    /// отдельным блоком, не через `FinanceGroupRow`/`coreAccountsSnapshot` цикл по именным группам).
+    @Test("Ungrouped-фикс (г): анти-дубль — Ungrouped НЕ в state.groups, счёт без группы виден 1 раз через ungroupedAccounts()")
     func exactlyOneUngroupedBucketNoDuplicateRender() throws {
         let ctx = try makeContext()
-        let ungrouped = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: FinanceSystemGroups.ungroupedColorHex, order: 0)
-        ctx.insert(ungrouped)
-        let namedGroup = FinanceGroup(name: "Именная", colorHex: "#888888", order: 1)
+        let namedGroup = AccountGroup(name: "Именная", order: 1)
         ctx.insert(namedGroup)
         let coreService = AccountsCoreService(modelContext: ctx)
         let ungroupedAccount = try coreService.createAccount(name: "Без группы", kind: .debitCard, currency: "RUB", openingBalance: 300, group: nil)
@@ -493,17 +494,17 @@ struct FinanceViewModelCoreEntitiesTests {
         let vm = makeViewModel(ctx)
         vm.handle(.loadGroups)
 
-        // Ровно одна Ungrouped-сущность в списке групп (не дубль).
+        // Ungrouped структурно отсутствует в state.groups (0, не "не более одного").
         let ungroupedMatches = vm.state.groups.filter { $0.name == FinanceSystemGroups.ungroupedName }
-        #expect(ungroupedMatches.count == 1)
+        #expect(ungroupedMatches.isEmpty)
 
-        // Реплика ledger-цикла (FinanceOverviewCardView.buildLedgerPresentation): один проход по
-        // state.groups, coreAccountsSnapshot(matching:) на каждую группу — счёт без группы
-        // встречается РОВНО один раз суммарно по всем группам (не в двух местах одновременно).
-        var totalOccurrences = 0
+        // Счёт без группы НЕ задвоен ни в одной именной группе (coreAccountsSnapshot по каждой),
+        // и встречается РОВНО один раз в ungroupedAccounts().
+        var occurrencesInNamedGroups = 0
         for group in vm.state.groups {
-            totalOccurrences += vm.coreAccountsSnapshot(matching: group).filter { $0.id == ungroupedAccount.id }.count
+            occurrencesInNamedGroups += vm.coreAccountsSnapshot(matching: group).filter { $0.id == ungroupedAccount.id }.count
         }
-        #expect(totalOccurrences == 1)
+        #expect(occurrencesInNamedGroups == 0)
+        #expect(vm.ungroupedAccounts().filter { $0.id == ungroupedAccount.id }.count == 1)
     }
 }

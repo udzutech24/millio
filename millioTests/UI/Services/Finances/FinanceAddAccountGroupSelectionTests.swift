@@ -13,8 +13,8 @@ struct FinanceAddAccountGroupSelectionTests {
 
     @Test("Предпочитает явно выбранную группу")
     func testResolveSelectedGroupPrefersSelectedID() {
-        let primary = FinanceGroup(name: "Основная", colorHex: "#FF0000")
-        let secondary = FinanceGroup(name: "Дополнительная", colorHex: "#00FF00")
+        let primary = AccountGroup(name: "Основная", colorHex: "#FF0000")
+        let secondary = AccountGroup(name: "Дополнительная", colorHex: "#00FF00")
 
         let resolved = FinanceAddAccountGroupSelection.resolveSelectedGroup(
             selectedGroupID: secondary.groupUniqueID,
@@ -27,7 +27,7 @@ struct FinanceAddAccountGroupSelectionTests {
 
     @Test("Падает назад на предвыбранную группу, если выбранная недоступна")
     func testResolveSelectedGroupFallsBackToPreselected() {
-        let primary = FinanceGroup(name: "Основная", colorHex: "#FF0000")
+        let primary = AccountGroup(name: "Основная", colorHex: "#FF0000")
         let resolved = FinanceAddAccountGroupSelection.resolveSelectedGroup(
             selectedGroupID: "missing",
             preselectedGroupID: primary.groupUniqueID,
@@ -39,8 +39,8 @@ struct FinanceAddAccountGroupSelectionTests {
 
     @Test("Возвращает nil, если нет выбранной и предвыбранной группы")
     func testResolveSelectedGroupReturnsNilWithoutExplicitSelection() {
-        let primary = FinanceGroup(name: "Основная", colorHex: "#FF0000")
-        let secondary = FinanceGroup(name: "Дополнительная", colorHex: "#00FF00")
+        let primary = AccountGroup(name: "Основная", colorHex: "#FF0000")
+        let secondary = AccountGroup(name: "Дополнительная", colorHex: "#00FF00")
 
         let resolved = FinanceAddAccountGroupSelection.resolveSelectedGroup(
             selectedGroupID: nil,

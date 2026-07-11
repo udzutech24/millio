@@ -356,7 +356,7 @@ struct FinanceLifecycleIntegrationTests {
         #expect(harness.financeViewModel.state.availableCards.contains { $0.cardUniqueID == cardID })
         #expect(harness.cashflowViewModel.state.availableCards.contains { $0.cardUniqueID == cardID })
 
-        harness.financeViewModel.handle(.removeAccountFromGroup(accountLink))
+        harness.financeViewModel.removeLegacyAccountFromGroup(accountLink)
         try await harness.reloadAll()
 
         // После архивации карта исчезает из обоих VM

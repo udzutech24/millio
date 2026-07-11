@@ -69,7 +69,7 @@ struct FinanceViewModelUpdateAccountAmountCharacterizationTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadAccounts)
-        vm.handle(.updateAccountAmount(junction, 15_000))
+        vm.updateLegacyAccountAmount(account: junction, newAmount: 15_000)
 
         #expect(abs(card.balance - 15_000) < 0.01)
         let txs = try fetchTransactions(ctx)
@@ -90,7 +90,7 @@ struct FinanceViewModelUpdateAccountAmountCharacterizationTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadAccounts)
-        vm.handle(.updateAccountAmount(junction, 6_000))
+        vm.updateLegacyAccountAmount(account: junction, newAmount: 6_000)
 
         #expect(abs(card.balance - 6_000) < 0.01)
         let txs = try fetchTransactions(ctx)
@@ -109,7 +109,7 @@ struct FinanceViewModelUpdateAccountAmountCharacterizationTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadAccounts)
-        vm.handle(.updateAccountAmount(junction, 10_000.005))
+        vm.updateLegacyAccountAmount(account: junction, newAmount: 10_000.005)
 
         #expect(abs(card.balance - 10_000.005) < 0.001, "баланс пишется даже при дельте внутри эпсилон")
         let txs = try fetchTransactions(ctx)
@@ -131,7 +131,7 @@ struct FinanceViewModelUpdateAccountAmountCharacterizationTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadAccounts)
-        vm.handle(.updateAccountAmount(junction, 8_000)) // новый долг 8000
+        vm.updateLegacyAccountAmount(account: junction, newAmount: 8_000) // новый долг 8000
 
         #expect(abs(card.balance - 12_000) < 0.01, "balance = limit - newDebt = 20000-8000")
         let txs = try fetchTransactions(ctx)
@@ -152,7 +152,7 @@ struct FinanceViewModelUpdateAccountAmountCharacterizationTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadAccounts)
-        vm.handle(.updateAccountAmount(junction, 3_000)) // погашение до 3000
+        vm.updateLegacyAccountAmount(account: junction, newAmount: 3_000) // погашение до 3000
 
         #expect(abs(card.balance - 17_000) < 0.01)
         let txs = try fetchTransactions(ctx)
@@ -174,7 +174,7 @@ struct FinanceViewModelUpdateAccountAmountCharacterizationTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadAccounts)
-        vm.handle(.updateAccountAmount(junction, 70_000))
+        vm.updateLegacyAccountAmount(account: junction, newAmount: 70_000)
 
         #expect(abs(credit.remainingAmount - 70_000) < 0.01)
         #expect(credit.isClosed == false)
@@ -196,7 +196,7 @@ struct FinanceViewModelUpdateAccountAmountCharacterizationTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadAccounts)
-        vm.handle(.updateAccountAmount(junction, 0))
+        vm.updateLegacyAccountAmount(account: junction, newAmount: 0)
 
         #expect(abs(credit.remainingAmount - 0) < 0.01)
         #expect(credit.isClosed == true, "newAmount <= 0 закрывает кредит (as-is)")
@@ -218,7 +218,7 @@ struct FinanceViewModelUpdateAccountAmountCharacterizationTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadAccounts)
-        vm.handle(.updateAccountAmount(junction, 55_000))
+        vm.updateLegacyAccountAmount(account: junction, newAmount: 55_000)
 
         #expect(abs(investment.amount - 55_000) < 0.01)
         let txs = try fetchTransactions(ctx)
@@ -238,7 +238,7 @@ struct FinanceViewModelUpdateAccountAmountCharacterizationTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadAccounts)
-        vm.handle(.updateAccountAmount(junction, 22_000))
+        vm.updateLegacyAccountAmount(account: junction, newAmount: 22_000)
 
         #expect(abs(investment.amount - 22_000) < 0.01)
         let txs = try fetchTransactions(ctx)
@@ -261,7 +261,7 @@ struct FinanceViewModelUpdateAccountAmountCharacterizationTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadAccounts)
-        vm.handle(.updateAccountAmount(junction, 15)) // newAmount = НОВОЕ КОЛИЧЕСТВО, не сумма
+        vm.updateLegacyAccountAmount(account: junction, newAmount: 15) // newAmount = НОВОЕ КОЛИЧЕСТВО, не сумма
 
         #expect(investment.marketQuantity == 15)
         #expect(abs(investment.amount - 1_500) < 0.01, "amount = quantity * unitPrice = 15*100")
@@ -284,7 +284,7 @@ struct FinanceViewModelUpdateAccountAmountCharacterizationTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadAccounts)
-        vm.handle(.updateAccountAmount(junction, 4))
+        vm.updateLegacyAccountAmount(account: junction, newAmount: 4)
 
         #expect(investment.marketQuantity == 4)
         #expect(abs(investment.amount - 400) < 0.01)

@@ -139,7 +139,7 @@ final class FinanceLifecycleHarness {
         cardViewModel.handle(.updateCard(card))
 
         let created = try requireCard(named: name)
-        financeViewModel.handle(.addAccountToGroup(accountType: .card, accountID: created.cardUniqueID, group: group))
+        financeViewModel.addLegacyAccountToGroup(accountType: .card, accountID: created.cardUniqueID, group: group)
 
         try await waitUntil {
             self.financeAccount(for: created.cardUniqueID) != nil
@@ -169,7 +169,7 @@ final class FinanceLifecycleHarness {
         cardViewModel.handle(.updateCard(card))
 
         let created = try requireCard(named: name)
-        financeViewModel.handle(.addAccountToGroup(accountType: .card, accountID: created.cardUniqueID, group: group))
+        financeViewModel.addLegacyAccountToGroup(accountType: .card, accountID: created.cardUniqueID, group: group)
 
         try await waitUntil {
             self.financeAccount(for: created.cardUniqueID) != nil
@@ -182,13 +182,13 @@ final class FinanceLifecycleHarness {
 
     func quickEditCardBalance(cardID: String, to newAmount: Double) async throws {
         let account = try requireFinanceAccount(for: cardID)
-        financeViewModel.handle(.updateAccountAmount(account, newAmount))
+        financeViewModel.updateLegacyAccountAmount(account: account, newAmount: newAmount)
         try await assertCardState(cardID: cardID, balance: newAmount)
     }
 
     func quickEditCreditCard(cardID: String, creditLimit: Double, debt: Double) async throws {
         let account = try requireFinanceAccount(for: cardID)
-        financeViewModel.handle(.updateCreditCardQuickFields(account: account, creditLimit: creditLimit, debt: debt))
+        financeViewModel.updateLegacyCreditCardQuickFields(account: account, creditLimit: creditLimit, debt: debt)
         try await assertCardState(cardID: cardID, balance: max(0, creditLimit - debt))
     }
 
@@ -217,7 +217,7 @@ final class FinanceLifecycleHarness {
 
         let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
         modelContext.insert(account)
-        financeViewModel.handle(.addAccountToGroup(accountType: .investment, accountID: investment.investmentUniqueID, group: group))
+        financeViewModel.addLegacyAccountToGroup(accountType: .investment, accountID: investment.investmentUniqueID, group: group)
         try modelContext.save()
 
         try await waitUntil {
@@ -572,9 +572,9 @@ final class FinanceLifecycleHarness {
     }
 
     private func financeAccount(for accountID: String, type: FinanceAccountType) -> FinanceAccount? {
-        financeViewModel.state.groups
-            .flatMap { $0.accounts ?? [] }
-            .first { $0.accountType == type && $0.accountID == accountID }
+        // [Ф5c.7 contract] `state.groups` теперь `[AccountGroup]` (core) — легаси-junction харнесса
+        // читаем напрямую из фикстуры `group: FinanceGroup`, не через VM state.
+        (group.accounts ?? []).first { $0.accountType == type && $0.accountID == accountID }
     }
 
     private func cardFromStore(cardID: String) -> Card? {

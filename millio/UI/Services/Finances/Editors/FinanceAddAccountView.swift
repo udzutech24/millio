@@ -10,7 +10,7 @@ import SwiftData
 
 struct FinanceAddAccountView: View {
     @ObservedObject var viewModel: FinanceViewModel
-    let preselectedGroup: FinanceGroup?
+    let preselectedGroup: AccountGroup?
     let preselectedAccountType: FinanceAccountType?
     let presentationStyle: FinanceEditorPresentationStyle
     @Environment(\.dismiss) private var dismiss
@@ -20,7 +20,7 @@ struct FinanceAddAccountView: View {
 
     init(
         viewModel: FinanceViewModel,
-        preselectedGroup: FinanceGroup? = nil,
+        preselectedGroup: AccountGroup? = nil,
         preselectedAccountType: FinanceAccountType? = nil,
         presentationStyle: FinanceEditorPresentationStyle = .modal
     ) {
@@ -100,15 +100,15 @@ struct FinanceAddAccountView: View {
         return localized("finances.add_account.nav.new")
     }
     
-    private var resolvedGroup: FinanceGroup? {
+    private var resolvedGroup: AccountGroup? {
         FinanceAddAccountGroupSelection.resolveSelectedGroup(
             selectedGroupID: selectedGroupID,
             preselectedGroupID: preselectedGroup?.groupUniqueID ?? viewModel.state.selectedGroupForAccount?.groupUniqueID,
             groups: viewModel.state.groups
         )
     }
-    
-    var targetGroup: FinanceGroup? {
+
+    var targetGroup: AccountGroup? {
         resolvedGroup
     }
     
@@ -484,7 +484,7 @@ struct FinanceAddAccountView: View {
         }
 
         let maxOrder = viewModel.state.groups.map(\.order).max() ?? -1
-        let newGroup = FinanceGroup(name: suggestedName, colorHex: recommendation.accentHex, order: maxOrder + 1)
+        let newGroup = AccountGroup(name: suggestedName, colorHex: recommendation.accentHex, order: maxOrder + 1)
         viewModel.modelContext.insert(newGroup)
 
         do {
@@ -1081,7 +1081,7 @@ struct FinanceAddAccountView: View {
         guard let depositData else { return }
         let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
-        let group = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: viewModel.modelContext)
+        let group = targetGroup  // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен
         let service = AccountsCoreService(modelContext: viewModel.modelContext)
 
         let meta = AccountsCoreAdditionBridge.depositMeta(
@@ -1142,7 +1142,7 @@ struct FinanceAddAccountView: View {
             openingBalance = Decimal(investmentData.amount)
         }
 
-        let group = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: viewModel.modelContext)
+        let group = targetGroup  // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен
         let service = AccountsCoreService(modelContext: viewModel.modelContext)
         do {
             try service.createAccount(
@@ -1164,7 +1164,7 @@ struct FinanceAddAccountView: View {
     private func createObligationAccountOnNewCore(kind: AccountKind) {
         let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
-        let group = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: viewModel.modelContext)
+        let group = targetGroup  // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен
         let service = AccountsCoreService(modelContext: viewModel.modelContext)
 
         do {
@@ -1214,7 +1214,7 @@ struct FinanceAddAccountView: View {
         guard let investmentData else { return }
         let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
-        let group = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: viewModel.modelContext)
+        let group = targetGroup  // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен
         let service = AccountsCoreService(modelContext: viewModel.modelContext)
 
         do {
@@ -1302,7 +1302,7 @@ struct FinanceAddAccountView: View {
         }
         // Паритет с легаси: считаются ТОЛЬКО акции/крипта (`isMarketTickerCategory`), не
         // облигации/металлы — те же 2 из 4 `MarketAssetClass`, что и `InvestmentCategory`.
-        let coreCount = viewModel.state.coreAccounts.filter { account in
+        let coreCount = viewModel.state.accounts.filter { account in
             guard account.kind == .marketInvestment, let assetClass = account.marketMeta?.assetClass else {
                 return false
             }
@@ -1315,7 +1315,7 @@ struct FinanceAddAccountView: View {
         viewModel.state.availableCards.count
         + viewModel.state.availableCredits.count
         + viewModel.state.availableInvestments.count
-        + viewModel.state.coreAccounts.count
+        + viewModel.state.accounts.count
     }
 
     private var isCreatingNewTrackedTicker: Bool {
@@ -1438,8 +1438,8 @@ enum FinanceAddAccountGroupSelection {
     static func resolveSelectedGroup(
         selectedGroupID: String?,
         preselectedGroupID: String?,
-        groups: [FinanceGroup]
-    ) -> FinanceGroup? {
+        groups: [AccountGroup]
+    ) -> AccountGroup? {
         if let selectedGroupID,
            let selectedGroup = groups.first(where: { $0.groupUniqueID == selectedGroupID }) {
             return selectedGroup

@@ -37,14 +37,6 @@ struct SheetsModifier: ViewModifier {
                 DisplayCurrencySheet(viewModel: viewModel, isSecondary: true)
             }
             .sheet(isPresented: Binding(
-                get: { viewModel.state.showQuickEditAccountSheet },
-                set: { if !$0 { viewModel.handle(.hideQuickEditAccountSheet) } }
-            )) {
-                if let account = viewModel.state.quickEditAccount {
-                    FinanceQuickEditAccountView(account: account, viewModel: viewModel)
-                }
-            }
-            .sheet(isPresented: Binding(
                 get: { viewModel.state.showGroupDynamics },
                 set: { if !$0 { viewModel.handle(.hideGroupDynamics) } }
             )) {
