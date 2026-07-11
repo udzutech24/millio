@@ -671,24 +671,25 @@ struct FinancesMainTabView: View {
                         .buttonStyle(.plain)
                     }
 
+                    // [Гейт 5c.7.6.3] Вторичная валюта — чипом «≈ N $», а не голым текстом (решение
+                    // владельца 2026-07-08: без чипа прироста/sparkline, только вторичная сумма).
                     if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency {
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(formatBalance(viewModel.state.secondaryTotalAmount, isHidden: viewModel.state.isAmountHidden))
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(AppColors.textTertiary)
-
-                            Button {
-                                viewModel.handle(.showSecondaryDisplayCurrencySheet)
-                            } label: {
-                                currencyPickerLabel(
-                                    symbol: MonetaCurrency(rawValue: secondaryCurrency)?.symbol ?? secondaryCurrency,
-                                    amountFontSize: 15,
-                                    color: AppColors.textTertiary.opacity(0.82)
-                                )
+                        Button {
+                            viewModel.handle(.showSecondaryDisplayCurrencySheet)
+                        } label: {
+                            HStack(spacing: AppSpacing.xs) {
+                                Text("≈ \(formatBalance(viewModel.state.secondaryTotalAmount, isHidden: viewModel.state.isAmountHidden)) \(MonetaCurrency(rawValue: secondaryCurrency)?.symbol ?? secondaryCurrency)")
+                                    .font(.millioCallout)
+                                    .foregroundStyle(AppColors.textTertiary)
+                                Image(systemName: "chevron.down")
+                                    .font(.millioMicro)
+                                    .foregroundStyle(AppColors.textTertiary.opacity(0.7))
                             }
-                            .buttonStyle(.plain)
+                            .padding(.horizontal, AppSpacing.s)
+                            .padding(.vertical, AppSpacing.xs)
+                            .background(Capsule(style: .continuous).fill(Color.white.opacity(0.06)))
                         }
-                        .offset(y: -2)
+                        .buttonStyle(.plain)
                     }
 
                 }
@@ -862,26 +863,36 @@ struct FinancesMainTabView: View {
         viewModel.orderedAccounts(for: group).isEmpty && viewModel.legacyAccountsMatchingGroupName(group.name).isEmpty
     }
 
+    /// [Гейт 5c.7.6.2] Список групп разбит на секции «Активы»/«Обязательства» с подытогами
+    /// (`FinanceAccountsSectionSplitter` — знак net-тотала группы в валюте шапки). Ungrouped —
+    /// канон `account.group == nil`, НЕ сущность `AccountGroup` (структурно исключена из `groups` в
+    /// `loadCoreEntities`), поэтому не рендерится через generic `FinanceGroupRow` — отдельный блок,
+    /// добавляемый в ту секцию, куда попал его net-тотал (регресс-guard: без него core-счета без
+    /// группы становятся невидимы на экране «Счета», найдено `FinanceViewModelCoreEntitiesTests`).
     private func groupsListView(_ groups: [AccountGroup]) -> some View {
         let nonEmptyGroups = groups.filter { !isGroupEmpty($0) }
         let emptyGroups = groups.filter { isGroupEmpty($0) }
+        let groupsByID = Dictionary(uniqueKeysWithValues: nonEmptyGroups.map { ($0.groupUniqueID, $0) })
+        let split = FinanceAccountsSectionSplitter.split(
+            orderedGroupIDs: nonEmptyGroups.map(\.groupUniqueID),
+            totalsInPrimaryCurrency: viewModel.state.groupTotalsPrimaryCurrency,
+            ungroupedTotal: isUngroupedSectionEmpty ? nil : viewModel.state.ungroupedTotal
+        )
 
-        return VStack(spacing: 10) {
-            ForEach(nonEmptyGroups) { group in
-                FinanceGroupRow(
-                    group: group,
-                    viewModel: viewModel,
-                    draggedGroupID: $draggedGroupID
-                )
-            }
+        return VStack(spacing: AppSpacing.xl) {
+            accountsSection(
+                title: L("finances.main.section.assets"),
+                subtotal: split.assets.subtotal,
+                groups: split.assets.groupIDs.compactMap { groupsByID[$0] },
+                showsUngrouped: split.ungroupedInAssets == true
+            )
 
-            // [Ф5c.7 contract] Ungrouped — канон `account.group == nil`, НЕ сущность `AccountGroup`
-            // (структурно исключена из `groups` в `loadCoreEntities`), поэтому не рендерится через
-            // generic `FinanceGroupRow` — отдельный блок (регресс-guard: без него core-счета без
-            // группы становятся невидимы на экране «Счета», найдено `FinanceViewModelCoreEntitiesTests`).
-            if !isUngroupedSectionEmpty {
-                ungroupedSectionRow
-            }
+            accountsSection(
+                title: L("finances.main.section.liabilities"),
+                subtotal: split.liabilities.subtotal,
+                groups: split.liabilities.groupIDs.compactMap { groupsByID[$0] },
+                showsUngrouped: split.ungroupedInAssets == false
+            )
 
             if !emptyGroups.isEmpty {
                 hiddenGroupsRow(count: emptyGroups.count)
@@ -893,6 +904,47 @@ struct FinancesMainTabView: View {
                             viewModel: viewModel,
                             draggedGroupID: $draggedGroupID
                         )
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func accountsSection(
+        title: String,
+        subtotal: Double,
+        groups: [AccountGroup],
+        showsUngrouped: Bool
+    ) -> some View {
+        if !groups.isEmpty || showsUngrouped {
+            VStack(alignment: .leading, spacing: AppSpacing.s) {
+                HStack {
+                    Text(title)
+                        .font(.millioCaption)
+                        .foregroundStyle(AppColors.textTertiary.opacity(0.84))
+                        .textCase(.uppercase)
+
+                    Spacer()
+
+                    Text(formatBalance(subtotal, isHidden: viewModel.state.isAmountHidden))
+                        .font(.millioCaption)
+                        .foregroundStyle(AppColors.textTertiary.opacity(0.84))
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+
+                VStack(spacing: AppSpacing.s) {
+                    ForEach(groups) { group in
+                        FinanceGroupRow(
+                            group: group,
+                            viewModel: viewModel,
+                            draggedGroupID: $draggedGroupID
+                        )
+                    }
+
+                    if showsUngrouped {
+                        ungroupedSectionRow
                     }
                 }
             }

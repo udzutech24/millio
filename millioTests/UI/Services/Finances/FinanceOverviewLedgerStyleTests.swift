@@ -76,19 +76,60 @@ struct FinanceOverviewLedgerStyleTests {
         #expect(width == CGFloat(120))
     }
 
-    @Test("Компактная карточка использует сдержанные метрики для overview")
-    func compactCardMetricsMatchCompactDesign() {
-        let metrics = FinanceOverviewLedgerStyle.compactCardMetrics
 
-        #expect(metrics.titleFontSize == 16)
-        #expect(metrics.amountFontSize == 19)
-        #expect(metrics.progressHeight == 10)
-        #expect(metrics.minProgressWidth == 28)
-        #expect(metrics.horizontalPadding == 14)
-        #expect(metrics.verticalPadding == 12)
-        #expect(metrics.cornerRadius == 16)
-        #expect(metrics.contentSpacing == 10)
-        #expect(metrics.minHeight == 88)
-        #expect(metrics.chevronFontSize == 15)
+    // MARK: - stackedSegmentWidths (Гейт 5c.7.6.1 — полоса «активы vs обязательства»)
+
+    @Test("Сегменты стековой полосы суммируются в доступную ширину (не как независимые бары)")
+    func stackedSegmentWidthsSumToAvailableWidth() {
+        let widths = FinanceOverviewLedgerStyle.stackedSegmentWidths(
+            debitTotal: 700, creditTotal: 300, availableWidth: 200, minimumSegmentWidth: 6
+        )
+        #expect(abs((widths.debit + widths.credit) - 200) < 0.001)
+        #expect(widths.debit > widths.credit)
+    }
+
+    @Test("Только активы (обязательств нет) — вся ширина одному сегменту")
+    func stackedSegmentWidthsAllDebit() {
+        let widths = FinanceOverviewLedgerStyle.stackedSegmentWidths(
+            debitTotal: 500, creditTotal: 0, availableWidth: 200, minimumSegmentWidth: 6
+        )
+        #expect(widths.debit == 200)
+        #expect(widths.credit == 0)
+    }
+
+    @Test("Только обязательства (активов нет) — вся ширина другому сегменту")
+    func stackedSegmentWidthsAllCredit() {
+        let widths = FinanceOverviewLedgerStyle.stackedSegmentWidths(
+            debitTotal: 0, creditTotal: 500, availableWidth: 200, minimumSegmentWidth: 6
+        )
+        #expect(widths.debit == 0)
+        #expect(widths.credit == 200)
+    }
+
+    @Test("Малая доля (напр. 1%) не схлопывается в 0 — держит минимальную видимость, сумма ширины сохраняется")
+    func stackedSegmentWidthsGuaranteesMinimumVisibility() {
+        let widths = FinanceOverviewLedgerStyle.stackedSegmentWidths(
+            debitTotal: 9_900, creditTotal: 100, availableWidth: 200, minimumSegmentWidth: 12
+        )
+        #expect(widths.credit >= 12)
+        #expect(abs((widths.debit + widths.credit) - 200) < 0.001)
+    }
+
+    @Test("Обе стороны пустые (gross == 0) — не крашится, отдаёт всю ширину нейтрально дебету")
+    func stackedSegmentWidthsZeroGross() {
+        let widths = FinanceOverviewLedgerStyle.stackedSegmentWidths(
+            debitTotal: 0, creditTotal: 0, availableWidth: 200, minimumSegmentWidth: 6
+        )
+        #expect(widths.debit == 200)
+        #expect(widths.credit == 0)
+    }
+
+    @Test("Нулевая доступная ширина — обе стороны 0, без деления на ноль")
+    func stackedSegmentWidthsZeroAvailableWidth() {
+        let widths = FinanceOverviewLedgerStyle.stackedSegmentWidths(
+            debitTotal: 500, creditTotal: 300, availableWidth: 0, minimumSegmentWidth: 6
+        )
+        #expect(widths.debit == 0)
+        #expect(widths.credit == 0)
     }
 }

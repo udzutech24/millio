@@ -10,19 +10,6 @@ import Foundation
 import CoreGraphics
 
 enum FinanceOverviewLedgerStyle {
-    struct CompactCardMetrics: Equatable {
-        let titleFontSize: CGFloat
-        let amountFontSize: CGFloat
-        let progressHeight: CGFloat
-        let minProgressWidth: CGFloat
-        let horizontalPadding: CGFloat
-        let verticalPadding: CGFloat
-        let cornerRadius: CGFloat
-        let contentSpacing: CGFloat
-        let minHeight: CGFloat
-        let chevronFontSize: CGFloat
-    }
-
     static func countsText(groups: Int, accounts: Int) -> String {
         "\(groups) \(L("finances.overview.groups_suffix")) · \(accounts) \(L("finances.overview.accounts_suffix"))"
     }
@@ -57,18 +44,30 @@ enum FinanceOverviewLedgerStyle {
         return max(minimumWidth, availableWidth * ratio)
     }
 
-    static var compactCardMetrics: CompactCardMetrics {
-        CompactCardMetrics(
-            titleFontSize: 16,
-            amountFontSize: 19,
-            progressHeight: 10,
-            minProgressWidth: 28,
-            horizontalPadding: 14,
-            verticalPadding: 12,
-            cornerRadius: 16,
-            contentSpacing: 10,
-            minHeight: 88,
-            chevronFontSize: 15
-        )
+    /// Ширины двух сегментов ОДНОЙ полосы «активы vs обязательства» (Гейт 5c.7.6.1) — в отличие от
+    /// `barWidth` (независимые бары, каждый до `availableWidth`), сегменты здесь обязаны СУММИРОВАТЬСЯ
+    /// в `availableWidth`. Если непусты обе стороны — гарантируем минимальную видимость меньшей,
+    /// забирая излишек у большей (масштабированием), а не выходя за `availableWidth`.
+    static func stackedSegmentWidths(
+        debitTotal: Double,
+        creditTotal: Double,
+        availableWidth: CGFloat,
+        minimumSegmentWidth: CGFloat
+    ) -> (debit: CGFloat, credit: CGFloat) {
+        guard availableWidth > 0 else { return (0, 0) }
+        let gross = debitTotal + creditTotal
+        guard gross > 0.01, creditTotal > 0.01 else { return (availableWidth, 0) }
+        guard debitTotal > 0.01 else { return (0, availableWidth) }
+
+        var debitWidth = availableWidth * CGFloat(debitTotal / gross)
+        var creditWidth = availableWidth - debitWidth
+        if debitWidth < minimumSegmentWidth {
+            debitWidth = minimumSegmentWidth
+            creditWidth = availableWidth - debitWidth
+        } else if creditWidth < minimumSegmentWidth {
+            creditWidth = minimumSegmentWidth
+            debitWidth = availableWidth - creditWidth
+        }
+        return (max(0, debitWidth), max(0, creditWidth))
     }
 }

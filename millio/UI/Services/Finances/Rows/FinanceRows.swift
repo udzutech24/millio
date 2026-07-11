@@ -342,19 +342,43 @@ struct FinanceGroupRow: View {
     
     private func groupAmountSection(containerWidth: CGFloat) -> some View {
         let amountColor = groupTotal < 0 ? AppColors.error : AppColors.textPrimary
-        return financeAmountLabel(
-            amountText: formatBalance(groupTotal, isHidden: viewModel.state.isAmountHidden),
-            currencySymbol: MonetaCurrency(rawValue: groupDisplayCurrency)?.symbol ?? groupDisplayCurrency,
-            amountFontSize: 15,
-            amountColor: amountColor.opacity(0.92),
-            currencyColor: amountColor.opacity(0.66)
-        )
+        return VStack(alignment: .trailing, spacing: AppSpacing.xs / 2) {
+            financeAmountLabel(
+                amountText: formatBalance(groupTotal, isHidden: viewModel.state.isAmountHidden),
+                currencySymbol: MonetaCurrency(rawValue: groupDisplayCurrency)?.symbol ?? groupDisplayCurrency,
+                amountFontSize: 15,
+                amountColor: amountColor.opacity(0.92),
+                currencyColor: amountColor.opacity(0.66)
+            )
+
+            if showsPrimaryCurrencySubtitle {
+                Text(primaryCurrencySubtitleText)
+                    .font(.millioMicro)
+                    .foregroundStyle(AppColors.textTertiary.opacity(0.82))
+                    .lineLimit(1)
+            }
+        }
         .frame(
             width: FinancesMainLayoutPolicy.groupRowAmountWidth(containerWidth: containerWidth),
             alignment: .trailing
         )
         .padding(.leading, 12)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// [Гейт 5c.7.6.2 фикс-раунд] Группа со своей `displayCurrency`, отличной от валюты шапки —
+    /// показываем подстроку «≈ N ₽» (зеркалит формат чипа шапки). Значение уже посчитано СИНХРОННО
+    /// (`state.groupTotalsPrimaryCurrency`, обновляется в `FinanceViewModel.refreshGroupTotalPrimaryCurrency`
+    /// тем же `calculateGroupTotal`) — второго async-прохода конвертации здесь нет.
+    private var showsPrimaryCurrencySubtitle: Bool {
+        guard let groupCurrency = group.displayCurrency else { return false }
+        return groupCurrency.uppercased() != viewModel.state.displayCurrency.uppercased()
+    }
+
+    private var primaryCurrencySubtitleText: String {
+        let converted = viewModel.state.groupTotalsPrimaryCurrency[groupID] ?? 0
+        let symbol = MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency
+        return "≈ \(formatBalance(converted, isHidden: viewModel.state.isAmountHidden)) \(symbol)"
     }
     
     private var accountsAccordion: some View {

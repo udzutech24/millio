@@ -64,7 +64,7 @@ struct FinanceOverviewCardView: View {
                     .tint(AppColors.textPrimary)
                     .frame(maxWidth: .infinity, minHeight: 180)
             } else if let ledgerPresentation, ledgerPresentation.hasData {
-                compactLedgerOverview(presentation: ledgerPresentation)
+                assetsLiabilitiesStackedBar(presentation: ledgerPresentation)
             } else {
                 emptyState
             }
@@ -491,27 +491,84 @@ struct FinanceOverviewCardView: View {
         )
     }
 
-    private func compactLedgerOverview(
+    /// [Гейт 5c.7.6.1] Заменяет две независимые карточки Credit/Debit (`compactSideCard`, снесена —
+    /// каждая со своей шкалой до `maxSideTotal`, что искажало пропорцию между сторонами) на ОДНУ
+    /// полосу: сегменты «активы vs обязательства» суммируются в реальную ширину (пропорция = данным
+    /// тотала, AC), плюс явный net сверху — данные ТОЛЬКО из уже посчитанного `ledgerPresentation`
+    /// (тот же единственный источник, что раньше питал две карточки, никакого второго расчёта).
+    private func assetsLiabilitiesStackedBar(
         presentation: FinanceOverviewLedgerPresentation
     ) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            compactSideCard(
-                side: presentation.credit,
-                color: creditColor,
-                totalReference: presentation.maxSideTotal
-            ) {
-                openExpandedChart(side: .credit)
+        VStack(alignment: .leading, spacing: AppSpacing.m) {
+            HStack(alignment: .top, spacing: AppSpacing.l) {
+                stackedBarLegend(title: presentation.debit.side.title, amount: presentation.debit.total, color: debitColor) {
+                    openExpandedChart(side: .debit)
+                }
+                stackedBarLegend(title: presentation.credit.side.title, amount: presentation.credit.total, color: creditColor) {
+                    openExpandedChart(side: .credit)
+                }
+
+                Spacer(minLength: AppSpacing.s)
+
+                VStack(alignment: .trailing, spacing: AppSpacing.xs) {
+                    Text(L("finances.overview.chart.saldo"))
+                        .font(.millioCaption2)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .textCase(.uppercase)
+                    Text(signedAmount(presentation.saldo))
+                        .font(.millioTitle)
+                        .foregroundStyle(saldoColor(for: presentation.saldo))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                }
             }
 
-            compactSideCard(
-                side: presentation.debit,
-                color: debitColor,
-                totalReference: presentation.maxSideTotal
-            ) {
-                openExpandedChart(side: .debit)
+            GeometryReader { proxy in
+                let widths = FinanceOverviewLedgerStyle.stackedSegmentWidths(
+                    debitTotal: presentation.debit.total,
+                    creditTotal: presentation.credit.total,
+                    availableWidth: proxy.size.width,
+                    minimumSegmentWidth: AppSpacing.s
+                )
+                HStack(spacing: 0) {
+                    if widths.debit > 0 {
+                        Rectangle().fill(debitColor.opacity(0.85)).frame(width: widths.debit)
+                    }
+                    if widths.credit > 0 {
+                        Rectangle().fill(creditColor.opacity(0.85)).frame(width: widths.credit)
+                    }
+                }
+                .frame(height: AppSpacing.s)
+                .clipShape(Capsule(style: .continuous))
+                .background(Capsule(style: .continuous).fill(Color.white.opacity(0.05)))
             }
+            .frame(height: AppSpacing.s)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func stackedBarLegend(
+        title: String,
+        amount: Double,
+        color: Color,
+        onTap: @escaping () -> Void
+    ) -> some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                HStack(spacing: AppSpacing.xs) {
+                    Circle().fill(color).frame(width: AppSpacing.xs, height: AppSpacing.xs)
+                    Text(title)
+                        .font(.millioCallout)
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+                Text(amountWithCurrency(amount))
+                    .font(.millioHeadline)
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func sideToggleRow(
@@ -607,69 +664,6 @@ struct FinanceOverviewCardView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
                             .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func compactSideCard(
-        side: FinanceOverviewLedgerSidePresentation,
-        color: Color,
-        totalReference: Double,
-        onTap: @escaping () -> Void
-    ) -> some View {
-        let metrics = FinanceOverviewLedgerStyle.compactCardMetrics
-
-        return Button(action: onTap) {
-            VStack(alignment: .leading, spacing: metrics.contentSpacing) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(side.side.title)
-                        .font(.system(size: metrics.titleFontSize, weight: .semibold))
-                        .foregroundStyle(AppColors.textSecondary)
-
-                    Spacer(minLength: 8)
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: metrics.chevronFontSize, weight: .semibold))
-                        .foregroundStyle(color.opacity(0.82))
-                }
-
-                Text(amountWithCurrency(side.total))
-                    .font(.system(size: metrics.amountFontSize, weight: .bold))
-                    .foregroundStyle(color.opacity(0.9))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-
-                GeometryReader { proxy in
-                    let barWidth = FinanceOverviewLedgerStyle.barWidth(
-                        total: side.total,
-                        reference: totalReference,
-                        availableWidth: proxy.size.width,
-                        minimumWidth: metrics.minProgressWidth
-                    )
-
-                    ZStack(alignment: .leading) {
-                        Capsule(style: .continuous)
-                            .fill(Color.white.opacity(0.045))
-                            .frame(height: metrics.progressHeight)
-                        Capsule(style: .continuous)
-                            .fill(color.opacity(0.7))
-                            .frame(width: barWidth, height: metrics.progressHeight)
-                    }
-                }
-                .frame(height: metrics.progressHeight)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(minHeight: metrics.minHeight, alignment: .topLeading)
-            .padding(.horizontal, metrics.horizontalPadding)
-            .padding(.vertical, metrics.verticalPadding)
-            .background(
-                RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
-                    .fill(Color.white.opacity(0.04))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
                     )
             )
         }

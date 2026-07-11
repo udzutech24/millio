@@ -102,9 +102,17 @@ struct FinanceState {
     /// Множество ID групп с открытыми аккордеонами
     var expandedGroupIDs: Set<String> = []
     
-    /// Словарь сумм групп по их ID
+    /// Словарь сумм групп по их ID (в собственной валюте группы, если задана — для бейджа строки).
     var groupTotals: [String: Double] = [:]
-    
+
+    /// Тот же тотал группы, но ВСЕГДА в валюте шапки (Гейт 5c.7.6.2 — секции «Активы»/«Обязательства»
+    /// на «Счетах»). Отдельный словарь, а не пересчёт `groupTotals` на лету: у мультивалютных групп
+    /// значения расходятся, а подытоги секций обязаны складываться в тотал шапки (тот тоже в её валюте).
+    var groupTotalsPrimaryCurrency: [String: Double] = [:]
+
+    /// Тотал Ungrouped-бакета в валюте шапки — тот же вход в секции «Активы»/«Обязательства».
+    var ungroupedTotal: Double = 0.0
+
     /// Показывать ли динамику группы
     var showGroupDynamics: Bool = false
 
@@ -782,8 +790,22 @@ final class FinanceViewModel: ViewModelProtocol {
             let currency = group.displayCurrency ?? state.displayCurrency
             let total = await calculateGroupTotal(group: group, in: currency)
             state.groupTotals[group.groupUniqueID] = total
+            await refreshGroupTotalPrimaryCurrency(group: group, total: total, computedCurrency: currency)
         }
+        state.ungroupedTotal = await calculateUngroupedTotal(in: state.displayCurrency)
         await calculateTotalAmountAsync()
+    }
+
+    /// Обновляет `state.groupTotalsPrimaryCurrency[groupID]` — тотал ВСЕГДА в валюте шапки. Если
+    /// `total` уже посчитан в валюте шапки (типовой случай — у группы нет своей `displayCurrency`),
+    /// переиспользуем без второго вызова; иначе считаем отдельно тем же `calculateGroupTotal`
+    /// (не второй расчёт, тот же единственный источник с другим currency-аргументом).
+    private func refreshGroupTotalPrimaryCurrency(group: AccountGroup, total: Double, computedCurrency: String) async {
+        if computedCurrency == state.displayCurrency {
+            state.groupTotalsPrimaryCurrency[group.groupUniqueID] = total
+        } else {
+            state.groupTotalsPrimaryCurrency[group.groupUniqueID] = await calculateGroupTotal(group: group, in: state.displayCurrency)
+        }
     }
 
     
@@ -1127,11 +1149,16 @@ final class FinanceViewModel: ViewModelProtocol {
         scheduleBackgroundTask { viewModel in
             guard let group = viewModel.state.groups.first(where: { $0.groupUniqueID == groupUniqueID }) else {
                 viewModel.state.groupTotals.removeValue(forKey: groupUniqueID)
+                // [Гейт 5c.7.6.2 фикс-раунд] Без этого удалённая группа оставляла stale-ключ в
+                // `groupTotalsPrimaryCurrency` — секции «Активы»/«Обязательства» продолжили бы
+                // считать её в подытоге (id уже не в `orderedGroupIDs`, но словарь сплиттер не чистит).
+                viewModel.state.groupTotalsPrimaryCurrency.removeValue(forKey: groupUniqueID)
                 return
             }
             let currency = fallbackCurrency ?? group.displayCurrency ?? viewModel.state.displayCurrency
             let total = await viewModel.calculateGroupTotal(group: group, in: currency)
             viewModel.state.groupTotals[groupUniqueID] = total
+            await viewModel.refreshGroupTotalPrimaryCurrency(group: group, total: total, computedCurrency: currency)
         }
     }
 
