@@ -27,6 +27,7 @@ struct AccountDetailView: View {
         case income
         case expense
         case adjustBalance
+        case editDetails
         case transfer
         case earlyClose
         case buy
@@ -513,6 +514,9 @@ struct AccountDetailView: View {
                         }
                     }
                 }
+                actionButton(L("accounts_core.detail.action.edit"), icon: "pencil") {
+                    sheet = .editDetails
+                }
                 actionButton(L("accounts_core.detail.action.delete"), icon: "archivebox.fill", isDestructive: true) {
                     requestArchiveConfirmation()
                 }
@@ -732,6 +736,16 @@ struct AccountDetailView: View {
                     perform { try service.adjustBalance(account: account, to: newValue) }
                 }
             )
+        case .editDetails:
+            AccountEditDetailsSheet(
+                account: account,
+                modelContext: modelContext,
+                onSave: { name, group, note in
+                    performEdit {
+                        try service.updateAccount(account, name: name, group: group, note: note)
+                    }
+                }
+            )
         case .transfer:
             AccountTransferSheet(
                 source: account,
@@ -806,6 +820,20 @@ struct AccountDetailView: View {
     private func perform(_ operation: () throws -> Void) {
         do {
             try operation()
+            refreshToken = UUID()
+            sheet = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Правка «карточки» счёта (имя/группа/заметка) — как `perform`, но при успехе публикует
+    /// `investmentsUpdated`: смена имени/группы должна обновить список и группировку на экране «Счета»
+    /// (этот экран не держит ссылку на `FinanceViewModel` — тот же канал, что использует `archiveAccount`).
+    private func performEdit(_ operation: () throws -> Void) {
+        do {
+            try operation()
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             refreshToken = UUID()
             sheet = nil
         } catch {

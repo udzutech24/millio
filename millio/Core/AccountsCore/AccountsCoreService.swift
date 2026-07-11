@@ -459,6 +459,53 @@ final class AccountsCoreService {
         return event
     }
 
+    // MARK: - Правка метаданных счёта (rename / группа / заметка / мета)
+
+    /// Правит «карточку» счёта: имя, группу, заметку и meta-структуру своего kind. Это НЕ событие,
+    /// а прямая мутация полей — по тому же принципу, что `archiveAccount` (архив тоже поле `archivedAt`,
+    /// не событие): имя/группа/мета не имеют временной балансовой семантики и не участвуют в реплее
+    /// `balanceAt`, поэтому событие им не нужно (создавать «rename-событие» = абстракция на будущее,
+    /// новый `AccountEventType` + правки backup-схемы + обработка реплея — на ровном месте).
+    ///
+    /// ВАЛЮТА НАМЕРЕННО НЕ МЕНЯЕТСЯ (инвариант 8 плана 5c.7): суммы всех событий уже зафиксированы в
+    /// валюте счёта — молчаливая подмена `currency` переинтерпретировала бы всю историю (100 000 RUB
+    /// прочиталось бы как 100 000 USD = порча данных). Смена валюты — отдельное revalue-событие с явной
+    /// конвертацией, вне скоупа этого API; поэтому параметра валюты здесь нет намеренно.
+    ///
+    /// Снапшот-кэш НЕ инвалидируется намеренно: `AccountDailySnapshot` ключёван по счёту (не по группе),
+    /// групповой тотал считается на чтении из живого `account.group` — смена имени/группы/меты баланс и
+    /// снапшоты счёта не затрагивает, инвалидация была бы no-op со сносом валидного кэша (инвариант
+    /// `Total(Groups)==Total(Accounts)` держит тест смены группы через этот метод).
+    ///
+    /// Семантика параметров: `name`/`group`/`note` — желаемое итоговое значение (полная замена,
+    /// `group == nil` = «Без группы»); meta-структуры — патч (`nil` = не трогать существующую), вызывающий
+    /// код передаёт только meta своего kind.
+    @discardableResult
+    func updateAccount(
+        _ account: Account,
+        name: String,
+        group: AccountGroup?,
+        note: String? = nil,
+        cardMeta: CardMeta? = nil,
+        depositMeta: DepositMeta? = nil,
+        loanMeta: LoanMeta? = nil,
+        debtMeta: DebtMeta? = nil,
+        marketMeta: MarketMeta? = nil,
+        manualAssetMeta: ManualAssetMeta? = nil
+    ) throws -> Account {
+        account.name = name
+        account.group = group
+        account.note = note
+        if let cardMeta { account.cardMeta = cardMeta }
+        if let depositMeta { account.depositMeta = depositMeta }
+        if let loanMeta { account.loanMeta = loanMeta }
+        if let debtMeta { account.debtMeta = debtMeta }
+        if let marketMeta { account.marketMeta = marketMeta }
+        if let manualAssetMeta { account.manualAssetMeta = manualAssetMeta }
+        try modelContext.save()
+        return account
+    }
+
     // MARK: - Архивация
 
     /// «Удалить» в основном UI = архивация, НИКОГДА не деструктивно (AC7). История ДО `archivedAt`

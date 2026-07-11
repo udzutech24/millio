@@ -300,3 +300,73 @@ struct AccountEarlyCloseSheet: View {
         }
     }
 }
+
+/// Минимальная форма правки «карточки» счёта (Ф5c.7.0): имя + группа + заметка. Полноценный
+/// rich-edit (структурная meta по kind, иконка) — отдельная под-фаза 5c.7.5 через перетипизированную
+/// `FinanceAddAccountView`. Вызывает `AccountsCoreService.updateAccount` (единственная точка записи).
+/// Валюты в форме нет намеренно — смена валюты запрещена в v1 (инвариант 8, см. докстринг `updateAccount`).
+struct AccountEditDetailsSheet: View {
+    let account: Account
+    let modelContext: ModelContext
+    /// (имя, выбранная группа или nil = «Без группы», заметка или nil).
+    let onSave: (String, AccountGroup?, String?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var note: String
+    /// nil = «Без группы» (счёт без группы = `account.group == nil`, канон Ungrouped ядра).
+    @State private var selectedGroupID: UUID?
+
+    init(account: Account, modelContext: ModelContext, onSave: @escaping (String, AccountGroup?, String?) -> Void) {
+        self.account = account
+        self.modelContext = modelContext
+        self.onSave = onSave
+        _name = State(initialValue: account.name)
+        _note = State(initialValue: account.note ?? "")
+        _selectedGroupID = State(initialValue: account.group?.id)
+    }
+
+    private var groups: [AccountGroup] {
+        let descriptor = FetchDescriptor<AccountGroup>(sortBy: [SortDescriptor(\.order)])
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var selectedGroup: AccountGroup? {
+        groups.first { $0.id == selectedGroupID }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(L("accounts_core.detail.sheet.edit.name"), text: $name)
+                    Picker(L("accounts_core.detail.sheet.edit.group"), selection: $selectedGroupID) {
+                        Text(L("accounts_core.detail.sheet.edit.no_group")).tag(Optional<UUID>.none)
+                        ForEach(groups, id: \.id) { group in
+                            Text(group.name).tag(Optional(group.id))
+                        }
+                    }
+                    TextField(L("accounts_core.detail.sheet.note_placeholder"), text: $note)
+                }
+            }
+            .navigationTitle(L("accounts_core.detail.sheet.edit.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("accounts_core.detail.sheet.cancel")) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("accounts_core.detail.sheet.save")) {
+                        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+                        onSave(trimmedName, selectedGroup, trimmedNote.isEmpty ? nil : trimmedNote)
+                    }
+                    .disabled(trimmedName.isEmpty)
+                }
+            }
+        }
+    }
+}

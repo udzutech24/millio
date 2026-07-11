@@ -116,4 +116,44 @@ struct FinanceTotalsServiceFilterConsistencyTests {
         #expect(abs(dynamics - coreSum) < 0.01, "Динамика: скрытая легаси не должна входить в заголовок")
         #expect(abs(dashboard - dynamics) < 0.01, "Дашборд == Динамика на смешанных данных")
     }
+
+    // AC3 (Ф5c.7.0): смена группы счёта через `AccountsCoreService.updateAccount` не ломает инвариант
+    // Total(Groups)==Total(Accounts). Снапшот-кэш ключён по счёту (не по группе), групповой тотал
+    // считается на чтении из живого `account.group` — перенос между группами меняет только к какой
+    // группе относится счёт, но не grand total и не сходимость Дашборд/Динамика (см. докстринг
+    // `updateAccount`: инвалидация кэша при смене группы была бы no-op).
+    @Test("AC3: смена группы через updateAccount — тотал и сходимость Дашборд==Динамика держатся")
+    func groupChangeViaUpdateAccountKeepsTotalsConsistent() async throws {
+        let ctx = try makeContext()
+        let service = AccountsCoreService(modelContext: ctx)
+
+        let financeViewModel = FinanceViewModel(modelContext: ctx, currencyService: MockCurrencyRateService(), skipInitialLoad: true)
+        let currency = financeViewModel.state.displayCurrency
+
+        let groupA = AccountGroup(name: "Группа A")
+        let groupB = AccountGroup(name: "Группа B")
+        ctx.insert(groupA)
+        ctx.insert(groupB)
+        let card = try service.createAccount(name: "Дебетовая", kind: .debitCard, currency: currency, openingBalance: 10_000, group: groupA)
+        _ = try service.createAccount(name: "Наличные", kind: .cash, currency: currency, openingBalance: 2_500, group: groupB)
+
+        financeViewModel.handle(.loadAccounts)
+        financeViewModel.handle(.loadGroups)
+        let expected = 12_500.0
+        let dashboardBefore = await financeViewModel.totalsService.calculateTotalsSnapshot().totalAmount
+        let dynamicsBefore = await dynamicsCurrentBalance(financeViewModel: financeViewModel, modelContext: ctx)
+        #expect(abs(dashboardBefore - expected) < 0.01, "Стартовый тотал по ядру = 12 500")
+        #expect(abs(dashboardBefore - dynamicsBefore) < 0.01, "Инвариант держится до смены группы")
+
+        // Переносим счёт из группы A в группу B через updateAccount.
+        try service.updateAccount(card, name: card.name, group: groupB)
+        financeViewModel.handle(.loadAccounts)
+        financeViewModel.handle(.loadGroups)
+
+        let dashboardAfter = await financeViewModel.totalsService.calculateTotalsSnapshot().totalAmount
+        let dynamicsAfter = await dynamicsCurrentBalance(financeViewModel: financeViewModel, modelContext: ctx)
+        #expect(abs(dashboardAfter - expected) < 0.01, "Смена группы не меняет grand total")
+        #expect(abs(dashboardAfter - dynamicsAfter) < 0.01, "Инвариант Дашборд==Динамика держится после смены группы")
+        #expect(card.group?.name == "Группа B", "Счёт действительно переехал в группу B")
+    }
 }
