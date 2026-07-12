@@ -64,7 +64,6 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.l) {
-            nameSection
             amountSection
             rateSection
             termSection
@@ -93,17 +92,6 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
     }
 
     // MARK: - Секции
-
-    private var nameSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.s) {
-            FinancesSectionHeader(title: L("accounts_core.deposit_form.section.name"))
-            FinancesGlassCard(contentPadding: EdgeInsets(top: AppSpacing.s, leading: AppSpacing.m, bottom: AppSpacing.s, trailing: AppSpacing.m)) {
-                TextField(L("accounts_core.deposit_form.name_placeholder"), text: $name)
-                    .font(.millioBody)
-                    .foregroundStyle(AppColors.textPrimary)
-            }
-        }
-    }
 
     private var amountSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.s) {
