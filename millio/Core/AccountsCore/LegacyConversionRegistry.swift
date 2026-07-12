@@ -55,4 +55,19 @@ final class LegacyConversionRegistry {
         map.removeValue(forKey: legacyUniqueID)
         store(map)
     }
+
+    /// Массовый сброс записей конверсии для указанных легаси-ID. Нужен self-heal-миграции
+    /// (`LegacyAccountsMigrator`): после замены стора без ядра (restore до-AccountsCore-бэкапа или
+    /// recovery-ребилд) реестр помечает эти легаси-ID «сконвертированными», хотя core-двойника в
+    /// ТЕКУЩЕМ сторе нет — без сброса гейт мигратора (`guard !isConverted`) пропустит их и ядро не
+    /// пересоберётся. Сброс точечный (только переданные ID текущего стора) — записи других scope,
+    /// живущие в том же словаре, не затрагиваются.
+    func removeAll(legacyUniqueIDs: [String]) {
+        guard !legacyUniqueIDs.isEmpty else { return }
+        var map = load()
+        for id in legacyUniqueIDs {
+            map.removeValue(forKey: id)
+        }
+        store(map)
+    }
 }

@@ -213,6 +213,53 @@ struct BackupManagerTests {
         #expect(mockDataRepository.exportCalled == true)
     }
 
+    // MARK: - Self-heal хук после restore (plans/2026-07-12__legacy-migration-self-heal.md, Часть B)
+
+    @Test("Успешный restore дёргает onDidReplaceStore ровно один раз (self-heal без relaunch)")
+    func testRestoreFiresStoreReplacedHookOnSuccess() async throws {
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        mockCloudStore.downloadData = Data("restored data".utf8)
+        let mockDataRepository = MockDataRepository()
+        mockDataRepository.exportData = Data("existing data".utf8)
+
+        let counter = HookCounter()
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: mockDataRepository,
+            onDidReplaceStore: { await counter.bump() }
+        )
+
+        try await backupManager.restoreLatest()
+
+        // Хук вызван после импорта → app-слой запускает легаси→core миграцию в том же сеансе.
+        #expect(await counter.count == 1)
+    }
+
+    @Test("Откат restore (сбой импорта) НЕ дёргает onDidReplaceStore")
+    func testRestoreDoesNotFireHookOnRollback() async {
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        mockCloudStore.downloadData = Data("new data".utf8)
+        let repo = FailingImportDataRepository()
+        repo.storage = Data("previous data".utf8)
+        repo.failNextImport = true
+
+        let counter = HookCounter()
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: repo,
+            onDidReplaceStore: { await counter.bump() }
+        )
+
+        await #expect(throws: AppError.self) {
+            try await backupManager.restoreLatest()
+        }
+
+        // На откат к прежним (рабочим) данным self-heal не нужен — хук не срабатывает.
+        #expect(await counter.count == 0)
+    }
+
     @Test("Restore latest rolls back to previous data if import fails")
     func testRestoreLatestRollbackOnImportFailure() async {
         let mockCloudStore = MockCloudBackupStore()
@@ -659,6 +706,12 @@ struct BackupManagerTests {
 }
 
 // MARK: - Mocks
+
+/// Потокобезопасный счётчик вызовов `onDidReplaceStore` (хук пересекает actor-границу BackupManager).
+actor HookCounter {
+    private(set) var count = 0
+    func bump() { count += 1 }
+}
 
 final class MockCloudBackupStore: CloudBackupStoreProtocol {
     var isAvailableResult = false

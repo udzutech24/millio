@@ -1,0 +1,14 @@
+{
+  "planFile": "2026-07-12__legacy-migration-self-heal.md",
+  "title": "Self-heal легаси-миграции после restore",
+  "updated": "2026-07-12T21:00:00Z",
+  "phases": [
+    { "name": "Часть A — coarse-detection в миграторе + сброс флага/реестра", "status": "done", "note": "storeReplacedWithoutCore (fetchCount) + resetRegistryForCurrentStore; registry.removeAll" },
+    { "name": "Часть B — restore триггерит self-heal инлайн", "status": "done", "note": "onDidReplaceStore хук в BackupManager + проводка DIContainer" },
+    { "name": "Фикс #2 — триггер миграции в rebindDataScope (async scope-swap gap)", "status": "done", "note": "await runLegacyAccountsMigrationIfNeeded() после свопа diContainer; настоящий root cause с устройства" },
+    { "name": "Юнит-тесты (5 AC self-heal + 2 AC триггер-гэпа)", "status": "done", "note": "LegacyMigrationSelfHealTests + BackupManagerTests + LegacyMigrationScopeSwapTriggerTests" },
+    { "name": "Ручная проверка на устройстве владельца (тап иконки)", "status": "pending", "note": "Debug-билд собран и установлен на 70B4BF5E...; владелец тапает вручную" }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}
