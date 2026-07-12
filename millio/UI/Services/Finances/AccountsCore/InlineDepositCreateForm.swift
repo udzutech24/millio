@@ -40,7 +40,7 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
     }
 
     private func parseNumber(_ text: String) -> Double? {
-        Double(text.replacingOccurrences(of: ",", with: "."))
+        AmountInputFormatter.parse(text)
     }
 
     private func currentData() -> DepositFormData? {
@@ -98,9 +98,11 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
             FinancesSectionHeader(title: L("accounts_core.deposit_form.section.amount"))
             FinancesGlassCard(contentPadding: EdgeInsets(top: AppSpacing.s, leading: AppSpacing.m, bottom: AppSpacing.s, trailing: AppSpacing.m)) {
                 HStack {
-                    TextField(L("accounts_core.detail.sheet.amount_placeholder"), text: $amountText)
-                        .keyboardType(.decimalPad)
-                        .font(.millioBody)
+                    AmountTextField(
+                        placeholder: L("accounts_core.detail.sheet.amount_placeholder"),
+                        value: $amountText
+                    )
+                    .font(.millioBody)
                     Picker("", selection: $selectedCurrency) {
                         ForEach(["RUB", "USD", "EUR"], id: \.self) { code in
                             Text(code).tag(code)
@@ -117,9 +119,11 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
             FinancesSectionHeader(title: L("accounts_core.deposit_form.section.rate"))
             FinancesGlassCard(contentPadding: EdgeInsets(top: AppSpacing.s, leading: AppSpacing.m, bottom: AppSpacing.s, trailing: AppSpacing.m)) {
                 VStack(spacing: AppSpacing.s) {
-                    TextField(L("accounts_core.deposit_form.rate_placeholder"), text: $rateText)
-                        .keyboardType(.decimalPad)
-                        .font(.millioBody)
+                    AmountTextField(
+                        placeholder: L("accounts_core.deposit_form.rate_placeholder"),
+                        value: $rateText
+                    )
+                    .font(.millioBody)
                     Picker(L("accounts_core.deposit_form.capitalization_label"), selection: $capitalization) {
                         Text(L("accounts_core.deposit_form.capitalization.none")).tag(AccountDepositCapitalization.none)
                         Text(L("accounts_core.deposit_form.capitalization.monthly")).tag(AccountDepositCapitalization.monthly)
@@ -164,10 +168,12 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
                                 .font(.millioCalloutRegular)
                                 .foregroundStyle(AppColors.textSecondary)
                             Spacer()
-                            TextField("%", text: $earlyClosePenaltyPercentText)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 60)
+                            AmountTextField(
+                                placeholder: "%",
+                                value: $earlyClosePenaltyPercentText
+                            )
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 60)
                         }
                     }
                 }
