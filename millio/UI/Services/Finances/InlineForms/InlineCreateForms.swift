@@ -82,7 +82,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
 
     @State private var card: InlineCardDraft
     @State private var balanceText: String = ""
-    @State private var balanceDisplayText: String = ""
     @State private var creditLimitText: String = ""
     @State private var creditDebtText: String = ""
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
@@ -115,7 +114,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             balance: 0.0
         ))
         _balanceText = State(initialValue: "")
-        _balanceDisplayText = State(initialValue: "")
     }
     
     var currentCard: InlineCardDraft {
@@ -148,25 +146,29 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         }
         .onAppear {
             loadAvailableCurrencies()
-            if balanceDisplayText.isEmpty {
-                balanceDisplayText = AmountInputFormatter.display(balanceText)
-            }
         }
         .onChange(of: name) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.cardTypeRaw) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.currency) { _, _ in onCardDataChanged(currentCard) }
-        .onChange(of: balanceText) { _, _ in onCardDataChanged(currentCard) }
-        .onChange(of: balanceDisplayText) { _, newValue in
-            let sanitized = AmountInputFormatter.sanitize(newValue)
-            let formatted = AmountInputFormatter.display(sanitized)
-            if newValue != formatted {
-                balanceDisplayText = formatted
-            }
-            balanceText = sanitized
-            card.balance = AmountInputFormatter.parse(sanitized) ?? 0
+        .onChange(of: balanceText) { _, newValue in
+            // AmountTextField держит raw canonical в balanceText; card.balance пересчитываем
+            // здесь (раньше это делал set-closure поля). currentCard всё равно берёт из текста.
+            card.balance = AmountInputFormatter.parse(newValue) ?? 0
+            onCardDataChanged(currentCard)
         }
-        .onChange(of: creditLimitText) { _, _ in onCardDataChanged(currentCard) }
-        .onChange(of: creditDebtText) { _, _ in onCardDataChanged(currentCard) }
+        .onChange(of: creditLimitText) { _, newValue in
+            let limit = AmountInputFormatter.parse(newValue) ?? 0
+            let debt = AmountInputFormatter.parse(creditDebtText) ?? 0
+            card.creditLimit = newValue.isEmpty ? nil : limit
+            card.balance = max(0, limit - debt)
+            onCardDataChanged(currentCard)
+        }
+        .onChange(of: creditDebtText) { _, newValue in
+            let limit = AmountInputFormatter.parse(creditLimitText) ?? 0
+            let debt = AmountInputFormatter.parse(newValue) ?? 0
+            card.balance = max(0, limit - debt)
+            onCardDataChanged(currentCard)
+        }
         .onChange(of: card.priority) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.isFavorite) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.includeInTotal) { _, _ in onCardDataChanged(currentCard) }
@@ -327,18 +329,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
-                            TextField("0", text: Binding(
-                                get: { AmountInputFormatter.display(creditLimitText) },
-                                set: { newValue in
-                                    let sanitized = AmountInputFormatter.sanitize(newValue)
-                                    creditLimitText = sanitized
-                                    let limit = AmountInputFormatter.parse(creditLimitText) ?? 0
-                                    let debt = AmountInputFormatter.parse(creditDebtText) ?? 0
-                                    card.creditLimit = creditLimitText.isEmpty ? nil : limit
-                                    card.balance = max(0, limit - debt)
-                                }
-                            ))
-                                .keyboardType(.decimalPad)
+                            AmountTextField(placeholder: "0", value: $creditLimitText)
                                 .foregroundStyle(AppColors.textPrimary)
                                 .multilineTextAlignment(.trailing)
                                 .frame(width: 140)
@@ -353,17 +344,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
-                            TextField("0", text: Binding(
-                                get: { AmountInputFormatter.display(creditDebtText) },
-                                set: { newValue in
-                                    let sanitized = AmountInputFormatter.sanitize(newValue)
-                                    creditDebtText = sanitized
-                                    let limit = AmountInputFormatter.parse(creditLimitText) ?? 0
-                                    let debt = AmountInputFormatter.parse(creditDebtText) ?? 0
-                                    card.balance = max(0, limit - debt)
-                                }
-                            ))
-                                .keyboardType(.decimalPad)
+                            AmountTextField(placeholder: "0", value: $creditDebtText)
                                 .foregroundStyle(AppColors.textPrimary)
                                 .multilineTextAlignment(.trailing)
                                 .frame(width: 140)
@@ -390,8 +371,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
-                            TextField("0", text: $balanceDisplayText)
-                                .keyboardType(.decimalPad)
+                            AmountTextField(placeholder: "0", value: $balanceText)
                                 .foregroundStyle(AppColors.textPrimary)
                                 .multilineTextAlignment(.trailing)
                                 .frame(width: 140)
