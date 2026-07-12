@@ -1,0 +1,13 @@
+{
+  "planFile": "2026-07-12__legacy-migration-self-heal.md",
+  "title": "Self-heal легаси-миграции после restore",
+  "updated": "2026-07-12T00:00:00Z",
+  "phases": [
+    { "name": "Часть A — coarse-detection в миграторе + сброс флага/реестра", "status": "done", "note": "storeReplacedWithoutCore (fetchCount) + resetRegistryForCurrentStore; registry.removeAll" },
+    { "name": "Часть B — restore триггерит self-heal инлайн", "status": "done", "note": "onDidReplaceStore хук в BackupManager + проводка DIContainer" },
+    { "name": "Юнит-тесты (5 AC)", "status": "done", "note": "LegacyMigrationSelfHealTests + 2 хук-теста в BackupManagerTests" },
+    { "name": "Ручная проверка на устройстве владельца", "status": "pending", "note": "нужен билд на устройство" }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

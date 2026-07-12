@@ -70,7 +70,17 @@ final class DIContainer {
         if runtimeEnvironment.isAnyTesting {
             backupManager = disabledBackupManager
         } else {
-            let enabledBackupManager: BackupManagerProtocol = BackupManager(dataRepository: dataRepository)
+            // Self-heal после restore: если бэкап вернул до-AccountsCore-стор (легаси без ядра),
+            // прогоняем идемпотентную легаси→core миграцию сразу — без ожидания перезапуска.
+            // GroupsMigrator здесь НЕ вызываем: он гейтится собственным (безусловно выставляемым) флагом,
+            // после restore этот флаг stale → гарантированный no-op, а его поля групп (favorite/color/
+            // priority) косметические и не относятся к багу невидимых счетов.
+            let enabledBackupManager: BackupManagerProtocol = BackupManager(
+                dataRepository: dataRepository,
+                onDidReplaceStore: {
+                    LegacyAccountsMigrator(modelContext: modelContext).migrateIfNeeded(scopeIdentifier: scopeIdentifier)
+                }
+            )
             backupManager = SwitchingBackupManager(
                 appState: appState,
                 enabled: enabledBackupManager,

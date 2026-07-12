@@ -68,10 +68,23 @@ final class LegacyAccountsMigrator {
     /// Разовый per-scope прогон с UserDefaults-коротким замыканием. Флаг ставится только при отсутствии
     /// сбоев — иначе следующий старт дошагает недомигрированные счета (частичный прогон безопасен:
     /// каждый счёт скрывается атомарно, `registry` не задваивает).
+    ///
+    /// **Self-heal замены стора.** Флаг и реестр живут в UserDefaults, а данные — в SwiftData-сторе.
+    /// restore до-AccountsCore-бэкапа (или recovery-ребилд) возвращает легаси-скелет БЕЗ ядра, но
+    /// оба гейта переживают замену → без детекта миграция не перезапускается и счета невидимы навсегда
+    /// (progress/2026-07-11-migration-flag-restore-bug.md). Поэтому перед коротким замыканием —
+    /// дешёвый `storeReplacedWithoutCore()`; при срабатывании флаг И реестр текущего стора сбрасываются,
+    /// и идемпотентная миграция пересобирает ядро. См. plans/2026-07-12__legacy-migration-self-heal.md.
     @discardableResult
     func migrateIfNeeded(scopeIdentifier: String) -> Summary {
         let flagKey = Self.flagKeyPrefix + scopeIdentifier
-        guard !defaults.bool(forKey: flagKey) else { return Summary() }
+
+        if storeReplacedWithoutCore() {
+            defaults.removeObject(forKey: flagKey)
+            resetRegistryForCurrentStore()
+        } else if defaults.bool(forKey: flagKey) {
+            return Summary()
+        }
 
         let summary = migrateAll()
 
@@ -79,6 +92,33 @@ final class LegacyAccountsMigrator {
             defaults.set(true, forKey: flagKey)
         }
         return summary
+    }
+
+    // MARK: - Self-heal замены стора (restore до-AccountsCore-бэкапа / recovery-ребилд)
+
+    /// Дешёвый детект «стор заменён без ядра»: core `Account` пуст, но легаси-скелет
+    /// (`Card`/`Credit`/`Investment`) присутствует. На обычном холодном старте (ядро живое) стоит
+    /// РОВНО ОДИН `fetchCount(Account)` и метод выходит — лишнего full-fetch и подсчёта легаси нет.
+    /// Только `fetchCount` (не материализация объектов) — детект дёргается на каждый прогон миграции.
+    private func storeReplacedWithoutCore() -> Bool {
+        let coreCount = (try? modelContext.fetchCount(FetchDescriptor<Account>())) ?? 0
+        guard coreCount == 0 else { return false }
+
+        let cards = (try? modelContext.fetchCount(FetchDescriptor<Card>())) ?? 0
+        let credits = (try? modelContext.fetchCount(FetchDescriptor<Credit>())) ?? 0
+        let investments = (try? modelContext.fetchCount(FetchDescriptor<Investment>())) ?? 0
+        return cards + credits + investments > 0
+    }
+
+    /// Сбрасывает записи реестра для легаси-ID активных счетов ТЕКУЩЕГО стора — иначе гейт `:migrateOne`
+    /// (`guard !registry.isConverted`) продолжит пропускать те же ID (слепое пятно исходного диагноза,
+    /// найденное стресс-тестом): их core-двойников после замены стора нет. Точечно (только ID текущего
+    /// стора) — записи другого scope в общем словаре реестра не трогаем.
+    private func resetRegistryForCurrentStore() {
+        let legacyIDs = fetchActiveCards().map(\.cardUniqueID)
+            + fetchActiveCredits().map(\.creditUniqueID)
+            + fetchActiveInvestments().map(\.investmentUniqueID)
+        registry.removeAll(legacyUniqueIDs: legacyIDs)
     }
 
     /// Идемпотентно мигрирует все активные не-конвертированные легаси-счета (без флаг-гейта — для теста

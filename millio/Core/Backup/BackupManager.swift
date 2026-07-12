@@ -32,6 +32,13 @@ actor BackupManager: BackupManagerProtocol {
     private let usesSettingsEncryption: Bool
     private var backupTask: Task<Void, Never>?
 
+    /// Хук «стор заменён восстановлением»: вызывается один раз после УСПЕШНОГО импорта бэкапа в том же
+    /// сеансе. Нужен для self-heal легаси→core миграции — restore до-AccountsCore-бэкапа возвращает
+    /// легаси-скелет без ядра, и без немедленного прогона миграции счета невидимы до перезапуска
+    /// (RestoreView лишь ставит lifecycle=.ready и dismiss). Транспорт (этот actor) не знает о ядре —
+    /// реальный прогон живёт в app-слое (DIContainer). См. plans/2026-07-12__legacy-migration-self-heal.md.
+    private let onDidReplaceStore: (@MainActor () async -> Void)?
+
     private enum RestoreCandidateDecision {
         case ready(score: Int, reason: RestoreCandidateReason, detail: String?)
         case skip(reason: RestoreCandidateReason)
@@ -51,19 +58,25 @@ actor BackupManager: BackupManagerProtocol {
     init(
         cloudStore: CloudBackupStoreProtocol,
         dataRepository: DataRepositoryProtocol,
-        encryption: BackupEncryptionProtocol? = nil
+        encryption: BackupEncryptionProtocol? = nil,
+        onDidReplaceStore: (@MainActor () async -> Void)? = nil
     ) {
         self.cloudStore = cloudStore
         self.dataRepository = dataRepository
         self.staticEncryption = encryption
         self.usesSettingsEncryption = false
+        self.onDidReplaceStore = onDidReplaceStore
     }
-    
-    init(dataRepository: DataRepositoryProtocol) {
+
+    init(
+        dataRepository: DataRepositoryProtocol,
+        onDidReplaceStore: (@MainActor () async -> Void)? = nil
+    ) {
         self.cloudStore = CloudBackupStore()
         self.dataRepository = dataRepository
         self.staticEncryption = nil
         self.usesSettingsEncryption = true
+        self.onDidReplaceStore = onDidReplaceStore
     }
     
     func isAvailable() async -> Bool {
@@ -671,6 +684,10 @@ actor BackupManager: BackupManagerProtocol {
 
             throw error
         }
+
+        // Достигается только на успешном импорте (rollback-ветка выше перебрасывает ошибку). Self-heal
+        // легаси→core сразу, а не на следующий relaunch: restore мог вернуть стор без ядра.
+        await onDidReplaceStore?()
     }
     
     func lastBackupInfo() async -> BackupInfo? {
