@@ -21,10 +21,12 @@
 - Каждый под-шаг: build чистый + тесты без падений, отдельный коммит.
 - Особенность Investment: amountText пишется программно (positionTotal) — покрыто onChange(of:value) обёртки.
 
-## Фаза 4 — Cashflow (последним, рискованный) [ ] НЕ НАЧАТ
-- `CashflowTransactionEditorView.swift`: inline-паттерн → `AmountTextField` c font-closure (:614).
-- Сверить: курсор не прыгает, шрифт как раньше.
-- Gate: все Cashflow-related unit-тесты зелёные.
+## Фаза 4 — Cashflow (последним, рискованный) [x] РЕАЛИЗОВАН
+- amount-поле → `AmountTextField` с font-closure (Self.amountFontSize), убраны amountDisplayText/onChange/prefill.
+- helpers `sanitizedAmountText`/`formattedAmountDisplayText` оставлены (используются CashflowTransactionEditorViewLayoutTests).
+- Gate: build чистый, CashflowTransactionEditorViewLayoutTests + 76 тестов (bridge/budget/import/dedup/planner/upcoming/lifecycle) зелёные.
+- CashflowViewModelTests: 6 тестов recurring-catch-up падают И на baseline (d649c12, без моих правок) — подтверждено git stash — пре-существующий флак, не регрессия PR-2.
 
 ## Журнал
 - 2026-07-12: ветка создана, spec+plan заведены.
+- 2026-07-12: все 4 фазы реализованы. Ф1-3: 5 коммитов. Ф4: не закоммичена в этой сессии — см. итоговый отчёт.
