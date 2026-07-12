@@ -10,14 +10,16 @@
 - Unit-тест round-trip: пустая строка, ведущий ноль, только разделитель, дробь > maxFractionDigits.
 - Gate: build зелёный (только пред-существующие warnings) + AmountTextFieldTests 6/6 зелёные.
 
-## Фаза 2 — InlineDepositCreateForm [ ] НЕ НАЧАТ
-- amount (:101), rate (:120), penalty (:167) → `AmountTextField`.
-- `parseNumber` (:42-44) → `AmountInputFormatter.parse`.
-- Gate: build + FinanceAddAccountProductCounterTests, AllPresetsOnNewCoreTests, InlineCardDraftTests зелёные.
+## Фаза 2 — InlineDepositCreateForm [x] РЕАЛИЗОВАН
+- amount, rate, penalty → `AmountTextField`. `parseNumber` → `AmountInputFormatter.parse`.
+- Gate зелёный (build чистый, 3 тест-сьюта без падений).
 
-## Фаза 3 — InlineCreateForms (по одной форме) [ ] НЕ НАЧАТ
-- Мигрировать :152–166, затем :934–977, затем :1142–1152 — build+тест после каждой.
-- Проверять особенности формы (отрицательные суммы, иной separator) перед заменой.
+## Фаза 3 — InlineCreateForms (по одной форме) [x] РЕАЛИЗОВАН
+- 3a Card: balance/creditLimit/creditDebt — side-effect пересчёт перенесён в onChange(of:rawText).
+- 3b Credit: amount/remaining/monthlyPayment — убраны 3 DisplayText+handler.
+- 3c Investment: amount(программная запись через onChange value)/marketQuantity(maxFrac=12)/purchaseUnitPrice.
+- Каждый под-шаг: build чистый + тесты без падений, отдельный коммит.
+- Особенность Investment: amountText пишется программно (positionTotal) — покрыто onChange(of:value) обёртки.
 
 ## Фаза 4 — Cashflow (последним, рискованный) [ ] НЕ НАЧАТ
 - `CashflowTransactionEditorView.swift`: inline-паттерн → `AmountTextField` c font-closure (:614).

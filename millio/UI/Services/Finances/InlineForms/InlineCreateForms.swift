@@ -923,7 +923,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     @State private var selectedInvestmentType: InvestmentType = .positive
     @State private var amountText: String = ""
-    @State private var amountDisplayText: String = ""
     @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var includeInTotal: Bool = true
     @State private var selectedPriority: InvestmentPriority = .normal
@@ -939,7 +938,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @State private var marketMICCode: String?
     @State private var marketCurrency: String?
     @State private var marketQuantityText: String = ""
-    @State private var marketQuantityDisplayText: String = ""
     @State private var purchaseUnitPriceText: String = ""
     @State private var lastKnownUnitPrice: Double?
     @State private var lastKnownPriceUpdatedAt: Date?
@@ -1064,29 +1062,9 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         }
         .onAppear {
             loadAvailableCurrencies()
-            if amountDisplayText.isEmpty {
-                amountDisplayText = formatNumberForDisplay(amountText)
-            }
-            if marketQuantityDisplayText.isEmpty {
-                marketQuantityDisplayText = formatMarketQuantityForDisplay(marketQuantityText)
-            }
         }
         .onChange(of: name) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
-        .onChange(of: amountText) { _, newValue in
-            let formatted = formatNumberForDisplay(newValue)
-            if amountDisplayText != formatted {
-                amountDisplayText = formatted
-            }
-            onInvestmentDataChanged(getInvestmentData())
-        }
-        .onChange(of: amountDisplayText) { _, newValue in
-            let sanitized = AmountInputFormatter.sanitize(newValue)
-            let formatted = formatNumberForDisplay(sanitized)
-            if newValue != formatted {
-                amountDisplayText = formatted
-            }
-            amountText = sanitized
-        }
+        .onChange(of: amountText) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: selectedCurrency) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: selectedCategory) { oldValue, newValue in
             if !(newValue == .stocks || newValue == .crypto) {
@@ -1113,17 +1091,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                 amountText = String(total)
             }
             onInvestmentDataChanged(getInvestmentData())
-        }
-        .onChange(of: marketQuantityDisplayText) { _, newValue in
-            let sanitized = AmountInputFormatter.sanitize(
-                newValue,
-                maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
-            )
-            let formatted = formatMarketQuantityForDisplay(sanitized)
-            if newValue != formatted {
-                marketQuantityDisplayText = formatted
-            }
-            marketQuantityText = sanitized
         }
         .onChange(of: purchaseUnitPriceText) { _, _ in
             onInvestmentDataChanged(getInvestmentData())
@@ -1298,8 +1265,11 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        TextField("0", text: $marketQuantityDisplayText)
-                        .keyboardType(.decimalPad)
+                        AmountTextField(
+                            placeholder: "0",
+                            value: $marketQuantityText,
+                            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+                        )
                         .foregroundStyle(AppColors.textPrimary)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 160)
@@ -1343,13 +1313,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        TextField("0", text: Binding(
-                            get: { formatNumberForDisplay(purchaseUnitPriceText) },
-                            set: { newValue in
-                                purchaseUnitPriceText = AmountInputFormatter.sanitize(newValue)
-                            }
-                        ))
-                        .keyboardType(.decimalPad)
+                        AmountTextField(placeholder: "0", value: $purchaseUnitPriceText)
                         .foregroundStyle(AppColors.textPrimary)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 160)
@@ -1397,8 +1361,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        TextField("0", text: $amountDisplayText)
-                        .keyboardType(.decimalPad)
+                        AmountTextField(placeholder: "0", value: $amountText)
                         .foregroundStyle(AppColors.textPrimary)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 160)
@@ -1648,9 +1611,5 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     private func formatNumberForDisplay(_ text: String) -> String {
         AmountInputFormatter.display(text)
-    }
-
-    private func formatMarketQuantityForDisplay(_ text: String) -> String {
-        AmountInputFormatter.display(text, maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits)
     }
 }
