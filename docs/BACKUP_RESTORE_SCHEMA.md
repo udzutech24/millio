@@ -14,6 +14,12 @@
 - Source of truth в CloudKit: immutable snapshot records типа `AppBackup`.
 - `backup_index` больше не считается источником истины. Это best-effort cache, который можно потерять или пересобрать.
 - `latest_backup` сохраняется как legacy fallback и совместимость, но больше не является основной auto-backup точкой восстановления.
+- После успешного импорта restore обязан прогнать self-heal легаси→core миграции в том же сеансе
+  (`BackupManager.onDidReplaceStore` → `LegacyAccountsMigrator.migrateIfNeeded`). Причина: restore
+  до-AccountsCore-бэкапа возвращает легаси-скелет без ядра, а флаг/реестр миграции живут в UserDefaults
+  и переживают замену стора — без немедленного прогона счета невидимы до перезапуска. Миграция
+  идемпотентна; детект дешёвый (`fetchCount`, срабатывает только при пустом ядре + наличии легаси).
+  См. `plans/2026-07-12__legacy-migration-self-heal.md`.
 
 ---
 
