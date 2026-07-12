@@ -497,11 +497,8 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     let groupSection: GroupSection
     
     @State private var amountText: String = ""
-    @State private var amountDisplayText: String = ""
     @State private var remainingAmountText: String = ""
-    @State private var remainingAmountDisplayText: String = ""
     @State private var monthlyPaymentText: String = ""
-    @State private var monthlyPaymentDisplayText: String = ""
     @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var isFavorite: Bool = false
     @State private var paymentMode: CreditPaymentMode = .dayOfMonth
@@ -572,26 +569,11 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         }
         .onAppear {
             loadAvailableCurrencies()
-            if amountDisplayText.isEmpty {
-                amountDisplayText = formatNumberForDisplay(amountText)
-            }
-            if remainingAmountDisplayText.isEmpty {
-                remainingAmountDisplayText = formatNumberForDisplay(remainingAmountText)
-            }
-            if monthlyPaymentDisplayText.isEmpty {
-                monthlyPaymentDisplayText = formatNumberForDisplay(monthlyPaymentText)
-            }
         }
         .onChange(of: name) { _, _ in emitCreditDataChange() }
-        .onChange(of: amountDisplayText) { _, newValue in
-            handleAmountDisplayChange(newValue)
-        }
-        .onChange(of: remainingAmountDisplayText) { _, newValue in
-            handleRemainingAmountDisplayChange(newValue)
-        }
-        .onChange(of: monthlyPaymentDisplayText) { _, newValue in
-            handleMonthlyPaymentDisplayChange(newValue)
-        }
+        .onChange(of: amountText) { _, _ in emitCreditDataChange() }
+        .onChange(of: remainingAmountText) { _, _ in emitCreditDataChange() }
+        .onChange(of: monthlyPaymentText) { _, _ in emitCreditDataChange() }
         .onChange(of: selectedCurrency) { _, _ in emitCreditDataChange() }
         .onChange(of: isFavorite) { _, _ in emitCreditDataChange() }
         .onChange(of: paymentMode) { _, newMode in
@@ -675,8 +657,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        TextField("0", text: $amountDisplayText)
-                        .keyboardType(.decimalPad)
+                        AmountTextField(placeholder: "0", value: $amountText)
                         .foregroundStyle(AppColors.textPrimary)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 160)
@@ -691,8 +672,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        TextField("0", text: $remainingAmountDisplayText)
-                        .keyboardType(.decimalPad)
+                        AmountTextField(placeholder: "0", value: $remainingAmountText)
                         .foregroundStyle(AppColors.textPrimary)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 160)
@@ -742,8 +722,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        TextField("0", text: $monthlyPaymentDisplayText)
-                            .keyboardType(.decimalPad)
+                        AmountTextField(placeholder: "0", value: $monthlyPaymentText)
                             .foregroundStyle(AppColors.textPrimary)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 160)
@@ -921,40 +900,6 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
 
     private func emitCreditDataChange() {
         onCreditDataChanged(getCreditData())
-    }
-
-    private func handleAmountDisplayChange(_ newValue: String) {
-        let sanitized = AmountInputFormatter.sanitize(newValue)
-        let formatted = formatNumberForDisplay(sanitized)
-        if newValue != formatted {
-            amountDisplayText = formatted
-        }
-        amountText = sanitized
-        emitCreditDataChange()
-    }
-
-    private func handleRemainingAmountDisplayChange(_ newValue: String) {
-        let sanitized = AmountInputFormatter.sanitize(newValue)
-        let formatted = formatNumberForDisplay(sanitized)
-        if newValue != formatted {
-            remainingAmountDisplayText = formatted
-        }
-        remainingAmountText = sanitized
-        emitCreditDataChange()
-    }
-
-    private func handleMonthlyPaymentDisplayChange(_ newValue: String) {
-        let sanitized = AmountInputFormatter.sanitize(newValue)
-        let formatted = formatNumberForDisplay(sanitized)
-        if newValue != formatted {
-            monthlyPaymentDisplayText = formatted
-        }
-        monthlyPaymentText = sanitized
-        emitCreditDataChange()
-    }
-    
-    private func formatNumberForDisplay(_ text: String) -> String {
-        AmountInputFormatter.display(text)
     }
 
     private static func defaultReminderTime() -> Date {
