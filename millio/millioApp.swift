@@ -539,6 +539,17 @@ struct millioApp: App {
 
         if let backendRuntime, let binding {
             applyDependencyBinding(binding, backendRuntime: backendRuntime)
+
+            // Триггер легаси→core self-heal-миграции на КАЖДОМ свопе контейнера, а не только на
+            // cold-start-замыкании onScopeResolved (initializeColdStart:262). Async-своп на user через
+            // onSessionChanged → synchronizeDataScope(onScopeResolved: nil) РАНЬШЕ миграцию не переигрывал:
+            // cold-start резолвил guest (без легаси) и мигрировал его вхолостую, а user-стор со своими
+            // легаси-записями и пустым ядром активировался здесь позже и оставался немигрированным навсегда
+            // (progress/2026-07-11-migration-flag-restore-bug.md). Место — строго ПОСЛЕ applyDependencyBinding:
+            // миграция читает diContainer.modelContainer, который тот только что переключил на новый scope
+            // (до :541 ушло бы в старый контейнер). Повторный вызов в том же процессе (cold-start уже
+            // мигрировал этот scope) — дешёвый no-op: один fetchCount(Account) + флаг-short-circuit.
+            await runLegacyAccountsMigrationIfNeeded()
         }
 
         // Бамп ПОСЛЕ свопа контейнера и применения зависимостей: .id меняется →

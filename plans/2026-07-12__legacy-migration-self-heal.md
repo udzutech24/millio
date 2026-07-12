@@ -27,7 +27,32 @@ Millio сейчас, его личные финансовые данные (см
 Restore заменяет стор (легаси-таблицы возвращаются из старого бэкапа, core пуст), но НЕ трогает
 UserDefaults → оба гейта стоят → повторная миграция не выполняется → счета невидимы навсегда.
 
-## Фикс — 2 части
+## Root cause #2 — НАСТОЯЩИЙ (найден на устройстве, 5 раундов, 2026-07-12): триггер-гэп при async scope-swap
+
+Self-heal (Часть A/B ниже) был **необходим, но недостаточен**: он чинит логику миграции, но её надо
+ещё и **вызвать** для нужного scope. Оказалось — не вызывается.
+
+`runLegacyAccountsMigrationIfNeeded()` (`millioApp.swift:604`) исполнялся РОВНО ОДИН РАЗ — из
+cold-start-замыкания `onScopeResolved` (`initializeColdStart:262`), на scope, что резолвится СИНХРОННО
+на холодном старте. В реальном кейсе владельца это — `guest` (auth restore ещё не поднял user-сессию).
+Переключение на `user` scope происходит ПОЗЖЕ, отдельным АСИНХРОННЫМ путём: `onSessionChanged`
+(`:334-340`) → `synchronizeDataScope(with: user)` с `onScopeResolved: nil` (дефолт) → `rebindDataScope`
+свопает `activeModelContainer`/`diContainer` на user, но миграцию **НЕ переигрывает**.
+
+Итог (подтверждён логом устройства): user-стор (`millio_user_d977e6e…`) имеет `core.Account = 0` при
+`legacy.Card = 17, legacy.FinanceAccount = 63, legacy.Investment = 44` (124 немигрированные легаси-записи) —
+ровно тот случай, для которого self-heal и создавался (`storeReplacedWithoutCore`), но который для этого
+scope НИКОГДА не запускался. Исходный план (стр. «millioApp.swift — БЕЗ изменений») промахнулся: он
+проверял cold-start-вызов, не async-своп.
+
+**Фикс #2:** `await runLegacyAccountsMigrationIfNeeded()` добавлен в `rebindDataScope` СТРОГО ПОСЛЕ свопа
+`diContainer` (после `applyDependencyBinding`). `rebindDataScope` — единый choke-point активации
+контейнера (и cold-start, и async login/logout идут через него), поэтому миграция гарантированно
+запускается для КАЖДОГО scope, чей контейнер становится активным. Двойной вызов на cold-start (свор
+через rebindDataScope + повтор через `onScopeResolved:262`) безопасен: повторный прогон — дешёвый no-op
+(один `fetchCount(Account)` + флаг-short-circuit).
+
+## Фикс — 2 части (self-heal логики) + Фикс #2 (триггер)
 
 ### Часть A — coarse-detection в `LegacyAccountsMigrator`
 
@@ -59,8 +84,10 @@ coarse-detection + при срабатывании миграции, а не т�
    указывал условный путь).
 2. `millio/Core/AccountsCore/LegacyConversionRegistry.swift` — `removeAll(legacyUniqueIDs:)` (точечный
    сброс записей текущего стора; другие scope в общем словаре не трогаются).
-3. `millio/millioApp.swift:604` — БЕЗ изменений (сигнатура `migrateIfNeeded` не менялась, cold-start
-   вызов работает как есть; проверено).
+3. `millio/millioApp.swift` — **ИЗМЕНЁН** (правка исходного ошибочного вывода «БЕЗ изменений»).
+   Root cause #2: вызов `await runLegacyAccountsMigrationIfNeeded()` добавлен в `rebindDataScope`
+   ПОСЛЕ `applyDependencyBinding` (внутри `if let backendRuntime, let binding`) — миграция триггерится
+   на КАЖДОМ свопе контейнера, не только на cold-start-замыкании. Сигнатура `migrateIfNeeded` не менялась.
 4. `millio/Core/Backup/BackupManager.swift` — хук `onDidReplaceStore: (@MainActor () async -> Void)?`
    (оба init) + вызов `await onDidReplaceStore?()` после успешного импорта в
    `replaceRepositoryDataWithBackup` (rollback-ветка перебрасывает ошибку → хук не срабатывает).
@@ -98,6 +125,13 @@ coarse-detection + при срабатывании миграции, а не т�
       сама работа хука (миграция легаси-only стора) покрыта AC1. Вместе доказывают «restore → счета видны».
 - [x] Адверсариальный AC5: легаси-only стор считается «непустым» recovery-счётчиком →
       `legacyOnlyStore_countsAsNonEmpty` (разграничение self-heal vs restore-флоу зафиксировано).
+- [x] **Root cause #2** — Юнит-тест: cold-start резолвит guest (без легаси) → миграция guest вхолостую,
+      затем swap на user СО своими легаси (Card/FinanceAccount/Investment) и пустым ядром → после swap
+      ядро user заполнено (migrateAll отработал). → `LegacyMigrationScopeSwapTriggerTests.
+      coldStartGuestThenUserSwap_migratesUserCoreAfterSwap`.
+- [x] **Root cause #2** — Юнит-тест: повторный триггер на уже мигрированном scope (двойной вызов
+      cold-start) → флаг-short-circuit, лишней работы нет (только `fetchCount`). →
+      `redundantSecondTriggerOnSameScope_isCheapNoOp`.
 - [ ] Ручная проверка на устройстве владельца: повторить сценарий (или дождаться подтверждения, что
       текущее сломанное состояние устройства самолечится после установки фикса). PENDING — нужен билд
       на устройство (владелец).
@@ -117,3 +151,9 @@ coarse-detection + при срабатывании миграции, а не т�
     самолечение косметики групп — отдельная задача.
   - 5 AC покрыты юнит-тестами (`LegacyMigrationSelfHealTests` + 2 хук-теста в `BackupManagerTests`);
     остаётся device-проверка владельца (PENDING).
+- 2026-07-12 (раунд 5, device): найден **настоящий root cause #2** — триггер-гэп при async scope-swap
+  (см. секцию выше). Часть A/B чинили ЛОГИКУ миграции, но для user-scope миграция никогда не
+  ВЫЗЫВАЛАСЬ (cold-start-замыкание висело на синхронно-резолвнутом guest). Фикс: вызов миграции
+  добавлен в `rebindDataScope` после свопа `diContainer` (`millioApp.swift`). +2 юнит-теста
+  (`LegacyMigrationScopeSwapTriggerTests`). Debug-инструментация — в отдельной ветке
+  `debug/legacy-migration-instrumentation` (в feature-ветку не входит).
