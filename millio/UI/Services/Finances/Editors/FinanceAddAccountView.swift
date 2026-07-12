@@ -30,24 +30,7 @@ struct FinanceAddAccountView: View {
         self.presentationStyle = presentationStyle
     }
     
-    private enum AddAccountMode: String, CaseIterable, Identifiable {
-        case create
-        case archived
-        
-        var id: String { rawValue }
-        
-        var title: String {
-            switch self {
-            case .create:
-                L("finances.add_account.mode.create")
-            case .archived:
-                L("finances.add_account.mode.archived")
-            }
-        }
-    }
-    
     @State private var selectedAccountType: FinanceAccountType = .card
-    @State private var addAccountMode: AddAccountMode = .create
     @State private var selectedGroupID: String? = nil
     @State private var selectedInvestmentCategory: InvestmentCategory = .other
     @State private var selectedProductTypeTitle: String = FinanceAccountType.card.displayName
@@ -496,10 +479,6 @@ struct FinanceAddAccountView: View {
         }
     }
     
-    private var addAccountModeSection: some View {
-        EmptyView()
-    }
-
     @ViewBuilder
     private var createFormSections: some View {
         switch selectedAccountType {
@@ -551,7 +530,7 @@ struct FinanceAddAccountView: View {
 
     @ViewBuilder
     private var validationHintsSection: some View {
-        if addAccountMode == .create, !validationHints.isEmpty, !areHintsHidden {
+        if !validationHints.isEmpty, !areHintsHidden {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     FinancesSectionHeader(title: L("finances.add_account.section.hints"))
@@ -604,83 +583,6 @@ struct FinanceAddAccountView: View {
         }
     }
 
-    @ViewBuilder
-    private var archivedSelectionSections: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: L("finances.add_account.section.archived"))
-            FinancesGlassCard {
-                VStack(spacing: 0) {
-                    switch selectedAccountType {
-                    case .card:
-                        if viewModel.state.archivedCards.isEmpty {
-                            Text(L("finances.add_account.archived.cards.empty"))
-                                .font(.system(size: 14, weight: .regular))
-                                .foregroundStyle(AppColors.textTertiary)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.vertical, 16)
-                        } else {
-                            ForEach(viewModel.state.archivedCards) { card in
-                                FinancesSelectionRow(
-                                    title: card.name,
-                                    isSelected: selectedArchivedAccountID == card.cardUniqueID,
-                                    leadingIcon: nil,
-                                    onTap: { selectedArchivedAccountID = card.cardUniqueID }
-                                )
-                                if card.cardUniqueID != viewModel.state.archivedCards.last?.cardUniqueID {
-                                    FinancesRowDivider(leadingPadding: 16)
-                                }
-                            }
-                        }
-                        
-                    case .credit:
-                        if viewModel.state.archivedCredits.isEmpty {
-                            Text(L("finances.add_account.archived.credits.empty"))
-                                .font(.system(size: 14, weight: .regular))
-                                .foregroundStyle(AppColors.textTertiary)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.vertical, 16)
-                        } else {
-                            ForEach(viewModel.state.archivedCredits) { credit in
-                                FinancesSelectionRow(
-                                    title: credit.name,
-                                    isSelected: selectedArchivedAccountID == credit.creditUniqueID,
-                                    leadingIcon: nil,
-                                    onTap: { selectedArchivedAccountID = credit.creditUniqueID }
-                                )
-                                if credit.creditUniqueID != viewModel.state.archivedCredits.last?.creditUniqueID {
-                                    FinancesRowDivider(leadingPadding: 16)
-                                }
-                            }
-                        }
-                        
-                    case .investment:
-                        if viewModel.state.archivedInvestments.isEmpty {
-                            Text(L("finances.add_account.archived.investments.empty"))
-                                .font(.system(size: 14, weight: .regular))
-                                .foregroundStyle(AppColors.textTertiary)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.vertical, 16)
-                        } else {
-                            ForEach(viewModel.state.archivedInvestments) { investment in
-                                FinancesSelectionRow(
-                                    title: investment.name,
-                                    isSelected: selectedArchivedAccountID == investment.investmentUniqueID,
-                                    leadingIcon: nil,
-                                    onTap: { selectedArchivedAccountID = investment.investmentUniqueID }
-                                )
-                                if investment.investmentUniqueID != viewModel.state.archivedInvestments.last?.investmentUniqueID {
-                                    FinancesRowDivider(leadingPadding: 16)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        groupSection
-    }
-    
     private var scrollContent: some View {
         ScrollView {
             VStack(spacing: 18) {
@@ -690,7 +592,6 @@ struct FinanceAddAccountView: View {
                     if selectedAccountType != .card {
                         accountTypeSection
                     }
-                    addAccountModeSection
 
                     validationHintsSection
                     createFormSections
@@ -901,7 +802,7 @@ struct FinanceAddAccountView: View {
         case .credit:
             return creditData != nil
         case .investment:
-            if selectedInvestmentPreset == .deposit, addAccountMode == .create {
+            if selectedInvestmentPreset == .deposit {
                 return depositData != nil
             }
             return investmentData != nil
@@ -944,7 +845,6 @@ struct FinanceAddAccountView: View {
     }
 
     private var requiredHints: [ValidationHint] {
-        guard addAccountMode == .create else { return [] }
         var hints: [ValidationHint] = []
 
         if isTickerDrivenName {
@@ -963,7 +863,6 @@ struct FinanceAddAccountView: View {
     }
 
     private var recommendedHints: [ValidationHint] {
-        guard addAccountMode == .create else { return [] }
         var hints: [ValidationHint] = []
         if !hasEnteredPrimaryAmount {
             let amountHint: String
@@ -1012,7 +911,7 @@ struct FinanceAddAccountView: View {
     }
 
     private func focusNameFieldIfNeeded() {
-        guard hasConfirmedProductSelection, addAccountMode == .create, !isTickerDrivenName else {
+        guard hasConfirmedProductSelection, !isTickerDrivenName else {
             isNameFieldFocused = false
             return
         }
@@ -1028,7 +927,6 @@ struct FinanceAddAccountView: View {
     /// EDIT-путь легаси снесён (6b Ф5c.3), поэтому `isEditingLegacy: false`. Защитный гуард
     /// `isEditingLegacy` в мосте сохранён (гард-тест `AllPresetsOnNewCoreTests`, анамнез Фазы 6a).
     private var newCoreMoneyKindForCurrentSelection: AccountKind? {
-        guard addAccountMode == .create else { return nil }
         return AccountsCoreAdditionBridge.moneyKind(
             accountType: selectedAccountType,
             investmentPreset: selectedInvestmentPreset,
@@ -1040,7 +938,6 @@ struct FinanceAddAccountView: View {
     /// kind нового ядра для пресетов «Кредит»/«Долг» (Фаза 2) — `nil` для остальных пресетов
     /// и для режима редактирования (та же причина и фикс Фазы 6a, см. `newCoreMoneyKindForCurrentSelection`).
     private var newCoreObligationKindForCurrentSelection: AccountKind? {
-        guard addAccountMode == .create else { return nil }
         return AccountsCoreAdditionBridge.obligationKind(
             accountType: selectedAccountType,
             investmentCategory: selectedInvestmentCategory,
@@ -1051,7 +948,6 @@ struct FinanceAddAccountView: View {
     /// kind нового ядра для пресета «Вклад»/«Накопительный счёт» (Фаза 3) — `nil` для остальных
     /// пресетов и для режима редактирования (правка depositMeta — через `AccountDetailView`, не эту форму).
     private var newCoreDepositKindForCurrentSelection: AccountKind? {
-        guard addAccountMode == .create else { return nil }
         return AccountsCoreAdditionBridge.depositKind(
             accountType: selectedAccountType,
             investmentPreset: selectedInvestmentPreset,
@@ -1063,7 +959,6 @@ struct FinanceAddAccountView: View {
     /// (Фаза 4) — `nil` для остальных пресетов (карта/счёт/вклад/кредит/долг — уже обработаны выше)
     /// и для режима редактирования. «Долг» сюда НЕ попадает — обработан `newCoreObligationKindForCurrentSelection`.
     private var newCoreAssetKindForCurrentSelection: AccountKind? {
-        guard addAccountMode == .create else { return nil }
         let hasTicker = investmentData?.marketData?.symbol?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
         return AccountsCoreAdditionBridge.assetKind(
             accountType: selectedAccountType,
@@ -1325,22 +1220,20 @@ struct FinanceAddAccountView: View {
     }
 
     private func validateEntitlementsForSave() -> Bool {
-        if addAccountMode == .create {
-            let canAddProduct = EntitlementPolicy.canAddFinanceProduct(
-                isPro: appState.isPro,
-                currentProducts: currentFinanceProductCount
-            )
-            guard canAddProduct else {
-                paywallMessage = LocalizedTextResolver { locale in
-                    String(
-                        format: AppLocalization.string("monetization.finance.products.limit.hard_format", locale: locale),
-                        locale: locale,
-                        EntitlementPolicy.freeFinanceProductLimit
-                    )
-                }
-                showPaywallAlert = true
-                return false
+        let canAddProduct = EntitlementPolicy.canAddFinanceProduct(
+            isPro: appState.isPro,
+            currentProducts: currentFinanceProductCount
+        )
+        guard canAddProduct else {
+            paywallMessage = LocalizedTextResolver { locale in
+                String(
+                    format: AppLocalization.string("monetization.finance.products.limit.hard_format", locale: locale),
+                    locale: locale,
+                    EntitlementPolicy.freeFinanceProductLimit
+                )
             }
+            showPaywallAlert = true
+            return false
         }
 
         if selectedAccountType == .investment,
