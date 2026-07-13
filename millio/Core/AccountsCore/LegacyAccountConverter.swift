@@ -56,11 +56,6 @@ final class LegacyAccountConverter {
             manualAssetMeta: input.manualAssetMeta,
             date: date
         )
-        #if DEBUG
-        print("DYN convOpening legacyID=\(input.legacyUniqueID) coreID=\(account.id) " +
-              "kind=\(input.kind) name=\(input.name) " +
-              "openingBalance=\(input.openingBalance) snapshotDate=\(AccountEvent.dayKey(for: date))")
-        #endif
         registry.record(legacyUniqueID: input.legacyUniqueID, coreAccountID: account.id)
 
         do {

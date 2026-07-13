@@ -1108,15 +1108,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             // Сравнение на уровне dayKey (день), а не Date: archivedAt может иметь время внутри дня.
             // archivedAt легаси-предшественника лежит на конкретной модели (Card/Credit/Investment)
             // в кэшах, а не на FinanceAccount. Нет archivedAt (не архивирован) → окно не сужаем.
-            #if DEBUG
-            if let a = legacyPredecessorArchivedAt(for: legacyAccount) {
-                print("DYN cutoff acc=\(legacyAccount.accountType) id=\(legacyAccount.accountID) " +
-                      "date=\(AccountEvent.dayKey(for: date)) archived=\(AccountEvent.dayKey(for: a)) " +
-                      "skip=\(AccountEvent.dayKey(for: date) >= AccountEvent.dayKey(for: a))")
-            } else {
-                print("DYN cutoff acc=\(legacyAccount.accountType) id=\(legacyAccount.accountID) archivedAt=NIL")
-            }
-            #endif
             if let archivedAt = legacyPredecessorArchivedAt(for: legacyAccount),
                AccountEvent.dayKey(for: date) >= AccountEvent.dayKey(for: archivedAt) {
                 continue
@@ -2281,14 +2272,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 }
                 
                 var investmentBalance = investmentSign * baseAmount
-
-                #if DEBUG
-                print("DYN invBase id=\(investment.investmentUniqueID) type=\(investment.investmentType) " +
-                      "date=\(AccountEvent.dayKey(for: date)) baseAmount=\(baseAmount) " +
-                      "fullBalance=\(investment.amount) hasInitial=\(investment.hasInitialAmount) " +
-                      "signedBase=\(investmentBalance)")
-                #endif
-
+                
                 if date < investment.createdAt {
                     if includeInitialBeforeCreation {
                         accountBalance = investmentBalance
