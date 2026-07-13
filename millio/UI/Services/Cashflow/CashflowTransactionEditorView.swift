@@ -62,7 +62,6 @@ struct CashflowTransactionEditorView: View {
 
     @State private var selectedTransactionType: CashflowTransactionType
     @State private var amountText: String = ""
-    @State private var amountDisplayText: String = ""
     @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var transactionDate: Date = Date()
     @State private var selectedCardID: String? = nil
@@ -326,9 +325,6 @@ struct CashflowTransactionEditorView: View {
                 selectedExpenseCategoryRaw = preselectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue
             }
             validateAvailableBalance()
-            if amountDisplayText.isEmpty {
-                amountDisplayText = Self.formattedAmountDisplayText(from: amountText)
-            }
             refreshTransferRateSuggestion()
             DispatchQueue.main.async {
                 isAmountFieldFocused = true
@@ -357,16 +353,6 @@ struct CashflowTransactionEditorView: View {
         }
         .onChange(of: amountText) { _, _ in
             validateAvailableBalance()
-        }
-        .onChange(of: amountDisplayText) { _, newValue in
-            let sanitized = Self.sanitizedAmountText(from: newValue)
-            let formatted = Self.formattedAmountDisplayText(from: sanitized)
-            if newValue != formatted {
-                amountDisplayText = formatted
-            }
-            if amountText != sanitized {
-                amountText = sanitized
-            }
         }
         .onChange(of: transactionDate) { _, _ in
             validateAvailableBalance()
@@ -604,17 +590,13 @@ struct CashflowTransactionEditorView: View {
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        TextField("0", text: Binding(
-                            get: { amountDisplayText },
-                            set: { amountDisplayText = $0 }
-                        ))
-                        .keyboardType(.decimalPad)
+                        AmountTextField(
+                            placeholder: "0",
+                            value: $amountText,
+                            maxFractionDigits: Self.amountMaxFractionDigits,
+                            font: { Font.system(size: Self.amountFontSize(for: $0), weight: .bold, design: .rounded) }
+                        )
                         .multilineTextAlignment(.trailing)
-                        .font(.system(
-                            size: Self.amountFontSize(for: amountDisplayText),
-                            weight: .bold,
-                            design: .rounded
-                        ))
                         .lineLimit(1)
                         .minimumScaleFactor(Self.amountMinimumScaleFactor)
                         .foregroundStyle(AppColors.textPrimary)
