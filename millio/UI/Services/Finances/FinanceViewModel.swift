@@ -1213,7 +1213,8 @@ final class FinanceViewModel: ViewModelProtocol {
     /// Есть ли хоть один архивный счёт нового ядра — дешёвая проверка для показа пункта «Архив»
     /// в настройках (Фаза 5, задача 2 брифинга), без загрузки самих объектов.
     func hasArchivedNewCoreAccounts() -> Bool {
-        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.archivedAt != nil })
+        // Мягко удалённые (deletedAt) — не архивные: пункт «Архив» не должен светиться только из-за них.
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.archivedAt != nil && $0.deletedAt == nil })
         return ((try? modelContext.fetchCount(descriptor)) ?? 0) > 0
     }
 
@@ -1564,11 +1565,12 @@ final class FinanceViewModel: ViewModelProtocol {
         calculateTotalAmount()
     }
 
-    /// Физическое удаление core-счёта. Необратимо (`AccountsCoreService.physicallyDelete`).
+    /// Удаление core-счёта из архива (Ф5/Q1: мягкое, `softDelete` — история графика сохраняется,
+    /// счёт лишь помечается tombstone и уходит из всех списков).
     private func deleteAccountPermanently(_ account: Account) {
         let service = AccountsCoreService(modelContext: modelContext)
         do {
-            try service.physicallyDelete(account)
+            try service.softDelete(account)
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to delete account: \(error.localizedDescription)")
             return

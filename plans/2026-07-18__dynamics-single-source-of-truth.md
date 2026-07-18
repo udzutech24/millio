@@ -89,12 +89,29 @@ keyboard, stale «Без группы». НЕ трогает cascade, не ко�
 - **Решение владельца (Q3):** тест включает archived-счета в базу и историю (архивация не меняет прошлое).
 - Регрессионный тест (Q1): удаление счёта (soft-delete) не смещает исторические точки чужих счетов.
 
-### Фаза 5 — Семантика удаления истории (soft-delete/tombstone для AccountDailySnapshot)
+### Фаза 5 — Семантика удаления истории (soft-delete/tombstone) — [x] РЕАЛИЗОВАН
 **Решение владельца (Q1)**: История сохраняется через soft-delete/tombstone.
-- Добавить `deletedAt: Date?` к `AccountDailySnapshot` (или аналог tombstone-флага).
-- Миграция: перейти с cascade на soft-delete.
-- Логика: `participates(on:)` учитывает tombstone'ы при расчёте базы исторических дат.
-- Тест регрессии: удаление счёта не смещает исторические точки пережившего счёта.
+**Выбранный механизм (отклонение от буквы плана, ponytail):** tombstone на РОДИТЕЛЕ `Account.deletedAt: Date?`,
+а НЕ на `AccountDailySnapshot`. Причина: переиспользует уже протестированный `participates(on:)`
+(та же жёсткая отсечка, что `archivedAt`) как единый чок-поинт → главные списки/тоталы фильтруют
+автоматически; сохраняет currency/meta/events/snapshots для корректного исторического реплея и
+конвертации по курсу даты; каскад `.cascade` на snapshots НЕ трогаем (нет orphan'ов, нет дубляжа
+currency на снапшот, per-account группировка цела). Вариант «tombstone на снапшоте + nullify»
+отклонён: терял бы currency/meta и требовал нового пути суммирования orphan'ов + не выражал «вклад
+после удаления = 0» без ещё одного поля.
+- `Account.deletedAt: Date?` + `participates(on:)` = `date < min(archivedAt, deletedAt)`.
+- `AccountsCoreService.softDelete(_:on:)` (tombstone) для юзерского удаления; `physicallyDelete` (hard
+  cascade) ОСТАВЛЕН для дедуп-двойников `LegacyAccountConverter` (истории для сохранения нет).
+- UI-репойнт: `ArchivedAccountsView` + `FinanceViewModel.deleteAccountPermanently` → `softDelete`;
+  списки архива (`ArchivedAccountsView`, `hasArchivedNewCoreAccounts`) фильтруют `deletedAt == nil`.
+- Round-trip `deletedAt`: `Account.export`/`AccountImporter` (backup) + reconciliation DTO
+  (`ScopeMergeReader`/`Dedup`/`Snapshot`) — иначе tombstone воскресал бы при guest→user merge.
+- **Миграция:** БЕЗ бампа версии схемы. Новая версия для optional-атрибута НЕВОЗМОЖНА (V6.models
+  ссылался бы на тот же тип Account → идентичная схема V5==V6 → краш ModelContainer до bootstrap,
+  проверено на прогоне). Optional-поле = каноничная АВТО-lightweight-миграция SwiftData (nil у старых
+  строк), Находка-2 (про таблицу, не колонку) не наступает, CloudKit-совместимо (как archivedAt).
+- Тесты: `AccountSoftDeleteTests` (7): participates-отсечка, прошлое неизменно, вклад после = 0,
+  today/архив-список исключают, backup round-trip. Гейт 9 классов **82/82 ×2 зелёные**.
 
 ### Фаза 6 — Интеграция, review, security, cleanup
 - Гейты по всему проекту; `@code-reviewer`; `/security-review`; архив плана в `plans/archive/`.

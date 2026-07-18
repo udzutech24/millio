@@ -171,7 +171,7 @@ enum ScopeMergeReader {
         let accounts = try context.fetch(FetchDescriptor<Account>()).map { account in
             AccountDTO(
                 id: account.id, name: account.name, kindRaw: account.kindRaw, currency: account.currency,
-                createdAt: account.createdAt, archivedAt: account.archivedAt,
+                createdAt: account.createdAt, archivedAt: account.archivedAt, deletedAt: account.deletedAt,
                 includeInTotal: account.includeInTotal, note: account.note, order: account.order,
                 groupID: account.group?.id,
                 cardMeta: account.cardMeta, depositMeta: account.depositMeta, loanMeta: account.loanMeta,

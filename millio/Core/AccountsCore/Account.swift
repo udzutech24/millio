@@ -16,6 +16,11 @@ final class Account: Persistable {
     var createdAt: Date = Date()
     /// Дата закрытия/архивации. nil = активный счёт. Двухступенчатая семантика — см. спеку §«Архив».
     var archivedAt: Date?
+    /// Дата мягкого удаления (tombstone, Ф5/Q1). nil = не удалён. Счёт с `deletedAt` исчезает из ВСЕХ
+    /// UI-списков, но его события/снапшоты сохраняются — история графика до этой даты неизменна
+    /// (в отличие от каскадного `.cascade`-сноса, который переписывал прошлое). В тоталах ведёт себя
+    /// как жёсткая отсечка наравне с `archivedAt` (см. `participates(on:)`).
+    var deletedAt: Date?
     var includeInTotal: Bool = true
     var note: String?
     var order: Int = 0
@@ -59,11 +64,14 @@ final class Account: Persistable {
         self.order = order
     }
 
-    /// Единый предикат участия в тоталах на дату (time-aware архив, AC6/AC7).
+    /// Единый предикат участия в тоталах на дату (time-aware архив/удаление, AC6/AC7/Ф5).
+    /// `archivedAt` и `deletedAt` — обе жёсткие отсечки: до наступившей даты счёт участвует, начиная
+    /// с неё — нет. Берём САМУЮ РАННЮЮ из заданных (архивация и удаление могут стоять на разных датах;
+    /// в текущем UI удаление доступно только для уже архивных, т.е. обычно archivedAt ≤ deletedAt).
     func participates(on date: Date) -> Bool {
         guard includeInTotal else { return false }
-        guard let archivedAt else { return true }
-        return date < archivedAt
+        guard let cutoff = [archivedAt, deletedAt].compactMap({ $0 }).min() else { return true }
+        return date < cutoff
     }
 
     // MARK: - Backup export/import (полный CloudKit backup, спека §0.4 — НЕ путь reconciliation)
@@ -80,6 +88,7 @@ final class Account: Persistable {
             "order": order
         ]
         if let archivedAt { dict["archivedAt"] = archivedAt.timeIntervalSince1970 }
+        if let deletedAt { dict["deletedAt"] = deletedAt.timeIntervalSince1970 }
         if let note { dict["note"] = note }
         if let groupID = group?.id { dict["groupID"] = groupID.uuidString }
         if let cardMeta { dict["cardMeta"] = cardMeta.exportDict() }

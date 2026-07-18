@@ -28,6 +28,7 @@ struct AccountDTO: Sendable {
     let currency: String
     let createdAt: Date
     let archivedAt: Date?
+    let deletedAt: Date?
     let includeInTotal: Bool
     let note: String?
     let order: Int

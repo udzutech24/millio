@@ -130,6 +130,7 @@ enum ScopeMergeDedup {
                                   currency: dto.currency, createdAt: dto.createdAt,
                                   includeInTotal: dto.includeInTotal, order: dto.order)
             account.archivedAt = dto.archivedAt
+            account.deletedAt = dto.deletedAt
             account.note = dto.note
             account.cardMeta = dto.cardMeta
             account.depositMeta = dto.depositMeta
