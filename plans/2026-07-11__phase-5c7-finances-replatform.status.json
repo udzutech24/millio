@@ -1,7 +1,7 @@
 {
   "planFile": "2026-07-11__phase-5c7-finances-replatform.md",
   "title": "Ф5c.7 — реплатформинг Finances на AccountsCore (+ Ф6)",
-  "updated": "2026-07-11T18:45:00Z",
+  "updated": "2026-07-18T14:20:00+03:00",
   "phases": [
     {
       "name": "Ф0 — Fable ревью+стресс-тест плана",
@@ -39,9 +39,14 @@
       "note": "РЕАЛИЗОВАНА 2026-07-11 (локально, НЕ запушено). Гейт 1 01e9da8: AccountGroup.customIconName (additive, без V6) + backup-сериализация в обе стороны + 2 roundtrip-теста с мутационной проверкой (воспроизведена независимо верификатором); пикер в редакторе группы (переиспользован AccountIconPickerSheet), рендер на 3 экранах, при nil — прежняя вычисляемая иконка. Гейт 2 c6726f9: stacked-полоса активы/обязательства с нетто (единый источник FinanceTotalsService), секции Активы/Обязательства с подытогами (FinanceAccountsSectionSplitter, классификация по знаку NET-тотала в валюте шапки), чип «≈ N $» в шапке, подстрока «≈ в ₽» у валютных групп (YAGNI-отложение опровергнуто верификатором — значение уже было в state), снесён dead-code CompactCardMetrics/compactLedgerOverview. Тесты: 103/103, protected Dynamics-кластер 0 новых красных (ID-сеты), mixed-store characterization фиксирует документированное расхождение подытоги/шапка на легаси-хвосте (инвариант 9 §2.1, до ручной очистки владельцем). Fable CONFIRMED на обоих гейтах (Гейт 2 — дважды). PENDING: визуальный review + device stress-test на реальном бэкапе владельца. Среда: чистка диска (1.6 ГБ → 116 ГБ, симуляторы сведены к 26.5) — первая сборка 5c.7.7 дольше из-за холодного DerivedData. Визуальный review пройден владельцем 2026-07-11 (симулятор); device stress-test на реальном бэкапе — при случае. Побочно найден баг миграционного флага (progress/2026-07-11-migration-flag-restore-bug.md) — отдельная задача."
     },
     {
-      "name": "5c.7.7 — Финальный regression-гейт под-проекта",
+      "name": "5c.7.7 — Финальный regression-гейт под-проекта (пункты 1–3)",
+      "status": "done",
+      "note": "Автономный прогон 2026-07-18 на develop (worktree, изолир. DerivedData). П.1 xcresulttool: 1887 passed / 14 failed vs baseline 1745/14 → 0 новых красных (passed +142 = новые тесты 5c.7 зелёные; все 14 сверены пофамильно с задокументированным baseline/flaky — recurring/scheduled-кластер, reminders, l10n zh-Hans, archive-policy, settings-structure, LanguageManager-race «Share timestamp», self-документированный перф-флейк totalAtIsFast порог 2с; ноль падений в тест-файлах реплатформинга). П.2 grep: первичный путь на core (state.groups:[AccountGroup] FVM:32, state.accounts:[Account] FVM:73, coreAccountsForDynamics()->[Account] FDVM:1117); легаси-@Model сокращены до 3 не-первичных классов — fallback непроконвертированных (fallbackAccountsForCalculation/resolvedCard/Credit/Investment/cardsCache), materialization-мост FinanceAccountService целиком, purge-хелперы; FinanceGroupService держит FinanceGroup только как fallback-синхронизацию по имени (invariant 9). П.3 родитель 2026-07-07__legacy-accounts-purge-path-b.md — (c)-Finances-кластер переклассифицирован: Finances-доминанта пред-гейта устранена, блокер 5c.11 снят ЧАСТИЧНО (5c.8/5c.9/5c.10 + fallback/bridge/purge-хвосты остаются по плану, не регрессия)."
+    },
+    {
+      "name": "5c.7.7 — Device stress-test + «да» владельца (пункт 4)",
       "status": "pending",
-      "note": "РАЗБЛОКИРОВАН (5c.7.6 done) — не начат: полный millioTests (xcresulttool, ID-сеты vs baseline), grep-подтверждение сокращения легаси-ссылок, переклассификация (c)-кластера в пред-гейт-грепе плана-родителя, device stress-test + явное «да» владельца перед push/мержем."
+      "note": "PENDING — владелец недоступен в автономном прогоне. Нужен реальный бэкап владельца + явное «да» перед push/мержем в develop."
     }
   ],
   "costUsd": null,
