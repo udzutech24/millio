@@ -288,7 +288,6 @@ final class CreditViewModel: ViewModelProtocol {
             let activeCredits = credits.filter { $0.archivedAt == nil }
             // Обновляем остатки долга только для незакрытых кредитов
             for credit in activeCredits {
-                credit.includeInTotal = true
                 // Не пересчитываем остаток для закрытых кредитов (где остаток был установлен вручную = 0)
                 if !credit.isClosed {
                     credit.updateRemainingAmount()
@@ -433,7 +432,6 @@ final class CreditViewModel: ViewModelProtocol {
         includeInTotal: Bool,
         uniqueID: String?
     ) {
-        _ = includeInTotal
         // Вычисляем startDate и termMonths для внутреннего использования
         // Устанавливаем startDate примерно за год до endDate (или используем существующую дату)
         let calendar = Calendar.current
@@ -465,7 +463,7 @@ final class CreditViewModel: ViewModelProtocol {
             existing.bank = bank
             existing.creditType = creditType
             existing.isFavorite = isFavorite
-            existing.includeInTotal = true
+            existing.includeInTotal = includeInTotal
             existing.applyPaymentSchedule(
                 mode: paymentMode,
                 dayOfMonth: paymentDayOfMonth,
@@ -513,7 +511,7 @@ final class CreditViewModel: ViewModelProtocol {
                 currency: currency,
                 bank: bank,
                 creditType: creditType,
-                includeInTotal: true
+                includeInTotal: includeInTotal
         )
             if let uniqueID, !uniqueID.isEmpty {
                 newCredit.uniqueID = uniqueID

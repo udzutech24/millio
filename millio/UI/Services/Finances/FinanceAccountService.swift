@@ -112,7 +112,6 @@ final class FinanceAccountService {
         let allCredits = (try? modelContext.fetch(creditDescriptor)) ?? []
         let availableCredits = allCredits.filter { $0.archivedAt == nil }
         let archivedCredits = allCredits.filter { $0.archivedAt != nil }
-        normalizeCreditsIncludeInTotal(availableCredits + archivedCredits)
 
         let investmentDescriptor = FetchDescriptor<Investment>()
         let allInvestments = (try? modelContext.fetch(investmentDescriptor)) ?? []
@@ -151,22 +150,6 @@ final class FinanceAccountService {
     }
 
     // MARK: - Normalize
-
-    private func normalizeCreditsIncludeInTotal(_ credits: [Credit]) {
-        var requiresSave = false
-        for credit in credits where !credit.includeInTotal {
-            credit.includeInTotal = true
-            credit.updatedAt = Date()
-            requiresSave = true
-        }
-        if requiresSave {
-            do {
-                try modelContext.save()
-            } catch {
-                AppLogger.log(.error, category: "Finance", "Failed to normalize credits includeInTotal: \(error.localizedDescription)")
-            }
-        }
-    }
 
     private func normalizeMarketAssetIdentities(_ investments: [Investment]) {
         var requiresSave = false

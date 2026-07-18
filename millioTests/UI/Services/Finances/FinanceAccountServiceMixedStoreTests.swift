@@ -113,6 +113,38 @@ struct FinanceAccountServiceMixedStoreTests {
         #expect(junctions.contains { $0.accountID == legacyCard.cardUniqueID && $0.group?.groupUniqueID == group.groupUniqueID })
     }
 
+    // MARK: - Регрессия Ф7: тоггл includeInTotal кредита переживает загрузку
+
+    /// Ф7-регрессия: `loadAccounts()` больше НЕ форсит `Credit.includeInTotal = true`
+    /// (снесён `normalizeCreditsIncludeInTotal`). Раньше пользовательский тоггл «не учитывать
+    /// кредит в тотале» молча возвращался в true на каждой загрузке финансов.
+    @Test("Ф7: includeInTotal=false у кредита переживает loadAccounts (normalize снесён)")
+    func creditIncludeInTotalFalseSurvivesLoad() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+
+        let credit = Credit(
+            name: "Кредит вне тотала",
+            amount: 100_000,
+            interestRate: 0,
+            monthlyPayment: 5_000,
+            startDate: Date(),
+            termMonths: 12,
+            currency: "RUB",
+            includeInTotal: false
+        )
+        ctx.insert(credit)
+        try ctx.save()
+        let creditID = credit.creditUniqueID
+
+        let service = makeService(ctx)
+        service.loadAccounts()
+
+        let reloaded = try ctx.fetch(FetchDescriptor<Credit>())
+            .first { $0.creditUniqueID == creditID }
+        #expect(reloaded?.includeInTotal == false)
+    }
+
     @Test("Смешанный стор: физическое удаление легаси-записи не задевает core-двойник")
     func mixedStorePhysicalDeleteLeavesCoreUntouched() throws {
         let (container, ctx) = try makeContext()
