@@ -18,7 +18,7 @@ struct ArchivedAccountsView: View {
     private var archivedAccounts: [Account] {
         _ = refreshToken
         let descriptor = FetchDescriptor<Account>(
-            predicate: #Predicate<Account> { $0.archivedAt != nil }
+            predicate: #Predicate<Account> { $0.archivedAt != nil && $0.deletedAt == nil }
         )
         let accounts = (try? modelContext.fetch(descriptor)) ?? []
         return accounts.sorted { ($0.archivedAt ?? .distantPast) > ($1.archivedAt ?? .distantPast) }
@@ -145,9 +145,10 @@ struct ArchivedAccountsView: View {
         guard let account = pendingPhysicalDeletion else { return }
         pendingPhysicalDeletion = nil
         do {
-            try service.physicallyDelete(account)
-            // Без события `state.coreAccounts` держит ссылку на физически удалённый @Model —
-            // риск краша в `FinanceRows`/`NewCoreAccountRow` при следующем рендере (Fable-находка).
+            // Мягкое удаление (Ф5/Q1): история графика сохраняется, счёт лишь помечается tombstone
+            // и уходит из списка архива (предикат `deletedAt == nil` ниже). Событие всё равно нужно —
+            // `state.coreAccounts` мог держать ссылку на этот @Model, обновляем снапшот VM.
+            try service.softDelete(account)
             EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             refreshToken = UUID()
         } catch {

@@ -1,0 +1,38 @@
+{
+  "_generated": true,
+  "planFile": "2026-07-05__account-detail-per-type.md",
+  "title": "Plan: Экран деталей счёта под каждый тип продукта",
+  "updated": "2026-07-08T03:19:22.422Z",
+  "phases": [
+    {
+      "name": "Phase 1: Общий каркас + переключение по kind",
+      "status": "pending"
+    },
+    {
+      "name": "Phase 2: Движок A — Карта / Наличные / Счёт",
+      "status": "pending"
+    },
+    {
+      "name": "Phase 3: Движок B — Вклад",
+      "status": "pending"
+    },
+    {
+      "name": "Phase 4: Движки C+D — Кредит + Долг",
+      "status": "pending"
+    },
+    {
+      "name": "Phase 5: Движок E — Инвестиция / Акции / Крипта",
+      "status": "pending"
+    },
+    {
+      "name": "Phase 6: Движок F — Недвижимость / Бизнес / Другое",
+      "status": "pending"
+    },
+    {
+      "name": "Phase 7: Новые поля модели (⚠️ после стабилизации V5)",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

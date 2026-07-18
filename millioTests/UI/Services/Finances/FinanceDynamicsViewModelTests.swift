@@ -567,7 +567,7 @@ struct FinanceDynamicsViewModelTests {
         #expect(dynamicsViewModel.state.dynamicsBreakdown.contains { $0.name == ungroupedName })
     }
 
-    @Test("Aggregated chart хранит archived history, а header и breakdown остаются visible-only")
+    @Test("Aggregated chart и header делят единый исторический скоуп (Ф4); breakdown-список остаётся per-account visible-only")
     func testAggregatedChartUsesHistoricalAccountsWhileHeaderAndBreakdownStayVisible() async throws {
         let modelContext = try createTestModelContext()
         let now = Date()
@@ -666,9 +666,9 @@ struct FinanceDynamicsViewModelTests {
 
         let breakdownStart = breakdown.reduce(0) { $0 + $1.startValue }
         let breakdownEnd = breakdown.reduce(0) { $0 + $1.endValue }
-        let expectedDelta = breakdownEnd - breakdownStart
 
-        // Архивация убирает счёт из live header, но не должна переписывать chart history.
+        // Архивация убирает счёт из breakdown-списка (per-account visible-only), но не переписывает
+        // chart history. Правый край баланса при этом падает на сумму архивированного счёта.
         #expect(!beforeArchivePoints.isEmpty, "до архивации должны быть точки на графике")
         #expect(beforeArchiveBalance - dynamicsViewModel.state.currentBalance > 1_000_000,
                 "После архивации баланс должен уменьшиться на сумму архивированного счёта (~10M)")
@@ -682,9 +682,16 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs((chartPoints.last?.value ?? 0) - breakdownEnd) < 0.01,
                 "Финиш графика после archivedAt должен совпадать с visible-only endValue")
         #expect(abs(dynamicsViewModel.state.currentBalance - breakdownEnd) < 0.01,
-                "Header currentBalance должен совпадать с нижним endValue")
-        #expect(abs(dynamicsViewModel.state.periodDelta.absolute - expectedDelta) < 0.01,
-                "Header delta должен совпадать с нижней дельтой")
+                "Header currentBalance должен совпадать с нижним endValue (правый край, archived=0 после archivedAt)")
+
+        // Ф4 (dynamics-single-source-of-truth, Q3/AC4): заголовок и карточка считаются на ТОМ ЖЕ
+        // историческом скоупе, что и серия графика — архивный счёт входит в базу периода (был живым
+        // на старте недели) и «уходит» при архивации. Поэтому header.delta == (последняя−первая точка
+        // серии), а НЕ visible-only breakdown-дельта: единый источник числа заголовок/карточка/график.
+        // Раньше этот тест кодировал обратное (header остаётся visible-only) — премиса снята Ф4.
+        let chartDelta = (chartPoints.last?.value ?? 0) - afterArchiveStart
+        #expect(abs(dynamicsViewModel.state.periodDelta.absolute - chartDelta) < 0.01,
+                "Header delta должен совпадать с дельтой серии (единый исторический скоуп, Ф4)")
     }
 
     @Test("Динамика для акций показывает короткий тикер вместо длинного имени")
@@ -1441,7 +1448,7 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs((points.first?.value ?? -1) - 0) < 0.01)
     }
 
-    @Test("Эффективный старт периода клипуется к дате создания нового счета")
+    @Test("Q2: старт периода НЕ клэмпится к дате создания счёта (держит запрошенную ширину)")
     func testResolvedPeriodDatesClampStartToAccountCreation() throws {
         let modelContext = try createTestModelContext()
         let calendar = Calendar.current
@@ -1484,11 +1491,13 @@ struct FinanceDynamicsViewModelTests {
             basePeriod: (requestedStart, now)
         )
 
-        #expect(period.start == createdAt)
+        // Q2 (dynamics-single-source-of-truth): клэмп базы к дате создания снят — период держит
+        // запрошенную ширину, счёт до своего createdAt считается нулём.
+        #expect(period.start == requestedStart)
         #expect(period.end == now)
     }
 
-    @Test("Годовой период динамики клипуется к первой дате реальных данных")
+    @Test("Q2: годовой период держит запрошенную ширину, база до создания счёта = 0")
     func testYearPeriodUsesFirstRealDataDateForChartState() async throws {
         let modelContext = try createTestModelContext()
         let calendar = Calendar.current
@@ -1542,8 +1551,13 @@ struct FinanceDynamicsViewModelTests {
             dynamicsViewModel.state.chartData.isEmpty == false
         }
 
-        #expect(dynamicsViewModel.state.periodStartDate >= createdAt)
-        #expect((dynamicsViewModel.state.chartData.first?.date ?? .distantPast) >= createdAt)
+        // Q2: клэмп снят — старт периода раньше даты создания счёта (год держит ширину), а первая
+        // точка серии стоит на запрошенном старте, а не на createdAt.
+        #expect(dynamicsViewModel.state.periodStartDate < createdAt)
+        let firstPoint = try #require(dynamicsViewModel.state.chartData.first)
+        #expect(firstPoint.date == dynamicsViewModel.state.periodStartDate)
+        // До создания счёта база = 0 (кредит-обязательство ещё не существует).
+        #expect(abs(firstPoint.value) < 0.01)
     }
 
     @Test("Breakdown по акциям использует общий старт периода и показывает ноль до появления позиции")

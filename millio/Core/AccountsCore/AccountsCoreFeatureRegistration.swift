@@ -122,6 +122,7 @@ struct AccountImporter: ModelImporter {
         account.order = order
         account.note = data["note"] as? String
         account.archivedAt = (data["archivedAt"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
+        account.deletedAt = (data["deletedAt"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
 
         if let groupIDString = data["groupID"] as? String, let groupID = UUID(uuidString: groupIDString) {
             let groupDescriptor = FetchDescriptor<AccountGroup>(predicate: #Predicate<AccountGroup> { $0.id == groupID })
