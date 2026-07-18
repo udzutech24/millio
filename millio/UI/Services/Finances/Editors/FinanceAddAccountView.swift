@@ -587,13 +587,28 @@ struct FinanceAddAccountView: View {
         ScrollView {
             VStack(spacing: 18) {
                 if hasConfirmedProductSelection {
-                    nameSection
+                    // [Вариант А, тикер-driven типы, 2026-07-18] Для акций/крипты имя авто-
+                    // заполняется из тикера и уже показывается в `tickerDrivenNameSection`
+                    // ПОСЛЕ выбора тикера (порядок Тип→Тикер→Название(авто)→Позиция) — общий
+                    // `nameSection` сверху для них не рендерим, иначе получаем два поля с
+                    // одним и тем же именем на экране одновременно.
+                    if !isTickerDrivenName {
+                        nameSection
+                    }
 
                     if selectedAccountType != .card {
                         accountTypeSection
                     }
 
-                    validationHintsSection
+                    // Общий баннер подсказок дублирует точечные required/optional маркеры,
+                    // которые тикер-driven форма уже показывает у самих полей (тикер/количество/
+                    // цена) — вместо баннера оставляем маркеры. Мягкие рекомендации (группа,
+                    // остаток бесплатных тикеров) при этом теряются здесь, но не блокируют
+                    // сохранение — жёсткая проверка лимита тикеров всё равно есть в
+                    // `validateEntitlementsForSave()` независимо от баннера.
+                    if !isTickerDrivenName {
+                        validationHintsSection
+                    }
                     createFormSections
                 }
             }

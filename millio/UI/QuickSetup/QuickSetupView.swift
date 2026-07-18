@@ -179,9 +179,16 @@ struct QuickSetupView: View {
         }
         .sheet(isPresented: $showMarketSearchSheet) {
             MarketSymbolSearchSheet(filter: viewModel.productTypeForCreation == .crypto ? .crypto : .stocks) { symbol in
-                viewModel.applySelectedMarketSymbol(symbol)
-                Task {
-                    await viewModel.refreshSelectedMarketQuote(forceRefresh: true)
+                // Откладываем мутацию на следующий runloop-тик (тот же приём, что в
+                // routeToProductCreation): applySelectedMarketSymbol меняет высоту marketDraftFields
+                // над полем количества (появляется exchange-бейдж, цена → ProgressView). Без задержки
+                // reflow совпадает с dismiss .sheet и передачей responder обратно presenting-view —
+                // первый тап промахивается мимо сдвинувшегося TextField, клавиатура не открывается.
+                DispatchQueue.main.async {
+                    viewModel.applySelectedMarketSymbol(symbol)
+                    Task {
+                        await viewModel.refreshSelectedMarketQuote(forceRefresh: true)
+                    }
                 }
             }
             .presentationDetents([.large])
