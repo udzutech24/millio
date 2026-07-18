@@ -252,16 +252,18 @@ final class FinanceViewModel: ViewModelProtocol {
     /// пересчёта (до первого await).
     private var totalsGeneration = 0
 
-    /// Поколение, чей результат последним попал в `state` — водяной знак для запрета регресса.
-    /// [Фикс гонки, 2026-07-18] Публикуем по правилу «моё поколение >= уже опубликованного», А НЕ
-    /// «моё поколение == последнего СТАРТОВАВШЕГО»: строгое равенство ломает прямой `await` вызов
-    /// (например явный тест/ручной рефреш), если ПАРАЛЛЕЛЬНО стартовал fire-and-forget фоновый
-    /// пересчёт (`loadAccounts` → `refreshGroupTotalsAndAmounts`) — тогда более новое поколение
-    /// «сгорает» у ещё не завершённой фоновой задачи, и явный awaiter не публикует ничего, хотя
-    /// именно ЕГО поколение гарантированно максимальное на момент его финиша (после него никто
-    /// новее не стартовал). Водяной знак допускает публикацию любого поколения ≥ уже показанного —
-    /// без регресса к более старым числам, но без немого дропа последнего awaiter'а.
-    private var publishedTotalsGeneration = 0
+    /// Водяной знак публикации ГРУППОВЫХ величин (`groupTotals`/`groupTotalsPrimaryCurrency`/
+    /// `ungroupedTotal`). РАЗДЕЛЁН с `publishedTotalAmountGeneration` намеренно: раньше оба вида
+    /// публикаций делили один счётчик, и фоновый `refreshGroupTotalsAndAmounts`, публикуя ТОЛЬКО
+    /// групповые тоталы, поднимал общий водяной знак — после чего корректный параллельный пересчёт
+    /// ИТОГА `state.totalAmount` (явный `calculateTotalAmountAsync` с меньшим поколением) молча
+    /// дропался гардом, а собственный inner-пересчёт итога рефреша мог ещё висеть на await →
+    /// `state.totalAmount` застревал на устаревшем значении (баг пост-миграционного «0», 2026-07-18).
+    private var publishedGroupTotalsGeneration = 0
+
+    /// Водяной знак публикации ИТОГА `state.totalAmount`. Стейл (меньшее поколение) не перезаписывает
+    /// уже показанный более свежий итог; групповые публикации на него НЕ влияют.
+    private var publishedTotalAmountGeneration = 0
 
     /// Быстрые словари для поиска счетов по ID (O(1) вместо O(n))
     @Published private(set) var cardByID: [String: Card] = [:]
@@ -833,8 +835,8 @@ final class FinanceViewModel: ViewModelProtocol {
         }
         let newUngroupedTotal = await calculateUngroupedTotal(in: state.displayCurrency)
 
-        guard generation >= publishedTotalsGeneration else { return }
-        publishedTotalsGeneration = generation
+        guard generation >= publishedGroupTotalsGeneration else { return }
+        publishedGroupTotalsGeneration = generation
 
         state.groupTotals = newGroupTotals
         state.groupTotalsPrimaryCurrency = newGroupTotalsPrimaryCurrency
@@ -856,8 +858,8 @@ final class FinanceViewModel: ViewModelProtocol {
         } else {
             value = await calculateGroupTotal(group: group, in: state.displayCurrency)
         }
-        guard generation >= publishedTotalsGeneration else { return }
-        publishedTotalsGeneration = generation
+        guard generation >= publishedGroupTotalsGeneration else { return }
+        publishedGroupTotalsGeneration = generation
         state.groupTotalsPrimaryCurrency[group.groupUniqueID] = value
     }
 
@@ -884,8 +886,8 @@ final class FinanceViewModel: ViewModelProtocol {
         // Публикуем, только если наше поколение не старше уже показанного — не откатываем на
         // более старые числа (гонка на холодном кэше котировок), но и не роняем немо результат
         // последнего awaiter'а, если параллельно ещё не финишировал fire-and-forget пересчёт.
-        guard myGeneration >= publishedTotalsGeneration else { return }
-        publishedTotalsGeneration = myGeneration
+        guard myGeneration >= publishedTotalAmountGeneration else { return }
+        publishedTotalAmountGeneration = myGeneration
 
         state.currencyConversionWarning = nil
         state.totalAmount = snapshot.totalAmount
@@ -1238,8 +1240,8 @@ final class FinanceViewModel: ViewModelProtocol {
 
         scheduleBackgroundTask { viewModel in
             guard let group = viewModel.state.groups.first(where: { $0.groupUniqueID == groupUniqueID }) else {
-                guard generation >= viewModel.publishedTotalsGeneration else { return }
-                viewModel.publishedTotalsGeneration = generation
+                guard generation >= viewModel.publishedGroupTotalsGeneration else { return }
+                viewModel.publishedGroupTotalsGeneration = generation
                 viewModel.state.groupTotals.removeValue(forKey: groupUniqueID)
                 // [Гейт 5c.7.6.2 фикс-раунд] Без этого удалённая группа оставляла stale-ключ в
                 // `groupTotalsPrimaryCurrency` — секции «Активы»/«Обязательства» продолжили бы
@@ -1250,8 +1252,8 @@ final class FinanceViewModel: ViewModelProtocol {
             let currency = fallbackCurrency ?? group.displayCurrency ?? viewModel.state.displayCurrency
             let total = await viewModel.calculateGroupTotal(group: group, in: currency)
 
-            guard generation >= viewModel.publishedTotalsGeneration else { return }
-            viewModel.publishedTotalsGeneration = generation
+            guard generation >= viewModel.publishedGroupTotalsGeneration else { return }
+            viewModel.publishedGroupTotalsGeneration = generation
             viewModel.state.groupTotals[groupUniqueID] = total
             await viewModel.refreshGroupTotalPrimaryCurrency(group: group, total: total, computedCurrency: currency, generation: generation)
         }
