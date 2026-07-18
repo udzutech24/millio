@@ -812,9 +812,10 @@ struct FinanceViewModelTests {
             currencyService: mockRateService,
             skipInitialLoad: true
         )
-        viewModel.handle(.loadGroups)
-        viewModel.handle(.loadAccounts)
-
+        // [Фикс гонки тоталов, 2026-07-18] Не вызываем handle(.loadGroups)/.loadAccounts() —
+        // они планируют СВОИ fire-and-forget scheduleBackgroundTask-пересчёты (не нужны тесту:
+        // `calculateTotalAmountAsync` сам читает счета из modelContext, не из state.accounts) и
+        // конкурируют с прямым await ниже за generation-watermark, делая тест недетерминированным.
         await viewModel.calculateTotalAmountAsync()
 
         // 10 USD × 100 = 1000 RUB (валюта экрана по умолчанию — RUB).

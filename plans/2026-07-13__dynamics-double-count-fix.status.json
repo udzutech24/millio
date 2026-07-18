@@ -1,0 +1,12 @@
+{
+  "planFile": "2026-07-13__dynamics-double-count-fix.md",
+  "title": "Динамика: фикс двойного учёта",
+  "updated": "2026-07-13T12:00:00Z",
+  "phases": [
+    { "name": "Day-granularity cutoff легаси-предшественника", "status": "done", "note": "b7af609; dayKey(date)<dayKey(archivedAt), хелпер legacyPredecessorArchivedAt" },
+    { "name": "UI: скрытие процента при near-zero базе", "status": "done", "note": "b7af609; решение владельца — лейбл не рендерим; isPercentUndefined + 3 точки FinanceDynamicsView" },
+    { "name": "Unit-тесты + верификация", "status": "done", "note": "ba50396; 5 новых тестов, build+тесты зелёные; device-проверка PENDING" }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

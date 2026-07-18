@@ -1051,7 +1051,10 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     var body: some View {
         VStack(spacing: 18) {
             if isMarketCategory {
+                // Порядок Тикер → Название специально: имя авто-заполняется из тикера
+                // (см. applySelectedMarketSymbol), поэтому его нельзя показывать раньше выбора.
                 marketInstrumentSection
+                tickerDrivenNameSection
                 marketPositionSection
             } else {
                 balanceSection
@@ -1139,7 +1142,13 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         )
         .sheet(isPresented: $showMarketSearchSheet) {
             MarketSymbolSearchSheet(filter: marketFilter) { symbol in
-                applySelectedMarketSymbol(symbol)
+                // Тот же reflow-at-dismiss риск, что в QuickSetup: applySelectedMarketSymbol синхронно
+                // меняет высоту секций над полем количества (бейдж биржи, секция имени, ProgressView
+                // цены). Откладываем на следующий тик, чтобы dismiss завершился до reflow и первый тап
+                // по AmountTextField не промахнулся.
+                DispatchQueue.main.async {
+                    applySelectedMarketSymbol(symbol)
+                }
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -1168,6 +1177,8 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             : L("finances.add_account.hint.select_ticker")
     }
     
+    /// Тикер/пара — единственное реально обязательное поле рынка (см. `isValid`): помечаем
+    /// красной точкой у лейбла вместо общего баннера с подсказками.
     private var marketInstrumentSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: L("finances.market.section_symbol"))
@@ -1178,9 +1189,15 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             ) {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
-                        Text(marketInstrumentTitle)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AppColors.textPrimary)
+                        HStack(spacing: 6) {
+                            Text(marketInstrumentTitle)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Circle()
+                                .fill(AppColors.error)
+                                .frame(width: 6, height: 6)
+                                .accessibilityLabel(L("finances.add_account.marker.required"))
+                        }
                         Spacer()
                         Text(marketSymbol.isEmpty ? "—" : marketSymbol)
                             .font(.system(size: 16, weight: .semibold))
@@ -1255,15 +1272,48 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         }
     }
     
+    /// Read-only чип названия для тикер-driven типов (акции/крипта): имя подставляется из
+    /// выбранного тикера/пары (`applySelectedMarketSymbol`), редактировать его напрямую нельзя —
+    /// поэтому не рендерим disabled TextField, а показываем финальное значение с чекмарком.
+    private var tickerDrivenNameSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: L("finances.add_account.section.name"))
+            FinancesGlassCard {
+                HStack(spacing: 10) {
+                    if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(L("finances.add_account.name.autofill_hint"))
+                            .font(.millioCaptionRegular)
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.millioCallout)
+                            .foregroundStyle(AppColors.positiveColor)
+                        Text(name)
+                            .font(.millioHeadline)
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, AppSpacing.ml)
+                .padding(.horizontal, AppSpacing.l)
+            }
+        }
+    }
+
     private var marketPositionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: L("finances.market.section_position"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
-                        Text(marketQuantityTitle)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AppColors.textPrimary)
+                        HStack(spacing: 6) {
+                            Text(marketQuantityTitle)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Text(L("finances.add_account.marker.optional"))
+                                .font(.millioMicro)
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
                         Spacer()
                         AmountTextField(
                             placeholder: "0",
@@ -1309,9 +1359,14 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                     FinancesRowDivider(leadingPadding: 16)
 
                     HStack(spacing: 12) {
-                        Text(L("finances.add_account.investment.purchase_price"))
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AppColors.textPrimary)
+                        HStack(spacing: 6) {
+                            Text(L("finances.add_account.investment.purchase_price"))
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Text(L("finances.add_account.marker.optional"))
+                                .font(.millioMicro)
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
                         Spacer()
                         AmountTextField(placeholder: "0", value: $purchaseUnitPriceText)
                         .foregroundStyle(AppColors.textPrimary)

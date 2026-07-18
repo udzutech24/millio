@@ -1123,8 +1123,11 @@ private struct FinanceDynamicsContentView: View {
                     HStack(spacing: 6) {
                         Text(formatDelta(delta.absolute))
                             .font(.caption.weight(.semibold))
-                        Text(formatPercent(delta.percent))
-                            .font(.caption.weight(.semibold))
+                        // Near-zero база → процент не определён: лейбл не рендерим совсем (решение владельца).
+                        if !FinanceAmountText.isPercentUndefined(value: delta.percent, isHidden: isAmountHidden) {
+                            Text(formatPercent(delta.percent))
+                                .font(.caption.weight(.semibold))
+                        }
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -2456,7 +2459,10 @@ private struct FinanceDynamicsContentView: View {
                     if !viewModel.state.isSingleAccountMode {
                         let badgeColor = deltaColor(for: item)
                         let badgeBg = deltaBackground(for: item)
-                        let badgeText = "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
+                        // Near-zero база → процент не определён: показываем только дельту, без «•» и процента.
+                        let badgeText = FinanceAmountText.isPercentUndefined(value: item.deltaPercent, isHidden: isAmountHidden)
+                            ? formatDelta(item.delta)
+                            : "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
                         Text(badgeText)
                             .font(.caption.weight(.semibold).monospacedDigit())
                             .padding(.horizontal, 8)
@@ -2500,7 +2506,10 @@ private struct FinanceDynamicsContentView: View {
                     if !viewModel.state.isSingleAccountMode {
                         let badgeColor = deltaColor(for: item)
                         let badgeBg = deltaBackground(for: item)
-                        let badgeText = "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
+                        // Near-zero база → процент не определён: показываем только дельту, без «•» и процента.
+                        let badgeText = FinanceAmountText.isPercentUndefined(value: item.deltaPercent, isHidden: isAmountHidden)
+                            ? formatDelta(item.delta)
+                            : "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
                         Text(badgeText)
                             .font(.caption.weight(.semibold).monospacedDigit())
                             .padding(.horizontal, 8)

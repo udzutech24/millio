@@ -248,6 +248,23 @@ final class FinanceViewModel: ViewModelProtocol {
     private var rateSourceObserver: NSObjectProtocol?
     private var backgroundTasks: [UUID: Task<Void, Never>] = [:]
 
+    /// Монотонный счётчик поколений пересчёта тоталов. Растёт синхронно в момент старта нового
+    /// пересчёта (до первого await).
+    private var totalsGeneration = 0
+
+    /// Водяной знак публикации ГРУППОВЫХ величин (`groupTotals`/`groupTotalsPrimaryCurrency`/
+    /// `ungroupedTotal`). РАЗДЕЛЁН с `publishedTotalAmountGeneration` намеренно: раньше оба вида
+    /// публикаций делили один счётчик, и фоновый `refreshGroupTotalsAndAmounts`, публикуя ТОЛЬКО
+    /// групповые тоталы, поднимал общий водяной знак — после чего корректный параллельный пересчёт
+    /// ИТОГА `state.totalAmount` (явный `calculateTotalAmountAsync` с меньшим поколением) молча
+    /// дропался гардом, а собственный inner-пересчёт итога рефреша мог ещё висеть на await →
+    /// `state.totalAmount` застревал на устаревшем значении (баг пост-миграционного «0», 2026-07-18).
+    private var publishedGroupTotalsGeneration = 0
+
+    /// Водяной знак публикации ИТОГА `state.totalAmount`. Стейл (меньшее поколение) не перезаписывает
+    /// уже показанный более свежий итог; групповые публикации на него НЕ влияют.
+    private var publishedTotalAmountGeneration = 0
+
     /// Быстрые словари для поиска счетов по ID (O(1) вместо O(n))
     @Published private(set) var cardByID: [String: Card] = [:]
     @Published private(set) var creditByID: [String: Credit] = [:]
@@ -529,7 +546,15 @@ final class FinanceViewModel: ViewModelProtocol {
             // archive/edit/restore/physicallyDelete/QuickSetup) — раньше это маскировалось живым
             // fetch внутри `FinanceRows.newCoreAccounts`. Нужен свой триггер именно здесь.
             loadCoreEntities()
-            
+            // [Фикс 2026-07-18] `loadCoreEntities()` обновляет только списки счетов/групп —
+            // `state.totalAmount`/`groupTotals` тут не пересчитывались вообще (доказанный баг:
+            // после сохранения нового продукта шапка «Счета» оставалась старой до ручного
+            // pull-to-refresh). Дёргаем тот же watermark-guarded пайплайн, что и остальные
+            // core-мутации (`investmentsUpdated` и т.п.) — гонка с ним исключена по построению.
+            scheduleBackgroundTask { viewModel in
+                await viewModel.refreshGroupTotalsAndAmounts()
+            }
+
         case .addAccountToGroup(let account, let group):
             addAccountToGroup(account, group: group)
 
@@ -786,26 +811,56 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     private func refreshGroupTotalsAndAmounts() async {
+        // [Фикс гонки/неатомарной публикации, 2026-07-18] Штампуем поколение ДО первого await:
+        // если пока мы await'или котировки/цены нового счёта запустился более новый пересчёт
+        // (например добавление инвест-счёта пока висит холодный кэш котировки), наш результат
+        // считается устаревшим и не публикуется — иначе он мог финишировать позже и перезаписать
+        // уже верные (более свежие) `totalAmount`/`groupTotals` старыми числами.
+        totalsGeneration += 1
+        let generation = totalsGeneration
+
+        // Собираем в локальные снапшоты и публикуем одним присваиванием в конце — иначе View
+        // читает `state.groupTotals[id] ?? 0` для ещё не досчитанной группы и на миг показывает
+        // «0» для группы, чьи дочерние карточки уже отрисованы с верными суммами.
+        var newGroupTotals: [String: Double] = [:]
+        var newGroupTotalsPrimaryCurrency: [String: Double] = [:]
+
         for group in state.groups {
             let currency = group.displayCurrency ?? state.displayCurrency
             let total = await calculateGroupTotal(group: group, in: currency)
-            state.groupTotals[group.groupUniqueID] = total
-            await refreshGroupTotalPrimaryCurrency(group: group, total: total, computedCurrency: currency)
+            newGroupTotals[group.groupUniqueID] = total
+            newGroupTotalsPrimaryCurrency[group.groupUniqueID] = currency == state.displayCurrency
+                ? total
+                : await calculateGroupTotal(group: group, in: state.displayCurrency)
         }
-        state.ungroupedTotal = await calculateUngroupedTotal(in: state.displayCurrency)
-        await calculateTotalAmountAsync()
+        let newUngroupedTotal = await calculateUngroupedTotal(in: state.displayCurrency)
+
+        guard generation >= publishedGroupTotalsGeneration else { return }
+        publishedGroupTotalsGeneration = generation
+
+        state.groupTotals = newGroupTotals
+        state.groupTotalsPrimaryCurrency = newGroupTotalsPrimaryCurrency
+        state.ungroupedTotal = newUngroupedTotal
+
+        await calculateTotalAmountAsync(generation: generation)
     }
 
     /// Обновляет `state.groupTotalsPrimaryCurrency[groupID]` — тотал ВСЕГДА в валюте шапки. Если
     /// `total` уже посчитан в валюте шапки (типовой случай — у группы нет своей `displayCurrency`),
     /// переиспользуем без второго вызова; иначе считаем отдельно тем же `calculateGroupTotal`
     /// (не второй расчёт, тот же единственный источник с другим currency-аргументом).
-    private func refreshGroupTotalPrimaryCurrency(group: AccountGroup, total: Double, computedCurrency: String) async {
+    /// - Parameter generation: поколение из `scheduleGroupTotalRefresh` — повторная watermark-
+    ///   проверка ПОСЛЕ собственного await (конвертация в другую валюту — ещё один гэп для гонки).
+    private func refreshGroupTotalPrimaryCurrency(group: AccountGroup, total: Double, computedCurrency: String, generation: Int) async {
+        let value: Double
         if computedCurrency == state.displayCurrency {
-            state.groupTotalsPrimaryCurrency[group.groupUniqueID] = total
+            value = total
         } else {
-            state.groupTotalsPrimaryCurrency[group.groupUniqueID] = await calculateGroupTotal(group: group, in: state.displayCurrency)
+            value = await calculateGroupTotal(group: group, in: state.displayCurrency)
         }
+        guard generation >= publishedGroupTotalsGeneration else { return }
+        publishedGroupTotalsGeneration = generation
+        state.groupTotalsPrimaryCurrency[group.groupUniqueID] = value
     }
 
     
@@ -815,9 +870,26 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
     
-    func calculateTotalAmountAsync() async {
-        state.currencyConversionWarning = nil
+    /// - Parameter generation: поколение пересчёта, если вызов уже часть более широкого пайплайна
+    ///   (`refreshGroupTotalsAndAmounts`). При `nil` (вызов напрямую) штампует новое поколение сам.
+    func calculateTotalAmountAsync(generation: Int? = nil) async {
+        let myGeneration: Int
+        if let generation {
+            myGeneration = generation
+        } else {
+            totalsGeneration += 1
+            myGeneration = totalsGeneration
+        }
+
         let snapshot = await totalsService.calculateTotalsSnapshot()
+
+        // Публикуем, только если наше поколение не старше уже показанного — не откатываем на
+        // более старые числа (гонка на холодном кэше котировок), но и не роняем немо результат
+        // последнего awaiter'а, если параллельно ещё не финишировал fire-and-forget пересчёт.
+        guard myGeneration >= publishedTotalAmountGeneration else { return }
+        publishedTotalAmountGeneration = myGeneration
+
+        state.currencyConversionWarning = nil
         state.totalAmount = snapshot.totalAmount
         state.secondaryTotalAmount = snapshot.secondaryTotalAmount
         if let warning = snapshot.currencyConversionWarning {
@@ -965,6 +1037,18 @@ final class FinanceViewModel: ViewModelProtocol {
     /// (invariant 9 §2.1). Публичный, т.к. используется вне VM (`FinanceOverviewCardView` и т.п.).
     func legacyAccountsMatchingGroupName(_ name: String) -> [FinanceAccount] {
         fetchLegacyGroup(named: name)?.accounts ?? []
+    }
+
+    /// Секция «Без группы» пуста для рендера, если нет core-счетов без группы И ни одна легаси-junction
+    /// не даёт renderable-инфо. Критерий ОБЯЗАН совпадать с фактическим рендером строк в
+    /// `FinancesView.ungroupedSectionRow`: core-счета рисуются всегда, а легаси-хвост — только когда
+    /// `getAccountInfo != nil`. Для счетов, смигрированных в core, junction остаётся в `FinanceGroup`
+    /// (`LegacyAccountsMigrator` их не удаляет — регресс-guard), но `getAccountInfo` для них nil, поэтому
+    /// строка не рисуется. Если считать их непустыми — виден заголовок с шевроном над пустым телом.
+    func isUngroupedSectionRenderEmpty() -> Bool {
+        ungroupedAccounts().isEmpty
+            && legacyAccountsMatchingGroupName(FinanceSystemGroups.ungroupedName)
+                .allSatisfy { getAccountInfo(account: $0) == nil }
     }
 
 
@@ -1146,8 +1230,18 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     private func scheduleGroupTotalRefresh(for groupUniqueID: String, fallbackCurrency: String? = nil) {
+        // [Фикс 2026-07-18, остаточная гонка из Fable-ревью] Тот же generation/watermark guard,
+        // что уже есть в `refreshGroupTotalsAndAmounts`/`calculateTotalAmountAsync`. Штампуем ДО
+        // первого await (синхронно, до `scheduleBackgroundTask`) — иначе этот single-group путь
+        // мог перезаписать `groupTotals[id]` устаревшим значением, если параллельно финишировал
+        // более новый полный пересчёт (или другой single-group рефреш той же группы), и наоборот.
+        totalsGeneration += 1
+        let generation = totalsGeneration
+
         scheduleBackgroundTask { viewModel in
             guard let group = viewModel.state.groups.first(where: { $0.groupUniqueID == groupUniqueID }) else {
+                guard generation >= viewModel.publishedGroupTotalsGeneration else { return }
+                viewModel.publishedGroupTotalsGeneration = generation
                 viewModel.state.groupTotals.removeValue(forKey: groupUniqueID)
                 // [Гейт 5c.7.6.2 фикс-раунд] Без этого удалённая группа оставляла stale-ключ в
                 // `groupTotalsPrimaryCurrency` — секции «Активы»/«Обязательства» продолжили бы
@@ -1157,8 +1251,11 @@ final class FinanceViewModel: ViewModelProtocol {
             }
             let currency = fallbackCurrency ?? group.displayCurrency ?? viewModel.state.displayCurrency
             let total = await viewModel.calculateGroupTotal(group: group, in: currency)
+
+            guard generation >= viewModel.publishedGroupTotalsGeneration else { return }
+            viewModel.publishedGroupTotalsGeneration = generation
             viewModel.state.groupTotals[groupUniqueID] = total
-            await viewModel.refreshGroupTotalPrimaryCurrency(group: group, total: total, computedCurrency: currency)
+            await viewModel.refreshGroupTotalPrimaryCurrency(group: group, total: total, computedCurrency: currency, generation: generation)
         }
     }
 

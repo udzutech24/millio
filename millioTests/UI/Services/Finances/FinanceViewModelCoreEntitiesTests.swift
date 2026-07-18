@@ -507,4 +507,78 @@ struct FinanceViewModelCoreEntitiesTests {
         #expect(occurrencesInNamedGroups == 0)
         #expect(vm.ungroupedAccounts().filter { $0.id == ungroupedAccount.id }.count == 1)
     }
+
+    // MARK: - isUngroupedSectionRenderEmpty (критерий пустоты == критерий рендера)
+
+    /// РЕГРЕССИЯ: пустая секция «Без группы» с видимым заголовком. Стейл-junction под системной
+    /// группой ссылается на карту, которой нет в сторе (аналог счёта, смигрированного в core:
+    /// `LegacyAccountsMigrator` junction не удаляет). Старый критерий считал секцию непустой по
+    /// самому факту junction'а, но рендер фильтрует по `getAccountInfo != nil` → заголовок с шевроном
+    /// над пустым телом. Новый критерий обязан вернуть render-empty == true.
+    @Test("Ungrouped render-empty: стейл-junction смигрированного счёта (getAccountInfo == nil) → секция скрыта")
+    func staleUngroupedJunctionCountsAsRenderEmpty() throws {
+        let ctx = try makeContext()
+        let ungroupedLegacy = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: FinanceSystemGroups.ungroupedColorHex, order: 0)
+        ctx.insert(ungroupedLegacy)
+        let staleJunction = FinanceAccount(accountType: .card, accountID: UUID().uuidString)
+        staleJunction.group = ungroupedLegacy
+        ctx.insert(staleJunction)
+        try ctx.save()
+
+        let vm = makeViewModel(ctx)
+        // Только loadGroups (наполняет state.accounts для ungroupedAccounts()). loadAccounts НЕ зовём:
+        // он запускает легаси-миграционный пайплайн с shared-синглтоном LegacyConversionRegistry.shared,
+        // который в общем прогоне сьюта отцепляет orphan-junction (нестабильно между изоляцией и сьютом).
+        // Для критерия это не нужно: getAccountInfo для orphan вернёт nil и через пустой cardByID.
+        vm.handle(.loadGroups)
+
+        // Старый (сломанный) критерий: junction присутствует → считал секцию непустой.
+        let legacy = vm.legacyAccountsMatchingGroupName(FinanceSystemGroups.ungroupedName)
+        #expect(!legacy.isEmpty)
+        // Но рендер-инфо нет ни для одной записи, и core-счетов без группы нет.
+        #expect(legacy.allSatisfy { vm.getAccountInfo(account: $0) == nil })
+        #expect(vm.ungroupedAccounts().isEmpty)
+        // Итог нового критерия — секция скрыта.
+        #expect(vm.isUngroupedSectionRenderEmpty())
+    }
+
+    /// Регресс-guard обратного сценария: реальная легаси-карта без группы (`getAccountInfo != nil`)
+    /// обязана держать секцию видимой — критерий не должен «переусердствовать» и спрятать живой счёт.
+    @Test("Ungrouped render-empty: реальная легаси-карта без группы (getAccountInfo != nil) → секция видна")
+    func realLegacyUngroupedAccountIsNotRenderEmpty() throws {
+        let ctx = try makeContext()
+        let ungroupedLegacy = FinanceGroup(name: FinanceSystemGroups.ungroupedName, colorHex: FinanceSystemGroups.ungroupedColorHex, order: 0)
+        ctx.insert(ungroupedLegacy)
+        let card = Card(name: "Наличные", cardNumber: "0001", bank: .other, cardType: .debit, currency: "RUB", balance: 5_000)
+        card.includeInTotal = true
+        ctx.insert(card)
+        let junction = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        junction.group = ungroupedLegacy
+        ctx.insert(junction)
+        try ctx.save()
+
+        let vm = makeViewModel(ctx)
+        vm.handle(.loadGroups)
+        vm.handle(.loadAccounts)
+
+        let legacy = vm.legacyAccountsMatchingGroupName(FinanceSystemGroups.ungroupedName)
+        #expect(legacy.contains { vm.getAccountInfo(account: $0) != nil })
+        #expect(!vm.isUngroupedSectionRenderEmpty())
+    }
+
+    /// Регресс-guard: core-счёт без группы (канон `group == nil`) держит секцию видимой независимо
+    /// от легаси-части (тот же guard, что упомянут в `FinancesView.swift:870`).
+    @Test("Ungrouped render-empty: core-счёт без группы → секция видна")
+    func coreUngroupedAccountIsNotRenderEmpty() throws {
+        let ctx = try makeContext()
+        let coreService = AccountsCoreService(modelContext: ctx)
+        _ = try coreService.createAccount(name: "Core без группы", kind: .debitCard, currency: "RUB", openingBalance: 999, group: nil)
+        try ctx.save()
+
+        let vm = makeViewModel(ctx)
+        vm.handle(.loadGroups)
+
+        #expect(!vm.ungroupedAccounts().isEmpty)
+        #expect(!vm.isUngroupedSectionRenderEmpty())
+    }
 }

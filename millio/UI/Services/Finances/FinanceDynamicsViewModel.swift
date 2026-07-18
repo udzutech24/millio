@@ -1101,6 +1101,17 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         for account in coreAccounts {
             guard let legacyUniqueID = LegacyConversionRegistry.shared.legacyUniqueID(forCoreAccountID: account.id),
                   let legacyAccount = legacyByUniqueID[legacyUniqueID] else { continue }
+            // Инвариант границы (СТРОГО `<`, не `<=`): день миграции (`dayKey == archivedAt`) принадлежит
+            // core-двойнику через opening-снапшот. Легаси-предшественник отдаёт баланс ТОЛЬКО для дней
+            // строго ДО дня архивации; на сам день миграции его вклад = 0, иначе вклад легаси и вклад
+            // core-двойника за один и тот же день суммируются → двойной учёт вклада в графике «Динамика».
+            // Сравнение на уровне dayKey (день), а не Date: archivedAt может иметь время внутри дня.
+            // archivedAt легаси-предшественника лежит на конкретной модели (Card/Credit/Investment)
+            // в кэшах, а не на FinanceAccount. Нет archivedAt (не архивирован) → окно не сужаем.
+            if let archivedAt = legacyPredecessorArchivedAt(for: legacyAccount),
+               AccountEvent.dayKey(for: date) >= AccountEvent.dayKey(for: archivedAt) {
+                continue
+            }
             let cardIDs: Set<String> = legacyAccount.accountType == .card ? [legacyAccount.accountID] : []
             sum += await calculateBalanceAtDate(
                 accounts: [legacyAccount], date: date,
@@ -1108,6 +1119,17 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             )
         }
         return sum
+    }
+
+    /// `archivedAt` конкретной легаси-модели (Card/Credit/Investment) по её FinanceAccount-обёртке.
+    /// FinanceAccount — лишь связь группа↔счёт и archivedAt не хранит; берём его из тех же кэшей,
+    /// что и `calculateBalanceAtDate`. `nil` — счёт не архивирован (или не найден в кэше).
+    private func legacyPredecessorArchivedAt(for legacyAccount: FinanceAccount) -> Date? {
+        switch legacyAccount.accountType {
+        case .card: return cardsCache[legacyAccount.accountID]?.archivedAt
+        case .credit: return creditsCache[legacyAccount.accountID]?.archivedAt
+        case .investment: return investmentsCache[legacyAccount.accountID]?.archivedAt
+        }
     }
 
     /// Core-счета, участвующие в расчёте динамики при текущем фильтре групп (`selectedGroupIDs`).

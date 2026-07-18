@@ -952,8 +952,7 @@ struct FinancesMainTabView: View {
     }
 
     private var isUngroupedSectionEmpty: Bool {
-        viewModel.ungroupedAccounts().isEmpty
-            && viewModel.legacyAccountsMatchingGroupName(FinanceSystemGroups.ungroupedName).isEmpty
+        viewModel.isUngroupedSectionRenderEmpty()
     }
 
     private static let ungroupedSectionKey = "finances.ungrouped.section"
