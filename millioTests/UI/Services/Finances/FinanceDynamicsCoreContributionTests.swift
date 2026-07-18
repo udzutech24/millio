@@ -98,16 +98,24 @@ struct FinanceDynamicsCoreContributionTests {
         let points = dynamicsViewModel.state.chartData.sorted { $0.date < $1.date }
         #expect(!points.isEmpty, "Легаси-скелет должен построиться (счёт существовал, есть junction)")
 
-        // Точка у начала периода (ДО миграции, легаси ещё активна, ядро ещё не существует) —
-        // реальная легаси-история сохранена, не обнулена новым механизмом.
-        let firstValue = try #require(points.first?.value)
-        #expect(abs(firstValue - 100_000) < 0.01, "Доисторическая точка должна остаться легаси-значением (100 000), не 0")
-
         // Точка на конце периода ("сейчас", ПОСЛЕ миграции) — легаси скрыт (вносит 0), но core-
         // двойник вносит мигрированный баланс. Если бы вклад ядра не добавлялся (регресс к
         // dual-path без core, или к простому обнулению), здесь было бы 0.
         let lastValue = try #require(points.last?.value)
         #expect(abs(lastValue - 100_000) < 0.01, "Текущая точка должна прийти от ядра (100 000), а не обнулиться вместе с легаси")
+
+        // Q2 (dynamics-single-source-of-truth): период .month держит запрошенную ширину, поэтому
+        // точки до создания счёта (createdAt = -10 дней) считаются нулём. После создания —
+        // легаси-история (до миграции) и core-двойник (после) несут 100 000; история не обнулена.
+        let afterCreation = points.filter { $0.date >= createdAt }
+        #expect(
+            afterCreation.allSatisfy { abs($0.value - 100_000) < 0.01 },
+            "После создания счёта серия несёт легаси/core-значение 100 000 на всех точках"
+        )
+        #expect(
+            points.contains { abs($0.value - 100_000) < 0.01 },
+            "Легаси-история (100 000) присутствует в серии, а не обнулена новым механизмом"
+        )
     }
 
     // MARK: - Нет core-счетов вообще: скелет не меняется (не регресс, известный пробел «1b»)
@@ -149,11 +157,17 @@ struct FinanceDynamicsCoreContributionTests {
         dynamicsViewModel.state.dynamicsMode = .aggregated
         await dynamicsViewModel.updateChartDataAsync()
 
-        let points = dynamicsViewModel.state.chartData
+        let points = dynamicsViewModel.state.chartData.sorted { $0.date < $1.date }
         #expect(!points.isEmpty)
+        // Без core-счетов продюсер добавляет 0 — серия равна чистому легаси-скелету. Q2: клэмп базы
+        // снят, поэтому точки до createdAt = 0, а с момента создания счёта — живой баланс 50 000.
         for point in points {
-            #expect(abs(point.value - 50_000) < 0.01, "Без core-счетов addingCoreContribution добавляет 0 — график равен чистому легаси-скелету")
+            let isZero = abs(point.value) < 0.01
+            let isBalance = abs(point.value - 50_000) < 0.01
+            #expect(isZero || isBalance, "Точка равна 0 (до создания счёта) либо чистому легаси-балансу 50 000")
         }
+        #expect(abs((points.last?.value ?? 0) - 50_000) < 0.01, "Конец периода = живой баланс 50 000")
+        #expect(points.contains { abs($0.value - 50_000) < 0.01 }, "После создания счёта серия несёт 50 000")
     }
 
     // MARK: - Ветка .accounts: только core-счета (Фаза 6b, баг «No products»)

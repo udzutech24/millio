@@ -1441,7 +1441,7 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs((points.first?.value ?? -1) - 0) < 0.01)
     }
 
-    @Test("Эффективный старт периода клипуется к дате создания нового счета")
+    @Test("Q2: старт периода НЕ клэмпится к дате создания счёта (держит запрошенную ширину)")
     func testResolvedPeriodDatesClampStartToAccountCreation() throws {
         let modelContext = try createTestModelContext()
         let calendar = Calendar.current
@@ -1484,11 +1484,13 @@ struct FinanceDynamicsViewModelTests {
             basePeriod: (requestedStart, now)
         )
 
-        #expect(period.start == createdAt)
+        // Q2 (dynamics-single-source-of-truth): клэмп базы к дате создания снят — период держит
+        // запрошенную ширину, счёт до своего createdAt считается нулём.
+        #expect(period.start == requestedStart)
         #expect(period.end == now)
     }
 
-    @Test("Годовой период динамики клипуется к первой дате реальных данных")
+    @Test("Q2: годовой период держит запрошенную ширину, база до создания счёта = 0")
     func testYearPeriodUsesFirstRealDataDateForChartState() async throws {
         let modelContext = try createTestModelContext()
         let calendar = Calendar.current
@@ -1542,8 +1544,13 @@ struct FinanceDynamicsViewModelTests {
             dynamicsViewModel.state.chartData.isEmpty == false
         }
 
-        #expect(dynamicsViewModel.state.periodStartDate >= createdAt)
-        #expect((dynamicsViewModel.state.chartData.first?.date ?? .distantPast) >= createdAt)
+        // Q2: клэмп снят — старт периода раньше даты создания счёта (год держит ширину), а первая
+        // точка серии стоит на запрошенном старте, а не на createdAt.
+        #expect(dynamicsViewModel.state.periodStartDate < createdAt)
+        let firstPoint = try #require(dynamicsViewModel.state.chartData.first)
+        #expect(firstPoint.date == dynamicsViewModel.state.periodStartDate)
+        // До создания счёта база = 0 (кредит-обязательство ещё не существует).
+        #expect(abs(firstPoint.value) < 0.01)
     }
 
     @Test("Breakdown по акциям использует общий старт периода и показывает ноль до появления позиции")
