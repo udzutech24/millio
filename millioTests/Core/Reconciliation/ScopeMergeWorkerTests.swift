@@ -188,4 +188,37 @@ struct ScopeMergeWorkerTests {
             #expect(count(AccountEvent.self, in: user) == 1)
         }
     }
+
+    /// Ф6 polish: deletedAt round-trip через merge. `copyNewCore` вставляет new-core счета только
+    /// если id ОТСУТСТВУЕТ в user (`accountByID[dto.id] == nil`, ScopeMergeDedup.swift:127) — существующие
+    /// записи никогда не перезаписываются, LWW по updatedAt для core Account не применяется вовсе.
+    /// Сценарий: guest — стейл-копия счёта БЕЗ deletedAt (не знает об удалении), user уже мягко удалил
+    /// счёт и хранит его исторический снапшот. Ожидание: merge не воскрешает счёт и не теряет снапшот.
+    @Test func newCore_deletedAtAccountNotResurrectedAndSnapshotSurvives() async throws {
+        try await withRegistry {
+            let guest = makeContainer(); let user = makeContainer()
+            let accID = UUID()
+            insertCoreAccount(guest, id: accID, name: "Core") // без deletedAt — стейл-копия
+            save(guest)
+
+            let userAccount = Account(id: accID, name: "Core", kind: .manualAsset, currency: "RUB")
+            userAccount.deletedAt = fixedDate
+            let event = AccountEvent(id: UUID(), account: userAccount, date: fixedDate,
+                                     type: .openingBalance, amount: 1000)
+            let snapshot = AccountDailySnapshot(account: userAccount, dayKey: "2023-11-14", balance: 1000)
+            user.mainContext.insert(userAccount)
+            user.mainContext.insert(event)
+            user.mainContext.insert(snapshot)
+            save(user)
+
+            _ = try await runMerge(guest: guest, user: user)
+
+            let merged = try ModelContext(user).fetch(FetchDescriptor<Account>())
+            #expect(merged.count == 1, "merge не должен плодить дубль по тому же id")
+            #expect(merged.first?.deletedAt != nil, "guest без deletedAt не должен воскресить удалённый на user счёт")
+
+            let snapshots = try ModelContext(user).fetch(FetchDescriptor<AccountDailySnapshot>())
+            #expect(snapshots.count == 1, "исторический снапшот удалённого счёта не должен теряться при merge")
+        }
+    }
 }

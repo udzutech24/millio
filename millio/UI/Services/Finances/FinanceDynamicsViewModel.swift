@@ -141,16 +141,11 @@ struct ChartDataPoint: Identifiable, Equatable {
 // MARK: - Dynamics Series
 
 /// Итог одного построения агрегированной серии «Динамики» (Ф2 dynamics-single-source-of-truth):
-/// период + точки. Точка = легаси-реплей + вклад ядра, суммарно, в валюте экрана. Заголовок-дельта
+/// точки графика. Точка = легаси-реплей + вклад ядра, суммарно, в валюте экрана. Заголовок-дельта
 /// и карточка «Общая сумма» — чистые функции от `points` (первая/последняя точка), а не три
 /// независимых калькулятора над одними данными.
 struct DynamicsSeries {
-    let periodStart: Date
-    let periodEnd: Date
     let points: [ChartDataPoint]
-
-    var startValue: Double { points.first?.value ?? 0 }
-    var endValue: Double { points.last?.value ?? 0 }
 }
 
 // MARK: - Dynamics Mode
@@ -1956,7 +1951,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         )
         let deduped = dedupedByCalendarDay(legacyPoints)
         guard includeCore else {
-            return DynamicsSeries(periodStart: period.start, periodEnd: period.end, points: deduped)
+            return DynamicsSeries(points: deduped)
         }
         // Core-only портфель: легаси-счетов нет → legacyPoints пуст, dedupedByCalendarDay возвращает []
         // (guard на пустом входе) и core-цикл не стартует → пустая серия (AC5/AC1). Строим дневной
@@ -1983,7 +1978,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             ).doubleValue
             withCore.append(ChartDataPoint(date: point.date, value: point.value + core, label: point.label))
         }
-        return DynamicsSeries(periodStart: period.start, periodEnd: period.end, points: withCore)
+        return DynamicsSeries(points: withCore)
     }
 
     /// Сворачивает точки к одной на календарный день. Концы периода сохраняются как есть (база =
