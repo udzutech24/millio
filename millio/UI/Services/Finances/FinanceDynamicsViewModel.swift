@@ -851,13 +851,18 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private func updateCurrentBalanceAndDelta(for selectedDate: Date?) async {
         if Task.isCancelled { return }
 
-        let accounts = getAccountsForCalculation(scope: .currentVisible)
         // Период вычисляем по всем счетам (включая archived), чтобы диапазон не плыл при архивации.
-        // Расчёты баланса/дельты ниже идут только по visible accounts.
         let accountsForPeriod = getAccountsForCalculation(scope: .historicalInterval(DateInterval(start: .distantPast, end: .distantFuture)))
         let (startDate, endDate) = resolvedPeriodDates(for: accountsForPeriod)
         state.periodStartDate = startDate
         state.periodEndDate = endDate
+
+        // Баланс/дельту заголовка и карточки считаем на ТОМ ЖЕ скоупе, что и серия графика
+        // (updateChartDataAsync: .historicalInterval того же периода). Он включает archived-счета
+        // (Q3 — архивация не переписывает прошлое). Раньше здесь был .currentVisible (archived
+        // исключены) → правый край заголовка расходился с последней точкой серии на портфеле с
+        // архивным счётом (AC1/AC4). Для не-архивных портфелей набор счетов идентичен currentVisible.
+        let accounts = getAccountsForCalculation(scope: .historicalInterval(DateInterval(start: startDate, end: endDate)))
 
         let useNetTotals = shouldUseNetTotals()
 
@@ -1953,12 +1958,26 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         guard includeCore else {
             return DynamicsSeries(periodStart: period.start, periodEnd: period.end, points: deduped)
         }
+        // Core-only портфель: легаси-счетов нет → legacyPoints пуст, dedupedByCalendarDay возвращает []
+        // (guard на пустом входе) и core-цикл не стартует → пустая серия (AC5/AC1). Строим дневной
+        // скелет из самих концов периода (нулевые легаси-значения), чтобы core-вклад лёг на непустую
+        // основу. Концы = resolvedPeriodDates, поэтому startValue/endValue сходятся с заголовком.
+        let skeleton: [ChartDataPoint]
+        if deduped.isEmpty {
+            let label = L("finances.dynamics.chart.total_label")
+            skeleton = [
+                ChartDataPoint(date: period.start, value: 0, label: label),
+                ChartDataPoint(date: period.end, value: 0, label: label)
+            ]
+        } else {
+            skeleton = deduped
+        }
         // Core складывается ОДИН раз на точку (= на день): точный запрос ядра на дату точки. На
         // концах даты совпадают с resolvedPeriodDates, поэтому endValue/startValue серии сходятся с
         // core-вкладом заголовка (totalAt на тех же датах) — инвариант AC1.
         var withCore: [ChartDataPoint] = []
-        withCore.reserveCapacity(deduped.count)
-        for point in deduped {
+        withCore.reserveCapacity(skeleton.count)
+        for point in skeleton {
             let core = NSDecimalNumber(
                 decimal: await financeViewModel.accountsTotalsService.totalAt(point.date, in: state.displayCurrency)
             ).doubleValue
