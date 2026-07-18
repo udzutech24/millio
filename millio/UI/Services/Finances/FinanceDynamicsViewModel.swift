@@ -809,6 +809,38 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return (safeStart, normalizedEnd)
     }
     
+    /// Unscoped-агрегат: нет фильтра по группам/счетам и не режим одного счёта. Только в этом режиме
+    /// заголовок, карточка «Общая сумма» и график обязаны сходиться на концах единой серии (AC1);
+    /// scoped-режимы остаются на легаси per-account пути до порта «1b».
+    var isUnscopedAggregate: Bool {
+        state.selectedGroupIDs.isEmpty
+            && state.selectedAccountIDs.isEmpty
+            && !state.isSingleAccountMode
+    }
+
+    /// Карточка «Общая сумма» для unscoped-агрегата = концы единой серии (заголовок), а НЕ повторный
+    /// reduce по breakdown — единый источник числа закрывает расхождение заголовок/карточка (AC1).
+    /// В режиме выбранной точки (scrub) и в scoped-режимах возвращает nil → карточка считается по
+    /// breakdown, как раньше.
+    func aggregateTotalRow() -> DynamicsBreakdownItem? {
+        guard isUnscopedAggregate, state.selectedDate == nil else { return nil }
+        let endValue = state.currentBalance
+        let delta = state.periodDelta.absolute
+        let startValue = endValue - delta
+        return DynamicsBreakdownItem(
+            id: "total",
+            name: L("finances.dynamics.chart.total_label"),
+            startValue: startValue,
+            endValue: endValue,
+            delta: delta,
+            deltaPercent: state.periodDelta.percent,
+            icon: nil,
+            accountType: nil,
+            isCreditCard: false,
+            isArchived: false
+        )
+    }
+
     /// Обновить текущий баланс и дельту
     func updateCurrentBalanceAndDelta() async {
         await updateCurrentBalanceAndDelta(for: state.selectedDate)
@@ -848,9 +880,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         // (три пути тотала → один). Для легаси-данных вклад = 0 (нет core-счетов), поэтому
         // легаси-реплей не меняется. Скоупы (выбор групп/счетов, режим одного счёта) остаются на
         // легаси-пути до порта per-account Dynamics на ядро (задача «1b»/Фаза 4).
-        let isUnscopedAggregate = state.selectedGroupIDs.isEmpty
-            && state.selectedAccountIDs.isEmpty
-            && !state.isSingleAccountMode
         let coreCurrent: Double = isUnscopedAggregate
             ? NSDecimalNumber(decimal: await financeViewModel.accountsTotalsService.totalAt(targetDate, in: state.displayCurrency)).doubleValue
             : 0
@@ -1605,31 +1634,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
     }
     
-    /// 6b Фаза 2b (single-world): добавляет вклад ядра event-sourcing в каждую точку легаси-
-    /// скелета НА ТУ ЖЕ дату — точный запрос через `AccountsTotalsService.totalAt`, без
-    /// промежуточного дневного ряда и forward-fill приближения (замена снесённому
-    /// `ChartDataPoint.mergingNewCoreSeries`). Легаси-скелет (`points`, из `buildTimeSeriesData`)
-    /// остаётся источником ДОмиграционной истории — он уже time-aware (архивные счета отдают
-    /// реальный баланс только для дат `<= archivedAt`), поэтому на датах до миграции ядро
-    /// добавляет 0 (двойника ещё нет), а после миграции легаси даёт 0 (скрыт) и добавляется
-    /// ядро — итог идентичен прежнему dual-path, но без риска рассинхрона дат между двумя
-    /// независимо построенными рядами. Известное MVP-ограничение (opening-balance датой
-    /// миграции, искажение дельты на границе, см. план 6b §Ф2) не усугубляется и не устраняется —
-    /// это тот же compromise, просто без лишнего слоя приближённого слияния.
-    /// No-op на пустых `points` (нечего дополнять) — это тот же пробел «1b» (core-only счета ещё
-    /// не участвуют в списке счетов Dynamics), не регрессия этой фазы.
-    private func addingCoreContribution(_ points: [ChartDataPoint], currency: String) async -> [ChartDataPoint] {
-        guard !points.isEmpty else { return points }
-        var result: [ChartDataPoint] = []
-        result.reserveCapacity(points.count)
-        for point in points {
-            let coreValue = await financeViewModel.accountsTotalsService.totalAt(point.date, in: currency)
-            let addition = NSDecimalNumber(decimal: coreValue).doubleValue
-            result.append(ChartDataPoint(date: point.date, value: point.value + addition, label: point.label))
-        }
-        return result
-    }
-
     /// Построить временной ряд данных для графика
     func buildTimeSeriesData(
         accounts: [FinanceAccount],

@@ -2526,7 +2526,12 @@ private struct FinanceDynamicsContentView: View {
     // MARK: - Total Row
 
     private var totalRow: DynamicsBreakdownItem? {
-        FinanceDynamicsPresentation.totalRow(
+        // Unscoped-агрегат: карточка «Общая сумма» = концы единой серии (заголовок), а не повторный
+        // reduce по breakdown — единый источник числа (AC1). Scoped/scrub → reduce по breakdown.
+        if let aggregate = viewModel.aggregateTotalRow() {
+            return aggregate
+        }
+        return FinanceDynamicsPresentation.totalRow(
             from: viewModel.state.dynamicsBreakdown,
             viewMode: viewModel.state.viewMode
         )
