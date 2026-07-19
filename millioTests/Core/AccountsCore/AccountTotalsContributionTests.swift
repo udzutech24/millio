@@ -32,11 +32,18 @@ struct AccountTotalsContributionTests {
         #expect(value == 42_000)
     }
 
-    @Test("Знак применяется ТОЛЬКО к .debitCard: cash/bankAccount с лимитом не трогаем")
-    func onlyDebitCardKindIsTransformed() {
-        // Гипотетический счёт другого kind с проставленным лимитом не должен превращаться в долг —
-        // условие ключуется строго на .debitCard (пресет «Карта»), см. дизайн Ф7b.
-        #expect(AccountTotalsContribution.signedValue(rawBalance: 10_000, kind: .cash, creditLimit: 5_000) == 10_000)
+    @Test("Кредитка без банка (kind == .cash) с лимитом — тоже входит как −долг (баг Ф7b-2)")
+    func cashKindCreditCardIsTransformed() {
+        // Форма «Новый продукт» кладёт кредитку без выбранного банка в .cash
+        // (cardKind(bank: .other) == .cash). Знак ДОЛЖЕН применяться по наличию лимита.
+        // Остаток 1 300 000, лимит 1 500 000 → долг 200 000.
+        #expect(AccountTotalsContribution.signedValue(rawBalance: 1_300_000, kind: .cash, creditLimit: 1_500_000) == -200_000)
+    }
+
+    @Test("Знак — только для денежных card-kind: bankAccount/loan с лимитом не трогаем")
+    func nonCardKindWithLimitUnchanged() {
+        // Лимит проставляется ТОЛЬКО card-пресетом; на других kind это гипотетика, но
+        // ограничение (.cash/.debitCard) защищает от случайного превращения в долг.
         #expect(AccountTotalsContribution.signedValue(rawBalance: 10_000, kind: .bankAccount, creditLimit: 5_000) == 10_000)
         #expect(AccountTotalsContribution.signedValue(rawBalance: 10_000, kind: .loan, creditLimit: 5_000) == 10_000)
     }

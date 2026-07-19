@@ -144,6 +144,43 @@ struct AccountsTotalsServiceTests {
         #expect(total == -121_000) // 5000 (дебет) − 126_000 (долг кредитки)
     }
 
+    /// Ф7b-2 (репро девайс-бага): ПОЛНЫЙ путь создания кредитки формой «Новый продукт» БЕЗ выбранного
+    /// банка. Форма даёт kind через `AccountsCoreAdditionBridge.cardKind(bank: .other) == .cash`,
+    /// openingBalance = max(0, лимит − долг), cardMeta.creditLimit = лимит. До фикса тотал давал
+    /// +остаток (знак терялся на гарде `.debitCard`); теперь — −долг. Одновременно проверяем, что
+    /// лимит НЕ теряется по пути создания (сохранён в cardMeta).
+    @Test @MainActor
+    func creditCardCreatedWithoutBankViaFormPathContributesNegativeDebt() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+
+        // Тот же расчёт, что делает InlineCardDraft.currentCard для cardType == .credit:
+        let limit: Decimal = 1_500_000
+        let debt: Decimal = 200_000
+        let openingBalance = max(0, limit - debt) // 1 300 000 (остаток лимита)
+
+        // kind — ровно как выводит форма для карты без банка (bank == .other):
+        let kind = AccountsCoreAdditionBridge.cardKind(bank: .other)
+        #expect(kind == .cash) // фиксируем предпосылку бага: кредитка без банка → .cash
+
+        let cardMeta = CardMeta(bank: nil, last4: nil, creditLimit: limit, statementDay: nil,
+                                dueDay: nil, minPayment: nil, graceDays: nil, overdraftLimit: nil)
+        let account = try service.createAccount(
+            name: "Кредитка без банка", kind: kind, currency: "RUB",
+            openingBalance: openingBalance, cardMeta: cardMeta
+        )
+
+        // Лимит не потерян по пути создания.
+        #expect(account.cardMeta?.creditLimit == limit)
+
+        let totals = AccountsTotalsService(modelContext: ctx, rebuilder: rebuilder, rateService: rateService)
+        let total = await totals.totalAt(Date(), in: "RUB")
+        #expect(total == -debt) // −200 000, а не +1 300 000
+    }
+
     /// AC7/AC6: архивный `.loan` без группы (Ungrouped) не «утекает» в сегодняшний тотал —
     /// его отрицательный вклад исчезает с даты архивации, но история ДО неё не меняется задним числом.
     @Test @MainActor
