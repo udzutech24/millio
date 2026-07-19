@@ -135,6 +135,53 @@ struct CreditViewModelTests {
         #expect(abs((updated?.remainingAmountAdjustment ?? 0)) > 0.01)
     }
 
+    @Test("Ф7: includeInTotal=false переживает редактирование кредита (update-путь + loadCredits)")
+    func testIncludeInTotalFalseSurvivesEdit() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CreditViewModel(modelContext: modelContext)
+
+        let credit = Credit(
+            name: "Кредит",
+            amount: 100_000,
+            interestRate: 0.0,
+            monthlyPayment: 5_000,
+            startDate: Date(),
+            termMonths: 12,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer
+        )
+        credit.remainingAmount = 100_000
+        modelContext.insert(credit)
+        try modelContext.save()
+
+        // Пользователь выключает учёт кредита в тотале через форму редактирования.
+        viewModel.handle(.editCredit(credit))
+        viewModel.handle(.updateCredit(
+            name: credit.name,
+            amount: credit.amount,
+            monthlyPayment: credit.monthlyPayment,
+            endDate: credit.endDate ?? Date(),
+            remainingAmount: credit.remainingAmount,
+            currency: credit.currency,
+            bank: credit.bank,
+            creditType: credit.creditType,
+            isFavorite: credit.isFavorite,
+            paymentMode: .dayOfMonth,
+            paymentDayOfMonth: 15,
+            nextPaymentDate: nil,
+            reminderEnabled: false,
+            reminderDaysBefore: nil,
+            reminderTime: nil,
+            includeInTotal: false,
+            uniqueID: nil
+        ))
+
+        // updateCredit заканчивается loadCredits(); ни update-путь, ни reload не должны вернуть true.
+        let updated = viewModel.state.credits.first
+        #expect(updated?.includeInTotal == false)
+    }
+
     @Test("Отрицательное значение долга клампится в 0 и корректно пишет adjustment")
     func testNegativeRemainingAmountIsClamped() throws {
         let modelContext = try createTestModelContext()
