@@ -1218,15 +1218,23 @@ final class FinanceViewModel: ViewModelProtocol {
         return ((try? modelContext.fetchCount(descriptor)) ?? 0) > 0
     }
 
-    /// Баланс счёта нового ядра «сейчас» — прямой синхронный реплей событий (список короткий,
-    /// см. Т2 в плане; async-кэш через `AccountsTotalsService` подключается там, где важна
-    /// производительность на длинной истории — тотал/график).
+    /// Знаковый вклад счёта нового ядра в сальдо «сейчас» — прямой синхронный реплей событий (список
+    /// короткий, см. Т2 в плане; async-кэш через `AccountsTotalsService` подключается там, где важна
+    /// производительность на длинной истории — тотал/график). Ф7b: значение прогоняется через ту же
+    /// единую точку знака (`AccountTotalsContribution`), что и тоталы/серия — кредитная карта в строке
+    /// списка и сортировке показывается как −долг (красным через `NewCoreAccountRow.amountValue < 0`),
+    /// а не как остаток лимита. Для экрана деталки счёта остаток берётся ОТДЕЛЬНО, прямым `balanceAt`.
     func newCoreBalanceToday(_ account: Account) -> Decimal {
-        AccountBalanceEngine.balanceAt(
+        let rawBalance = AccountBalanceEngine.balanceAt(
             events: account.events ?? [],
             kind: account.kind,
             on: nowProvider(),
             marketMeta: account.marketMeta
+        )
+        return AccountTotalsContribution.signedValue(
+            rawBalance: rawBalance,
+            kind: account.kind,
+            creditLimit: account.cardMeta?.creditLimit
         )
     }
 
