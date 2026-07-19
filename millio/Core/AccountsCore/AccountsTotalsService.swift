@@ -104,17 +104,26 @@ final class AccountsTotalsService {
         descriptor.sortBy = [SortDescriptor(\.dayKey, order: .reverse)]
         descriptor.fetchLimit = 1
 
+        // «Баланс счёта» на дату — либо из checkpoint-кэша, либо прямым реплеем (счёт создан позже date
+        // или событий вовсе нет). Снапшоты хранят СЫРОЙ баланс (Ф7b: знак на чтении, не в кэше) — поэтому
+        // знаковый вклад в тотал вычисляем ЗДЕСЬ, единой точкой на все потребители тоталов/серии/карточки.
+        let rawBalance: Decimal
         if let snapshot = try? modelContext.fetch(descriptor).first {
-            return snapshot.balance
+            rawBalance = snapshot.balance
+        } else {
+            rawBalance = AccountBalanceEngine.balanceAt(
+                events: account.events ?? [],
+                kind: account.kind,
+                on: date,
+                priceProvider: priceProvider,
+                marketMeta: account.marketMeta
+            )
         }
 
-        // Нет ни одного checkpoint-а ≤ date (счёт создан позже date, либо событий вовсе нет) — прямой реплей.
-        return AccountBalanceEngine.balanceAt(
-            events: account.events ?? [],
+        return AccountTotalsContribution.signedValue(
+            rawBalance: rawBalance,
             kind: account.kind,
-            on: date,
-            priceProvider: priceProvider,
-            marketMeta: account.marketMeta
+            creditLimit: account.cardMeta?.creditLimit
         )
     }
 

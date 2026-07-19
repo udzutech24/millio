@@ -118,6 +118,32 @@ struct AccountsTotalsServiceTests {
         #expect(total == 3000) // 5000 − 2000, тотал МЕНЬШЕ ровно на сумму кредита
     }
 
+    // MARK: - Ф7b: core-кредитная карта входит в тотал как −долг, дебетовая — без изменений
+
+    /// Кредитка нового create-пути: `.debitCard` + `openingBalance = остаток лимита` + `cardMeta.creditLimit`.
+    /// Раньше уходила в тотал как +остаток (баг Ф7b); теперь — как −долг через единую точку знака.
+    @Test @MainActor
+    func totalAtIncludesCreditCardAsNegativeDebtContribution() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+
+        // Дебетовая карта +5000 (creditLimit == nil) — контроль, что она не меняется.
+        _ = try service.createAccount(name: "Дебет", kind: .debitCard, currency: "RUB", openingBalance: 5000)
+        // Кредитка: остаток лимита 1 374 000, лимит 1 500 000 → долг 126 000.
+        _ = try service.createAccount(
+            name: "Кредитка", kind: .debitCard, currency: "RUB", openingBalance: 1_374_000,
+            cardMeta: CardMeta(bank: nil, last4: nil, creditLimit: 1_500_000, statementDay: nil,
+                               dueDay: nil, minPayment: nil, graceDays: nil, overdraftLimit: nil)
+        )
+
+        let totals = AccountsTotalsService(modelContext: ctx, rebuilder: rebuilder, rateService: rateService)
+        let total = await totals.totalAt(Date(), in: "RUB")
+        #expect(total == -121_000) // 5000 (дебет) − 126_000 (долг кредитки)
+    }
+
     /// AC7/AC6: архивный `.loan` без группы (Ungrouped) не «утекает» в сегодняшний тотал —
     /// его отрицательный вклад исчезает с даты архивации, но история ДО неё не меняется задним числом.
     @Test @MainActor

@@ -145,6 +145,53 @@ struct FinanceDynamicsSeriesInvariantTests {
         await assertInvariantHoldsForAllPeriods(dynamicsViewModel, sourceLabel: "mixed")
     }
 
+    // MARK: - Ф7b: core-кредитка входит в серию/заголовок/карточку как −долг (знак через продюсер)
+
+    @Test("AC1(Ф7b): core-кредитка даёт −долг в серии — заголовок == серия == карточка, конец периода < 0")
+    func invariantHolds_coreCreditCardPortfolio() async throws {
+        let ctx = try makeContext()
+        let now = Date()
+        let createdAt = now.addingTimeInterval(-400 * 86_400) // старше 1Y, покрывает все периоды
+
+        let coreGroup = AccountGroup(name: "Основная")
+        ctx.insert(coreGroup)
+
+        let accountsService = AccountsCoreService(modelContext: ctx)
+        // Наличные +50 000, чтобы серия не была вырожденной.
+        _ = try accountsService.createAccount(
+            name: "Наличные", kind: .cash, currency: "RUB", openingBalance: 50_000, group: coreGroup, date: createdAt
+        )
+        // Кредитка: остаток лимита 20 000, лимит 100 000 → долг 80 000 → вклад −80 000.
+        _ = try accountsService.createAccount(
+            name: "Кредитка", kind: .debitCard, currency: "RUB", openingBalance: 20_000, group: coreGroup,
+            cardMeta: CardMeta(bank: nil, last4: nil, creditLimit: 100_000, statementDay: nil,
+                               dueDay: nil, minPayment: nil, graceDays: nil, overdraftLimit: nil),
+            date: createdAt
+        )
+        try ctx.save()
+
+        let financeViewModel = FinanceViewModel(modelContext: ctx, currencyService: MockCurrencyRateService(), skipInitialLoad: true)
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: ctx, financeViewModel: financeViewModel, currencyService: MockCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.dynamicsMode = .aggregated
+
+        // Знак прошёл через продюсер серии: сальдо = 50 000 − 80 000 = −30 000 (кредитка = долг, не актив).
+        dynamicsViewModel.state.period = .all
+        await dynamicsViewModel.updateCurrentBalanceAndDelta()
+        await dynamicsViewModel.updateChartDataAsync()
+        let points = dynamicsViewModel.state.chartData.sorted { $0.date < $1.date }
+        #expect(abs((points.last?.value ?? 0) - (-30_000)) < 0.01,
+                "конец серии = 50 000 − 80 000 = −30 000 (кредитка входит как −долг, а не +остаток)")
+
+        await assertInvariantHoldsForAllPeriods(dynamicsViewModel, sourceLabel: "core-credit-card")
+    }
+
     // MARK: - Q2: счёт создан внутри периода — база=0, без клэмпа
 
     @Test("AC1+AC3(Q2): счёт создан внутри периода — база=0 без клэмпа, инвариант держится")
