@@ -59,7 +59,7 @@ enum HistoricalValuationWriterInventory {
         entry("core-create", "millio/Core/AccountsCore/AccountsCoreService.swift", "createAccount", [.accountSet, .financial, .events]),
         entry("core-events", "millio/Core/AccountsCore/AccountsCoreService.swift", "recordEvent/adjustBalance/buy/sell/revalue/upsertEvent/upsertInterestEvent/transfer/deleteEvent/updateEvent", [.events]),
         entry("core-lifecycle", "millio/Core/AccountsCore/AccountsCoreService.swift", "archiveAccount/restoreAccount/softDelete/physicallyDelete", [.accountSet, .events]),
-        entry("core-meta", "millio/Core/AccountsCore/AccountsCoreService.swift", "updateAccount", [.financial]),
+        entry("core-meta", "millio/Core/AccountsCore/AccountsCoreService.swift", "updateAccount", [.accountSet, .financial]),
         entry("deposit-generated-events", "millio/Core/AccountsCore/DepositInterestScheduler.swift", "generate/deleteGeneratedInterestEvents", [.events]),
         entry("core-seed", "millio/Core/AccountsCore/AccountsCoreSeeder.swift", "seedIfNeeded", [.accountSet, .financial, .events]),
         entry("backup-account-import", "millio/Core/AccountsCore/AccountsCoreFeatureRegistration.swift", "AccountImporter.import", [.accountSet, .financial, .events], readiness: [.restore]),

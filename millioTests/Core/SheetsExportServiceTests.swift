@@ -261,7 +261,7 @@ struct SheetsExportTriggerTests {
         let syncCalled = SheetsCallCounter()
         // connected: true — иначе guard в триггере заблокирует sync
         let exportService = SheetsSpyExportService(onSync: { await syncCalled.increment() }, connected: true)
-        let trigger = SheetsExportTrigger(exportService: exportService)
+        let trigger = SheetsExportTrigger(exportService: exportService, isEnabled: { true })
         let emptyExport = MillioExportData(
             transactions: [], accounts: [], archivedAccounts: [], budgets: [], investments: []
         )
@@ -282,7 +282,7 @@ struct SheetsExportTriggerTests {
         let syncCalled = SheetsCallCounter()
         // connected: false — guard в триггере должен заблокировать sync
         let exportService = SheetsSpyExportService(onSync: { await syncCalled.increment() }, connected: false)
-        let trigger = SheetsExportTrigger(exportService: exportService)
+        let trigger = SheetsExportTrigger(exportService: exportService, isEnabled: { true })
         let emptyExport = MillioExportData(
             transactions: [], accounts: [], archivedAccounts: [], budgets: [], investments: []
         )
@@ -291,6 +291,25 @@ struct SheetsExportTriggerTests {
         try await Task.sleep(for: .seconds(6))
 
         #expect(await syncCalled.count == 0)
+    }
+
+    @Test("Google Sheets kill switch не запрашивает status и не запускает sync")
+    func testDisabledKillSwitchSkipsAllWork() async {
+        let syncCalled = SheetsCallCounter()
+        let exportService = SheetsSpyExportService(
+            onSync: { await syncCalled.increment() },
+            connected: true
+        )
+        let trigger = SheetsExportTrigger(exportService: exportService, isEnabled: { false })
+        let emptyExport = MillioExportData(
+            transactions: [], accounts: [], archivedAccounts: [], budgets: [], investments: []
+        )
+
+        await trigger.syncImmediately(with: emptyExport)
+        await trigger.notifyTransactionAdded(with: emptyExport)
+
+        #expect(await syncCalled.count == 0)
+        #expect(await exportService.statusCallCount == 0)
     }
 }
 
@@ -369,6 +388,7 @@ private actor SheetsSpyExportService: SheetsExportServiceProtocol {
     private let onSync: @Sendable () async -> Void
     // Триггер проверяет isConnected перед запуском — возвращаем connected чтобы sync дошёл
     private let connectedStatus: SheetsExportStatus
+    private(set) var statusCallCount = 0
 
     init(
         onSync: @escaping @Sendable () async -> Void,
@@ -390,7 +410,10 @@ private actor SheetsSpyExportService: SheetsExportServiceProtocol {
     func connectAccount() async throws -> URL { URL(string: "https://example.com")! }
     func handleOAuthCallback(code: String) async throws {}
     func disconnectAccount() async throws {}
-    func getStatus() async -> SheetsExportStatus { connectedStatus }
+    func getStatus() async -> SheetsExportStatus {
+        statusCallCount += 1
+        return connectedStatus
+    }
 
     func syncNow(with data: MillioExportData) async throws -> SheetsExportStatus {
         await onSync()

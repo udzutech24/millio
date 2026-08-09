@@ -96,6 +96,13 @@ final class Account: Persistable {
     /// в текущем UI удаление доступно только для уже архивных, т.е. обычно archivedAt ≤ deletedAt).
     func participates(on date: Date) -> Bool {
         guard includeInTotal else { return false }
+        return isVisible(on: date)
+    }
+
+    /// Видимость в активном списке не зависит от `includeInTotal`: исключённый из капитала
+    /// продукт должен оставаться доступным для просмотра и обратного включения.
+    /// Архив/удаление остаются time-aware жёсткой отсечкой.
+    func isVisible(on date: Date) -> Bool {
         guard let cutoff = [archivedAt, deletedAt].compactMap({ $0 }).min() else { return true }
         return date < cutoff
     }

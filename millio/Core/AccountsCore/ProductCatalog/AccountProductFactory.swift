@@ -215,31 +215,33 @@ enum AccountProductGraphBuilder {
 @MainActor
 final class AccountProductFactory {
     typealias StageHook = AccountProductGraphBuilder.StageHook
-    typealias SaveOperation = (ModelContext) throws -> Void
+    typealias GraphEnricher = (BuiltProductGraph, ModelContext) throws -> Void
 
     private let container: ModelContainer
-    private let saveOperation: SaveOperation
+    private let saveBoundary: AccountsCoreSaveBoundary
 
     init(
         modelContext: ModelContext,
-        saveOperation: @escaping SaveOperation = { try $0.save() }
+        saveOperation: @escaping AccountsCoreSaveBoundary.SaveOperation = { try $0.save() }
     ) {
         self.container = modelContext.container
-        self.saveOperation = saveOperation
+        self.saveBoundary = AccountsCoreSaveBoundary(saveOperation: saveOperation)
     }
 
     @discardableResult
     func create(
         _ command: CreateProductCommand,
+        graphEnricher: GraphEnricher = { _, _ in },
         stageHook: StageHook = { _ in }
     ) throws -> UUID {
         let transactionContext = ModelContext(container)
         transactionContext.autosaveEnabled = false
 
         do {
-            _ = try AccountProductGraphBuilder.build(command, in: transactionContext, stageHook: stageHook)
+            let graph = try AccountProductGraphBuilder.build(command, in: transactionContext, stageHook: stageHook)
+            try graphEnricher(graph, transactionContext)
             try stageHook(.save)
-            try saveOperation(transactionContext)
+            try saveBoundary.commit(transactionContext, operation: .createProduct)
         } catch {
             transactionContext.rollback()
             throw error

@@ -112,4 +112,26 @@ struct SchemaMigrationTests {
         let items = try container2.mainContext.fetch(FetchDescriptor<Item>())
         #expect(items.count == 1)
     }
+
+
+    @Test("V7 account history survives additive V8 attachment migration") @MainActor
+    func v7AccountHistorySurvivesV8Migration() throws {
+        let url = tempStoreURL()
+        defer { cleanup(url) }
+        let v7Schema = Schema(AppSchemaV7.models, version: AppSchemaV7.versionIdentifier)
+        let v7Config = ModelConfiguration("v7_fixture", schema: v7Schema, url: url, cloudKitDatabase: .none)
+        let v7Container = try ModelContainer(for: v7Schema, configurations: [v7Config])
+        let account = Account(name: "Apartment", kind: .manualAsset, productType: .realEstate)
+        account.manualAssetMeta = ManualAssetMeta(revalReminderMonths: 12, depreciationRatePerYear: nil, linkedLoanID: nil)
+        let event = AccountEvent(account: account, date: Date(timeIntervalSince1970: 1_700_000_000), type: .openingBalance, amount: 54_000_000)
+        v7Container.mainContext.insert(account)
+        v7Container.mainContext.insert(event)
+        try v7Container.mainContext.save()
+
+        let migrated = try AppMigrationPlan.makeContainer(configuration: ModelConfiguration("v8_fixture", url: url, cloudKitDatabase: .none))
+        let restored = try #require(migrated.mainContext.fetch(FetchDescriptor<Account>()).first)
+        #expect(restored.name == "Apartment")
+        #expect(restored.events?.first?.amount == 54_000_000)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<AccountAttachment>()).isEmpty)
+    }
 }

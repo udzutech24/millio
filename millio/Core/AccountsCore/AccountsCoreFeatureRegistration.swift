@@ -27,6 +27,8 @@ struct AccountsCoreFeatureRegistration {
             HistoricalPortfolioValuation.self,
             typeName: "HistoricalPortfolioValuation"
         )
+        ModelTypeRegistry.shared.register(RealEstateProfile.self, typeName: "RealEstateProfile")
+        ModelTypeRegistry.shared.register(AccountAttachment.self, typeName: "AccountAttachment")
         ModelTypeRegistry.shared.registerBackupExporter(
             "HistoricalPortfolioValuation",
             exporter: HistoricalPortfolioValuationBackupExporter.export
@@ -38,6 +40,74 @@ struct AccountsCoreFeatureRegistration {
         ModelTypeRegistry.shared.registerImporter(AccountDailySnapshotImporter.self)
         ModelTypeRegistry.shared.registerImporter(HistoricalAssetPriceImporter.self)
         ModelTypeRegistry.shared.registerImporter(HistoricalPortfolioValuationImporter.self)
+        ModelTypeRegistry.shared.registerImporter(RealEstateProfileImporter.self)
+        ModelTypeRegistry.shared.registerImporter(AccountAttachmentImporter.self)
+    }
+}
+
+// MARK: - Real-estate V8 importers
+
+struct RealEstateProfileImporter: ModelImporter {
+    static func importType() -> String { "RealEstateProfile" }
+    static var importPriority: Int { 33 }
+
+    static func `import`(from data: [String: Any], context: ModelContext) throws {
+        guard let idRaw = data["id"] as? String, let id = UUID(uuidString: idRaw),
+              let accountRaw = data["accountID"] as? String, let accountID = UUID(uuidString: accountRaw),
+              let typeRaw = data["propertyTypeRaw"] as? String,
+              let propertyType = RealEstatePropertyType(rawValue: typeRaw) else {
+            throw AppError.backupCorrupted
+        }
+        let accountDescriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.id == accountID })
+        guard let account = try context.fetch(accountDescriptor).first,
+              account.productType == .realEstate else { throw AppError.backupCorrupted }
+        let descriptor = FetchDescriptor<RealEstateProfile>(predicate: #Predicate { $0.id == id })
+        if let existing = try context.fetch(descriptor).first {
+            existing.accountID = accountID
+            existing.propertyType = propertyType
+        } else {
+            context.insert(RealEstateProfile(id: id, accountID: accountID, propertyType: propertyType))
+        }
+    }
+}
+
+struct AccountAttachmentImporter: ModelImporter {
+    static func importType() -> String { "AccountAttachment" }
+    static var importPriority: Int { 34 }
+
+    static func `import`(from data: [String: Any], context: ModelContext) throws {
+        guard let idRaw = data["id"] as? String, let id = UUID(uuidString: idRaw),
+              let accountRaw = data["accountID"] as? String, let accountID = UUID(uuidString: accountRaw),
+              let kindRaw = data["kindRaw"] as? String, let kind = AccountAttachmentKind(rawValue: kindRaw),
+              let order = data["order"] as? Int, (0..<AccountAttachmentPolicy.maximumPhotos).contains(order),
+              let isCover = data["isCover"] as? Bool,
+              let createdAtRaw = data["createdAt"] as? TimeInterval,
+              let mediaRaw = data["mediaData"] as? String, let mediaData = Data(base64Encoded: mediaRaw),
+              !mediaData.isEmpty, mediaData.count <= AccountPhotoProcessor.maximumEncodedBytes else {
+            throw AppError.backupCorrupted
+        }
+        let accountDescriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.id == accountID })
+        guard let account = try context.fetch(accountDescriptor).first,
+              account.productType == .realEstate else { throw AppError.backupCorrupted }
+        let descriptor = FetchDescriptor<AccountAttachment>(predicate: #Predicate { $0.id == id })
+        guard try context.fetch(descriptor).isEmpty else { return }
+        let accountAttachments = try context.fetch(FetchDescriptor<AccountAttachment>(
+            predicate: #Predicate { $0.accountID == accountID }
+        ))
+        guard accountAttachments.count < AccountAttachmentPolicy.maximumPhotos,
+              !accountAttachments.contains(where: { $0.order == order }),
+              !(isCover && accountAttachments.contains(where: \.isCover)) else {
+            throw AppError.backupCorrupted
+        }
+        context.insert(AccountAttachment(
+            id: id,
+            accountID: accountID,
+            kind: kind,
+            order: order,
+            isCover: isCover,
+            createdAt: Date(timeIntervalSince1970: createdAtRaw),
+            mediaData: mediaData
+        ))
     }
 }
 

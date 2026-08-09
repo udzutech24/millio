@@ -27,9 +27,14 @@ enum AccountsCoreServiceError: Error {
 @MainActor
 final class AccountsCoreService {
     private let modelContext: ModelContext
+    private let saveBoundary: AccountsCoreSaveBoundary
 
-    init(modelContext: ModelContext) {
+    init(
+        modelContext: ModelContext,
+        saveOperation: @escaping AccountsCoreSaveBoundary.SaveOperation = { try $0.save() }
+    ) {
         self.modelContext = modelContext
+        self.saveBoundary = AccountsCoreSaveBoundary(saveOperation: saveOperation)
     }
 
     /// Service methods are commit boundaries: on failure, retain neither domain mutations nor
@@ -197,10 +202,28 @@ final class AccountsCoreService {
     /// Покупка актива — увеличивает `quantity` (движок E реплеит Σ buy−sell × цена(дата)).
     /// `unitPrice` — цена ПОКУПКИ (не текущая рыночная), фиксируется на событии навсегда.
     @discardableResult
-    func buy(account: Account, quantity: Decimal, unitPrice: Decimal, date: Date = Date(), note: String? = nil) throws -> AccountEvent {
+    func buy(
+        account: Account,
+        quantity: Decimal,
+        unitPrice: Decimal,
+        fee: Decimal = 0,
+        date: Date = Date(),
+        note: String? = nil
+    ) throws -> AccountEvent {
         guard account.kind == .marketInvestment else { throw AccountsCoreServiceError.unsupportedEventType(.buy) }
         try requireEventAllowed(.buy, for: account)
-        let event = AccountEvent(account: account, date: date, type: .buy, quantity: quantity, unitPrice: unitPrice, note: note)
+        let event = AccountEvent(
+            account: nil,
+            date: date,
+            type: .buy,
+            amount: fee,
+            quantity: quantity,
+            unitPrice: unitPrice,
+            note: note
+        )
+        // Validate before insertion so a rejected operation leaves the context untouched.
+        _ = try StockLotEngine.replay(events: [event])
+        event.account = account
         modelContext.insert(event)
         invalidateCache(for: account, from: date)
         HistoricalValuationRevisionTracker.bump([.events], on: account)
@@ -208,13 +231,30 @@ final class AccountsCoreService {
         return event
     }
 
-    /// Продажа актива — уменьшает `quantity`. НЕ проверяет «продажа больше остатка» (не жёсткий
-    /// запрет, брифинг Фазы 4, п.4) — предупреждение считает вызывающий UI по текущему `quantity`.
+    /// Продажа актива уменьшает quantity и жёстко запрещает short position.
+    /// Backdated sale is validated by replay at its actual timestamp, not against today's total.
     @discardableResult
-    func sell(account: Account, quantity: Decimal, unitPrice: Decimal, date: Date = Date(), note: String? = nil) throws -> AccountEvent {
+    func sell(
+        account: Account,
+        quantity: Decimal,
+        unitPrice: Decimal,
+        fee: Decimal = 0,
+        date: Date = Date(),
+        note: String? = nil
+    ) throws -> AccountEvent {
         guard account.kind == .marketInvestment else { throw AccountsCoreServiceError.unsupportedEventType(.sell) }
         try requireEventAllowed(.sell, for: account)
-        let event = AccountEvent(account: account, date: date, type: .sell, quantity: quantity, unitPrice: unitPrice, note: note)
+        let event = AccountEvent(
+            account: nil,
+            date: date,
+            type: .sell,
+            amount: fee,
+            quantity: quantity,
+            unitPrice: unitPrice,
+            note: note
+        )
+        _ = try StockLotEngine.replay(events: (account.events ?? []) + [event])
+        event.account = account
         modelContext.insert(event)
         invalidateCache(for: account, from: date)
         HistoricalValuationRevisionTracker.bump([.events], on: account)
@@ -583,13 +623,15 @@ final class AccountsCoreService {
     ///
     /// Семантика параметров: `name`/`group`/`note` — желаемое итоговое значение (полная замена,
     /// `group == nil` = «Без группы»); meta-структуры — патч (`nil` = не трогать существующую), вызывающий
-    /// код передаёт только meta своего kind.
+    /// код передаёт только meta своего kind. `includeInTotal` — тоже патч:
+    /// `nil` не меняет membership, а explicit Bool меняет его и инвалидирует account-set revision.
     @discardableResult
     func updateAccount(
         _ account: Account,
         name: String,
         group: AccountGroup?,
         note: String? = nil,
+        includeInTotal: Bool? = nil,
         cardMeta: CardMeta? = nil,
         depositMeta: DepositMeta? = nil,
         loanMeta: LoanMeta? = nil,
@@ -624,24 +666,23 @@ final class AccountsCoreService {
 
         // Mutate only after the complete candidate tuple has passed validation. A rejected edit
         // leaves both the object and context clean rather than partially applying cosmetic fields.
+        let membershipChanged = includeInTotal.map { $0 != account.includeInTotal } ?? false
         account.name = name
         account.group = group
         account.note = note
+        if let includeInTotal { account.includeInTotal = includeInTotal }
         if let cardMeta { account.cardMeta = cardMeta }
         if let depositMeta { account.depositMeta = depositMeta }
         if let loanMeta { account.loanMeta = loanMeta }
         if let debtMeta { account.debtMeta = debtMeta }
         if let marketMeta { account.marketMeta = marketMeta }
         if let manualAssetMeta { account.manualAssetMeta = manualAssetMeta }
-        HistoricalValuationRevisionTracker.bump([.financial], on: account)
-        do {
-            try modelContext.save()
-        } catch {
-            // Safe because the clean-context precondition above makes this method the sole owner
-            // of pending mutations. Never use this rollback pattern without that precondition.
-            modelContext.rollback()
-            throw error
-        }
+        var revisionImpacts: Set<HistoricalValuationRevisionDimension> = [.financial]
+        if membershipChanged { revisionImpacts.insert(.accountSet) }
+        HistoricalValuationRevisionTracker.bump(revisionImpacts, on: account)
+        // Safe because the clean-context precondition above makes this method the sole owner
+        // of pending mutations. Never use this rollback boundary without that precondition.
+        try saveBoundary.commit(modelContext, operation: .updateAccount)
         return account
     }
 
@@ -742,6 +783,17 @@ final class AccountsCoreService {
             }
         }
 
+        // V8 product records deliberately use accountID instead of a relationship so adding them
+        // does not mutate the released V7 Account checksum. Physical deletion therefore owns the
+        // explicit cleanup; archive leaves both profile and gallery intact.
+        let profiles = try modelContext.fetch(
+            FetchDescriptor<RealEstateProfile>(predicate: #Predicate { $0.accountID == accountID })
+        )
+        let attachments = try modelContext.fetch(
+            FetchDescriptor<AccountAttachment>(predicate: #Predicate { $0.accountID == accountID })
+        )
+        profiles.forEach(modelContext.delete)
+        attachments.forEach(modelContext.delete)
         modelContext.delete(account) // каскад .cascade удалит events + snapshots самого счёта
         try saveOrRollback()
     }

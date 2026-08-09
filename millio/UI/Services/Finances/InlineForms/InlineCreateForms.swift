@@ -1061,7 +1061,9 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             }
             groupSection
             calculationsSection
-            prioritySection
+            if selectedCategory != .house {
+                prioritySection
+            }
         }
         .onAppear {
             loadAvailableCurrencies()
@@ -1465,17 +1467,19 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                     
-                    HStack(spacing: 12) {
-                        FinancesCheckboxOption(
-                            title: L("finances.add_account.total_impact.increases"),
-                            isSelected: selectedInvestmentType == .positive,
-                            onTap: { selectedInvestmentType = .positive }
-                        )
-                        FinancesCheckboxOption(
-                            title: L("finances.add_account.total_impact.decreases"),
-                            isSelected: selectedInvestmentType == .negative,
-                            onTap: { selectedInvestmentType = .negative }
-                        )
+                    if selectedCategory != .house {
+                        HStack(spacing: 12) {
+                            FinancesCheckboxOption(
+                                title: L("finances.add_account.total_impact.increases"),
+                                isSelected: selectedInvestmentType == .positive,
+                                onTap: { selectedInvestmentType = .positive }
+                            )
+                            FinancesCheckboxOption(
+                                title: L("finances.add_account.total_impact.decreases"),
+                                isSelected: selectedInvestmentType == .negative,
+                                onTap: { selectedInvestmentType = .negative }
+                            )
+                        }
                     }
                     
                     Text(L("finances.add_account.total_impact.description"))

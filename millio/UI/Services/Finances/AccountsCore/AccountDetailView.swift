@@ -73,8 +73,17 @@ struct AccountDetailView: View {
             GradientBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.xl) {
+                    if AccountDetailDescriptor.resolve(for: account).kind == .realEstate {
+                        RealEstateDetailSection(
+                            account: account,
+                            modelContext: modelContext,
+                            refreshToken: refreshToken
+                        )
+                    }
                     header
-                    actionsRow
+                    if account.archivedAt == nil && account.deletedAt == nil {
+                        actionsRow
+                    }
                     if account.kind == .deposit {
                         depositForecastSection
                     }
@@ -95,7 +104,7 @@ struct AccountDetailView: View {
             L("accounts_core.detail.delete_confirm.title"),
             isPresented: $showArchiveConfirm
         ) {
-            Button(L("accounts_core.detail.action.delete"), role: .destructive) {
+            Button(archiveActionTitle, role: .destructive) {
                 archiveAccount()
             }
             Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
@@ -192,6 +201,20 @@ struct AccountDetailView: View {
                 Text(note)
                     .font(.millioCalloutRegular)
                     .foregroundStyle(AppColors.textTertiary)
+            }
+
+            if !account.includeInTotal {
+                Label(
+                    L("accounts_core.detail.total.excluded"),
+                    systemImage: "sum"
+                )
+                .font(.millioCaptionRegular)
+                .foregroundStyle(AppColors.textSecondary)
+                .padding(.horizontal, AppSpacing.s)
+                .padding(.vertical, AppSpacing.xs)
+                .background(
+                    Capsule().fill(AppColors.iconBackground)
+                )
             }
         }
     }
@@ -361,33 +384,19 @@ struct AccountDetailView: View {
 
     // MARK: - Рыночный счёт (.marketInvestment) — qty/цена/P&L (Фаза 4)
 
-    /// Текущее количество актива — реплей Σ buy−sell (та же логика, что движок E, но локально:
-    /// нужно и для отображения, и для предупреждения «продажа больше остатка», не жёсткого запрета).
-    private var currentQuantity: Decimal {
+    /// UI consumes the pure FIFO replay; it must not grow a second quantity/cost-basis engine.
+    private var stockSnapshot: StockPositionSnapshot? {
         _ = refreshToken
-        return (account.events ?? []).reduce(Decimal(0)) { acc, event in
-            switch event.type {
-            case .buy: return acc + (event.quantity ?? 0)
-            case .sell: return acc - (event.quantity ?? 0)
-            default: return acc
-            }
-        }
+        return try? StockLotEngine.replay(events: account.events ?? [], on: Date())
     }
 
-    private var totalBuyCost: Decimal {
-        (account.events ?? []).filter { $0.type == .buy }
-            .reduce(Decimal(0)) { $0 + ($1.quantity ?? 0) * ($1.unitPrice ?? 0) }
+    private var currentQuantity: Decimal {
+        stockSnapshot?.quantity ?? 0
     }
 
-    private var totalSellProceeds: Decimal {
-        (account.events ?? []).filter { $0.type == .sell }
-            .reduce(Decimal(0)) { $0 + ($1.quantity ?? 0) * ($1.unitPrice ?? 0) }
-    }
-
-    /// P&L нереализованный = рыночная стоимость сейчас − Σ buy + Σ sell (брифинг Фазы 4, задача 4).
-    /// Средняя цена покупки (avg cost basis) НЕ хранится — выводится этим же реплеем при необходимости.
+    /// Unrealized P&L excludes realized proceeds and is based only on remaining FIFO lots.
     private var unrealizedPL: Decimal {
-        balanceToday - totalBuyCost + totalSellProceeds
+        stockSnapshot?.unrealizedProfitLoss(at: currentUnitPrice) ?? 0
     }
 
     /// Текущая цена за единицу + признак «не сегодняшняя» (пометка «посл. известная»). `nil` цены из
@@ -517,11 +526,17 @@ struct AccountDetailView: View {
                 actionButton(L("accounts_core.detail.action.edit"), icon: "pencil") {
                     sheet = .editDetails
                 }
-                actionButton(L("accounts_core.detail.action.delete"), icon: "archivebox.fill", isDestructive: true) {
+                actionButton(archiveActionTitle, icon: "archivebox.fill", isDestructive: true) {
                     requestArchiveConfirmation()
                 }
             }
         }
+    }
+
+    private var archiveActionTitle: String {
+        account.productType == .realEstate
+            ? L("real_estate.archive.action")
+            : L("accounts_core.detail.action.delete")
     }
 
     /// Ненулевой баланс (S8): сначала показываем выбор «перевести остаток / закрыть как есть»,
@@ -737,15 +752,43 @@ struct AccountDetailView: View {
                 }
             )
         case .editDetails:
-            AccountEditDetailsSheet(
-                account: account,
-                modelContext: modelContext,
-                onSave: { name, group, note in
-                    performEdit {
-                        try service.updateAccount(account, name: name, group: group, note: note)
+            if account.productType == .realEstate {
+                RealEstateEditSheet(
+                    account: account,
+                    modelContext: modelContext,
+                    onSave: { name, group, note, includeInTotal, propertyType, reminderMonths, linkedLoanID, photos in
+                        performEdit {
+                            try RealEstateEditorService(modelContext: modelContext).update(
+                                account: account,
+                                name: name,
+                                group: group,
+                                note: note,
+                                includeInTotal: includeInTotal,
+                                propertyType: propertyType,
+                                reminderMonths: reminderMonths,
+                                linkedLoanID: linkedLoanID,
+                                photos: photos
+                            )
+                        }
                     }
-                }
-            )
+                )
+            } else {
+                AccountEditDetailsSheet(
+                    account: account,
+                    modelContext: modelContext,
+                    onSave: { name, group, note, includeInTotal, _, _, _ in
+                    performEdit {
+                        try service.updateAccount(
+                            account,
+                            name: name,
+                            group: group,
+                            note: note,
+                            includeInTotal: includeInTotal
+                        )
+                    }
+                    }
+                )
+            }
         case .transfer:
             AccountTransferSheet(
                 source: account,

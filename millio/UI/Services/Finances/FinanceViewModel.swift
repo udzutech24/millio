@@ -68,8 +68,9 @@ struct FinanceState {
     /// Время последнего успешного принудительного обновления
     var lastRefreshedAt: Date? = nil
 
-    /// Счета нового ядра, участвующие сегодня ([Ф5c.7 contract] — флип из `coreAccounts`).
-    /// ПЕРВИЧНЫЙ источник рендера списка/группы. Архивные скрыты — как у `newCoreAccounts`.
+    /// Видимые счета нового ядра ([Ф5c.7 contract] — флип из `coreAccounts`).
+    /// ПЕРВИЧНЫЙ источник рендера списка/группы. Архивные скрыты, но `includeInTotal == false`
+    /// не скрывает продукт: membership влияет на суммы, а не на навигацию.
     var accounts: [Account] = []
 
     // MARK: - Легаси-fallback (invariant 5/9 §2.1 плана 5c.7) — ОСТАЁТСЯ активной для НЕМИГРИРОВАННОГО
@@ -758,7 +759,7 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     /// [Ф5c.7 contract] Populate `state.groups`/`state.accounts` из ядра — единственный первичный
-    /// источник рендера списка/группы. Участвующие сегодня, сортировка order→createdAt (тот же
+    /// источник рендера списка/группы. Видимые сегодня, сортировка order→createdAt (тот же
     /// паттерн, что был у `newCoreAccounts(matching:)`, не второй путь агрегации — инвариант 2 §2.1).
     /// Канон Ungrouped = `account.group == nil`: `state.groups` исключает любую `AccountGroup` с
     /// известным Ungrouped-именем (защита от сущности-дубля).
@@ -767,7 +768,7 @@ final class FinanceViewModel: ViewModelProtocol {
 
         let accounts = (try? modelContext.fetch(FetchDescriptor<Account>())) ?? []
         state.accounts = accounts
-            .filter { $0.participates(on: today) }
+            .filter { $0.isVisible(on: today) }
             .sorted { $0.order != $1.order ? $0.order < $1.order : $0.createdAt < $1.createdAt }
 
         let ungroupedNames = FinanceSystemGroups.allKnownUngroupedNames
@@ -1114,14 +1115,14 @@ final class FinanceViewModel: ViewModelProtocol {
     /// (Account уже несёт имя/сумму инлайн).
     func orderedAccounts(for group: AccountGroup) -> [Account] {
         let today = nowProvider()
-        let accounts = (group.accounts ?? []).filter { $0.participates(on: today) }
+        let accounts = (group.accounts ?? []).filter { $0.isVisible(on: today) }
         return sortedAccounts(accounts, group: group)
     }
 
     /// Core-счета БЕЗ группы (канон Ungrouped — `account.group == nil`, не сущность).
     func ungroupedAccounts() -> [Account] {
         let today = nowProvider()
-        let accounts = state.accounts.filter { $0.group == nil && $0.participates(on: today) }
+        let accounts = state.accounts.filter { $0.group == nil && $0.isVisible(on: today) }
         return sortedAccounts(accounts, group: nil)
     }
 
@@ -1163,7 +1164,7 @@ final class FinanceViewModel: ViewModelProtocol {
 
         let today = nowProvider()
         return accounts
-            .filter { $0.participates(on: today) }
+            .filter { $0.isVisible(on: today) }
             .sorted { lhs, rhs in
                 lhs.order != rhs.order ? lhs.order < rhs.order : lhs.createdAt < rhs.createdAt
             }
@@ -1191,7 +1192,7 @@ final class FinanceViewModel: ViewModelProtocol {
 
         let today = nowProvider()
         return accounts
-            .filter { $0.participates(on: today) }
+            .filter { $0.isVisible(on: today) }
             .sorted { lhs, rhs in
                 lhs.order != rhs.order ? lhs.order < rhs.order : lhs.createdAt < rhs.createdAt
             }

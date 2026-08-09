@@ -81,6 +81,37 @@ struct AccountsTotalsServiceTests {
     }
 
     @Test @MainActor
+    func membershipEditRemovesAccountFromCurrentAndHistoricalTotals() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let core = AccountsCoreService(modelContext: ctx)
+        let openedAt = day(-2)
+        let account = try core.createAccount(
+            name: "Квартира",
+            kind: .manualAsset,
+            currency: "RUB",
+            openingBalance: 54_000_000,
+            date: openedAt
+        )
+        let totals = AccountsTotalsService(
+            modelContext: ctx,
+            rebuilder: AccountSnapshotRebuilder(modelContainer: container),
+            rateService: DateAwareMockRateService()
+        )
+        #expect(await totals.totalAt(Date(), in: "RUB") == 54_000_000)
+
+        try core.updateAccount(
+            account,
+            name: account.name,
+            group: nil,
+            includeInTotal: false
+        )
+
+        #expect(await totals.totalAt(Date(), in: "RUB") == 0)
+        #expect(await totals.totalAt(day(-1), in: "RUB") == 0)
+    }
+
+    @Test @MainActor
     func coreHistoricalTotalUsesPersistedRateBeforeProvider() async throws {
         let container = try makeContainer()
         let ctx = container.mainContext

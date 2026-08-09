@@ -272,6 +272,31 @@ struct FinanceViewModelCoreEntitiesTests {
         #expect(bucket("Б").map(\.id) == [account.id])
     }
 
+    @Test("includeInTotal=false excludes amount but keeps product visible and editable")
+    func excludedFromTotalAccountRemainsVisible() throws {
+        let ctx = try makeContext()
+        let coreService = AccountsCoreService(modelContext: ctx)
+        let account = try coreService.createAccount(
+            name: "Квартира",
+            kind: .manualAsset,
+            currency: "RUB",
+            openingBalance: 54_000_000
+        )
+        try coreService.updateAccount(
+            account,
+            name: account.name,
+            group: nil,
+            includeInTotal: false
+        )
+
+        let vm = makeViewModel(ctx)
+        vm.handle(.loadGroups)
+
+        #expect(vm.state.accounts.map(\.id).contains(account.id))
+        #expect(vm.ungroupedAccounts().map(\.id).contains(account.id))
+        #expect(account.participates(on: Date()) == false)
+    }
+
     /// adjustBalance (perform(), без публикации событий) — баланс в строке обязан обновляться БЕЗ
     /// рефреша снапшота: `state.accounts` хранит ту же @Model-ссылку, что и `modelContext`
     /// (единый контекст), поэтому `newCoreBalanceToday` пересчитывает по актуальным `.events`

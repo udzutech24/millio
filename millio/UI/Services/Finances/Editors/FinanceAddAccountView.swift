@@ -5,6 +5,7 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 // MARK: - Finance Add Account View
 
@@ -54,6 +55,11 @@ struct FinanceAddAccountView: View {
     @State private var draftIconName: String? = nil
     @State private var draftIconColor: String? = nil
     @State private var showIconPicker = false
+    @State private var realEstatePropertyType: RealEstatePropertyType = .apartment
+    @State private var realEstatePhotoItems: [PhotosPickerItem] = []
+    @State private var realEstatePhotoData: [Data] = []
+    @State private var isProcessingRealEstatePhotos = false
+    @State private var realEstatePhotoError: String?
 
     private enum HintsPrefs {
         static let hiddenKey = "finance_add_account_hints_hidden"
@@ -610,6 +616,9 @@ struct FinanceAddAccountView: View {
                         validationHintsSection
                     }
                     createFormSections
+                    if selectedProductOption == .house {
+                        realEstateCreationSection
+                    }
                 }
             }
             .padding(.horizontal, 20)
@@ -619,6 +628,67 @@ struct FinanceAddAccountView: View {
         .scrollDismissesKeyboard(.immediately)
         .dismissKeyboardOnTap()
         .scrollIndicators(.hidden)
+    }
+
+    private var realEstateCreationSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: L("real_estate.edit.object"))
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    Picker(L("real_estate.about.type"), selection: $realEstatePropertyType) {
+                        ForEach(RealEstatePropertyType.allCases) { type in
+                            Text(type.localizedTitle).tag(type)
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    FinancesRowDivider(leadingPadding: 16)
+                    PhotosPicker(
+                        selection: $realEstatePhotoItems,
+                        maxSelectionCount: AccountAttachmentPolicy.maximumPhotos,
+                        matching: .images
+                    ) {
+                        HStack {
+                            Label(L("real_estate.photo.add"), systemImage: "photo.badge.plus")
+                            Spacer()
+                            if isProcessingRealEstatePhotos { ProgressView() }
+                            Text("\(realEstatePhotoData.count)/\(AccountAttachmentPolicy.maximumPhotos)")
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 14)
+                    }
+                    .disabled(isProcessingRealEstatePhotos)
+                    if let realEstatePhotoError {
+                        Text(realEstatePhotoError)
+                            .font(.millioCaptionRegular)
+                            .foregroundStyle(AppColors.error)
+                            .padding(.horizontal, 16).padding(.bottom, 12)
+                    }
+                }
+            }
+        }
+        .onChange(of: realEstatePhotoItems) { _, items in
+            Task { await processRealEstateDraftPhotos(items) }
+        }
+    }
+
+    private func processRealEstateDraftPhotos(_ items: [PhotosPickerItem]) async {
+        await MainActor.run { isProcessingRealEstatePhotos = true; realEstatePhotoError = nil }
+        do {
+            var processed: [Data] = []
+            for item in items.prefix(AccountAttachmentPolicy.maximumPhotos) {
+                guard let source = try await item.loadTransferable(type: Data.self) else {
+                    throw AccountPhotoProcessorError.invalidImage
+                }
+                processed.append(try await AccountPhotoProcessor().process(source))
+            }
+            await MainActor.run { realEstatePhotoData = processed; isProcessingRealEstatePhotos = false }
+        } catch {
+            await MainActor.run {
+                realEstatePhotoData = []
+                realEstatePhotoError = error.localizedDescription
+                isProcessingRealEstatePhotos = false
+            }
+        }
     }
     
     @ViewBuilder
@@ -810,6 +880,7 @@ struct FinanceAddAccountView: View {
     
     private var isValid: Bool {
         guard requiredHints.isEmpty else { return false }
+        if selectedProductOption == .house, isProcessingRealEstatePhotos { return false }
 
         switch selectedAccountType {
         case .card:
@@ -1057,6 +1128,7 @@ struct FinanceAddAccountView: View {
                 name: resolvedName,
                 currency: currency,
                 amount: openingBalance,
+                includeInTotal: cardData?.includeInTotal ?? investmentData?.includeInTotal ?? true,
                 groupID: group?.id,
                 cardType: cardData?.cardType,
                 bank: cardData?.bank,
@@ -1096,6 +1168,7 @@ struct FinanceAddAccountView: View {
                     name: resolvedName,
                     currency: creditData.currency,
                     amount: Decimal(creditData.remainingAmount),
+                    includeInTotal: creditData.includeInTotal,
                     groupID: group?.id,
                     loanMeta: meta
                 ))
@@ -1108,6 +1181,7 @@ struct FinanceAddAccountView: View {
                     name: resolvedName,
                     currency: investmentData.currency,
                     amount: Decimal(investmentData.amount),
+                    includeInTotal: investmentData.includeInTotal,
                     groupID: group?.id,
                     debtDirection: direction
                 ))
@@ -1147,6 +1221,7 @@ struct FinanceAddAccountView: View {
                     name: resolvedName,
                     currency: currency,
                     amount: Decimal(investmentData.amount),
+                    includeInTotal: investmentData.includeInTotal,
                     groupID: group?.id,
                     marketSymbol: symbol,
                     marketQuantity: Decimal(quantity),
@@ -1159,10 +1234,30 @@ struct FinanceAddAccountView: View {
                     name: resolvedName,
                     currency: investmentData.currency,
                     amount: Decimal(investmentData.amount),
+                    includeInTotal: investmentData.includeInTotal,
                     groupID: group?.id,
                     marketSymbol: nil
                 ))
-                _ = try factory.create(command)
+                if selectedProductOption == .house {
+                    let propertyType = realEstatePropertyType
+                    let photoData = realEstatePhotoData
+                    _ = try factory.create(command, graphEnricher: { graph, transactionContext in
+                        transactionContext.insert(RealEstateProfile(
+                            accountID: graph.account.id,
+                            propertyType: propertyType
+                        ))
+                        for (index, data) in photoData.enumerated() {
+                            transactionContext.insert(AccountAttachment(
+                                accountID: graph.account.id,
+                                order: index,
+                                isCover: index == 0,
+                                mediaData: data
+                            ))
+                        }
+                    })
+                } else {
+                    _ = try factory.create(command)
+                }
             default:
                 return
             }

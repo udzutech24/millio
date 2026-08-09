@@ -156,4 +156,43 @@ struct AllPresetsOnNewCoreTests {
             ))
         }
     }
+
+    @Test("Membership flag survives resolver and factory for every product shape", arguments: [
+        FinanceAddAccountProductOption.card,
+        .account, .deposit, .credit, .debt, .investment, .house, .stocks, .business, .crypto, .other
+    ])
+    func excludedProductStaysExcluded(option: FinanceAddAccountProductOption) throws {
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        let (base, _) = makeInput(for: option, date: date)
+        let input = FinanceProductCreationInput(
+            option: base.option,
+            name: base.name,
+            currency: base.currency,
+            amount: base.amount,
+            includeInTotal: false,
+            groupID: base.groupID,
+            cardType: base.cardType,
+            bank: base.bank,
+            cardLast4: base.cardLast4,
+            creditLimit: base.creditLimit,
+            depositMeta: base.depositMeta,
+            loanMeta: base.loanMeta,
+            debtDirection: base.debtDirection,
+            marketSymbol: base.marketSymbol,
+            marketQuantity: base.marketQuantity,
+            marketUnitPrice: base.marketUnitPrice,
+            note: base.note,
+            date: base.date
+        )
+
+        let command = try FinanceProductCreationCommandResolver.resolve(input)
+        #expect(command.includeInTotal == false)
+
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let context = container.mainContext
+        let id = try AccountProductFactory(modelContext: context).create(command)
+        let account = try #require(context.fetch(FetchDescriptor<Account>()).first { $0.id == id })
+        #expect(account.includeInTotal == false)
+        #expect(account.participates(on: date) == false)
+    }
 }

@@ -117,6 +117,14 @@ struct SchemaConsistencyTests {
         #expect(v7Names.contains("HistoricalPortfolioValuation"))
     }
 
+    @Test
+    func v8IsAdditiveOverV7() {
+        let v7Names = Set(AppSchemaV7.models.map { entityName(for: $0) })
+        let v8Names = Set(AppSchemaV8.models.map { entityName(for: $0) })
+        #expect(v7Names.subtracting(v8Names).isEmpty)
+        #expect(v8Names.subtracting(v7Names) == ["RealEstateProfile", "AccountAttachment"])
+    }
+
     /// AppSchema.create() возвращает схему из тех же типов что и AppSchemaCurrent.
     @Test
     func appSchemaCreateMatchesSchemaCurrent() {

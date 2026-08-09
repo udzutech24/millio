@@ -1,0 +1,28 @@
+{
+  "plan": "2026-08-09__real-estate-product-vertical-slice.md",
+  "status": "completed",
+  "updatedAt": "2026-08-09",
+  "currentPhase": null,
+  "phases": {
+    "1": "completed",
+    "2": "completed",
+    "3": "completed",
+    "4": "completed"
+  },
+  "evidence": [
+    "includeInTotal loss traced from InlineInvestmentCreateForm to FinanceProductCreationCommandResolver default",
+    "includeInTotal now propagates through resolver and AccountProductFactory for all 11 visible product options",
+    "AccountsCoreService explicit membership edit bumps accountSet and financial revisions",
+    "excluded products remain visible/editable while current and historical totals exclude them",
+    "targeted xcodebuild: 31 tests in 3 suites passed; app target built",
+    "V8 is additive over V7 and the V7 account/event migration fixture passes",
+    "photo processing downsamples off-main, strips GPS metadata and enforces count/byte limits",
+    "backup round-trip preserves real-estate profile and attachments",
+    "release gate: 73 tests in 9 suites passed",
+    "dark-mode accessibility Dynamic Type render smoke passed in final 8-test real-estate gate",
+    "UX/l10n hotfix: typed property titles, dedicated adaptive editor and compact selection sheets",
+    "atomic metadata/profile/gallery edit rollback and archived read-only policies tested",
+    "render matrix: 375x812 and 390x844, RU/EN/zh-Hans, regular/accessibility Dynamic Type, dark mode",
+    "manual simulator screenshots inspected for closed editor, type selection and mortgage selection"
+  ]
+}

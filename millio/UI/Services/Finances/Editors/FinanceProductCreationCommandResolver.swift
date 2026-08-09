@@ -7,6 +7,7 @@ struct FinanceProductCreationInput {
     let name: String
     let currency: String
     let amount: Decimal
+    let includeInTotal: Bool
     let groupID: UUID?
     let cardType: CardType?
     let bank: Bank?
@@ -26,6 +27,7 @@ struct FinanceProductCreationInput {
         name: String,
         currency: String,
         amount: Decimal,
+        includeInTotal: Bool = true,
         groupID: UUID? = nil,
         cardType: CardType? = nil,
         bank: Bank? = nil,
@@ -44,6 +46,7 @@ struct FinanceProductCreationInput {
         self.name = name
         self.currency = currency
         self.amount = amount
+        self.includeInTotal = includeInTotal
         self.groupID = groupID
         self.cardType = cardType
         self.bank = bank
@@ -82,6 +85,7 @@ enum FinanceProductCreationCommandResolver {
                 name: input.name,
                 currency: input.currency,
                 openingBalance: openingBalance,
+                includeInTotal: input.includeInTotal,
                 groupID: input.groupID,
                 metadata: metadata,
                 note: input.note,
@@ -195,6 +199,7 @@ enum FinanceProductCreationCommandResolver {
             name: input.name,
             currency: input.currency,
             openingBalance: 0,
+            includeInTotal: input.includeInTotal,
             groupID: input.groupID,
             metadata: .init(market: MarketMeta(symbol: symbol, assetClass: assetClass)),
             note: input.note,

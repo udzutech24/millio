@@ -160,8 +160,14 @@ struct AccountProductFactoryTests {
         let context = container.mainContext
         let factory = AccountProductFactory(modelContext: context) { _ in throw SaveFailure() }
 
-        #expect(throws: SaveFailure.self) {
-            try factory.create(depositCommand())
+        do {
+            _ = try factory.create(depositCommand())
+            Issue.record("Expected a typed persistence failure")
+        } catch let AccountsCorePersistenceError.saveFailed(operation, underlying) {
+            #expect(operation == .createProduct)
+            #expect(underlying is SaveFailure)
+        } catch {
+            Issue.record("Unexpected error: \(type(of: error))")
         }
         #expect(!context.hasChanges)
         context.insert(AccountGroup(name: "Unrelated"))

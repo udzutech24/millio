@@ -303,28 +303,37 @@ struct AccountEarlyCloseSheet: View {
     }
 }
 
-/// Минимальная форма правки «карточки» счёта (Ф5c.7.0): имя + группа + заметка. Полноценный
+/// Минимальная форма правки «карточки» счёта (Ф5c.7.0): имя + группа + заметка + membership. Полноценный
 /// rich-edit (структурная meta по kind, иконка) — отдельная под-фаза 5c.7.5 через перетипизированную
 /// `FinanceAddAccountView`. Вызывает `AccountsCoreService.updateAccount` (единственная точка записи).
 /// Валюты в форме нет намеренно — смена валюты запрещена в v1 (инвариант 8, см. докстринг `updateAccount`).
 struct AccountEditDetailsSheet: View {
     let account: Account
     let modelContext: ModelContext
-    /// (имя, выбранная группа или nil = «Без группы», заметка или nil).
-    let onSave: (String, AccountGroup?, String?) -> Void
+    /// Generic fields plus optional real-estate metadata.
+    let onSave: (String, AccountGroup?, String?, Bool, RealEstatePropertyType, Int?, UUID?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
     @State private var note: String
+    @State private var includeInTotal: Bool
+    @State private var propertyType: RealEstatePropertyType
+    @State private var reminderMonths: Int
+    @State private var selectedLoanID: UUID?
     /// nil = «Без группы» (счёт без группы = `account.group == nil`, канон Ungrouped ядра).
     @State private var selectedGroupID: UUID?
 
-    init(account: Account, modelContext: ModelContext, onSave: @escaping (String, AccountGroup?, String?) -> Void) {
+    init(account: Account, modelContext: ModelContext, onSave: @escaping (String, AccountGroup?, String?, Bool, RealEstatePropertyType, Int?, UUID?) -> Void) {
         self.account = account
         self.modelContext = modelContext
         self.onSave = onSave
         _name = State(initialValue: account.name)
         _note = State(initialValue: account.note ?? "")
+        _includeInTotal = State(initialValue: account.includeInTotal)
+        let profile = try? RealEstateProfileService(modelContext: modelContext).profile(accountID: account.id)
+        _propertyType = State(initialValue: profile?.propertyType ?? .other)
+        _reminderMonths = State(initialValue: account.manualAssetMeta?.revalReminderMonths ?? 0)
+        _selectedLoanID = State(initialValue: account.manualAssetMeta?.linkedLoanID)
         _selectedGroupID = State(initialValue: account.group?.id)
     }
 
@@ -341,6 +350,14 @@ struct AccountEditDetailsSheet: View {
         groups.first { $0.id == selectedGroupID }
     }
 
+    private var eligibleLoans: [Account] {
+        let currency = account.currency
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> {
+            $0.kindRaw == "loan" && $0.currency == currency && $0.archivedAt == nil && $0.deletedAt == nil
+        })
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -353,6 +370,29 @@ struct AccountEditDetailsSheet: View {
                         }
                     }
                     TextField(L("accounts_core.detail.sheet.note_placeholder"), text: $note)
+                    Toggle(L("finances.add_account.total_impact.include"), isOn: $includeInTotal)
+                        .tint(AppColors.toggleOnGreen)
+                }
+                if account.productType == .realEstate {
+                    Section(L("real_estate.edit.object")) {
+                        Picker(L("real_estate.about.type"), selection: $propertyType) {
+                            ForEach(RealEstatePropertyType.allCases) { type in
+                                Text(type.localizedTitle).tag(type)
+                            }
+                        }
+                        LabeledContent(L("real_estate.about.currency"), value: account.currency)
+                        Stepper(value: $reminderMonths, in: 0...60) {
+                            Text(reminderMonths == 0
+                                 ? L("real_estate.reminder.off")
+                                 : String(format: L("real_estate.about.reminder.months"), reminderMonths))
+                        }
+                        Picker(L("real_estate.about.mortgage"), selection: $selectedLoanID) {
+                            Text(L("real_estate.mortgage.none")).tag(Optional<UUID>.none)
+                            ForEach(eligibleLoans, id: \.id) { loan in
+                                Text(loan.name).tag(Optional(loan.id))
+                            }
+                        }
+                    }
                 }
             }
             .navigationTitle(L("accounts_core.detail.sheet.edit.title"))
@@ -364,7 +404,15 @@ struct AccountEditDetailsSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L("accounts_core.detail.sheet.save")) {
                         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-                        onSave(trimmedName, selectedGroup, trimmedNote.isEmpty ? nil : trimmedNote)
+                        onSave(
+                            trimmedName,
+                            selectedGroup,
+                            trimmedNote.isEmpty ? nil : trimmedNote,
+                            includeInTotal,
+                            propertyType,
+                            reminderMonths == 0 ? nil : reminderMonths,
+                            selectedLoanID
+                        )
                     }
                     .disabled(trimmedName.isEmpty)
                 }

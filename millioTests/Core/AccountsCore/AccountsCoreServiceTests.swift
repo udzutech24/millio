@@ -277,7 +277,7 @@ struct AccountsCoreServiceTests {
     }
 
     @Test
-    func sellReducesQuantityAndAllowsExceedingCurrentHolding() throws {
+    func sellRejectsQuantityExceedingHoldingWithoutPersistingEvent() throws {
         let (container, ctx) = try makeContext()
         _ = container
         let service = AccountsCoreService(modelContext: ctx)
@@ -287,11 +287,13 @@ struct AccountsCoreServiceTests {
             marketMeta: MarketMeta(symbol: "AAPL", assetClass: .stock)
         )
         try service.buy(account: account, quantity: 5, unitPrice: 100)
-        // Продажа БОЛЬШЕ остатка — не жёсткий запрет (брифинг Фазы 4, задача 4): сервис не бросает ошибку.
-        try service.sell(account: account, quantity: 8, unitPrice: 120)
+        #expect(throws: StockLotEngineError.oversell(requested: 8, available: 5)) {
+            try service.sell(account: account, quantity: 8, unitPrice: 120)
+        }
 
         let balance = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .marketInvestment, on: Date(), marketMeta: account.marketMeta)
-        #expect(balance == -360) // quantity = -3 × 120
+        #expect(balance == 500)
+        #expect((account.events ?? []).filter { $0.type == .sell }.isEmpty)
     }
 
     @Test

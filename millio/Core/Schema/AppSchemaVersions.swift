@@ -139,6 +139,18 @@ enum AppSchemaV7: VersionedSchema {
     ]
 }
 
+// MARK: - V8 (real-estate profile and privacy-safe photo attachments)
+
+/// Additive tables only: V7 model declarations remain byte-for-byte unchanged so existing stores
+/// retain a valid checksum and migrate without rewriting financial history.
+enum AppSchemaV8: VersionedSchema {
+    static var versionIdentifier = Schema.Version(8, 0, 0)
+    static var models: [any PersistentModel.Type] = AppSchemaV7.models + [
+        RealEstateProfile.self,
+        AccountAttachment.self,
+    ]
+}
+
 // MARK: - Текущая схема (единственный источник правды)
 
 // При добавлении нового @Model:
@@ -149,7 +161,7 @@ enum AppSchemaV7: VersionedSchema {
 // ВАЖНО: models уже выпущенной версии (или версии, под идентификатором которой уже
 // существуют сторы на дисках — dev/sim в том числе) — не редактировать задним числом.
 // Это ломает staged migration (см. комментарий V4 выше, Находка 2).
-typealias AppSchemaCurrent = AppSchemaV7
+typealias AppSchemaCurrent = AppSchemaV8
 
 // MARK: - План миграции
 
@@ -163,6 +175,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         AppSchemaV5.self,
         AppSchemaV6.self,
         AppSchemaV7.self,
+        AppSchemaV8.self,
     ]
 
     static var stages: [MigrationStage] = [
@@ -172,6 +185,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         .lightweight(fromVersion: AppSchemaV4.self, toVersion: AppSchemaV5.self),
         .lightweight(fromVersion: AppSchemaV5.self, toVersion: AppSchemaV6.self),
         .lightweight(fromVersion: AppSchemaV6.self, toVersion: AppSchemaV7.self),
+        .lightweight(fromVersion: AppSchemaV7.self, toVersion: AppSchemaV8.self),
     ]
 }
 
