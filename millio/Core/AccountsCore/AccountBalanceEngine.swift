@@ -45,6 +45,15 @@ enum AccountBalanceEngine {
         }
     }
 
+    /// Quantity is the native replay output required by the unified historical market resolver.
+    /// Keeping it here prevents portfolio valuation from growing a second market replay engine.
+    static func marketQuantityAt(events: [AccountEvent], on date: Date) -> Decimal {
+        let relevant = events
+            .filter { $0.date <= date }
+            .sorted(by: strictOrder)
+        return marketQuantityFromTransformedEvents(applyRedenomination(to: relevant))
+    }
+
     // MARK: - Сортировка (S5: детерминизм реплея)
 
     private static func strictOrder(_ lhs: AccountEvent, _ rhs: AccountEvent) -> Bool {
@@ -132,13 +141,7 @@ enum AccountBalanceEngine {
         priceProvider: MarketPriceProviding?,
         marketMeta: MarketMeta?
     ) -> Decimal {
-        let quantity = events.reduce(Decimal(0)) { acc, event in
-            switch event.type {
-            case .buy: return acc + (event.quantity ?? 0)
-            case .sell: return acc - (event.quantity ?? 0)
-            default: return acc
-            }
-        }
+        let quantity = marketQuantityFromTransformedEvents(events)
 
         guard quantity != 0 else { return 0 }
 
@@ -157,6 +160,16 @@ enum AccountBalanceEngine {
 
         let price = providedPrice ?? lastKnownPrice ?? 0
         return quantity * price
+    }
+
+    private static func marketQuantityFromTransformedEvents(_ events: [TransformedEvent]) -> Decimal {
+        events.reduce(Decimal(0)) { acc, event in
+            switch event.type {
+            case .buy: return acc + (event.quantity ?? 0)
+            case .sell: return acc - (event.quantity ?? 0)
+            default: return acc
+            }
+        }
     }
 
     // MARK: - F: ручной актив

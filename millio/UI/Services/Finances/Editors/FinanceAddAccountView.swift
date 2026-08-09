@@ -992,7 +992,7 @@ struct FinanceAddAccountView: View {
         let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
         let group = targetGroup  // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен
-        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+        let factory = AccountProductFactory(modelContext: viewModel.modelContext)
 
         let meta = AccountsCoreAdditionBridge.depositMeta(
             rate: Decimal(depositData.rate),
@@ -1006,20 +1006,17 @@ struct FinanceAddAccountView: View {
         )
 
         do {
-            let account = try service.createAccount(
+            let command = try FinanceProductCreationCommandResolver.resolve(.init(
+                option: .deposit,
                 name: resolvedName,
-                kind: .deposit,
                 currency: depositData.currency,
-                openingBalance: Decimal(depositData.amount),
-                group: group,
+                amount: Decimal(depositData.amount),
+                groupID: group?.id,
                 depositMeta: meta,
                 note: depositData.comment.isEmpty ? nil : depositData.comment
-            )
-            try DepositInterestScheduler.regenerateFutureInterestEvents(
-                for: account,
-                service: service,
-                context: viewModel.modelContext
-            )
+            ))
+            _ = try factory.create(command)
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             dismiss()
         } catch {
             AppLogger.log(.error, category: "AccountsCore", "Не удалось создать вклад нового ядра: \(error)")
@@ -1053,16 +1050,21 @@ struct FinanceAddAccountView: View {
         }
 
         let group = targetGroup  // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен
-        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+        let factory = AccountProductFactory(modelContext: viewModel.modelContext)
         do {
-            try service.createAccount(
+            let command = try FinanceProductCreationCommandResolver.resolve(.init(
+                option: selectedProductOption,
                 name: resolvedName,
-                kind: kind,
                 currency: currency,
-                openingBalance: openingBalance,
-                group: group,
-                cardMeta: cardMeta
-            )
+                amount: openingBalance,
+                groupID: group?.id,
+                cardType: cardData?.cardType,
+                bank: cardData?.bank,
+                cardLast4: cardData?.cardNumber,
+                creditLimit: cardMeta?.creditLimit
+            ))
+            _ = try factory.create(command)
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             dismiss()
         } catch {
             AppLogger.log(.error, category: "AccountsCore", "Не удалось создать денежный счёт нового ядра: \(error)")
@@ -1075,7 +1077,7 @@ struct FinanceAddAccountView: View {
         let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
         let group = targetGroup  // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен
-        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+        let factory = AccountProductFactory(modelContext: viewModel.modelContext)
 
         do {
             switch kind {
@@ -1089,29 +1091,31 @@ struct FinanceAddAccountView: View {
                 )
                 // openingBalance — ТЕКУЩИЙ остаток долга (remainingAmount), не первоначальная сумма
                 // (principal хранится отдельно в loanMeta для отображения) — движок C сам сделает знак минус.
-                try service.createAccount(
+                let command = try FinanceProductCreationCommandResolver.resolve(.init(
+                    option: .credit,
                     name: resolvedName,
-                    kind: .loan,
                     currency: creditData.currency,
-                    openingBalance: Decimal(creditData.remainingAmount),
-                    group: group,
+                    amount: Decimal(creditData.remainingAmount),
+                    groupID: group?.id,
                     loanMeta: meta
-                )
+                ))
+                _ = try factory.create(command)
             case .debt:
                 guard let investmentData else { return }
                 let direction: DebtDirection = investmentData.investmentType == .positive ? .owedToMe : .owedByMe
-                let signedOpening = direction == .owedToMe ? Decimal(investmentData.amount) : -Decimal(investmentData.amount)
-                try service.createAccount(
+                let command = try FinanceProductCreationCommandResolver.resolve(.init(
+                    option: .debt,
                     name: resolvedName,
-                    kind: .debt,
                     currency: investmentData.currency,
-                    openingBalance: signedOpening,
-                    group: group,
-                    debtMeta: AccountsCoreAdditionBridge.debtMeta(direction: direction)
-                )
+                    amount: Decimal(investmentData.amount),
+                    groupID: group?.id,
+                    debtDirection: direction
+                ))
+                _ = try factory.create(command)
             default:
                 return
             }
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             dismiss()
         } catch {
             AppLogger.log(.error, category: "AccountsCore", "Не удалось создать обязательство нового ядра: \(error)")
@@ -1125,7 +1129,7 @@ struct FinanceAddAccountView: View {
         let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
         let group = targetGroup  // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен
-        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+        let factory = AccountProductFactory(modelContext: viewModel.modelContext)
 
         do {
             switch kind {
@@ -1138,28 +1142,31 @@ struct FinanceAddAccountView: View {
                 // последняя известная рыночная цена на момент выбора тикера (брифинг Фазы 4, задача 1).
                 let unitPrice = Decimal(marketData.purchaseUnitPrice ?? marketData.unitPrice ?? 0)
                 let currency = (marketData.currency?.isEmpty == false) ? marketData.currency! : investmentData.currency
-                let meta = AccountsCoreAdditionBridge.marketMeta(symbol: symbol, category: selectedInvestmentCategory)
-                let account = try service.createAccount(
+                let command = try FinanceProductCreationCommandResolver.resolve(.init(
+                    option: selectedProductOption,
                     name: resolvedName,
-                    kind: .marketInvestment,
                     currency: currency,
-                    openingBalance: 0, // движок E игнорирует opening — баланс считает только buy/sell
-                    group: group,
-                    marketMeta: meta
-                )
-                try service.buy(account: account, quantity: Decimal(quantity), unitPrice: unitPrice)
+                    amount: Decimal(investmentData.amount),
+                    groupID: group?.id,
+                    marketSymbol: symbol,
+                    marketQuantity: Decimal(quantity),
+                    marketUnitPrice: unitPrice
+                ))
+                _ = try factory.create(command)
             case .manualAsset:
-                try service.createAccount(
+                let command = try FinanceProductCreationCommandResolver.resolve(.init(
+                    option: selectedProductOption,
                     name: resolvedName,
-                    kind: .manualAsset,
                     currency: investmentData.currency,
-                    openingBalance: Decimal(investmentData.amount),
-                    group: group,
-                    manualAssetMeta: AccountsCoreAdditionBridge.manualAssetMeta()
-                )
+                    amount: Decimal(investmentData.amount),
+                    groupID: group?.id,
+                    marketSymbol: nil
+                ))
+                _ = try factory.create(command)
             default:
                 return
             }
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             dismiss()
         } catch {
             AppLogger.log(.error, category: "AccountsCore", "Не удалось создать актив нового ядра: \(error)")

@@ -90,12 +90,8 @@ enum AppSchemaV3: VersionedSchema {
 
 enum AppSchemaV4: VersionedSchema {
     static var versionIdentifier = Schema.Version(4, 0, 0)
-    static var models: [any PersistentModel.Type] = AppSchemaV3.models + [
-        Account.self,
-        AccountEvent.self,
-        AccountGroup.self,
-        AccountDailySnapshot.self,
-    ]
+    static var models: [any PersistentModel.Type] = AppSchemaV3.models
+        + AppSchemaV5.frozenAccountsCoreModels
 }
 
 // MARK: - V5 (HistoricalAssetPrice — append-only кэш рыночных цен, Фаза 4 S9/AC10)
@@ -110,15 +106,38 @@ enum AppSchemaV5: VersionedSchema {
     ]
 }
 
-// MARK: - Добавление Account.deletedAt (tombstone мягкого удаления, Ф5/Q1) — БЕЗ новой версии.
-// Механизм версий (V1…V5) обслуживает добавление НОВЫХ @Model-ТИПОВ: каждая версия отличается
-// набором типов, поэтому SwiftData различает их схемы. Добавление же нового OPTIONAL-СВОЙСТВА к
-// существующему типу через новую версию НЕВОЗМОЖНО: V6.models ссылался бы на тот же Swift-тип
-// Account, что и V5 → обе версии дают на рантайме БАЙТ-ИДЕНТИЧНУЮ схему, а lightweight-стейдж между
-// идентичными схемами роняет ModelContainer на старте (краш до bootstrap). Optional-атрибут — это
-// каноничный кейс АВТОМАТИЧЕСКОЙ lightweight-миграции SwiftData: у существующих строк поле = nil,
-// «unknown model version»-риск Находки 2 не наступает (он был про добавление ТАБЛИЦЫ, не колонки),
-// CloudKit-совместимо (optional, как archivedAt). Версию НЕ бампим.
+// MARK: - V6 (persisted product identity, Accounts history Phase 1P)
+
+// V4/V5 используют frozen declarations из `AppSchemaV5AccountsCoreModels.swift`. Ссылаться из
+// исторической версии на mutable top-level `Account` нельзя: добавление даже optional-свойства
+// меняет checksum старой версии, и реальный V5 store падает с NSCocoaErrorDomain 134504
+// "Cannot use staged migration with an unknown model version".
+//
+// V6 впервые владеет optional-колонками `productTypeRaw`/`productMigrationReason`.
+// После acceptance его AccountsCore graph заморожен в `AppSchemaV6AccountsCoreModels.swift`:
+// иначе V7 revision columns изменят checksum исторической V6 задним числом.
+enum AppSchemaV6: VersionedSchema {
+    static var versionIdentifier = Schema.Version(6, 0, 0)
+    static var models: [any PersistentModel.Type] = AppSchemaV3.models
+        + AppSchemaV6.frozenAccountsCoreModels
+}
+
+// MARK: - V7 (immutable local historical close repository, Accounts history Phase 3V)
+
+// V7 switches the frozen V6 AccountsCore declarations to the current production graph. This owns
+// only additive optional valuation-revision Account columns plus the new close table. The staged
+// transition never deletes or rewrites Account/Event/Snapshot source rows.
+enum AppSchemaV7: VersionedSchema {
+    static var versionIdentifier = Schema.Version(7, 0, 0)
+    static var models: [any PersistentModel.Type] = AppSchemaV3.models + [
+        Account.self,
+        AccountEvent.self,
+        AccountGroup.self,
+        AccountDailySnapshot.self,
+        HistoricalAssetPrice.self,
+        HistoricalPortfolioValuation.self,
+    ]
+}
 
 // MARK: - Текущая схема (единственный источник правды)
 
@@ -130,7 +149,7 @@ enum AppSchemaV5: VersionedSchema {
 // ВАЖНО: models уже выпущенной версии (или версии, под идентификатором которой уже
 // существуют сторы на дисках — dev/sim в том числе) — не редактировать задним числом.
 // Это ломает staged migration (см. комментарий V4 выше, Находка 2).
-typealias AppSchemaCurrent = AppSchemaV5
+typealias AppSchemaCurrent = AppSchemaV7
 
 // MARK: - План миграции
 
@@ -142,6 +161,8 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         AppSchemaV3.self,
         AppSchemaV4.self,
         AppSchemaV5.self,
+        AppSchemaV6.self,
+        AppSchemaV7.self,
     ]
 
     static var stages: [MigrationStage] = [
@@ -149,69 +170,34 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         .lightweight(fromVersion: AppSchemaV2.self, toVersion: AppSchemaV3.self),
         .lightweight(fromVersion: AppSchemaV3.self, toVersion: AppSchemaV4.self),
         .lightweight(fromVersion: AppSchemaV4.self, toVersion: AppSchemaV5.self),
+        .lightweight(fromVersion: AppSchemaV5.self, toVersion: AppSchemaV6.self),
+        .lightweight(fromVersion: AppSchemaV6.self, toVersion: AppSchemaV7.self),
     ]
 }
 
 // MARK: - Фабрика контейнеров
 
-// SwiftData требует variadic-форму для передачи migrationPlan.
-// Все вызовы ModelContainer с планом миграции должны идти через эти методы.
+// Все вызовы ModelContainer с планом миграции должны идти через эти методы. Фабрика
+// сама подставляет current versioned schema: schema-less `ModelConfiguration` иначе
+// создаёт current layout с on-disk version identifier `1.0.0`, ломая следующую staged migration.
 extension AppMigrationPlan {
     static func makeContainer(configuration: ModelConfiguration) throws -> ModelContainer {
-        try ModelContainer(
-            for: Item.self,
-                 CashflowTransaction.self,
-                 CashflowSystemCategoryOverride.self,
-                 CashflowCustomCategory.self,
-                 BudgetPlan.self,
-                 BudgetCategoryLimit.self,
-                 Cashback.self,
-                 UserSubscription.self,
-                 CashbackCustomCategory.self,
-                 Card.self,
-                 FinanceAccount.self,
-                 FinanceGroup.self,
-                 Credit.self,
-                 Investment.self,
-                 AssetCatalogItem.self,
-                 AssetProviderMapping.self,
-                 HistoricalRate.self,
-                 Account.self,
-                 AccountEvent.self,
-                 AccountGroup.self,
-                 AccountDailySnapshot.self,
-                 HistoricalAssetPrice.self,
+        let schema = AppSchema.create()
+        var resolvedConfiguration = configuration
+        resolvedConfiguration.schema = schema
+        return try ModelContainer(
+            for: schema,
             migrationPlan: AppMigrationPlan.self,
-            configurations: configuration
+            configurations: [resolvedConfiguration]
         )
     }
 
     static func makeInMemoryContainer() throws -> ModelContainer {
-        try ModelContainer(
-            for: Item.self,
-                 CashflowTransaction.self,
-                 CashflowSystemCategoryOverride.self,
-                 CashflowCustomCategory.self,
-                 BudgetPlan.self,
-                 BudgetCategoryLimit.self,
-                 Cashback.self,
-                 UserSubscription.self,
-                 CashbackCustomCategory.self,
-                 Card.self,
-                 FinanceAccount.self,
-                 FinanceGroup.self,
-                 Credit.self,
-                 Investment.self,
-                 AssetCatalogItem.self,
-                 AssetProviderMapping.self,
-                 HistoricalRate.self,
-                 Account.self,
-                 AccountEvent.self,
-                 AccountGroup.self,
-                 AccountDailySnapshot.self,
-                 HistoricalAssetPrice.self,
-            migrationPlan: AppMigrationPlan.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        try makeContainer(
+            configuration: ModelConfiguration(
+                isStoredInMemoryOnly: true,
+                cloudKitDatabase: .none
+            )
         )
     }
 }

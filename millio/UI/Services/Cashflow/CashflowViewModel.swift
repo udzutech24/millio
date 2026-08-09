@@ -29,6 +29,9 @@ final class CashflowViewModel: ViewModelProtocol {
     let now: () -> Date
     private let assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)?
     private let defaults: UserDefaults
+    let historicalReaderMode: HistoricalPortfolioReaderMode
+    var historicalAssetsSeries: HistoricalPortfolioSeriesResult?
+    var historicalAssetsShadowDeltaBucket: HistoricalPortfolioShadowDeltaBucket?
     private let categoryPinPrefs: CashflowCategoryPinPrefs
     let bulkExpenseMerchantPrefs: CashflowBulkExpenseMerchantCategoryPrefs
     let budgetAutoRepeatPrefs = BudgetAutoRepeatPrefs()
@@ -38,6 +41,23 @@ final class CashflowViewModel: ViewModelProtocol {
     private var rateSourceObserver: NSObjectProtocol?
     // Опциональный — не все экземпляры VM используют экспорт (например, тесты, Preview)
     private let sheetsExportTrigger: SheetsExportTrigger?
+
+    private(set) lazy var historicalAccountsTotalsService: AccountsTotalsService = {
+        let scopeID = historicalValuationScopeID
+        return AccountsTotalsService(
+            modelContext: modelContext,
+            rebuilder: AccountSnapshotRebuilder(modelContainer: modelContext.container),
+            rateService: CurrencyRateService.shared,
+            marketPriceService: AccountMarketPriceService(modelContext: modelContext),
+            scopeReadiness: {
+                HistoricalValuationReadinessCoordinator.shared.readiness(scopeID: scopeID)
+            }
+        )
+    }()
+
+    var historicalValuationScopeID: String {
+        modelContext.container.configurations.first?.name ?? "unresolved-scope"
+    }
 
     // MARK: - Services
     let historyService: CashflowHistoryService
@@ -172,7 +192,8 @@ final class CashflowViewModel: ViewModelProtocol {
         now: @escaping () -> Date = Date.init,
         assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)? = nil,
         defaults: UserDefaults = .standard,
-        sheetsExportTrigger: SheetsExportTrigger? = nil
+        sheetsExportTrigger: SheetsExportTrigger? = nil,
+        historicalReaderMode: HistoricalPortfolioReaderMode? = nil
     ) {
         self.sheetsExportTrigger = sheetsExportTrigger
         self.modelContext = modelContext
@@ -182,6 +203,8 @@ final class CashflowViewModel: ViewModelProtocol {
         self.now = now
         self.assetsSnapshotProvider = assetsSnapshotProvider
         self.defaults = defaults
+        self.historicalReaderMode = historicalReaderMode
+            ?? HistoricalPortfolioReaderConfiguration.current(defaults: defaults).mode
         self.categoryPinPrefs = CashflowCategoryPinPrefs(defaults: defaults)
         self.bulkExpenseMerchantPrefs = CashflowBulkExpenseMerchantCategoryPrefs(defaults: defaults)
         state.displayCurrency = SettingsManager.shared.primaryCurrencyCode

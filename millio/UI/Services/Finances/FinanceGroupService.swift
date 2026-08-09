@@ -19,6 +19,7 @@ final class FinanceGroupService {
     // MARK: - Dependencies
 
     private let modelContext: ModelContext
+    private let saveChanges: (ModelContext) throws -> Void
 
     /// Провайдер текущих core-групп из FinanceState
     private let groupsProvider: () -> [AccountGroup]
@@ -38,6 +39,7 @@ final class FinanceGroupService {
 
     init(
         modelContext: ModelContext,
+        saveChanges: @escaping (ModelContext) throws -> Void = { try $0.save() },
         groupsProvider: @escaping () -> [AccountGroup],
         onLoadGroups: @escaping () -> Void,
         onLoadAccounts: @escaping () -> Void,
@@ -46,6 +48,7 @@ final class FinanceGroupService {
         onDismissGroupEditor: @escaping () -> Void
     ) {
         self.modelContext = modelContext
+        self.saveChanges = saveChanges
         self.groupsProvider = groupsProvider
         self.onLoadGroups = onLoadGroups
         self.onLoadAccounts = onLoadAccounts
@@ -62,21 +65,29 @@ final class FinanceGroupService {
     /// пересмотрено: это отмена случайного регресса, а не новая фича — удаление группы в старом мире
     /// ВСЕГДА архивировало её счета, тот же контракт сохраняется для core).
     func deleteGroup(_ group: AccountGroup) {
-        let accountsService = AccountsCoreService(modelContext: modelContext)
-        let now = Date()
-        for account in group.accounts ?? [] {
-            try? accountsService.archiveAccount(account, on: now)
-            account.group = nil
-        }
-        modelContext.delete(group)
-        syncLegacyGroupDeletion(named: group.name)
-
+        let groupID = group.id
+        let transactionContext = ModelContext(modelContext.container)
+        transactionContext.autosaveEnabled = false
         do {
-            try modelContext.save()
+            let groupDescriptor = FetchDescriptor<AccountGroup>(
+                predicate: #Predicate<AccountGroup> { $0.id == groupID }
+            )
+            guard let transactionGroup = try transactionContext.fetch(groupDescriptor).first else { return }
+            let accountsService = AccountsCoreService(modelContext: transactionContext)
+            let now = Date()
+            let accounts = try transactionContext.fetch(FetchDescriptor<Account>()).filter { $0.group?.id == groupID }
+            for account in accounts {
+                accountsService.stageArchiveAccount(account, on: now)
+                account.group = nil
+            }
+            transactionContext.delete(transactionGroup)
+            try syncLegacyGroupDeletion(named: transactionGroup.name, in: transactionContext)
+            try saveChanges(transactionContext)
             onLoadGroups()
             onLoadAccounts()
             onCalculateTotal()
         } catch {
+            transactionContext.rollback()
             AppLogger.log(.error, category: "Finance", "Failed to delete group: \(error.localizedDescription)")
         }
     }
@@ -160,11 +171,11 @@ final class FinanceGroupService {
     /// Удаление core-группы: если одноимённая легаси-`FinanceGroup` существует И пуста (нет
     /// непроконвертированного хвоста), удаляем и её — иначе оставляем (легаси archive/restore
     /// продолжает работать для её содержимого, invariant 5).
-    private func syncLegacyGroupDeletion(named name: String) {
+    private func syncLegacyGroupDeletion(named name: String, in context: ModelContext) throws {
         let descriptor = FetchDescriptor<FinanceGroup>(predicate: #Predicate<FinanceGroup> { $0.name == name })
-        guard let legacyGroup = try? modelContext.fetch(descriptor).first else { return }
+        guard let legacyGroup = try context.fetch(descriptor).first else { return }
         if legacyGroup.accounts?.isEmpty ?? true {
-            modelContext.delete(legacyGroup)
+            context.delete(legacyGroup)
         }
     }
 }

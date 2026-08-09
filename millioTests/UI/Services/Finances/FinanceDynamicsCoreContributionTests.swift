@@ -9,7 +9,7 @@ import Testing
 /// построил легаси-скелет (`buildTimeSeriesData`). Тесты здесь проверяют результирующее поведение
 /// агрегированного графика «Динамики» через публичный `updateChartDataAsync()`, а не саму
 /// (приватную) функцию — тестируем контракт, а не реализацию.
-@Suite("Dynamics aggregated chart: core contribution (6b Фаза 2b, замена mergingNewCoreSeries)")
+@Suite("Dynamics aggregated chart: core contribution (6b Фаза 2b, замена mergingNewCoreSeries)", .serialized)
 @MainActor
 struct FinanceDynamicsCoreContributionTests {
 
@@ -216,6 +216,58 @@ struct FinanceDynamicsCoreContributionTests {
         #expect(!breakdown.isEmpty, "Ветка .accounts должна показать core-счёт, а не пустой список (баг «No products»)")
         let core = try #require(breakdown.first { $0.name == "Наличные" })
         #expect(abs(core.endValue - 200_000) < 0.01, "Баланс core-счёта должен прийти от accountsTotalsService (200 000)")
+    }
+
+    @Test("Core-only профиль без FinanceGroup: график и счета не схлопываются в 0 / No products")
+    func coreOnlyProfileWithoutLegacyGroupsKeepsDynamicsScope() async throws {
+        let ctx = try makeContext()
+        let createdAt = Date().addingTimeInterval(-60 * 86_400)
+        let coreGroup = AccountGroup(name: "Core only", colorHex: "#FFFFFF")
+        ctx.insert(coreGroup)
+        let accountsService = AccountsCoreService(modelContext: ctx)
+        _ = try accountsService.createAccount(
+            name: "Core deposit",
+            kind: .bankAccount,
+            currency: "RUB",
+            openingBalance: 200_000,
+            group: coreGroup,
+            date: createdAt
+        )
+        try ctx.save()
+
+        #expect((try? ctx.fetchCount(FetchDescriptor<FinanceGroup>())) == 0)
+        #expect((try? ctx.fetchCount(FetchDescriptor<FinanceAccount>())) == 0)
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: ctx,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+        #expect(financeViewModel.state.accounts.count == 1)
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: ctx,
+            financeViewModel: financeViewModel,
+            currencyService: MockCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.period = .month
+        dynamicsViewModel.state.dynamicsMode = .aggregated
+        dynamicsViewModel.state.viewMode = .accounts
+
+        await dynamicsViewModel.updateChartDataAsync()
+        await dynamicsViewModel.updateCurrentBalanceAndDelta()
+        await dynamicsViewModel.updateDynamicsBreakdown()
+
+        #expect(abs(dynamicsViewModel.state.currentBalance - 200_000) < 0.01)
+        #expect(abs((dynamicsViewModel.state.chartData.last?.value ?? 0) - 200_000) < 0.01)
+        let row = try #require(
+            dynamicsViewModel.state.dynamicsBreakdown.first { $0.name == "Core deposit" }
+        )
+        #expect(abs(row.endValue - 200_000) < 0.01)
     }
 
     // MARK: - Start строки core-счёта: домиграционный баланс от легаси-предшественника (не 0)

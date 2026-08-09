@@ -7,11 +7,19 @@ import Testing
 /// (`MarketDataClientProtocol`), без сети. `actor` — `Sendable`-безопасен при передаче в сервис.
 actor AccountMarketPriceMockClient: MarketDataClientProtocol {
     var quotesBySymbol: [String: Double] = [:]
+    var chartsBySymbol: [String: ChartResponse] = [:]
+    var chartRequests: [(symbol: String, outputSize: Int)] = []
     var shouldThrow = false
 
     func setPrice(_ price: Double, for symbol: String) {
         quotesBySymbol[symbol.uppercased()] = price
     }
+
+    func setChart(_ chart: ChartResponse, for symbol: String) {
+        chartsBySymbol[symbol.uppercased()] = chart
+    }
+
+    func requestedCharts() -> [(symbol: String, outputSize: Int)] { chartRequests }
 
     func searchSymbols(query: String, outputSize: Int) async throws -> [TwelveDataSymbol] { [] }
 
@@ -28,6 +36,15 @@ actor AccountMarketPriceMockClient: MarketDataClientProtocol {
             guard let price = quotesBySymbol[symbol.uppercased()] else { return nil }
             return makeSummary(symbol: symbol, price: price)
         }
+    }
+
+    func assetChart(symbol: String, interval: String, outputSize: Int) async throws -> ChartResponse {
+        if shouldThrow { throw MarketAPIClientError.transport("mock offline") }
+        chartRequests.append((symbol.uppercased(), outputSize))
+        guard let chart = chartsBySymbol[symbol.uppercased()] else {
+            throw MarketAPIClientError.transport("missing mock chart")
+        }
+        return chart
     }
 
     private func makeSummary(symbol: String, price: Double) -> AssetSummary {
@@ -63,6 +80,65 @@ struct AccountMarketPriceServiceTests {
 
     private func day(_ offset: Int, base: Date = Date(timeIntervalSince1970: 1_700_000_000)) -> Date {
         base.addingTimeInterval(TimeInterval(offset) * 86_400)
+    }
+
+    @Test("historical prefetch stores immutable closes and warm cache skips provider")
+    func historicalPrefetchIsCacheFirstAndAppendOnly() async throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let account = try AccountsCoreService(modelContext: ctx).createAccount(
+            name: "AAPL", kind: .marketInvestment, currency: "USD", openingBalance: 0,
+            marketMeta: MarketMeta(symbol: "AAPL", assetClass: .stock),
+            date: Date(timeIntervalSince1970: 1_767_225_600)
+        )
+        let client = AccountMarketPriceMockClient()
+        await client.setChart(ChartResponse(
+            symbol: "AAPL", interval: "1day", currency: "USD",
+            points: [ChartPoint(
+                datetime: "2026-01-02 00:00:00", open: 100, high: 111, low: 99, close: 110, volume: 1
+            )],
+            updatedAt: "2026-01-03T00:00:00Z", isStale: false
+        ), for: "AAPL")
+        let service = AccountMarketPriceService(modelContext: ctx, marketDataClient: client)
+        let requested = Date(timeIntervalSince1970: 1_767_312_000) // 2026-01-02 UTC
+
+        await service.prefetchHistoricalPrices(on: [requested], accounts: [account])
+        await service.prefetchHistoricalPrices(on: [requested], accounts: [account])
+
+        let rows = try ctx.fetch(FetchDescriptor<HistoricalAssetPrice>())
+        #expect(rows.count == 1)
+        #expect(rows.first?.dayKey == "2026-01-02")
+        #expect(rows.first?.price == 110)
+        #expect(rows.first?.source.hasPrefix("historical:market-backend|tz=") == true)
+        #expect(await client.requestedCharts().count == 1)
+    }
+
+    @Test("offline historical prefetch preserves existing cache")
+    func historicalPrefetchOfflineDoesNotMutateCache() async throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let account = try AccountsCoreService(modelContext: ctx).createAccount(
+            name: "AAPL", kind: .marketInvestment, currency: "USD", openingBalance: 0,
+            marketMeta: MarketMeta(symbol: "AAPL", assetClass: .stock),
+            date: Date(timeIntervalSince1970: 1_767_225_600)
+        )
+        ctx.insert(HistoricalAssetPrice(
+            symbol: "AAPL", assetClass: .stock, dayKey: "2026-01-01", price: 99,
+            source: "historical:test|tz=UTC"
+        ))
+        try ctx.save()
+        let client = AccountMarketPriceMockClient()
+        await client.setShouldThrow(true)
+
+        await AccountMarketPriceService(
+            modelContext: ctx, marketDataClient: client
+        ).prefetchHistoricalPrices(
+            on: [Date(timeIntervalSince1970: 1_767_398_400)], accounts: [account]
+        )
+
+        let rows = try ctx.fetch(FetchDescriptor<HistoricalAssetPrice>())
+        #expect(rows.count == 1)
+        #expect(rows.first?.price == 99)
     }
 
     // MARK: - Апсерт только сегодняшнего dayKey (S9/AC10)
@@ -131,6 +207,14 @@ struct AccountMarketPriceServiceTests {
             marketMeta: MarketMeta(symbol: "AAPL", assetClass: .stock)
         )
         try accountService.buy(account: account, quantity: 10, unitPrice: 100)
+        ctx.insert(HistoricalAssetPrice(
+            symbol: "AAPL",
+            assetClass: .stock,
+            dayKey: AccountEvent.dayKey(for: Date()),
+            price: 140,
+            source: "market-backend"
+        ))
+        try ctx.save()
 
         let client = AccountMarketPriceMockClient()
         let priceService = AccountMarketPriceService(modelContext: ctx, marketDataClient: client)
@@ -143,6 +227,7 @@ struct AccountMarketPriceServiceTests {
         let rows = try ctx.fetch(FetchDescriptor<HistoricalAssetPrice>())
         #expect(rows.count == 1) // одна и та же строка сегодняшнего dayKey, не дубликат
         #expect(rows.first?.price == 160)
+        #expect(rows.first?.source == "market-backend|tz=\(TimeZone.current.identifier)")
     }
 
     /// Недоступность сети/бэкенда — no-op, кэш не трогается (счёт не выпадает из тотала,

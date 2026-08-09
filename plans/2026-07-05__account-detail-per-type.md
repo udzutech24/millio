@@ -10,8 +10,8 @@
 `НЕ НАЧАТ`
 
 **Реализовано:** —
-**Осталось:** все фазы.
-**Зависимости:** Ф7 (новые поля модели) — ТОЛЬКО после стабилизации V5-схемы (см. `progress/accounts-core-rebuild-handoff.md`); решение по источнику графика (snapshot backfill vs ленивый реплей + лимит 3М) — до старта Ф1.
+**Осталось:** все фазы. Порядок изменён 2026-07-19: кредитная карта — первый приоритет (решение владельца), Phase 1 переопределена как урезанный каркас под кредитку, а не полный каркас на 12 kind. Исходный факт-чек (2026-07-19, develop 9bef397): ни один файл каркаса (`AccountDetailDescriptor`/`AccountChartSection`/`KPITileRow`/`AccountEditSheet`) не создан; текущий `AccountDetailView.swift` (858 строк) — общий на все kind, рендерит кредитку как обычный cash/debitCard счёт (баланс, банк+last4 в шапке), без лимита/долга; долг уже верно учтён в тоталах через `AccountTotalsContribution.signedValue` (`Core/AccountsCore/AccountTotalsContribution.swift:26-29`, ключ — `creditLimit != nil`, НЕ kind).
+**Зависимости:** Ф7 (новые поля модели) — ТОЛЬКО после стабилизации V5-схемы; V5 стабилизирована и вмержена (develop 9bef397, Ф7/Ф7b Динамики закрыты 2026-07-19) — блокер снят. Решение по источнику графика (snapshot backfill vs ленивый реплей + лимит 3М) — до старта Ф1.
 
 ## Цель
 
@@ -40,6 +40,9 @@ AC1–AC2 → Ф1; AC3 → Ф2; AC4–AC9 → Ф2–Ф6 (per-kind) + Ф1 (кар
 - **Альтернатива B:** один экран + разрастающийся switch (текущее). Минус: уже нечитаем на 830 строках без графика и настроек. Отвергнуто.
 - **Выбрано:** общий каркас + per-kind дескриптор (конфиг-структуры), группировка фаз по движкам — соседи по движку отличаются только конфигом.
 
+### 2b. Порядок фаз (обновлено 2026-07-19)
+Владелец хочет кредитку первой (видимый результат раньше), не полный каркас на 12 kind. Стресс-тест (10 причин провала) показал главные риски: derived-долг может разойтись с balance при неаккуратной реализации edit-flow (закрыто явной фиксацией решения в Ф1: долг редактируется как поле формы, конвертируется в balance на сохранении, пишется через AccountsCoreService) и погашение долга без выбора счёта-источника теряет прослеживаемость денег (владелец осознанно принял — просто adjustment, как «Изменить баланс» сегодня). Дескриптор проектируется как per-kind конфиг с самого начала (не хардкод) — расширение под остальные kind в Ф2–Ф6 не требует переписывания архитектуры, только новых конфигов.
+
 ### 3. Нет ли кода ради кода?
 Замена легаси-графика — не drive-by: он не подключён к ядру и нарушает токены; перенос невозможен. Новые поля модели вынесены в отдельную гейтованную фазу, а не размазаны.
 
@@ -47,52 +50,62 @@ AC1–AC2 → Ф1; AC3 → Ф2; AC4–AC9 → Ф2–Ф6 (per-kind) + Ф1 (кар
 
 **Состояния:** `[ ]` не начато · `[~]` в работе · `[x]` готово
 
-### `[ ]` Phase 1: Общий каркас + переключение по kind
+### `[ ]` Phase 1: Урезанный каркас + Движок кредитной карты (приоритет владельца 2026-07-19)
 
-**AC из spec:** AC1, AC2 (частично), AC7, AC9, AC10
+**AC из spec:** AC1, AC2 (частично, только под нужды карты), AC7, AC9, AC10, плюс AC3–AC6/AC8 для кредитки
+
+**Зафиксированные решения владельца (2026-07-19, не переспрашивать):**
+- Признак кредитки в дескрипторе — `cardMeta.creditLimit != nil`, НЕ kind (карта без банка может иметь kind `.cash`).
+- «Остаток лимита» — это уже существующий `balance` (он и есть `limit − долг`), отдельного поля не заводим; отображается как есть.
+- «Долг» — вычисляемое (`Card.debt = max(0, limit − balance)`, `Card.swift:214`), в UI отображается как самостоятельная плашка, редактируется как отдельное поле формы: ввод новой суммы долга → на сохранении `balance = limit − введённый_долг`, пишем через `AccountsCoreService` (не мимо).
+- «Лимит» — прямая запись в `cardMeta.creditLimit`.
+- «Погасить долг» — adjustment без выбора счёta-источника (аналог текущего «Изменить баланс», но в терминах долга: ввёл фактический долг → пересчитан balance). НЕ transfer, счёт-источник не запрашивается.
 
 **Файлы:**
-- `millio/UI/Services/Finances/AccountsCore/Components/AccountChartSection.swift` — новый: чипы периодов, линия (step/stepEnd/линия по конфигу), drag-точка, оверлеи (zero-line, лимит, риски дат, cost-basis, маркеры событий), инверсия знака, слот KPI; серия кэшируется по refreshToken
-- `millio/UI/Services/Finances/AccountsCore/Components/KPITileRow.swift` — новый: 3 плашки, «—» вместо 0,00
-- `millio/UI/Services/Finances/AccountsCore/Components/AccountEditSheet.swift` — новый: скелет Form (имя/группа/includeInTotal/заметка/валюта read-only) + слот kind-секции + деструктивная зона архива
-- `millio/UI/Services/Finances/AccountsCore/AccountDetailDescriptor.swift` — новый: per-kind дескриптор (actionsRow состав/порядок/тайтлы, конфиг графика, KPI-провайдер, словарь подписей истории)
-- `millio/UI/Services/Finances/AccountsCore/AccountDetailView.swift` — подключить дескриптор, шестерёнку, общий read-only режим archivedAt, S8-варианты по движку
-- `millio/Localizable.xcstrings` — новые ключи
+- `millio/UI/Services/Finances/AccountsCore/AccountDetailDescriptor.swift` — новый: per-kind дескриптор, но конфигурируется пока только под `.debitCard`/`.cash` с `creditLimit != nil` (карта) — остальные kind идут через дескриптор с конфигом-заглушкой = поведение как у нынешнего generic-экрана (не регресс)
+- `millio/UI/Services/Finances/AccountsCore/Components/AccountChartSection.swift` — новый, минимальная версия: чипы периодов (7Д/1М/3М/1Г/Всё), ступенчатая линия, оверлей zero-line + лимит; кэш серии по refreshToken (без cost-basis/маркеров сделок — те нужны только Ф5)
+- `millio/UI/Services/Finances/AccountsCore/Components/KPITileRow.swift` — новый: 3 плашки, «—» вместо 0,00; для карты — Лимит / Долг / Остаток
+- `millio/UI/Services/Finances/AccountsCore/Components/CreditLimitProgressBar.swift` — новый: прогресс использования лимита (долг/лимит), не путать с будущим `PayoffProgressBar` (Ф4, семантика «к нулю», а не «к лимиту»)
+- `millio/UI/Services/Finances/AccountsCore/Components/AccountEditSheet.swift` — новый: скелет Form (имя/группа/includeInTotal/заметка/валюта read-only) + card-секция (Лимит, Долг — конвертация в balance на сохранении) + деструктивная зона архива
+- `millio/UI/Services/Finances/AccountsCore/AccountDetailView.swift` — подключить дескриптор, шестерёнку, общий read-only режим archivedAt; для карты — долг красным вместо баланса, история в терминах долга, actionsRow «Погасить долг» / «Изменить лимит» вместо generic Доход/Расход/Изменить баланс
+- `millio/Localizable.xcstrings` — новые ключи (RU/EN/zh-Hans): «Долг», «Лимит», «Остаток лимита», «Погасить долг», «Изменить лимит»
 
 **Шаги:**
-1. `[ ]` Тесты: дескрипторы (состав действий per kind, движок E/F без cash-действий), формулы KPI движка A, read-only при archivedAt
-2. `[ ]` Имплементация каркаса
+1. `[ ]` Тесты: дескриптор возвращает card-конфиг при `creditLimit != nil` независимо от kind; формула долга/остатка; конвертация «ввод долга → balance» (включая долг=0 и долг>лимита — клэмп/предупреждение); read-only при archivedAt; регресс — остальные 11 kind рендерятся не хуже текущего generic-экрана
+2. `[ ]` Имплементация каркаса + движка кредитки
 3. `[ ]` Self-audit по AC
-4. `[ ]` Verification (deep bug hunt: производительность реплея, кэш серии)
-5. `[ ]` Impact analysis (существующие sheets/alerts не сломаны)
-6. `[ ]` Коммит: `feat(accounts-core): account detail per-kind scaffold`
+4. `[ ]` Verification (deep bug hunt: derived-долг не расходится с balance после adjustment; производительность реплея; кэш серии)
+5. `[ ]` Impact analysis (существующие sheets/alerts не сломаны; AccountTotalsContribution не задета — читает те же поля)
+6. `[ ]` Коммит: `feat(accounts-core): account detail scaffold + credit card engine`
 
-**Acceptance:** старый экран работает для всех kind через дескриптор; график рендерится хотя бы для движка A; edit-sheet сохраняет общие поля через AccountsCoreService; archivedAt скрывает actionsRow/шестерёнку у всех.
+**Acceptance:** кредитка показывает долг красным + лимит + остаток; редактирование лимита и долга работает через AccountEditSheet и пишет через AccountsCoreService; «Погасить долг» доступно как действие; остальные 11 kind не регрессируют (рендерятся как раньше через generic-путь дескриптора); archivedAt скрывает actionsRow/шестерёнку.
+
+**Известные ограничения фазы (сознательно не делаем здесь):** остальные секции ChartSection (cost-basis, маркеры сделок, риски дат) — Ф2–Ф6; овердрафт-баннер и «Пересчитать» для обычных cash/bankAccount — Ф2; PayoffProgressBar/NextDateCard/CounterpartyAvatar для Кредит(loan)/Долг(debt) — Ф4, семантически другой прогресс-бар, не переиспользуем CreditLimitProgressBar.
 
 **Guard phrase для старта:** «Реализуй Phase 1 по плану.»
 
 ---
 
-### `[ ]` Phase 2: Движок A — Карта / Наличные / Счёт
+### `[ ]` Phase 2: Движок A остаток — Наличные / Счёт (карта уже покрыта Ф1)
 
-**AC из spec:** AC3, AC4, AC5, AC6, AC8 (для A)
+**AC из spec:** AC3, AC4, AC5, AC6, AC8 (для .cash без creditLimit и .bankAccount)
 
 **Файлы:**
-- `AccountDetailDescriptor.swift` — конфиги .debitCard/.cash/.bankAccount (ступень, 7Д/1М/3М/1Г/Всё, оверлеи овердрафта/нуля)
-- `Components/BalanceStatusLine.swift` — новый: статус ниже нуля (овердрафт warning/error)
-- `AccountEditSheet.swift` — kind-секции: банк-пикер (общий справочник Карта+Счёт) / last4 / овердрафт; у .cash секция пустая
+- `AccountDetailDescriptor.swift` — конфиги `.cash` (без creditLimit) / `.bankAccount` (ступень, 7Д/1М/3М/1Г/Всё, оверлей нуля)
+- `Components/BalanceStatusLine.swift` — новый: статус ниже нуля (для bankAccount, если применимо; card-овердрафт уже закрыт Ф1)
+- `AccountEditSheet.swift` — kind-секции: банк-пикер / last4 для bankAccount; у .cash секция пустая
 - `AccountDetailSheets.swift` — режим AccountAdjustBalanceSheet «фактическая сумма → дельта» (Пересчитать/Сверка)
-- `AccountDetailView.swift` — карточка «Сверка» для .cash; кэшбэк-секция Карты за фичефлагом (выключен до моста)
+- `AccountDetailView.swift` — карточка «Сверка» для .cash; кэшбэк-секция Карты за фичефлагом (выключен до моста) — если ещё не закрыто в Ф1
 
 **Шаги:**
-1. `[ ]` Тесты: KPI-формула (expense+fee, без transferOut), семантика минуса от overdraftLimit, режим «факт → дельта»
+1. `[ ]` Тесты: KPI-формула (expense+fee, без transferOut), режим «факт → дельта»
 2. `[ ]` Имплементация
 3. `[ ]` Self-audit
 4. `[ ]` Verification
 5. `[ ]` Impact analysis
-6. `[ ]` Коммит: `feat(accounts-core): cashLike detail screens`
+6. `[ ]` Коммит: `feat(accounts-core): cash and bank account detail screens`
 
-**Acceptance:** у карты минус в пределах лимита = «Овердрафт −X из Y», не error; .cash не рендерит bank/last4; «Пересчитать» пишет adjustment-дельту от фактической суммы; empty-state для свежих счетов; один набор периодов и одна KPI-формула на всех трёх.
+**Acceptance:** .cash не рендерит bank/last4; «Пересчитать» пишет adjustment-дельту от фактической суммы; empty-state для свежих счетов; один набор периодов и одна KPI-формула на обоих.
 **Известные блокеры вне фазы:** bridge пишет .cash вместо .debitCard; пресета «Наличные» нет (открытые вопросы 1–2 spec).
 
 ---
@@ -255,6 +268,7 @@ AC1–AC2 → Ф1; AC3 → Ф2; AC4–AC9 → Ф2–Ф6 (per-kind) + Ф1 (кар
 
 - `2026-07-05` — план создан из спеки; статус НЕ НАЧАТ; гейты Ф5 (решения по market-ядру) и Ф7 (V5) зафиксированы.
 - `2026-07-08` — добавлен обязательный дизайн-слой (требование владельца, ночной прогон): единая стилистика 12 конфигураций в языке Cashflow-редизайна, антипримеры легаси зафиксированы; легаси-деталки не полируем (снос по 6b).
+- `2026-07-19` — актуализация под develop 9bef397 (Ф7/Ф7b Динамики закрыты, V5 стабилизирована — блокер Ф7 снят). Решение владельца: кредитная карта — первый приоритет. Phase 1 переопределена: урезанный каркас + движок кредитки (долг красным, лимит, остаток, прогресс использования, редактирование лимита/долга, «Погасить долг» как adjustment без счёта-источника). Phase 2 сужена до .cash/.bankAccount. Стресс-тест прогнан, решения по семантике долга зафиксированы в Ф1.
 
 ## Итог (заполняется при завершении)
 

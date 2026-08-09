@@ -142,7 +142,7 @@ struct StockBulkImportPersistenceService {
     }
 
     /// Импорт создаёт СЧЕТА НОВОГО ЯДРА (`AccountKind.marketInvestment`) — план 6b «Путь B»,
-    /// Фаза 3: перевод живых писателей легаси на `AccountsCoreService`, легаси `Investment`/
+    /// Фаза 3: перевод живых писателей легаси на atomic product graph, легаси `Investment`/
     /// `FinanceAccount` больше не создаются. `priority` остаётся в сигнатуре ради совместимости
     /// вызова из `StockBulkImportSheet` — ядро не хранит приоритет инвестиции, тот же осознанный
     /// пробел, что и в `FinanceAddAccountView.createAssetAccountOnNewCore` (единственный уже
@@ -154,20 +154,34 @@ struct StockBulkImportPersistenceService {
         targetGroup: AccountGroup?,
         mergeDuplicates: Bool
     ) async throws -> Int {
-        // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен.
-        let resolvedGroup = targetGroup
-        let service = AccountsCoreService(modelContext: modelContext)
-
         let resolvedRows = mergeDuplicates
             ? Self.mergeAddableRows(from: drafts)
             : Self.resolveAddableRows(from: drafts)
         guard !resolvedRows.isEmpty else { return 0 }
 
+        // Bulk import owns one disposable transaction. Existing-position buys and new
+        // Account+opening+buy graphs either all commit or none become visible.
+        let transactionContext = ModelContext(modelContext.container)
+        transactionContext.autosaveEnabled = false
+        let resolvedGroup: AccountGroup?
+        if let targetGroup {
+            let groupID = targetGroup.id
+            let descriptor = FetchDescriptor<AccountGroup>(
+                predicate: #Predicate<AccountGroup> { $0.id == groupID }
+            )
+            guard let persistedGroup = try transactionContext.fetch(descriptor).first else {
+                throw AccountProductFactoryError.missingGroup(groupID)
+            }
+            resolvedGroup = persistedGroup
+        } else {
+            resolvedGroup = nil
+        }
+
         // Дедуп по СИМВОЛУ — единственная identity, которую хранит `MarketMeta` ядра (см.
         // `AccountMeta.swift`). Легаси умел различать один тикер на разных биржах через
         // `assetID`/`exchange` (`MarketAssetIdentityResolver`) — ядро этого не переносит; при
         // 1–2 юзерах и уже принятом MVP-пробеле (план §3) это не блокер Фазы 3.
-        let existingAccounts = (try? modelContext.fetch(FetchDescriptor<Account>())) ?? []
+        let existingAccounts = try transactionContext.fetch(FetchDescriptor<Account>())
         var accountBySymbol: [String: Account] = [:]
         for account in existingAccounts where account.archivedAt == nil && account.kind == .marketInvestment {
             if let symbol = account.marketMeta?.symbol, !symbol.isEmpty {
@@ -176,7 +190,8 @@ struct StockBulkImportPersistenceService {
         }
 
         var importedCount = 0
-        for resolvedRow in resolvedRows {
+        do {
+          for resolvedRow in resolvedRows {
             // Символ БЕЗ префикса биржи (`normalizedSymbol`, не `storedSymbol` вида `MARKET:TICKER`) —
             // тот же формат, что уже хранит `MarketMeta.symbol` у единственного другого писателя
             // ядра (`FinanceAddAccountView`, тикер-пикер кладёт `symbol.symbol` без префикса).
@@ -198,37 +213,58 @@ struct StockBulkImportPersistenceService {
                 providerName: resolvedRow.candidate.providerRaw
             )
             if let resolvedIdentity {
-                AssetCatalogStore(modelContext: modelContext).syncIfSupported(identity: resolvedIdentity)
+                AssetCatalogStore(modelContext: transactionContext).syncIfSupported(identity: resolvedIdentity)
             }
 
             let quantity = Decimal(resolvedRow.quantity)
             let unitPrice = Decimal(resolvedRow.buyPrice)
 
             if let existing = accountBySymbol[symbol.uppercased()] {
+                guard let productType = existing.productType else {
+                    throw AccountsCoreServiceError.missingProductIdentity
+                }
+                try ProductDefinitionCatalog.validateStoredIdentity(
+                    productType,
+                    kindRaw: existing.kindRaw,
+                    metadata: AccountProductMetadata(account: existing),
+                    migrationReason: existing.productMigrationReason
+                )
+                guard ProductDefinitionCatalog.isEvent(.buy, allowedFor: productType) else {
+                    throw AccountsCoreServiceError.eventNotAllowed(productType, .buy)
+                }
                 existing.includeInTotal = includeInTotal
                 existing.group = resolvedGroup
-                try service.buy(account: existing, quantity: quantity, unitPrice: unitPrice)
+                transactionContext.insert(AccountEvent(
+                    account: existing,
+                    date: Date(),
+                    type: .buy,
+                    quantity: quantity,
+                    unitPrice: unitPrice
+                ))
             } else {
                 let meta = AccountsCoreAdditionBridge.marketMeta(symbol: symbol, category: .stocks)
                 // currency жёстко "USD" — легаси-импортёр всегда так делал (`Investment(..., currency: "USD")`),
                 // не полагаясь на `candidate.currency` (может быть пустым для тикера в USD-выражении).
-                let account = try service.createAccount(
+                let graph = try AccountProductGraphBuilder.build(CreateProductCommand(
+                    productType: .marketStock,
                     name: resolvedRow.candidate.displayName.isEmpty ? symbol : resolvedRow.candidate.displayName,
-                    kind: .marketInvestment,
                     currency: "USD",
                     openingBalance: 0,
-                    group: resolvedGroup,
-                    marketMeta: meta
-                )
-                account.includeInTotal = includeInTotal
-                try service.buy(account: account, quantity: quantity, unitPrice: unitPrice)
-                accountBySymbol[symbol.uppercased()] = account
+                    includeInTotal: includeInTotal,
+                    groupID: resolvedGroup?.id,
+                    metadata: .init(market: meta),
+                    initialMarketPurchase: .init(quantity: quantity, unitPrice: unitPrice)
+                ), in: transactionContext)
+                accountBySymbol[symbol.uppercased()] = graph.account
             }
 
             importedCount += 1
+          }
+          try transactionContext.save()
+        } catch {
+            transactionContext.rollback()
+            throw error
         }
-
-        try modelContext.save()
         return importedCount
     }
 

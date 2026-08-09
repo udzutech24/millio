@@ -284,6 +284,64 @@ struct BackupManagerTests {
         #expect(repo.clearCalls >= 1)
         #expect(repo.importCalls >= 2)
     }
+
+    @Test("Interrupted restore leaves historical valuation scope explicitly not ready")
+    func testInterruptedRestoreBlocksHistoricalPublication() async {
+        let scopeID = "backup-readiness-\(UUID().uuidString)"
+        let suiteName = "BackupManagerReadiness.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let coordinator = HistoricalValuationReadinessCoordinator(defaults: defaults)
+
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        mockCloudStore.downloadData = Data("new data".utf8)
+        let repository = FailingImportDataRepository()
+        repository.storage = Data("previous data".utf8)
+        repository.failNextImport = true
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: repository,
+            historicalValuationScopeID: scopeID,
+            historicalValuationReadiness: coordinator
+        )
+
+        await #expect(throws: AppError.self) {
+            try await backupManager.restoreLatest()
+        }
+        #expect(coordinator.readiness(scopeID: scopeID) == .failed(
+            reasonCode: "restore_failed"
+        ))
+    }
+
+    @Test("Restore persists an interruption marker before clearing source data")
+    func testRestoreMarkerPrecedesClear() async throws {
+        let scopeID = "backup-clear-boundary-\(UUID().uuidString)"
+        let suiteName = "BackupManagerClearBoundary.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let coordinator = HistoricalValuationReadinessCoordinator(defaults: defaults)
+        let cloud = MockCloudBackupStore()
+        cloud.isAvailableResult = true
+        cloud.downloadData = Data("restored data".utf8)
+        let repository = MockDataRepository()
+        repository.exportData = Data("previous data".utf8)
+        repository.onClear = {
+            let relaunched = HistoricalValuationReadinessCoordinator(defaults: defaults)
+            #expect(relaunched.readiness(scopeID: scopeID) == .failed(
+                reasonCode: "restore_interrupted"
+            ))
+        }
+        let manager = BackupManager(
+            cloudStore: cloud,
+            dataRepository: repository,
+            historicalValuationScopeID: scopeID,
+            historicalValuationReadiness: coordinator
+        )
+
+        try await manager.restoreLatest()
+        #expect(coordinator.readiness(scopeID: scopeID) == .ready)
+    }
     
     @Test("Restore latest supports passphrase-encrypted backups")
     func testRestoreLatestPassphraseEncryptedBackup() async throws {
@@ -813,6 +871,7 @@ final class MockDataRepository: DataRepositoryProtocol {
     var clearCalled = false
     var exportData = Data()
     var importedData: Data?
+    var onClear: (() -> Void)?
     
     func exportAllData() throws -> Data {
         exportCalled = true
@@ -826,6 +885,7 @@ final class MockDataRepository: DataRepositoryProtocol {
     
     func clearAllData() throws {
         clearCalled = true
+        onClear?()
     }
     
     func exportAllDataAsync() async throws -> Data {

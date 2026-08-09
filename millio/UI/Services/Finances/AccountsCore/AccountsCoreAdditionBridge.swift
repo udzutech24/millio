@@ -7,11 +7,63 @@ import SwiftData
 /// `Card`/`Credit`/`Investment`. Полный перенос экрана добавления и снос старых моделей — Фаза 6.
 enum AccountsCoreAdditionBridge {
 
+    /// Persisted product identity is derived from explicit form intent, never from bank presence.
+    /// In particular, a credit card without a selected bank remains a credit card.
+    static func moneyProductType(
+        accountType: FinanceAccountType,
+        investmentPreset: FinanceAddAccountInvestmentPreset,
+        cardType: CardType?
+    ) -> AccountProductType? {
+        switch accountType {
+        case .card:
+            return cardType == .credit ? .creditCard : .debitCard
+        case .investment where investmentPreset == .account:
+            return .bankAccount
+        default:
+            return nil
+        }
+    }
+
+    static func obligationProductType(kind: AccountKind, direction: DebtDirection?) -> AccountProductType? {
+        switch kind {
+        case .loan: return .loan
+        case .debt where direction == .owedToMe: return .receivable
+        case .debt where direction == .owedByMe: return .payable
+        default: return nil
+        }
+    }
+
+    static func assetProductType(
+        category: InvestmentCategory,
+        preset: FinanceAddAccountInvestmentPreset,
+        hasTicker: Bool
+    ) -> AccountProductType? {
+        switch category {
+        case .stocks: return .marketStock
+        case .crypto: return .marketCrypto
+        case .bonds: return .marketBond
+        case .metals: return .marketMetal
+        case .car: return .vehicle
+        case .house: return .realEstate
+        case .business: return .business
+        case .other where preset == .asset:
+            return hasTicker ? .genericMarketInvestment : .otherManualAsset
+        case .other where preset == .category:
+            return .otherManualAsset
+        case .other:
+            return nil
+        case .debt:
+            return nil
+        }
+    }
+
     /// kind для денежного пресета «Карта»: пустой/невыбранный банк (`.other`) трактуется как
     /// наличка без банка (спека §2.7, п. 63 — «наличка — вариант карты без банка»).
     /// Это временная эвристика до появления отдельного UI-пресета «Наличка».
     static func cardKind(bank: Bank) -> AccountKind {
-        bank == .other ? .cash : .debitCard
+        // Compatibility API for old tests/readers. New creation uses `moneyProductType` and the
+        // catalog canonical kind. A missing bank is not evidence that the user meant cash.
+        .debitCard
     }
 
     /// kind нового ядра для денежных пресетов («Карта»/«Счёт»), либо `nil`, если это не денежный
@@ -163,7 +215,13 @@ enum AccountsCoreAdditionBridge {
     /// Класс актива определяется ТОЛЬКО категорией `.crypto` — облигации/металлы не собираются
     /// текущей формой (нет UI-пути), дефолт `.stock` безопасен и для «универсальной» инвестиции с тикером.
     static func marketMeta(symbol: String, category: InvestmentCategory) -> MarketMeta {
-        MarketMeta(symbol: symbol.uppercased(), assetClass: category == .crypto ? .crypto : .stock)
+        let assetClass: MarketAssetClass = switch category {
+        case .crypto: .crypto
+        case .bonds: .bond
+        case .metals: .metal
+        default: .stock
+        }
+        return MarketMeta(symbol: symbol.uppercased(), assetClass: assetClass)
     }
 
     /// Мэппинг ручного актива (недвижимость/бизнес/другое/«инвестиция» без тикера) → `ManualAssetMeta`

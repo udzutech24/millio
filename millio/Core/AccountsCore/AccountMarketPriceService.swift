@@ -60,17 +60,112 @@ final class AccountMarketPriceService {
         }
     }
 
+    /// Cache-first historical warm-up. It performs at most one chart request per missing symbol,
+    /// never one request per account/day. Existing closed rows remain immutable.
+    func prefetchHistoricalPrices(on dates: [Date], accounts: [Account]) async {
+        let requestedDayKeys = Set(dates.map { AccountEvent.dayKey(for: $0) })
+        guard !requestedDayKeys.isEmpty else { return }
+
+        var instruments: [String: MarketAssetClass] = [:]
+        for account in accounts where account.kind == .marketInvestment {
+            guard let meta = account.marketMeta else { continue }
+            instruments[meta.symbol.uppercased()] = meta.assetClass
+        }
+        guard !instruments.isEmpty else { return }
+
+        let rows = (try? modelContext.fetch(FetchDescriptor<HistoricalAssetPrice>())) ?? []
+        var existingKeysBySymbol: [String: Set<String>] = [:]
+        for row in rows {
+            existingKeysBySymbol[row.symbol, default: []].insert(row.dayKey)
+        }
+
+        let outputSize = historicalOutputSize(for: dates)
+        var inserted = false
+        for symbol in instruments.keys.sorted() {
+            let cachedKeys = existingKeysBySymbol[symbol] ?? []
+            guard let assetClass = instruments[symbol] else { continue }
+            if hasHistoricalCoverage(
+                requestedDayKeys: requestedDayKeys,
+                cachedDayKeys: cachedKeys,
+                assetClass: assetClass
+            ) { continue }
+            guard let response = try? await marketDataClient.assetChart(
+                symbol: symbol,
+                interval: "1day",
+                outputSize: outputSize
+            ) else { continue }
+
+            for point in response.points {
+                guard let close = point.close, close.isFinite, close > 0,
+                      let dayKey = historicalDayKey(point.datetime),
+                      existingKeysBySymbol[symbol]?.contains(dayKey) != true else { continue }
+                modelContext.insert(HistoricalAssetPrice(
+                    symbol: symbol,
+                    assetClass: assetClass,
+                    dayKey: dayKey,
+                    price: Decimal(close),
+                    source: "historical:market-backend|tz=\(TimeZone.current.identifier)"
+                ))
+                existingKeysBySymbol[symbol, default: []].insert(dayKey)
+                inserted = true
+            }
+        }
+        if inserted { try? modelContext.save() }
+    }
+
+    private func hasHistoricalCoverage(
+        requestedDayKeys: Set<String>,
+        cachedDayKeys: Set<String>,
+        assetClass: MarketAssetClass
+    ) -> Bool {
+        let policy: HistoricalValuationCalendarPolicy = assetClass == .crypto
+            ? .crypto24x7(id: "historical-crypto-24x7-v1")
+            : .exchange(id: "historical-market-business-days-v1")
+        return requestedDayKeys.allSatisfy { requested in
+            if cachedDayKeys.contains(requested) { return true }
+            return cachedDayKeys.contains { candidate in
+                policy.allowsPreviousClose(from: candidate, for: requested)
+            }
+        }
+    }
+
+    private func historicalOutputSize(for dates: [Date]) -> Int {
+        guard let first = dates.min(), let last = dates.max() else { return 5 }
+        let days = Calendar.current.dateComponents([.day], from: first, to: last).day ?? 0
+        // Daily provider series contains trading days; headroom covers holidays and range edges.
+        return min(5_000, max(5, Int((Double(max(0, days)) * 0.8).rounded(.up)) + 10))
+    }
+
+    private func historicalDayKey(_ raw: String) -> String? {
+        let prefix = String(raw.prefix(10))
+        guard prefix.count == 10 else { return nil }
+        let characters = Array(prefix)
+        guard characters[4] == "-", characters[7] == "-",
+              characters.enumerated().allSatisfy({ index, character in
+                  index == 4 || index == 7 || character.isNumber
+              }) else { return nil }
+        return prefix
+    }
+
     /// Апсерт ТОЛЬКО сегодняшнего dayKey — append-only гарантия (S9/AC10) держится на том, что
     /// это единственное место записи в `HistoricalAssetPrice`, и оно никогда не трогает прошлые дни.
     private func upsertTodayPrice(symbol: String, assetClass: MarketAssetClass, dayKey: String, price: Decimal) {
+        let source = "market-backend|tz=\(TimeZone.current.identifier)"
         let descriptor = FetchDescriptor<HistoricalAssetPrice>(
             predicate: #Predicate<HistoricalAssetPrice> { $0.symbol == symbol && $0.dayKey == dayKey }
         )
         if let existing = try? modelContext.fetch(descriptor).first {
             existing.price = price
             existing.fetchedAt = Date()
+            existing.source = source
         } else {
-            let record = HistoricalAssetPrice(symbol: symbol, assetClass: assetClass, dayKey: dayKey, price: price, source: "market-backend")
+            let record = HistoricalAssetPrice(
+                symbol: symbol,
+                assetClass: assetClass,
+                dayKey: dayKey,
+                price: price,
+                source: source
+            )
             modelContext.insert(record)
         }
     }
@@ -79,9 +174,8 @@ final class AccountMarketPriceService {
 
     /// Единственный способ получить `MarketPriceProviding` для реплея — читает уже накопленный
     /// кэш ОДНИМ запросом и возвращает неизменяемый `Sendable`-снэпшот (безопасно передавать в
-    /// фоновый `AccountSnapshotRebuilder`, S4). Долг Фазы 4 (задокументирован, не в скоупе):
-    /// исторический бэкфилл прошлых дат НЕ выполняется — кэш растёт органически по мере того, как
-    /// пользователь открывает приложение онлайн (S9: не жечь платную квоту на историю).
+    /// фоновый `AccountSnapshotRebuilder`, S4). Сеть доступна только предварительному prefetch;
+    /// реплей всегда остаётся чистым и детерминированным.
     func makeSnapshotProvider(symbols: [String]) -> MarketPriceProviding {
         let upperSymbols = Array(Set(symbols.map { $0.uppercased() }))
         guard !upperSymbols.isEmpty else { return EmptyMarketPriceProvider() }

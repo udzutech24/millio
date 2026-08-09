@@ -36,6 +36,35 @@ struct ScopeReconciliationServiceTests {
         try? container.mainContext.save()
     }
 
+    private func insertHistoricalClose(_ container: ModelContainer, scopeID: String) {
+        let close = HistoricalPortfolioValuation(
+            logicalID: UUID().uuidString,
+            schemaVersion: 7,
+            scopeID: scopeID,
+            dayKey: "2026-08-07",
+            timeZoneID: "UTC",
+            displayCurrency: "RUB",
+            valuationPolicyVersion: 1,
+            accountSetRevisionRaw: "1",
+            financialRevisionRaw: "1",
+            eventRevisionRaw: "1",
+            evidenceRevisionRaw: "1",
+            totalRaw: "100",
+            diagnosticPartialTotalRaw: "100",
+            stateRaw: HistoricalValuationState.complete.rawValue,
+            finalityRaw: HistoricalValuationFinality.closed.rawValue,
+            qualityRaw: HistoricalValuationQuality.exact.rawValue,
+            publicationRaw: HistoricalValuationPublication.published.rawValue,
+            expectedContributionCount: 1,
+            resolvedContributionCount: 1,
+            manifestData: Data(),
+            generatedAt: fixedDate,
+            publishedAt: fixedDate
+        )
+        container.mainContext.insert(close)
+        try? container.mainContext.save()
+    }
+
     private func uniqueUserScope() -> DataScope { .user(id: UUID().uuidString) }
 
     private func cleanup(_ scope: DataScope) {
@@ -43,6 +72,10 @@ struct ScopeReconciliationServiceTests {
         for prefix in ["reconciliation.done.", "reconciliation.report.", "reconciliation.needsConfirmation."] {
             UserDefaults.standard.removeObject(forKey: prefix + key)
         }
+        if let request = try? HistoricalValuationRebuildQueue.pending(scopeID: key) {
+            _ = try? HistoricalValuationRebuildQueue.acknowledge(request)
+        }
+        HistoricalValuationReadinessCoordinator.shared.resetForTesting()
     }
 
     private func count<T: PersistentModel>(_ type: T.Type, in container: ModelContainer) -> Int {
@@ -97,6 +130,28 @@ struct ScopeReconciliationServiceTests {
         }
     }
 
+    @Test func noDivergenceWithGuestClose_enqueuesDestinationRebuildWithoutCopyingClose() async throws {
+        try await withRegistry {
+            let scope = uniqueUserScope(); defer { cleanup(scope) }
+            let guest = makeContainer(); let user = makeContainer()
+            insertTx(guest, amount: 100, updatedAt: 100)
+            insertTx(user, amount: 100, updatedAt: 100)
+            insertHistoricalClose(guest, scopeID: DataScope.guest.storeConfigurationName)
+
+            let outcome = await run(guest: guest, user: user, scope: scope)
+            let pending = try HistoricalValuationRebuildQueue.pending(
+                scopeID: scope.storeConfigurationName
+            )
+
+            #expect(outcome == .noDivergence)
+            #expect(pending?.reasonCode == "guest_close_scope_rebuild")
+            #expect(count(HistoricalPortfolioValuation.self, in: user) == 0)
+            #expect(HistoricalValuationReadinessCoordinator.shared.readiness(
+                scopeID: scope.storeConfigurationName
+            ) == .ready)
+        }
+    }
+
     @Test func mergedHappyPath_marksDoneAndReportsCounts() async throws {
         try await withRegistry {
             let scope = uniqueUserScope(); defer { cleanup(scope) }
@@ -111,10 +166,19 @@ struct ScopeReconciliationServiceTests {
             #expect(count(CashflowTransaction.self, in: user) == 2)
             #expect(ScopeMergeMarker.isDone(userScopeKey: scope.storeConfigurationName))
 
-            // Повторный запуск — идемпотентно пропущен по done-маркеру.
+            // Simulate an older-build crash after durable done but before clearing process-local
+            // readiness. The done fast path must heal that stale state.
+            HistoricalValuationReadinessCoordinator.shared.fail(
+                scopeID: scope.storeConfigurationName,
+                operation: .reconciliation,
+                reasonCode: "stale_reconciliation_failure"
+            )
             let second = await run(guest: guest, user: user, scope: scope)
             #expect(second == .alreadyDone)
             #expect(count(CashflowTransaction.self, in: user) == 2)
+            #expect(HistoricalValuationReadinessCoordinator.shared.readiness(
+                scopeID: scope.storeConfigurationName
+            ) == .ready)
         }
     }
 
@@ -131,6 +195,47 @@ struct ScopeReconciliationServiceTests {
             // Митигация B1b №6: partially readable → done НЕ ставим (повтор при чистом открытии).
             #expect(ScopeMergeMarker.isDone(userScopeKey: scope.storeConfigurationName) == false)
             #expect(ScopeMergeMarker.storedReport(userScopeKey: scope.storeConfigurationName)?.partiallyReadable == true)
+        }
+    }
+
+    @Test func rebuildEnqueueFailurePreventsCommitAndRetryCannotFallIntoFalseNoDivergence() async throws {
+        struct EnqueueFailure: Error {}
+        try await withRegistry {
+            let scope = uniqueUserScope(); defer { cleanup(scope) }
+            let guest = makeContainer(); let user = makeContainer()
+            insertTx(guest, amount: 100, updatedAt: 100)
+            insertTx(guest, amount: 250, updatedAt: 150)
+            insertTx(user, amount: 100, updatedAt: 100)
+            let service = ScopeReconciliationService { _, _ in throw EnqueueFailure() }
+
+            let outcome = await service.reconcile(
+                userContainer: user,
+                userScope: scope,
+                guestContainer: guest,
+                userStoreURL: nil,
+                guestStoreURL: nil,
+                usedFallbackOpen: false,
+                onWillMerge: {}
+            )
+
+            #expect(outcome == .skipped)
+            #expect(count(CashflowTransaction.self, in: user) == 1)
+            #expect(!ScopeMergeMarker.isDone(userScopeKey: scope.storeConfigurationName))
+            #expect(HistoricalValuationReadinessCoordinator.shared.readiness(
+                scopeID: scope.storeConfigurationName
+            ) == .failed(reasonCode: "reconciliation_failed"))
+
+            let retry = await run(guest: guest, user: user, scope: scope)
+            guard case .merged(let report) = retry else {
+                Issue.record("повтор должен выполнить merge, получено \(retry)")
+                return
+            }
+            let pending = try HistoricalValuationRebuildQueue.pending(
+                scopeID: scope.storeConfigurationName
+            )
+            #expect(report.transactionsAdded == 1)
+            #expect(count(CashflowTransaction.self, in: user) == 2)
+            #expect(pending?.reasonCode == "guest_reconciliation")
         }
     }
 }

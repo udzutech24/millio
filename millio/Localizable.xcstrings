@@ -55650,6 +55650,18 @@
         }
       }
     },
+    "finances.dynamics.warning.history_incomplete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Der Verlauf ist unvollständig. Der letzte bestätigte Wert wird angezeigt." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "History is incomplete. Showing the last verified value." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El historial está incompleto. Se muestra el último valor verificado." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "L’historique est incomplet. La dernière valeur vérifiée est affichée." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "История неполная. Показано последнее подтверждённое значение." } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Geçmiş eksik. Son doğrulanmış değer gösteriliyor." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "历史数据不完整。正在显示上次验证的数值。" } }
+      }
+    },
     "finances.dynamics.warning.estimated_rate" : {
       "extractionState" : "manual",
       "localizations" : {

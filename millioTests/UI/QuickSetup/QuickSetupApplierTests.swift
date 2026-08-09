@@ -261,13 +261,15 @@ final class QuickSetupApplierTests: XCTestCase {
         XCTAssertTrue(accounts.allSatisfy { $0.group?.name == group.name })
 
         let card = try XCTUnwrap(accounts.first(where: { $0.name == "Карта" }))
-        XCTAssertEqual(card.kind, .cash)
+        XCTAssertEqual(card.kind, .debitCard)
+        XCTAssertEqual(card.productType, .debitCard)
         XCTAssertEqual(
-            AccountBalanceEngine.balanceAt(events: card.events ?? [], kind: .cash, on: Date()), 1200
+            AccountBalanceEngine.balanceAt(events: card.events ?? [], kind: .debitCard, on: Date()), 1200
         )
 
         let realEstate = try XCTUnwrap(accounts.first(where: { $0.name == "Квартира" }))
         XCTAssertEqual(realEstate.kind, .manualAsset)
+        XCTAssertEqual(realEstate.productType, .realEstate)
         XCTAssertEqual(
             AccountBalanceEngine.balanceAt(events: realEstate.events ?? [], kind: .manualAsset, on: Date()),
             5_000_000
@@ -275,6 +277,7 @@ final class QuickSetupApplierTests: XCTestCase {
 
         let debt = try XCTUnwrap(accounts.first(where: { $0.name == "Долг другу" }))
         XCTAssertEqual(debt.kind, .debt)
+        XCTAssertEqual(debt.productType, .payable)
         XCTAssertEqual(debt.debtMeta?.direction, .owedByMe)
         XCTAssertEqual(
             AccountBalanceEngine.balanceAt(events: debt.events ?? [], kind: .debt, on: Date()), -15_000
@@ -282,10 +285,12 @@ final class QuickSetupApplierTests: XCTestCase {
 
         let credit = try XCTUnwrap(accounts.first(where: { $0.name == "Кредит" }))
         XCTAssertEqual(credit.kind, .loan)
+        XCTAssertEqual(credit.productType, .loan)
         XCTAssertEqual(credit.loanMeta?.principal, 300_000)
 
         let stock = try XCTUnwrap(accounts.first(where: { $0.name == "AAPL" }))
         XCTAssertEqual(stock.kind, .marketInvestment)
+        XCTAssertEqual(stock.productType, .marketStock)
         XCTAssertEqual(stock.marketMeta?.symbol, "AAPL")
         XCTAssertEqual(stock.marketMeta?.assetClass, .stock)
         let stockBuy = try XCTUnwrap(stock.events?.first { $0.type == .buy })
@@ -294,6 +299,7 @@ final class QuickSetupApplierTests: XCTestCase {
 
         let crypto = try XCTUnwrap(accounts.first(where: { $0.name == "BTC/USD" }))
         XCTAssertEqual(crypto.kind, .marketInvestment)
+        XCTAssertEqual(crypto.productType, .marketCrypto)
         XCTAssertEqual(crypto.marketMeta?.symbol, "BTC/USD")
         XCTAssertEqual(crypto.marketMeta?.assetClass, .crypto)
         let cryptoBuy = try XCTUnwrap(crypto.events?.first { $0.type == .buy })
@@ -392,6 +398,51 @@ final class QuickSetupApplierTests: XCTestCase {
         )
 
         XCTAssertNoThrow(try applier.apply(selection))
+    }
+
+    func testMissingMarketEvidenceRejectsWholeProductBatchWithoutManualFallback() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let appState = AppState()
+        SettingsManager.shared.isQuickSetupCompleted = false
+        let applier = QuickSetupApplier(modelContext: context, appState: appState)
+        let group = QuickSetupGroupDraft(
+            name: "Portfolio",
+            colorHex: "#112233",
+            icon: "chart.line.uptrend.xyaxis"
+        )
+        let selection = QuickSetupSelection(
+            language: .russian,
+            primaryCurrencyCode: "RUB",
+            favoriteCurrencyCodes: ["USD"],
+            selectedExpenseCategoryIDs: [ExpenseCategory.other.rawValue],
+            groups: [group],
+            products: [
+                QuickSetupProductDraft(
+                    type: .card,
+                    name: "Would otherwise commit first",
+                    amount: 1_000,
+                    currencyCode: "RUB",
+                    groupDraftID: group.id
+                ),
+                QuickSetupProductDraft(
+                    type: .ticker,
+                    name: "Missing ticker evidence",
+                    amount: 100,
+                    currencyCode: "USD",
+                    groupDraftID: group.id,
+                    marketSnapshot: nil
+                )
+            ],
+            backupPreference: .localOnly
+        )
+
+        XCTAssertThrowsError(try applier.apply(selection))
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Account>()), 0)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<AccountEvent>()), 0)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<AccountGroup>()), 0)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<FinanceGroup>()), 0)
+        XCTAssertFalse(SettingsManager.shared.isQuickSetupCompleted)
     }
 
     func testApplyExpenseCategoriesPersistsVisibilityForExpandedSystemCategories() throws {

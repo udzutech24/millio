@@ -11,6 +11,11 @@ import SwiftData
 /// иначе в тотале появился бы двойной счёт.
 @MainActor
 final class LegacyAccountConverter {
+    typealias SaveOperation = (ModelContext) throws -> Void
+
+    enum ConversionError: Error, Equatable {
+        case dirtyContext
+    }
 
     /// Параметры создания core-двойника. `openingBalance` уже приведён к знаку движка вызывающим
     /// кодом (для `.loan` — магнитуда, движок C сам инвертирует), см. `LegacyAccountConversion.plan`.
@@ -18,22 +23,26 @@ final class LegacyAccountConverter {
         let legacyUniqueID: String
         let name: String
         let currency: String
-        let kind: AccountKind
+        let productType: AccountProductType
         let openingBalance: Decimal
         let group: AccountGroup?
-        let cardMeta: CardMeta?
-        let loanMeta: LoanMeta?
-        let manualAssetMeta: ManualAssetMeta?
+        let metadata: AccountProductMetadata
+        let initialMarketPurchase: InitialMarketPurchase?
+        let includeInTotal: Bool
     }
 
     private let modelContext: ModelContext
-    private let coreService: AccountsCoreService
     private let registry: LegacyConversionRegistry
+    private let saveOperation: SaveOperation
 
-    init(modelContext: ModelContext, registry: LegacyConversionRegistry) {
+    init(
+        modelContext: ModelContext,
+        registry: LegacyConversionRegistry,
+        saveOperation: @escaping SaveOperation = { try $0.save() }
+    ) {
         self.modelContext = modelContext
-        self.coreService = AccountsCoreService(modelContext: modelContext)
         self.registry = registry
+        self.saveOperation = saveOperation
     }
 
     func isConverted(legacyUniqueID: String) -> Bool {
@@ -45,29 +54,27 @@ final class LegacyAccountConverter {
     /// откатываются (компенсация), ошибка пробрасывается.
     @discardableResult
     func convert(_ input: Input, date: Date = Date(), hideLegacy: () throws -> Void) throws -> Account {
-        let account = try coreService.createAccount(
-            name: input.name,
-            kind: input.kind,
-            currency: input.currency,
-            openingBalance: input.openingBalance,
-            group: input.group,
-            cardMeta: input.cardMeta,
-            loanMeta: input.loanMeta,
-            manualAssetMeta: input.manualAssetMeta,
-            date: date
-        )
-        registry.record(legacyUniqueID: input.legacyUniqueID, coreAccountID: account.id)
-
+        guard !modelContext.hasChanges else { throw ConversionError.dirtyContext }
         do {
+            let graph = try AccountProductGraphBuilder.build(CreateProductCommand(
+                productType: input.productType,
+                name: input.name,
+                currency: input.currency,
+                openingBalance: input.openingBalance,
+                includeInTotal: input.includeInTotal,
+                groupID: input.group?.id,
+                metadata: input.metadata,
+                date: date,
+                initialMarketPurchase: input.initialMarketPurchase
+            ), in: modelContext)
             try hideLegacy()
+            try saveOperation(modelContext)
+            registry.record(legacyUniqueID: input.legacyUniqueID, coreAccountID: graph.account.id)
+            return graph.account
         } catch {
-            // Компенсация: убрать только что созданный двойник и запись реестра — иначе в тотале
-            // останутся ОБА (легаси не скрыто + core-двойник), это и есть double-count из риска №8.
-            registry.remove(legacyUniqueID: input.legacyUniqueID)
-            try? coreService.physicallyDelete(account)
+            modelContext.rollback()
             throw error
         }
-        return account
     }
 
     /// Откат конвертации: удаляет core-двойник (по записи реестра) и запись реестра, затем
@@ -75,13 +82,20 @@ final class LegacyAccountConverter {
     /// сбое восстановления не осталось обоих активными (double-count) — легаси в этом случае
     /// остаётся archivedAt-скрытым и восстановимо повторно через архив (под-count безопаснее).
     func unconvert(legacyUniqueID: String, restoreLegacy: () throws -> Void) throws {
-        if let coreID = registry.coreAccountID(forLegacyUniqueID: legacyUniqueID) {
-            let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.id == coreID })
-            if let twin = try? modelContext.fetch(descriptor).first {
-                try coreService.physicallyDelete(twin)
+        guard !modelContext.hasChanges else { throw ConversionError.dirtyContext }
+        do {
+            if let coreID = registry.coreAccountID(forLegacyUniqueID: legacyUniqueID) {
+                let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.id == coreID })
+                if let twin = try modelContext.fetch(descriptor).first {
+                    modelContext.delete(twin)
+                }
             }
+            try restoreLegacy()
+            try saveOperation(modelContext)
+            registry.remove(legacyUniqueID: legacyUniqueID)
+        } catch {
+            modelContext.rollback()
+            throw error
         }
-        registry.remove(legacyUniqueID: legacyUniqueID)
-        try restoreLegacy()
     }
 }

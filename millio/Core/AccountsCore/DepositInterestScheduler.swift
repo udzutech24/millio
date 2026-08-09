@@ -8,6 +8,12 @@ import SwiftData
 /// дальше реплей естественно компаундит (каждое interest увеличивает базу следующего периода).
 enum DepositInterestScheduler {
 
+    struct InterestEventDraft: Equatable {
+        let sourceTransactionID: String
+        let amount: Decimal
+        let date: Date
+    }
+
     /// На сколько месяцев вперёд генерируем расписание БЕССРОЧНОГО вклада/накопительного счёта
     /// (`termEnd == nil`) — «догенерация роллингом» при старте/открытии (брифинг Фазы 3, п.2).
     static let perpetualHorizonMonths = 12
@@ -20,6 +26,34 @@ enum DepositInterestScheduler {
 
     private static func generatedPrefix(accountID: UUID) -> String {
         "deposit-interest:\(accountID.uuidString):"
+    }
+
+    /// Pure initial batch builder used by `AccountProductFactory`. It does not touch SwiftData and
+    /// therefore cannot accidentally commit a partial Account before its mandatory schedule.
+    static func buildInitialSchedule(
+        accountID: UUID,
+        meta: DepositMeta,
+        openingBalance: Decimal,
+        openingDate: Date,
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) -> [InterestEventDraft] {
+        let opening = AccountEvent(
+            account: nil,
+            date: openingDate,
+            type: .openingBalance,
+            amount: openingBalance
+        )
+        let horizon = effectiveHorizon(meta: meta, asOf: openingDate, calendar: calendar)
+        return buildSchedule(
+            accountID: accountID,
+            kind: .deposit,
+            meta: meta,
+            openingDate: openingDate,
+            existingEvents: [opening],
+            after: openingDate,
+            horizon: horizon,
+            calendar: calendar
+        )
     }
 
     /// Роллинг-догенерация горизонта ДЛЯ ВСЕХ активных вкладов (план `2026-07-05__cashflow-add-transaction-redesign.md`,
@@ -103,7 +137,7 @@ enum DepositInterestScheduler {
         )
         let existingEvents = (try? context.fetch(descriptor)) ?? (account.events ?? [])
 
-        return try generate(
+        let generated = try generate(
             account: account,
             meta: meta,
             openingDate: openingDate,
@@ -113,6 +147,10 @@ enum DepositInterestScheduler {
             service: service,
             calendar: calendar
         )
+        // One outer commit for the whole regenerated batch. `upsertInterestEvent` only mutates the
+        // context, avoiding the previous save-per-period partial schedule.
+        try context.save()
+        return generated
     }
 
     /// Удаляет СГЕНЕРИРОВАННЫЕ этим генератором (по конвенции `sourceTransactionID`) interest-события
@@ -149,46 +187,78 @@ enum DepositInterestScheduler {
         service: AccountsCoreService,
         calendar: Calendar
     ) throws -> Int {
+        let drafts = buildSchedule(
+            accountID: account.id,
+            kind: account.kind,
+            meta: meta,
+            openingDate: openingDate,
+            existingEvents: existingEvents,
+            after: asOf,
+            horizon: horizon,
+            calendar: calendar
+        )
+        for draft in drafts {
+            _ = try service.upsertInterestEvent(
+                sourceTransactionID: draft.sourceTransactionID,
+                account: account,
+                amount: draft.amount,
+                date: draft.date,
+                saveChanges: false
+            )
+        }
+        return drafts.count
+    }
+
+    private static func buildSchedule(
+        accountID: UUID,
+        kind: AccountKind,
+        meta: DepositMeta,
+        openingDate: Date,
+        existingEvents: [AccountEvent],
+        after asOf: Date,
+        horizon: Date,
+        calendar: Calendar
+    ) -> [InterestEventDraft] {
         var workingEvents = existingEvents
-        var generated = 0
+        var drafts: [InterestEventDraft] = []
 
         switch meta.capitalization {
         case .none:
-            // Простые проценты ОДНИМ начислением на дату окончания (брифинг Фазы 3, п.2):
-            // opening × rate × дней_срока / 365. Без термина считать нечего (edge case — no-op).
-            guard let termEnd = meta.termEnd, termEnd > asOf else { return 0 }
-            guard let openingAmount = workingEvents.first(where: { $0.type == .openingBalance })?.amount else { return 0 }
+            guard let termEnd = meta.termEnd, termEnd > asOf,
+                  let openingAmount = workingEvents.first(where: { $0.type == .openingBalance })?.amount else {
+                return []
+            }
             let days = calendar.dateComponents([.day], from: openingDate, to: termEnd).day ?? 0
-            guard days > 0 else { return 0 }
+            guard days > 0 else { return [] }
             let interest = round2(openingAmount * meta.rate / 100 * Decimal(days) / 365)
-            let dayKey = AccountEvent.dayKey(for: termEnd)
-            let sourceID = sourceTransactionID(accountID: account.id, dayKey: dayKey)
-            let event = try service.upsertInterestEvent(sourceTransactionID: sourceID, account: account, amount: interest, date: termEnd)
-            workingEvents.append(event)
-            generated = 1
+            guard interest != 0 else { return [] }
+            let sourceID = sourceTransactionID(accountID: accountID, dayKey: AccountEvent.dayKey(for: termEnd))
+            return [.init(sourceTransactionID: sourceID, amount: interest, date: termEnd)]
 
         case .monthly, .quarterly:
             let stepMonths = meta.capitalization == .quarterly ? 3 : 1
             let periodRate = meta.capitalization == .quarterly ? meta.rate / 4 : meta.rate / 12
             var n = 1
             while true {
-                guard let periodEnd = calendar.date(byAdding: .month, value: n * stepMonths, to: openingDate) else { break }
-                if periodEnd > horizon { break }
+                guard let periodEnd = calendar.date(byAdding: .month, value: n * stepMonths, to: openingDate),
+                      periodEnd <= horizon else { break }
                 n += 1
-                guard periodEnd > asOf else { continue } // прошлый период — не трогаем
-
-                let balanceBefore = AccountBalanceEngine.balanceAt(events: workingEvents, kind: .deposit, on: periodEnd)
+                guard periodEnd > asOf else { continue }
+                let balanceBefore = AccountBalanceEngine.balanceAt(events: workingEvents, kind: kind, on: periodEnd)
                 let interest = round2(balanceBefore * periodRate / 100)
                 guard interest != 0 else { continue }
-                let dayKey = AccountEvent.dayKey(for: periodEnd)
-                let sourceID = sourceTransactionID(accountID: account.id, dayKey: dayKey)
-                let event = try service.upsertInterestEvent(sourceTransactionID: sourceID, account: account, amount: interest, date: periodEnd)
-                workingEvents.append(event)
-                generated += 1
+                let sourceID = sourceTransactionID(accountID: accountID, dayKey: AccountEvent.dayKey(for: periodEnd))
+                drafts.append(.init(sourceTransactionID: sourceID, amount: interest, date: periodEnd))
+                workingEvents.append(AccountEvent(
+                    account: nil,
+                    date: periodEnd,
+                    type: .interest,
+                    amount: interest,
+                    sourceTransactionID: sourceID
+                ))
             }
+            return drafts
         }
-
-        return generated
     }
 
     /// Округление процентов до копейки — ОБЫЧНОЕ (`.plain`, «половина вверх»), НЕ bankers rounding

@@ -85,6 +85,35 @@ struct AccountSnapshotBackfillCoordinatorTests {
         #expect(!snapshots.contains { $0.dayKey == day6Key }) // подтверждает, что второй забег реально не выполнялся
     }
 
+    @Test @MainActor
+    func concurrentCallsShareOneBackfill() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let defaults = isolatedDefaults(#function)
+        let account = try service.createAccount(
+            name: "Карта",
+            kind: .cash,
+            currency: "RUB",
+            openingBalance: 100,
+            date: day(0)
+        )
+        try service.recordEvent(account: account, type: .income, amount: 50, date: day(1))
+        try ctx.save()
+
+        let coordinator = AccountSnapshotBackfillCoordinator(
+            modelContainer: container,
+            defaults: defaults,
+            nowProvider: { self.day(1) }
+        )
+        async let first = coordinator.backfillIfNeeded(scopeIdentifier: "single-flight")
+        async let second = coordinator.backfillIfNeeded(scopeIdentifier: "single-flight")
+        let results = await [first, second]
+
+        #expect(results == [1, 1])
+        #expect(try fetchSnapshots(ctx, accountID: account.id).count == 2)
+    }
+
     // MARK: - Разные scope НЕ делят один флаг
 
     @Test @MainActor

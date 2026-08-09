@@ -189,6 +189,58 @@ struct ScopeMergeWorkerTests {
         }
     }
 
+    @Test func newCore_preservesValidProductTupleExactly() async throws {
+        try await withRegistry {
+            let guest = makeContainer(); let user = makeContainer()
+            let account = Account(
+                id: UUID(),
+                name: "House",
+                kind: .manualAsset,
+                productType: .realEstate,
+                currency: "RUB"
+            )
+            account.manualAssetMeta = ManualAssetMeta(
+                revalReminderMonths: 12,
+                depreciationRatePerYear: nil,
+                linkedLoanID: nil
+            )
+            guest.mainContext.insert(account)
+            save(guest)
+
+            _ = try await runMerge(guest: guest, user: user)
+
+            let copied = try #require(ModelContext(user).fetch(FetchDescriptor<Account>()).first)
+            #expect(copied.kindRaw == AccountKind.manualAsset.rawValue)
+            #expect(copied.productType == .realEstate)
+            #expect(copied.productMigrationReason == nil)
+            #expect(copied.manualAssetMeta == account.manualAssetMeta)
+        }
+    }
+
+    @Test func newCore_quarantinesContradictoryProductTupleWithoutGuessingCash() async throws {
+        try await withRegistry {
+            let guest = makeContainer(); let user = makeContainer()
+            let account = Account(
+                id: UUID(),
+                name: "Broken",
+                kind: .marketInvestment,
+                productType: .cash,
+                currency: "USD"
+            )
+            account.marketMeta = MarketMeta(symbol: "AAPL", assetClass: .stock)
+            guest.mainContext.insert(account)
+            save(guest)
+
+            _ = try await runMerge(guest: guest, user: user)
+
+            let copied = try #require(ModelContext(user).fetch(FetchDescriptor<Account>()).first)
+            #expect(copied.kindRaw == AccountKind.marketInvestment.rawValue)
+            #expect(copied.productType == .unknownLegacy)
+            #expect(copied.productMigrationReason == ProductMigrationReason.persistedProductContradiction.rawValue)
+            #expect(copied.marketMeta?.symbol == "AAPL")
+        }
+    }
+
     /// Ф6 polish: deletedAt round-trip через merge. `copyNewCore` вставляет new-core счета только
     /// если id ОТСУТСТВУЕТ в user (`accountByID[dto.id] == nil`, ScopeMergeDedup.swift:127) — существующие
     /// записи никогда не перезаписываются, LWW по updatedAt для core Account не применяется вовсе.

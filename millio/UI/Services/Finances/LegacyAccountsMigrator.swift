@@ -52,12 +52,13 @@ final class LegacyAccountsMigrator {
 
     init(
         modelContext: ModelContext,
-        registry: LegacyConversionRegistry = .shared,
+        registry: LegacyConversionRegistry? = nil,
         defaults: UserDefaults = .standard,
         fallbackCurrency: String = "RUB",
         nowProvider: @escaping () -> Date = Date.init
     ) {
         self.modelContext = modelContext
+        let registry = registry ?? .shared
         self.registry = registry
         self.converter = LegacyAccountConverter(modelContext: modelContext, registry: registry)
         self.defaults = defaults
@@ -268,22 +269,39 @@ final class LegacyAccountsMigrator {
         }
 
         let coreGroup = resolveCoreGroup(name: groupNameByLegacyKey[legacyKey])
+        // Group materialization is a separate idempotent prerequisite. The converter deliberately
+        // rejects a dirty context so account creation + legacy archival remain one atomic save.
+        // Persist a newly bridged group first; otherwise every grouped legacy account fails with
+        // `dirtyContext` before conversion even starts.
+        if modelContext.hasChanges {
+            do {
+                try modelContext.save()
+            } catch {
+                modelContext.rollback()
+                summary.failures += 1
+                AppLogger.log(
+                    .error,
+                    category: "AccountsCore",
+                    "Legacy migration: failed to persist core group prerequisite — \(error.localizedDescription)"
+                )
+                return
+            }
+        }
         let input = LegacyAccountConverter.Input(
             legacyUniqueID: plan.legacyUniqueID,
             name: plan.name,
             currency: plan.currency,
-            kind: plan.kind,
+            productType: plan.productType,
             openingBalance: plan.openingBalance,
             group: coreGroup,
-            cardMeta: plan.cardMeta,
-            loanMeta: plan.loanMeta,
-            manualAssetMeta: plan.manualAssetMeta
+            metadata: plan.metadata,
+            initialMarketPurchase: plan.initialMarketPurchase,
+            includeInTotal: plan.includeInTotal
         )
 
         do {
             try converter.convert(input, date: nowProvider()) {
                 hideLegacy()
-                try self.modelContext.save()
             }
             summary.migrated += 1
         } catch {

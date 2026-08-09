@@ -16,6 +16,7 @@ final class MockHistoricalRateService: CurrencyRateServiceProtocol {
     var currentRate: Double?
     var historicalRatesByPair: [String: Double] = [:]
     private(set) var historicalCalls: Int = 0
+    private(set) var historicalCallDates: [Date] = []
     
     func getRate(from: String, to: String) async -> Double? {
         currentRate
@@ -23,6 +24,7 @@ final class MockHistoricalRateService: CurrencyRateServiceProtocol {
     
     func getHistoricalRate(on date: Date, from: String, to: String) async -> Double? {
         historicalCalls += 1
+        historicalCallDates.append(date)
         if let mapped = historicalRatesByPair["\(from.uppercased())_\(to.uppercased())"] {
             return mapped
         }
@@ -75,7 +77,8 @@ struct HistoricalRateStoreTests {
     @Test("Инвертирование курса работает для обратной пары")
     func testInverseRateLookup() async throws {
         let modelContext = try createTestModelContext()
-        let store = HistoricalRateStore(modelContext: modelContext, currencyService: MockHistoricalRateService())
+        let mockService = MockHistoricalRateService()
+        let store = HistoricalRateStore(modelContext: modelContext, currencyService: mockService)
         
         let date = Calendar.current.startOfDay(for: Date())
         let rate = HistoricalRate(
@@ -91,6 +94,7 @@ struct HistoricalRateStoreTests {
         let result = await store.getRate(on: date, from: "USD", to: "RUB")
         #expect(result.rate == 100.0)
         #expect(result.resolution == .exact)
+        #expect(mockService.historicalCalls == 0)
     }
 
     // MARK: - Дополнительные тесты
@@ -214,6 +218,25 @@ struct HistoricalRateStoreTests {
         let result = await store.getRate(on: date, from: "USD", to: "RUB")
         #expect(result.rate == 95.0)
         #expect(result.resolution == .exact)
+    }
+
+    @Test("Prefetch выходного запрашивает и сохраняет предыдущий рабочий день")
+    func testPrefetchWeekendWarmsPreviousBusinessDay() async throws {
+        let context = try createTestModelContext()
+        let mockService = MockHistoricalRateService()
+        mockService.historicalRatesByPair["USD_RUB"] = 95.0
+        let store = HistoricalRateStore(modelContext: context, currencyService: mockService)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let saturday = try #require(calendar.date(from: DateComponents(year: 2026, month: 8, day: 8)))
+        let friday = try #require(calendar.date(from: DateComponents(year: 2026, month: 8, day: 7)))
+
+        await store.prefetchExactRates(on: [saturday], pairs: [(from: "USD", to: "RUB")])
+
+        #expect(mockService.historicalCallDates == [friday])
+        let rows = try context.fetch(FetchDescriptor<HistoricalRate>())
+        #expect(rows.count == 1)
+        #expect(rows.first?.rateDate == friday)
     }
 
     @Test("Store не повторяет historical lookup для того же miss")

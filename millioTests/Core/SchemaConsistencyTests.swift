@@ -88,6 +88,35 @@ struct SchemaConsistencyTests {
             ))
     }
 
+    /// V6 swaps the frozen V5 AccountsCore declarations for their current counterparts while
+    /// preserving the same entity set. The V5→V6 stage owns the additive product columns.
+    @Test
+    func v6IsSupersetOfV5() {
+        let v5Names = Set(AppSchemaV5.models.map { entityName(for: $0) })
+        let v6Names = Set(AppSchemaV6.models.map { entityName(for: $0) })
+        let missing = v5Names.subtracting(v6Names)
+        #expect(missing.isEmpty,
+            Comment(rawValue:
+                "V5 содержит типы, отсутствующие в V6: \(missing). " +
+                "V6 должна сохранять все released entity names V5."
+            ))
+    }
+
+    /// V7 preserves every V6 entity and adds the immutable close table. Account revision columns
+    /// are optional and therefore belong to this lightweight boundary, not to frozen V6.
+    @Test
+    func v7IsSupersetOfV6() {
+        let v6Names = Set(AppSchemaV6.models.map { entityName(for: $0) })
+        let v7Names = Set(AppSchemaV7.models.map { entityName(for: $0) })
+        let missing = v6Names.subtracting(v7Names)
+        #expect(missing.isEmpty,
+            Comment(rawValue:
+                "V6 содержит типы, отсутствующие в V7: \(missing). " +
+                "V7 должна сохранять все released entity names V6."
+            ))
+        #expect(v7Names.contains("HistoricalPortfolioValuation"))
+    }
+
     /// AppSchema.create() возвращает схему из тех же типов что и AppSchemaCurrent.
     @Test
     func appSchemaCreateMatchesSchemaCurrent() {

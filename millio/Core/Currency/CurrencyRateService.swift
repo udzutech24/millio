@@ -41,7 +41,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     private let rateRepository: RateRepositoryProtocol
     private let historicalLoader: HTTPDataLoading
     private let frankfurterHistoricalProvider: HistoricalRateProvider
-    private let rubHistoricalFallbackProvider: HistoricalRateProvider?
+    private let rubHistoricalProvider: HistoricalRateProvider?
     private let cbrLatestProvider: CBRLatestRateProvider
 
     /// Провайдер цены крипто-валюты в USD (инжектируется извне, Core не зависит от MarketAPIClient).
@@ -69,7 +69,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         self.rateRepository = rateRepository
         self.historicalLoader = historicalLoader
         self.frankfurterHistoricalProvider = frankfurterHistoricalProvider
-        self.rubHistoricalFallbackProvider = rubHistoricalFallbackProvider
+        self.rubHistoricalProvider = rubHistoricalFallbackProvider
         self.cbrLatestProvider = cbrLatestProvider
         // Синхронный прогрев из UserDefaults — конвертация и виджет работают мгновенно без сети.
         // Не используем async/actor чтобы избежать race condition с первым обращением к getRate().
@@ -188,14 +188,17 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
             return await getRate(from: f, to: t)
         }
 
-        if let rate = await frankfurterHistoricalProvider.fetchRate(on: date, from: f, to: t, loader: historicalLoader) {
-            return rate
+        // Official CBR daily data is authoritative for every RUB-involved historical pair.
+        // Frankfurter remains the fallback for provider outages and the primary source for
+        // non-RUB pairs. The persisted HistoricalRateStore cache sits in front of this method.
+        if (f == "RUB" || t == "RUB"),
+           let rubHistoricalProvider,
+           let cbrRate = await rubHistoricalProvider.fetchRate(on: date, from: f, to: t, loader: historicalLoader) {
+            return cbrRate
         }
 
-        if (f == "RUB" || t == "RUB"),
-           let rubHistoricalFallbackProvider,
-           let fallbackRate = await rubHistoricalFallbackProvider.fetchRate(on: date, from: f, to: t, loader: historicalLoader) {
-            return fallbackRate
+        if let rate = await frankfurterHistoricalProvider.fetchRate(on: date, from: f, to: t, loader: historicalLoader) {
+            return rate
         }
 
         return nil
@@ -220,7 +223,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     /// фиксировали дату/пару как недоступную до перезапуска приложения.
     func resetHistoricalUnavailableRequestCache() {
         frankfurterHistoricalProvider.resetTransientCache()
-        rubHistoricalFallbackProvider?.resetTransientCache()
+        rubHistoricalProvider?.resetTransientCache()
     }
 
     /// Строит цепочку fallback-источников: preferred первым, остальные в порядке allCases.

@@ -1055,4 +1055,53 @@ struct StockBulkImportTests {
         #expect(buyEvents.count == 2)
         #expect(buyEvents.reduce(Decimal(0)) { $0 + ($1.quantity ?? 0) } == 27)
     }
+
+    @Test("Bulk validation failure rolls back an earlier newly built account")
+    func persistenceValidationFailureRollsBackWholeBatch() async throws {
+        let context = try makeContext()
+        let invalidExisting = Account(name: "SPY", kind: .marketInvestment, currency: "USD")
+        invalidExisting.marketMeta = MarketMeta(symbol: "SPY", assetClass: .stock)
+        context.insert(invalidExisting)
+        try context.save()
+
+        let apple = StockBulkImportCandidate(
+            symbol: "AAPL", market: "NASDAQ", displayName: "Apple", currency: "USD",
+            providerRaw: "market-backend"
+        )
+        let spy = StockBulkImportCandidate(
+            symbol: "SPY", market: "US", displayName: "SPY", currency: "USD",
+            providerRaw: "market-backend"
+        )
+        let drafts = [
+            StockBulkImportRowDraft(
+                rawLine: "AAPL 1 @ 100", tickerText: "AAPL", marketText: "NASDAQ",
+                quantityText: "1", buyPriceText: "100", sourceOrderIndex: 0,
+                candidates: [apple], selectedCandidate: apple
+            ),
+            StockBulkImportRowDraft(
+                rawLine: "SPY 1 @ 600", tickerText: "SPY", marketText: "US",
+                quantityText: "1", buyPriceText: "600", sourceOrderIndex: 1,
+                candidates: [spy], selectedCandidate: spy
+            )
+        ]
+        let service = StockBulkImportPersistenceService(
+            modelContext: context,
+            marketDataClient: StockBulkImportMockMarketDataClient()
+        )
+
+        await #expect(throws: AccountsCoreServiceError.self) {
+            _ = try await service.persist(
+                drafts: drafts,
+                includeInTotal: true,
+                priority: .normal,
+                targetGroup: nil,
+                mergeDuplicates: false
+            )
+        }
+
+        let accounts = try context.fetch(FetchDescriptor<Account>())
+        #expect(accounts.count == 1)
+        #expect(accounts.first?.name == "SPY")
+        #expect(try context.fetchCount(FetchDescriptor<AccountEvent>()) == 0)
+    }
 }

@@ -25,6 +25,8 @@ struct AccountDTO: Sendable {
     let id: UUID
     let name: String
     let kindRaw: String
+    let productTypeRaw: String?
+    let productMigrationReason: String?
     let currency: String
     let createdAt: Date
     let archivedAt: Date?
@@ -91,6 +93,9 @@ struct GuestMergeInput: Sendable {
     let legacyData: Data
     let newCore: NewCoreSnapshot
     let snapshot: ScopeSideSnapshot
+    /// Close rows are scope-bound and therefore never copied. Their presence still requires a
+    /// destination-scope rebuild even when ordinary graph counts produce `noDivergence`.
+    let hasHistoricalCloses: Bool
 }
 
 /// Результат применения merge worker'ом.

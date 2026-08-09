@@ -297,8 +297,8 @@ struct CurrencyRateServiceTests {
         #expect(loader.requestedURLs.count == 1)
     }
 
-    @Test("RUB historical fallback использует второй провайдер")
-    func testHistoricalRUBFallbackUsesSecondaryProvider() async {
+    @Test("При отказе ЦБ RUB historical не отправляется неподдерживаемому Frankfurter")
+    func testHistoricalRUBDoesNotCallUnsupportedFrankfurter() async {
         final class MockHistoricalLoader: HTTPDataLoading {
             private(set) var requestedURLs: [URL] = []
 

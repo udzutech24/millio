@@ -114,103 +114,99 @@ struct QuickSetupApplier {
     }
 
     /// Применяет продукты онбординга на НОВОМ ядре event-sourcing (Фаза 6a) — единственная точка
-    /// записи `AccountsCoreService`, легаси `Card`/`Credit`/`Investment`/`FinanceAccount` для НОВЫХ
+    /// записи `AccountProductGraphBuilder`, легаси `Card`/`Credit`/`Investment`/`FinanceAccount` для НОВЫХ
     /// счетов больше не создаются (это был последний живой обходной путь легаси-создания, найденный
     /// аудитом Фазы 6a: онбординг создавал легаси-продукты в обход `AccountsCoreAdditionBridge`,
     /// которым уже пользуется основной экран добавления счёта).
     private func applyProducts(_ products: [QuickSetupProductDraft], groups: [QuickSetupGroupDraft]) throws {
         guard !products.isEmpty else { return }
 
-        let groupsByDraftID = try ensureQuickSetupGroups(groups)
-        var ungroupedGroup: FinanceGroup?
-        var trackedTickerCount = try activeTrackedTickerCount()
-        let locale = AppLocalization.currentAppLocale
-        let service = AccountsCoreService(modelContext: modelContext)
+        // The whole onboarding product batch commits in one disposable context. A later invalid
+        // draft or failed save cannot leave earlier accounts/buys in the caller's context.
+        let transactionContext = ModelContext(modelContext.container)
+        transactionContext.autosaveEnabled = false
+        do {
+            let groupsByDraftID = try ensureQuickSetupGroups(groups, in: transactionContext)
+            var ungroupedGroup: FinanceGroup?
+            var trackedTickerCount = try activeTrackedTickerCount(in: transactionContext)
+            let locale = AppLocalization.currentAppLocale
 
-        for draft in products {
-            let targetGroup: FinanceGroup
-            if let groupDraftID = draft.groupDraftID,
-               let group = groupsByDraftID[groupDraftID] {
-                targetGroup = group
-            } else {
-                let resolved = ungroupedGroup ?? FinanceSystemGroups.ensureUngroupedGroup(in: modelContext)
-                ungroupedGroup = resolved
-                targetGroup = resolved
-            }
-            let accountGroup = AccountsCoreAdditionBridge.resolveAccountGroup(matching: targetGroup, in: modelContext)
-
-            switch draft.type {
-            case .card:
-                // Онбординг не собирает банк — всегда `.other`, тот же путь, что и обычная форма
-                // добавления карты (см. `AccountsCoreAdditionBridge.cardKind`).
-                try service.createAccount(
-                    name: draft.name,
-                    kind: AccountsCoreAdditionBridge.cardKind(bank: .other),
-                    currency: draft.currencyCode,
-                    openingBalance: Decimal(draft.amount),
-                    group: accountGroup
-                )
-
-            case .realEstate:
-                try service.createAccount(
-                    name: draft.name,
-                    kind: .manualAsset,
-                    currency: draft.currencyCode,
-                    openingBalance: Decimal(draft.amount),
-                    group: accountGroup,
-                    manualAssetMeta: AccountsCoreAdditionBridge.manualAssetMeta()
-                )
-
-            case .debt:
-                // Онбординг знает только «я должен» (старая форма тоже не собирала направление
-                // отдельно для этого пресета) — знак минус движок C сам не проставляет для `.debt`,
-                // это делает вызывающий код (см. `createObligationAccountOnNewCore`).
-                try service.createAccount(
-                    name: draft.name,
-                    kind: .debt,
-                    currency: draft.currencyCode,
-                    openingBalance: -Decimal(draft.amount),
-                    group: accountGroup,
-                    debtMeta: AccountsCoreAdditionBridge.debtMeta(direction: .owedByMe)
-                )
-
-            case .crypto:
-                guard EntitlementPolicy.canAddQuickSetupTrackedProduct(
-                    type: .crypto,
-                    isPro: appState.isPro,
-                    currentTrackedTickers: trackedTickerCount
-                ) else {
-                    throw QuickSetupApplyError.cryptoRequiresPro(locale: locale)
+            for draft in products {
+                let targetGroup: FinanceGroup
+                if let groupDraftID = draft.groupDraftID,
+                   let group = groupsByDraftID[groupDraftID] {
+                    targetGroup = group
+                } else {
+                    let resolved = ungroupedGroup
+                        ?? FinanceSystemGroups.ensureUngroupedGroup(in: transactionContext)
+                    ungroupedGroup = resolved
+                    targetGroup = resolved
                 }
-                try createMarketOrManualAsset(service: service, draft: draft, category: .crypto, group: accountGroup)
-                trackedTickerCount += 1
+                let accountGroup = AccountsCoreAdditionBridge.resolveAccountGroup(
+                    matching: targetGroup,
+                    in: transactionContext
+                )
+                let command = try makeProductCommand(
+                    for: draft,
+                    groupID: accountGroup?.id,
+                    trackedTickerCount: &trackedTickerCount,
+                    locale: locale
+                )
+                _ = try AccountProductGraphBuilder.build(command, in: transactionContext)
+            }
+            try transactionContext.save()
+        } catch {
+            transactionContext.rollback()
+            throw error
+        }
+    }
 
-            case .credit:
-                let amount = max(0, draft.amount)
-                let defaultTermMonths = 24
-                let monthlyPayment = max(0, amount / Double(defaultTermMonths))
-                // Онбординг не собирает ставку/дату платежа — тот же пробел, что и у основной формы
-                // «Кредит» (см. `AccountsCoreAdditionBridge.loanMeta`). openingBalance = ТЕКУЩИЙ остаток
-                // (в упрощённой форме онбординга это то же число, что и principal).
-                let meta = AccountsCoreAdditionBridge.loanMeta(
+    private func makeProductCommand(
+        for draft: QuickSetupProductDraft,
+        groupID: UUID?,
+        trackedTickerCount: inout Int,
+        locale: Locale
+    ) throws -> CreateProductCommand {
+        switch draft.type {
+        case .card:
+            return CreateProductCommand(
+                productType: .debitCard, name: draft.name, currency: draft.currencyCode,
+                openingBalance: Decimal(draft.amount), groupID: groupID
+            )
+        case .realEstate:
+            return CreateProductCommand(
+                productType: .realEstate, name: draft.name, currency: draft.currencyCode,
+                openingBalance: Decimal(draft.amount), groupID: groupID,
+                metadata: .init(manualAsset: AccountsCoreAdditionBridge.manualAssetMeta())
+            )
+        case .debt:
+            return CreateProductCommand(
+                productType: .payable, name: draft.name, currency: draft.currencyCode,
+                openingBalance: -Decimal(draft.amount), groupID: groupID,
+                metadata: .init(debt: AccountsCoreAdditionBridge.debtMeta(direction: .owedByMe))
+            )
+        case .credit:
+            let amount = max(0, draft.amount)
+            let monthlyPayment = amount / 24
+            return CreateProductCommand(
+                productType: .loan, name: draft.name, currency: draft.currencyCode,
+                openingBalance: Decimal(amount), groupID: groupID,
+                metadata: .init(loan: AccountsCoreAdditionBridge.loanMeta(
                     principal: Decimal(amount),
                     monthlyPayment: monthlyPayment > 0 ? Decimal(monthlyPayment) : nil,
                     paymentDay: nil,
                     termEnd: nil
-                )
-                try service.createAccount(
-                    name: draft.name,
-                    kind: .loan,
-                    currency: draft.currencyCode,
-                    openingBalance: Decimal(amount),
-                    group: accountGroup,
-                    loanMeta: meta
-                )
-
-            case .ticker:
+                ))
+            )
+        case .crypto, .ticker:
+            if draft.type == .crypto {
                 guard EntitlementPolicy.canAddQuickSetupTrackedProduct(
-                    type: .ticker,
-                    isPro: appState.isPro,
+                    type: .crypto, isPro: appState.isPro,
+                    currentTrackedTickers: trackedTickerCount
+                ) else { throw QuickSetupApplyError.cryptoRequiresPro(locale: locale) }
+            } else {
+                guard EntitlementPolicy.canAddQuickSetupTrackedProduct(
+                    type: .ticker, isPro: appState.isPro,
                     currentTrackedTickers: trackedTickerCount
                 ) else {
                     throw QuickSetupApplyError.quickSetupTrackedTickerLimitReached(
@@ -218,45 +214,26 @@ struct QuickSetupApplier {
                         locale: locale
                     )
                 }
-                try createMarketOrManualAsset(service: service, draft: draft, category: .stocks, group: accountGroup)
-                trackedTickerCount += 1
             }
-        }
-    }
-
-    /// Акции/крипта с известным тикером (`marketSnapshot` собран поиском в форме онбординга) —
-    /// рыночный счёт нового ядра с сразу примененной покупкой. Без снапшота (защитный путь, поиск
-    /// формы этого не допускает, но пробел старого кода не воспроизводим) — ручной актив на сумму
-    /// черновика, тот же выбор, что у пресета «Инвестиция» без тикера (Фаза 4).
-    private func createMarketOrManualAsset(
-        service: AccountsCoreService,
-        draft: QuickSetupProductDraft,
-        category: InvestmentCategory,
-        group: AccountGroup?
-    ) throws {
-        if let snapshot = draft.marketSnapshot {
-            let meta = AccountsCoreAdditionBridge.marketMeta(symbol: snapshot.symbol, category: category)
-            let account = try service.createAccount(
+            guard let snapshot = draft.marketSnapshot else {
+                throw QuickSetupApplyError.missingMarketEvidence(locale: locale)
+            }
+            trackedTickerCount += 1
+            let category: InvestmentCategory = draft.type == .crypto ? .crypto : .stocks
+            return CreateProductCommand(
+                productType: draft.type == .crypto ? .marketCrypto : .marketStock,
                 name: draft.name,
-                kind: .marketInvestment,
                 currency: snapshot.currencyCode,
-                openingBalance: 0, // движок E игнорирует opening — баланс считает только buy/sell
-                group: group,
-                marketMeta: meta
-            )
-            try service.buy(
-                account: account,
-                quantity: Decimal(snapshot.quantity),
-                unitPrice: Decimal(snapshot.purchaseUnitPrice)
-            )
-        } else {
-            try service.createAccount(
-                name: draft.name,
-                kind: .manualAsset,
-                currency: draft.currencyCode,
-                openingBalance: Decimal(draft.amount),
-                group: group,
-                manualAssetMeta: AccountsCoreAdditionBridge.manualAssetMeta()
+                openingBalance: 0,
+                groupID: groupID,
+                metadata: .init(market: AccountsCoreAdditionBridge.marketMeta(
+                    symbol: snapshot.symbol,
+                    category: category
+                )),
+                initialMarketPurchase: .init(
+                    quantity: Decimal(snapshot.quantity),
+                    unitPrice: Decimal(snapshot.purchaseUnitPrice)
+                )
             )
         }
     }
@@ -273,9 +250,12 @@ struct QuickSetupApplier {
         }
     }
 
-    private func ensureQuickSetupGroups(_ drafts: [QuickSetupGroupDraft]) throws -> [UUID: FinanceGroup] {
+    private func ensureQuickSetupGroups(
+        _ drafts: [QuickSetupGroupDraft],
+        in context: ModelContext
+    ) throws -> [UUID: FinanceGroup] {
         let descriptor = FetchDescriptor<FinanceGroup>()
-        var groups = try modelContext.fetch(descriptor)
+        var groups = try context.fetch(descriptor)
         var nextOrder = (groups.map(\.order).max() ?? -1) + 1
         var result: [UUID: FinanceGroup] = [:]
 
@@ -294,7 +274,7 @@ struct QuickSetupApplier {
                 priority: .normal
             )
             nextOrder += 1
-            modelContext.insert(group)
+            context.insert(group)
             groups.append(group)
             result[draft.id] = group
         }
@@ -305,9 +285,9 @@ struct QuickSetupApplier {
     /// Счётчик отслеживаемых тикеров нового ядра (Фаза 6a) — на старте онбординга стор всегда
     /// пуст, поэтому практический результат не меняется, но считаем честно на случай повторного
     /// запуска онбординга/будущей миграции существующих данных.
-    private func activeTrackedTickerCount() throws -> Int {
+    private func activeTrackedTickerCount(in context: ModelContext) throws -> Int {
         let descriptor = FetchDescriptor<Account>()
-        let accounts = try modelContext.fetch(descriptor)
+        let accounts = try context.fetch(descriptor)
         return accounts.reduce(into: 0) { partialResult, account in
             guard account.archivedAt == nil, account.kind == .marketInvestment else { return }
             partialResult += 1
@@ -323,6 +303,7 @@ enum QuickSetupApplyError: LocalizedError {
     case trackedTickerLimitReached(limit: Int)
     case quickSetupTrackedTickerLimitReached(limit: Int, locale: Locale)
     case cryptoRequiresPro(locale: Locale)
+    case missingMarketEvidence(locale: Locale)
 
     var errorDescription: String? {
         switch self {
@@ -339,6 +320,8 @@ enum QuickSetupApplyError: LocalizedError {
             )
         case .cryptoRequiresPro(let locale):
             return QuickSetupLocalization.tr("quick_setup.error.crypto_requires_pro", locale: locale)
+        case .missingMarketEvidence(let locale):
+            return QuickSetupLocalization.tr("quick_setup.error.enter_ticker", locale: locale)
         }
     }
 }

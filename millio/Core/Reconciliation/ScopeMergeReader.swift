@@ -24,6 +24,7 @@ enum ScopeMergeReader {
         static let accountEvent = "AccountEvent"
         static let accountGroup = "AccountGroup"
         static let accountDailySnapshot = "AccountDailySnapshot"
+        static let historicalPortfolioValuation = "HistoricalPortfolioValuation"
     }
 
     /// New-core типы, исключаемые из `legacyData` (ModelTypeRegistry-экспорта для reconciliation):
@@ -37,7 +38,8 @@ enum ScopeMergeReader {
     /// HistoricalAssetPrice сюда НЕ входит — у него нет выделенного merge-пути, он мержится через
     /// общий importer как HistoricalRate (upsert по symbol+dayKey).
     static let newCoreTypeNames: Set<String> = [
-        Model.account, Model.accountEvent, Model.accountGroup, Model.accountDailySnapshot
+        Model.account, Model.accountEvent, Model.accountGroup, Model.accountDailySnapshot,
+        Model.historicalPortfolioValuation
     ]
 
     // MARK: - Снимок стороны (counts / watermarks / lineage / tx-fingerprints)
@@ -170,7 +172,10 @@ enum ScopeMergeReader {
         }
         let accounts = try context.fetch(FetchDescriptor<Account>()).map { account in
             AccountDTO(
-                id: account.id, name: account.name, kindRaw: account.kindRaw, currency: account.currency,
+                id: account.id, name: account.name, kindRaw: account.kindRaw,
+                productTypeRaw: account.productTypeRaw,
+                productMigrationReason: account.productMigrationReason,
+                currency: account.currency,
                 createdAt: account.createdAt, archivedAt: account.archivedAt, deletedAt: account.deletedAt,
                 includeInTotal: account.includeInTotal, note: account.note, order: account.order,
                 groupID: account.group?.id,
@@ -196,6 +201,14 @@ enum ScopeMergeReader {
         let legacyData = try DataRepository.exportAllData(from: context, excluding: newCoreTypeNames)
         let newCore = try readNewCore(context: context)
         let snap = try snapshot(context: context)
-        return GuestMergeInput(legacyData: legacyData, newCore: newCore, snapshot: snap)
+        let hasHistoricalCloses = try context.fetchCount(
+            FetchDescriptor<HistoricalPortfolioValuation>()
+        ) > 0
+        return GuestMergeInput(
+            legacyData: legacyData,
+            newCore: newCore,
+            snapshot: snap,
+            hasHistoricalCloses: hasHistoricalCloses
+        )
     }
 }

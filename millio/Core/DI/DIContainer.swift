@@ -77,8 +77,39 @@ final class DIContainer {
             // priority) косметические и не относятся к багу невидимых счетов.
             let enabledBackupManager: BackupManagerProtocol = BackupManager(
                 dataRepository: dataRepository,
+                historicalValuationScopeID: scopeIdentifier,
                 onDidReplaceStore: {
-                    LegacyAccountsMigrator(modelContext: modelContext).migrateIfNeeded(scopeIdentifier: scopeIdentifier)
+                    let readiness = HistoricalValuationReadinessCoordinator.shared
+                    readiness.begin(scopeID: scopeIdentifier, operation: .revisionMigration)
+                    let summary = LegacyAccountsMigrator(modelContext: modelContext)
+                        .migrateIfNeeded(scopeIdentifier: scopeIdentifier)
+                    guard summary.failures == 0 else {
+                        readiness.fail(
+                            scopeID: scopeIdentifier,
+                            operation: .revisionMigration,
+                            reasonCode: "legacy_product_migration_failed"
+                        )
+                        appState.lifecycle = .error(.incompatibleSchemaVersion)
+                        return
+                    }
+                    do {
+                        let evidence = LegacyProductEvidenceCollector.collect(
+                            in: modelContainer.mainContext
+                        )
+                        _ = try AccountProductIdentityMigrator.migratePersistedAccounts(
+                            in: modelContainer,
+                            verifiedEvidenceByCoreAccountID: evidence
+                        )
+                        readiness.complete(scopeID: scopeIdentifier, operation: .revisionMigration)
+                    } catch {
+                        readiness.fail(
+                            scopeID: scopeIdentifier,
+                            operation: .revisionMigration,
+                            reasonCode: "product_classification_failed"
+                        )
+                        appState.lifecycle = .error(.incompatibleSchemaVersion)
+                        AppLogger.log(.error, category: "AccountsCore", "Post-restore product classification failed: \(error.localizedDescription)")
+                    }
                 }
             )
             backupManager = SwitchingBackupManager(

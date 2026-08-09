@@ -592,14 +592,16 @@ private struct FinanceDynamicsContentView: View {
         guard EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) else { return }
         isOverviewChartLoading = true
 
-        async let weekEntries = viewModel.buildOverviewEntries(granularity: .week)
-        async let monthEntries = viewModel.buildOverviewEntries(granularity: .month)
-        async let yearEntries = viewModel.buildOverviewEntries(granularity: .year)
-
+        // The structured external-coverage adapter owns query-scoped evidence while the producer
+        // awaits FX/market resolution. Keep these reads sequential so three overview queries cannot
+        // overwrite each other's prepared legacy boundary state.
+        let weekEntries = await viewModel.buildOverviewEntries(granularity: .week)
+        let monthEntries = await viewModel.buildOverviewEntries(granularity: .month)
+        let yearEntries = await viewModel.buildOverviewEntries(granularity: .year)
         overviewEntriesByGranularity = [
-            .week: await weekEntries,
-            .month: await monthEntries,
-            .year: await yearEntries
+            .week: weekEntries,
+            .month: monthEntries,
+            .year: yearEntries
         ]
         isOverviewChartLoading = false
     }

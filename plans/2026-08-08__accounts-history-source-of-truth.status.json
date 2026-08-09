@@ -1,0 +1,49 @@
+{
+  "planFile": "2026-08-08__accounts-history-source-of-truth.md",
+  "title": "Accounts history source of truth",
+  "updated": "2026-08-09T06:50:00+03:00",
+  "overallStatus": "emergency_structured_reader_active_device_acceptance_passed_phase_5_observation_open_phase_6_waiting_for_rollback_window",
+  "supersedes": "previous 10-phase draft",
+  "phases": [
+    {
+      "name": "Phase 0 — Contract reconciliation and red baseline",
+      "status": "reopened",
+      "note": "Independent review rejected the exit gate: night fixture is not same-D across injected midnight, and mandatory creation/restore/consumer/group failure baselines lack executed test evidence."
+    },
+    {
+      "name": "Phase 1V — Pure valuation contract, time and replay correctness",
+      "status": "complete",
+      "note": "Typed structured boundary, readiness/publication, validated decoding, direct replay for old/new readers, DST/IANA, cross-TZ/market regressions and revision inventory passed 38/38; independent findings resolved."
+    },
+    {
+      "name": "Phase 2V — Unified FX and market resolver",
+      "status": "complete",
+      "note": "Structured aggregate and unified resolver passed the fresh 98/98 focused gate; all independent-review findings were resolved and the independent verdict is ACCEPT. Legacy bare totalAt remains quarantined outside this exit scope until Phase 4 cutover."
+    },
+    {
+      "name": "Phase 3V — Minimal V7 close repository",
+      "status": "complete",
+      "note": "V7 close repository, byte-pinned accepted V6 fixture, backup/restore, deterministic concurrency, durable readiness/rebuild and transactional revision writers passed the combined and focused gates; independent P1 review is green."
+    },
+    {
+      "name": "Phase 1P — Product identity, catalog and atomic factory",
+      "status": "complete",
+      "note": "Typed product catalog and atomic factory are wired through production UI, QuickSetup, bulk, seeding and legacy conversion; real V5→V6→V7 fixtures and the combined gate passed, with independent P0/P1 review green."
+    },
+    {
+      "name": "Phase 4 — Portfolio producer, lazy close and shadow consumers",
+      "status": "complete_emergency_structured_reader_active",
+      "note": "Dynamics, dashboard, overview and Cashflow consume the structured portfolio producer; legacy predecessor coverage is explicit and exactly-once, incomplete coverage fails closed, repository reads recheck live readiness, and batched valuation avoids the former N+1 replay. After a real-device screenshot reproduced a 23,147,393 RUB silent-drop delta, the no-override shipping default was switched from shadow to the cache-only structured reader. Explicit shadow and structured compatibility rollback remain. Expanded cutover gate: 58/58 (/tmp/millio-emergency-cutover-expanded.xcresult)."
+    },
+    {
+      "name": "Phase 5 — Backfill, observation and cutover",
+      "status": "device_visual_acceptance_passed_operational_observation_open",
+      "note": "Emergency structured reader remains active. Exact-date cache-first FX/market backfill now renders the real-device 1W chart; CBR is primary for RUB pairs, incomplete results remain fail-closed, and the former manifest/revision/RUB-fetch failures are absent from the acceptance log. Historical arithmetic is internally exact: 98,898,259 + 958,897 = 99,857,156 across Dynamics and Cashflow. The 110,156 RUB difference from the 99,967,312 live balance is explicitly classified as live-versus-historical-close basis, not silently reconciled. Focused simulator suites, including the repaired grouped legacy migration cases, pass. The 30-observation/7-day policy, offline transition, rollback drill, and backend publication remain open."
+    },
+    {
+      "name": "Phase 6 — Cleanup and documentation",
+      "status": "blocked_by_phase_5_and_rollback_window",
+      "note": "Do not delete shadow/compatibility readers before Phase 5 approval and the real rollback window. Cleanup inventory is prepared; architecture/currency/schema/backup documentation and final deletion remain deferred."
+    }
+  ]
+}

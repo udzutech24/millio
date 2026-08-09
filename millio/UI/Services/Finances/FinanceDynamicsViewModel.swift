@@ -241,6 +241,17 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private var selectionUpdateTask: Task<Void, Never>?
     private var backgroundTasks: [UUID: Task<Void, Never>] = [:]
     private var chartUpdateRevision: Int = 0
+    private(set) var historicalPortfolioSeries: HistoricalPortfolioSeriesResult?
+    private(set) var historicalShadowDeltaBucket: HistoricalPortfolioShadowDeltaBucket?
+    private let historicalReaderMode: HistoricalPortfolioReaderMode
+    private lazy var legacyHistoricalValuator = LegacyHistoricalValuator(
+        modelContext: modelContext,
+        currencyService: currencyService,
+        onEstimatedConversion: { [weak self] in
+            guard let self, self.state.currencyConversionWarning == nil else { return }
+            self.state.currencyConversionWarning = L("finances.dynamics.warning.estimated_rate")
+        }
+    )
     
     // Кэши для оптимизации производительности
     var cardsCache: [String: Card] = [:]
@@ -259,11 +270,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         initialGroupCurrency: String? = nil,
         initialAccountID: String? = nil,
         initialAccountCurrency: String? = nil,
-        currencyService: CurrencyRateServiceProtocol
+        currencyService: CurrencyRateServiceProtocol,
+        historicalReaderMode: HistoricalPortfolioReaderMode? = nil
     ) {
         self.modelContext = modelContext
         self.financeViewModel = financeViewModel
         self.currencyService = currencyService
+        self.historicalReaderMode = historicalReaderMode
+            ?? HistoricalPortfolioReaderConfiguration.current(defaults: UserDefaults.standard).mode
         self.historicalRateStore = HistoricalRateStore(modelContext: modelContext, currencyService: currencyService)
         
         // Если передан initialAccountID, устанавливаем его как выбранный счет и включаем режим одного счета
@@ -544,6 +558,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         // Загружаем транзакции Cashflow для расчета динамики балансов
         loadCashflowTransactions()
+        legacyHistoricalValuator.reload()
         
         // Загружаем доступные валюты
         loadAvailableCurrencies()
@@ -593,6 +608,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
 
         rebuildCaches()
         loadCashflowTransactions()
+        legacyHistoricalValuator.reload()
     }
 
     private func fetchAccountsSnapshot() -> [FinanceAccount] {
@@ -846,6 +862,31 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private func updateCurrentBalanceAndDelta(for selectedDate: Date?) async {
         if Task.isCancelled { return }
 
+        // Structured readers select the already-valued point. No replay, FX lookup or live total is
+        // allowed after the series bundle exists. Shadow deliberately keeps current pixels.
+        if historicalReaderMode != .shadow {
+            guard let series = historicalPortfolioSeries else {
+                state.currencyConversionWarning = L("finances.dynamics.warning.history_incomplete")
+                return
+            }
+            let first = series.points.first
+            let selected = selectedDate.flatMap { series.point(nearestTo: $0) } ?? series.points.last
+            if let startTotal = first?.valuation.total,
+               let selectedTotal = selected?.valuation.total {
+                let start = NSDecimalNumber(decimal: startTotal).doubleValue
+                let current = NSDecimalNumber(decimal: selectedTotal).doubleValue
+                state.currentBalance = current
+                let delta = current - start
+                state.periodDelta = (delta, calculateDeltaPercent(delta: delta, startBalance: start))
+                state.currencyConversionWarning = nil
+            } else {
+                // Preserve the last visibly labelled value. A diagnostic subtotal or synthetic zero
+                // would be mathematically false; no legacy replay is allowed as a hidden fallback.
+                state.currencyConversionWarning = L("finances.dynamics.warning.history_incomplete")
+            }
+            return
+        }
+
         // Период вычисляем по всем счетам (включая archived), чтобы диапазон не плыл при архивации.
         let accountsForPeriod = getAccountsForCalculation(scope: .historicalInterval(DateInterval(start: .distantPast, end: .distantFuture)))
         let (startDate, endDate) = resolvedPeriodDates(for: accountsForPeriod)
@@ -1030,6 +1071,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     /// Обновить распределение по валютам
     func updateCurrencyBreakdown() async {
+        if historicalReaderMode != .shadow, let series = historicalPortfolioSeries {
+            state.currencyBreakdown = structuredCurrencyBreakdown(from: series)
+            return
+        }
         let accounts = getAccountsForCalculation(scope: .currentVisible)
         let displayCurrency = state.displayCurrency
         let endDate = getPeriodDates().end
@@ -1118,6 +1163,35 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         state.currencyBreakdown = items
     }
 
+    private func structuredCurrencyBreakdown(
+        from series: HistoricalPortfolioSeriesResult
+    ) -> [CurrencyBreakdownItem] {
+        guard let point = state.selectedDate.flatMap({ series.point(nearestTo: $0) }) ?? series.points.last,
+              point.valuation.total != nil else {
+            return []
+        }
+        let currencyByID = structuredAccountDescriptors().mapValues(\.currency)
+        var totals: [String: Double] = [:]
+        for contribution in point.accountContributions {
+            guard let value = contribution.value,
+                  let currency = currencyByID[contribution.opaqueAccountID] else { continue }
+            totals[currency, default: 0] += NSDecimalNumber(decimal: value).doubleValue
+        }
+        let positiveTotal = totals.values.filter { $0 > 0 }.reduce(0, +)
+        guard positiveTotal > 0 else { return [] }
+        return totals
+            .filter { $0.value > 0 }
+            .sorted { $0.value > $1.value }
+            .map {
+                CurrencyBreakdownItem(
+                    id: $0.key,
+                    currency: $0.key,
+                    convertedValue: $0.value,
+                    percentage: $0.value / positiveTotal * 100
+                )
+            }
+    }
+
     /// Легаси-счета, индексированные по `accountID` (== легаси `uniqueID`, ключ `LegacyConversionRegistry`).
     /// Историческая выборка (distantPast…distantFuture) включает archived-предшественников мигрированных
     /// core-счетов, скрытых из `.currentVisible`.
@@ -1176,32 +1250,26 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
     }
 
-    /// Core-счета, участвующие в расчёте динамики при текущем фильтре групп (`selectedGroupIDs`).
-    /// Единая точка сбора: используется и per-account строками `coreAccountDynamicsItems`, и суммарным
-    /// core-вкладом `coreContributionWithLegacyPredecessor` (Cashflow Assets-snapshot) — чтобы обе
-    /// вкладки/экрана считали по одному и тому же набору счетов. Дедуп по `id`.
+    /// Core-счета, участвующие в Динамике. `Account`/`AccountGroup` — primary source of truth;
+    /// легаси-`FinanceGroup` используется только как name bridge для старых filter IDs. После
+    /// core-primary flip сбор через `state.groups: [FinanceGroup]` возвращал пустой scope
+    /// на реальном core-only профиле, хотя экран «Счета» видел все данны.
     private func coreAccountsForDynamics() -> [Account] {
-        let groupsToShow = state.selectedGroupIDs.isEmpty
-            ? state.groups
-            : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
+        let today = Date()
+        let allCoreAccounts = ((try? modelContext.fetch(FetchDescriptor<Account>())) ?? [])
+            .filter { $0.participates(on: today) }
+        guard !state.selectedGroupIDs.isEmpty else { return allCoreAccounts }
 
-        var seen: Set<UUID> = []
-        var coreAccounts: [Account] = []
-        for group in groupsToShow {
-            for account in financeViewModel.newCoreAccounts(matchingName: group.name) where seen.insert(account.id).inserted {
-                coreAccounts.append(account)
-            }
+        let selectedCoreGroupIDs = Set(state.selectedGroupIDs.compactMap { UUID(uuidString: $0) })
+        let selectedLegacyGroupNames = Set(
+            state.groups
+                .filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
+                .map(\.name)
+        )
+        return allCoreAccounts.filter { account in
+            guard let group = account.group else { return false }
+            return selectedCoreGroupIDs.contains(group.id) || selectedLegacyGroupNames.contains(group.name)
         }
-        // Ungrouped core-счета (`group == nil`) не входят ни в одну группу `state.groups` (ungrouped-
-        // псевдогруппа отфильтрована в fetchGroupsFromStore при пустой легаси-связи). Добавляем отдельными
-        // строками, чтобы Total вкладки «Счета» совпадал с вкладкой «Группы» (там — Ungrouped-строка).
-        // Только когда фильтр по группам не активен (иначе показываем лишь выбранные группы).
-        if state.selectedGroupIDs.isEmpty {
-            for account in financeViewModel.newCoreAccounts(matchingName: FinanceSystemGroups.ungroupedName) where seen.insert(account.id).inserted {
-                coreAccounts.append(account)
-            }
-        }
-        return coreAccounts
     }
 
     /// Суммарный core-вклад (per-account total + вклад легаси-предшественника) на пару дат при текущем
@@ -1488,6 +1556,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
 
     /// Обновить список динамики
     func updateDynamicsBreakdown() async {
+        if historicalReaderMode != .shadow, let series = historicalPortfolioSeries {
+            state.dynamicsBreakdown = structuredDynamicsBreakdown(from: series)
+            return
+        }
         let accounts = getAccountsForCalculation(scope: .currentVisible)
         let requestedPeriod = getPeriodDates()
         let startDate = requestedPeriod.start
@@ -1532,6 +1604,135 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             state.dynamicsBreakdown = breakdown
         }
     }
+
+    private func structuredDynamicsBreakdown(
+        from series: HistoricalPortfolioSeriesResult
+    ) -> [DynamicsBreakdownItem] {
+        guard let first = series.points.first,
+              let last = series.points.last,
+              first.valuation.total != nil,
+              last.valuation.total != nil else {
+            return []
+        }
+        let descriptors = structuredAccountDescriptors()
+        let startByID = Dictionary(uniqueKeysWithValues: first.accountContributions.compactMap { contribution in
+            contribution.value.map { value in (contribution.opaqueAccountID, value) }
+        })
+        let endByID = Dictionary(uniqueKeysWithValues: last.accountContributions.compactMap { contribution in
+            contribution.value.map { value in (contribution.opaqueAccountID, value) }
+        })
+        let contributionIDs = Set(startByID.keys).union(endByID.keys)
+        let rows: [DynamicsAccountRow] = contributionIDs.sorted().compactMap { id in
+            guard let startValue = startByID[id],
+                  let endValue = endByID[id] else { return nil }
+            let descriptor = descriptors[id] ?? StructuredAccountDescriptor(
+                name: L("finances.dynamics.chart.account_fallback"),
+                currency: state.displayCurrency,
+                groupUniqueID: nil,
+                icon: nil,
+                accountType: nil,
+                isLiability: false,
+                isArchived: false
+            )
+            let start = NSDecimalNumber(decimal: startValue).doubleValue
+            let end = NSDecimalNumber(decimal: endValue).doubleValue
+            let delta = end - start
+            return DynamicsAccountRow(
+                item: DynamicsBreakdownItem(
+                    id: id,
+                    name: descriptor.name,
+                    startValue: start,
+                    endValue: end,
+                    delta: delta,
+                    deltaPercent: calculateDeltaPercent(delta: delta, startBalance: start),
+                    icon: descriptor.icon,
+                    accountType: descriptor.accountType,
+                    isCreditCard: descriptor.isLiability,
+                    isArchived: descriptor.isArchived
+                ),
+                groupUniqueID: descriptor.groupUniqueID
+            )
+        }
+        switch state.viewMode {
+        case .accounts:
+            return rows.map(\.item)
+        case .groups:
+            let groups = state.selectedGroupIDs.isEmpty
+                ? state.groups
+                : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
+            return aggregateGroupRows(
+                from: rows,
+                groupsToShow: groups,
+                includeUngrouped: state.selectedGroupIDs.isEmpty
+            )
+        }
+    }
+
+    /// Presentation metadata only. Historical amounts always come from the bundle; this lookup must
+    /// never replay balances. Both core IDs and unresolved legacy opaque IDs are represented so a
+    /// mixed portfolio's breakdown/distributions reconstruct the selected endpoint exactly.
+    private func structuredAccountDescriptors() -> [String: StructuredAccountDescriptor] {
+        let coreAccounts = (try? modelContext.fetch(FetchDescriptor<Account>())) ?? []
+        var result = Dictionary(uniqueKeysWithValues: coreAccounts.map { account in
+            let groupID = account.group.flatMap { group in
+                state.groups.first(where: { $0.name == group.name })?.groupUniqueID
+            }
+            return (account.id.uuidString, StructuredAccountDescriptor(
+                name: account.name,
+                currency: account.currency,
+                groupUniqueID: groupID,
+                icon: account.kind.fallbackIconName,
+                accountType: nil,
+                isLiability: account.kind == .loan,
+                isArchived: account.archivedAt != nil
+            ))
+        })
+
+        let groupByAccountID = legacyAccountGroupMap()
+        let legacyAccounts = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
+        for account in legacyAccounts {
+            let currency: String
+            let name: String
+            let isLiability: Bool
+            switch account.accountType {
+            case .card:
+                let card = cardsCache[account.accountID]
+                currency = card?.currency ?? state.displayCurrency
+                name = card?.name ?? account.accountID
+                isLiability = card?.cardType == .credit
+            case .credit:
+                let credit = creditsCache[account.accountID]
+                currency = credit?.currency ?? state.displayCurrency
+                name = credit?.name ?? account.accountID
+                isLiability = true
+            case .investment:
+                let investment = investmentsCache[account.accountID]
+                currency = investment?.currency ?? state.displayCurrency
+                name = investment?.name ?? account.accountID
+                isLiability = investment?.investmentType == .negative
+            }
+            result[account.accountUniqueID] = StructuredAccountDescriptor(
+                name: name,
+                currency: currency,
+                groupUniqueID: groupByAccountID[account.accountUniqueID],
+                icon: nil,
+                accountType: account.accountType,
+                isLiability: isLiability,
+                isArchived: isAccountArchived(account)
+            )
+        }
+        return result
+    }
+
+    private struct StructuredAccountDescriptor {
+        let name: String
+        let currency: String
+        let groupUniqueID: String?
+        let icon: String?
+        let accountType: FinanceAccountType?
+        let isLiability: Bool
+        let isArchived: Bool
+    }
     
     func updateChartDataAsync(expectedRevision: Int? = nil) async {
         let revision = expectedRevision ?? nextChartUpdateRevision()
@@ -1571,7 +1772,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         switch state.dynamicsMode {
         case .aggregated:
             // Все счета в одну линию
-            let liveEndBalanceAggr: Double? = chartAccounts.count == 1
+            let liveEndBalanceAggr: Double? = historicalReaderMode == .shadow && chartAccounts.count == 1
                 && state.selectedDate == nil
                 && !isAccountArchived(chartAccounts[0])
                 ? await liveConvertedBalance(for: chartAccounts[0], displayCurrency: state.displayCurrency, at: period.end)
@@ -1580,58 +1781,261 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             // ядра ровно один раз на календарный день, дедуп точек по дню. График — это сам массив;
             // заголовок и карточка «Общая сумма» читают его концы. Снесён отдельный шаг
             // addingCoreContribution — core сворачивается внутри продюсера.
-            let series = await aggregatedDynamicsSeries(
-                accounts: chartAccounts,
-                period: (start: period.start, end: period.end),
-                useNetTotals: useNetTotals,
-                liveEndBalance: liveEndBalanceAggr
+            let compatibilitySeries = if historicalReaderMode == .shadow {
+                await aggregatedDynamicsSeries(
+                    accounts: chartAccounts,
+                    period: (start: period.start, end: period.end),
+                    useNetTotals: useNetTotals,
+                    liveEndBalance: liveEndBalanceAggr
+                )
+            } else {
+                historicalDateSkeleton(period: period)
+            }
+            guard isCurrentChartUpdateRevision(revision) else { return }
+            let structuredSeries = await historicalAggregatedSeries(
+                period: period,
+                compatibilitySeries: compatibilitySeries
             )
             guard isCurrentChartUpdateRevision(revision) else { return }
-            state.chartData = series.points
+            state.chartData = structuredSeries.points
 
         case .byAccounts:
             // Каждый счет - отдельная линия
             var allDataPoints: [ChartDataPoint] = []
-            for account in chartAccounts {
-                let liveEndBalancePerAccount: Double? = chartAccounts.count == 1
-                    && state.selectedDate == nil
-                    && !isAccountArchived(account)
-                    ? await liveConvertedBalance(for: account, displayCurrency: state.displayCurrency, at: period.end)
-                    : nil
-                let accountData = await buildTimeSeriesData(
-                    accounts: [account],
-                    startDate: period.start,
-                    endDate: period.end,
-                    label: getAccountInfoForDynamics(account: account)?.name ?? L("finances.dynamics.chart.account_fallback"),
-                    debtAsNegative: false,
-                    liveEndBalance: liveEndBalancePerAccount
-                )
-                allDataPoints.append(contentsOf: accountData)
+            if historicalReaderMode == .shadow {
+                for account in chartAccounts {
+                    let liveEndBalancePerAccount: Double? = chartAccounts.count == 1
+                        && state.selectedDate == nil
+                        && !isAccountArchived(account)
+                        ? await liveConvertedBalance(for: account, displayCurrency: state.displayCurrency, at: period.end)
+                        : nil
+                    let accountData = await buildTimeSeriesData(
+                        accounts: [account],
+                        startDate: period.start,
+                        endDate: period.end,
+                        label: getAccountInfoForDynamics(account: account)?.name ?? L("finances.dynamics.chart.account_fallback"),
+                        debtAsNegative: false,
+                        liveEndBalance: liveEndBalancePerAccount
+                    )
+                    allDataPoints.append(contentsOf: accountData)
+                }
+            } else {
+                allDataPoints = historicalDateSkeleton(period: period).points
             }
             guard isCurrentChartUpdateRevision(revision) else { return }
-            state.chartData = allDataPoints
+            let structuredSeries = await historicalScopedSeries(
+                period: period,
+                compatibilitySeries: DynamicsSeries(points: allDataPoints),
+                accountIDs: scopedCoreAccountIDs(),
+                singleAccountID: nil
+            )
+            guard isCurrentChartUpdateRevision(revision) else { return }
+            state.chartData = structuredSeries.points
 
         case .singleAccount(let accountID):
             // Один выбранный счет
             if let account = chartAccounts.first(where: { $0.accountUniqueID == accountID }) {
-                let liveEndBalanceSingle: Double? = state.selectedDate == nil && !isAccountArchived(account)
-                    ? await liveConvertedBalance(for: account, displayCurrency: state.displayCurrency, at: period.end)
-                    : nil
-                let chartData = await buildTimeSeriesData(
-                    accounts: [account],
-                    startDate: period.start,
-                    endDate: period.end,
-                    label: getAccountInfoForDynamics(account: account)?.name ?? L("finances.dynamics.chart.account_fallback"),
-                    debtAsNegative: false,
-                    liveEndBalance: liveEndBalanceSingle
+                let chartData: [ChartDataPoint]
+                if historicalReaderMode == .shadow {
+                    let liveEndBalanceSingle: Double? = state.selectedDate == nil && !isAccountArchived(account)
+                        ? await liveConvertedBalance(for: account, displayCurrency: state.displayCurrency, at: period.end)
+                        : nil
+                    chartData = await buildTimeSeriesData(
+                        accounts: [account],
+                        startDate: period.start,
+                        endDate: period.end,
+                        label: getAccountInfoForDynamics(account: account)?.name ?? L("finances.dynamics.chart.account_fallback"),
+                        debtAsNegative: false,
+                        liveEndBalance: liveEndBalanceSingle
+                    )
+                } else {
+                    chartData = historicalDateSkeleton(period: period).points
+                }
+                guard isCurrentChartUpdateRevision(revision) else { return }
+                let coreID = coreAccountID(forVisibleAccountID: accountID)
+                let structuredSeries = await historicalScopedSeries(
+                    period: period,
+                    compatibilitySeries: DynamicsSeries(points: chartData),
+                    accountIDs: coreID.map { Set([$0]) } ?? [],
+                    singleAccountID: coreID
                 )
                 guard isCurrentChartUpdateRevision(revision) else { return }
-                state.chartData = chartData
+                state.chartData = structuredSeries.points
             } else {
                 guard isCurrentChartUpdateRevision(revision) else { return }
                 state.chartData = []
             }
         }
+    }
+
+    private func scopedCoreAccountIDs() -> Set<UUID> {
+        let selected = state.selectedAccountIDs
+        let available = Set(coreAccountsForDynamics().map(\.id))
+        guard !selected.isEmpty else { return available }
+        return Set(selected.compactMap(coreAccountID(forVisibleAccountID:))).intersection(available)
+    }
+
+    private func coreAccountID(forVisibleAccountID id: String) -> UUID? {
+        if let uuid = UUID(uuidString: id) { return uuid }
+        return LegacyConversionRegistry.shared.coreAccountID(forLegacyUniqueID: id)
+    }
+
+    /// Phase 4 reader switch. Shadow executes the structured producer but keeps the compatibility
+    /// pixels until the observation gate; structured mode projects only complete/provisional totals.
+    /// Incomplete diagnostic subtotals are deliberately omitted, producing a chart gap.
+    private func historicalAggregatedSeries(
+        period: (start: Date, end: Date),
+        compatibilitySeries: DynamicsSeries
+    ) async -> DynamicsSeries {
+        await historicalScopedSeries(
+            period: period,
+            compatibilitySeries: compatibilitySeries,
+            accountIDs: scopedCoreAccountIDs(),
+            singleAccountID: nil,
+            projectsAccountLines: false
+        )
+    }
+
+    private func historicalScopedSeries(
+        period: (start: Date, end: Date),
+        compatibilitySeries: DynamicsSeries,
+        accountIDs: Set<UUID>?,
+        singleAccountID: UUID?,
+        projectsAccountLines: Bool = true
+    ) async -> DynamicsSeries {
+        let query = HistoricalPortfolioSeriesQuery(
+            period: DateInterval(start: period.start, end: period.end),
+            timeZoneID: TimeZone.current.identifier,
+            displayCurrency: state.displayCurrency,
+            accountScope: accountIDs.map(HistoricalPortfolioAccountScope.accountIDs) ?? .portfolio,
+            samplingPolicy: .exact(
+                compatibilitySeries.points.isEmpty
+                    ? [period.start, period.end]
+                    : compatibilitySeries.points.map(\.date)
+            ),
+            valuationPolicyVersion: 1,
+            unresolvedExternalAccountIDs: unresolvedLegacyAccountIDs()
+        )
+        let result = await HistoricalPortfolioSeriesProducer(
+            valuator: financeViewModel.accountsTotalsService,
+            scopeID: financeViewModel.historicalValuationScopeID,
+            closeStore: HistoricalValuationCloseStore(modelContainer: modelContext.container),
+            externalCoverage: legacyHistoricalValuator
+        ).series(for: query)
+        historicalPortfolioSeries = result
+        logIncompleteHistoricalSeries(result, requestedCoreAccountCount: accountIDs?.count)
+
+        if historicalReaderMode == .shadow {
+            let structuredResult = result.points.last?.valuation
+            let structuredEnd = structuredResult?.total
+            let compatibilityEnd = compatibilitySeries.points.last.map { Decimal($0.value) }
+            historicalShadowDeltaBucket = .classify(
+                structured: structuredEnd,
+                compatibility: compatibilityEnd
+            )
+            if let structuredResult {
+                HistoricalPortfolioShadowEvidenceStore().append(.init(
+                    observation: .classify(
+                        structured: structuredResult,
+                        compatibilityTotal: compatibilityEnd,
+                        compatibilityContributionCount: nil,
+                        hasExpectedResolverCorrection: false
+                    ),
+                    dayKey: structuredResult.key.dayKey
+                ))
+            }
+        } else {
+            historicalShadowDeltaBucket = nil
+        }
+        guard historicalReaderMode != .shadow else { return compatibilitySeries }
+
+        let label = L("finances.dynamics.chart.total_label")
+        let points = result.points.flatMap { point -> [ChartDataPoint] in
+            guard point.valuation.total != nil else { return [] }
+            if !projectsAccountLines {
+                guard let total = point.valuation.total else { return [] }
+                return [ChartDataPoint(
+                    date: point.date,
+                    value: NSDecimalNumber(decimal: total).doubleValue,
+                    label: label
+                )]
+            }
+            return point.accountContributions.compactMap { contribution in
+                guard let value = contribution.value,
+                      singleAccountID == nil || contribution.opaqueAccountID == singleAccountID?.uuidString else {
+                    return nil
+                }
+                return ChartDataPoint(
+                    date: point.date,
+                    value: NSDecimalNumber(decimal: value).doubleValue,
+                    label: contribution.opaqueAccountID
+                )
+            }
+        }
+        return DynamicsSeries(points: points)
+    }
+
+    /// Non-PII diagnostics for the fail-closed historical reader. Exact balances, names and opaque
+    /// account identifiers are deliberately excluded; Xcode receives only coverage and reason codes.
+    private func logIncompleteHistoricalSeries(
+        _ series: HistoricalPortfolioSeriesResult,
+        requestedCoreAccountCount: Int?
+    ) {
+        let incomplete = series.points.filter { $0.valuation.total == nil }
+        guard !incomplete.isEmpty else { return }
+
+        let dimensions = Set(incomplete.flatMap { point in
+            point.valuation.unresolved.map { String(describing: $0.dimension) }
+        }).sorted().joined(separator: ",")
+        let reasons = Set(incomplete.flatMap { point in
+            point.valuation.unresolved.map(\.reasonCode)
+        }).sorted().joined(separator: ",")
+        let expected = incomplete.map { $0.valuation.expectedContributionCount }.max() ?? 0
+        let resolved = incomplete.map { $0.valuation.resolvedContributionCount }.min() ?? 0
+        let requestedCore = requestedCoreAccountCount.map { String($0) } ?? "all"
+
+        AppLogger.log(
+            .warning,
+            category: "HistoricalPortfolio",
+            "Incomplete series: points=\(incomplete.count)/\(series.points.count), "
+                + "requestedCore=\(requestedCore), "
+                + "coverage=\(resolved)/\(expected), dimensions=[\(dimensions)], reasons=[\(reasons)]"
+        )
+    }
+
+    /// Pure sampling skeleton for structured/compatibility readers. It selects dates only and never
+    /// executes legacy replay, FX, market lookup or live endpoint reconciliation.
+    private func historicalDateSkeleton(
+        period: (start: Date, end: Date)
+    ) -> DynamicsSeries {
+        let calendar = Calendar.current
+        let start = min(period.start, period.end)
+        let end = max(period.start, period.end)
+        let totalDays = max(0, calendar.dateComponents([.day], from: start, to: end).day ?? 0)
+        let stepDays: Int
+        if let configuredDays = state.period.days {
+            stepDays = configuredDays <= 30 ? 1 : configuredDays <= 365 ? 2 : 5
+        } else {
+            stepDays = totalDays <= 365 ? 2 : totalDays <= 730 ? 5 : 7
+        }
+
+        var dates: Set<Date> = [start, end]
+        var cursor = start
+        while cursor < end,
+              let next = calendar.date(byAdding: .day, value: stepDays, to: cursor),
+              next > cursor {
+            cursor = min(next, end)
+            let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: cursor) ?? cursor
+            dates.insert(min(endOfDay, end))
+        }
+        return DynamicsSeries(points: dates.sorted().map {
+            ChartDataPoint(date: $0, value: 0, label: "sampling")
+        })
+    }
+
+    private func unresolvedLegacyAccountIDs() -> Set<String> {
+        let period = DateInterval(start: state.periodStartDate, end: state.periodEndDate)
+        return Set(getAccountsForCalculation(scope: .historicalInterval(period)).map(\.accountUniqueID))
     }
     
     /// Построить временной ряд данных для графика
@@ -2044,7 +2448,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             calendar: calendar
         )
 
-        var entries: [FinanceOverviewPeriodEntry] = []
+        var boundaries: [(start: Date, end: Date, id: Date)] = []
         var cursor = firstPeriodStart
         while cursor <= currentPeriodStart {
             let nextStart = FinanceOverviewChartBuilder.offsetPeriod(
@@ -2059,55 +2463,88 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             )
             let periodStartBalanceDate = cursor.addingTimeInterval(-1)
 
-            var debit: Double = 0
-            var credit: Double = 0
-
-            for account in accounts {
-                let accountCardIDs = account.accountType == .card ? Set([account.accountID]) : Set<String>()
-                let startBalance = await calculateBalanceAtDate(
-                    accounts: [account],
-                    date: periodStartBalanceDate,
-                    accountCardIDs: accountCardIDs,
-                    debtAsNegative: false,
-                    includeInitialBeforeCreation: false
-                )
-                let endBalance = await calculateBalanceAtDate(
-                    accounts: [account],
-                    date: periodEnd,
-                    accountCardIDs: accountCardIDs,
-                    debtAsNegative: false,
-                    includeInitialBeforeCreation: false
-                )
-
-                let rawDelta = endBalance - startBalance
-                let adjustedDelta = isLiabilityAccount(account) ? -rawDelta : rawDelta
-                if adjustedDelta > 0.01 {
-                    debit += adjustedDelta
-                } else if adjustedDelta < -0.01 {
-                    credit += abs(adjustedDelta)
-                }
-            }
-
-            entries.append(
-                FinanceOverviewPeriodEntry(
-                    id: cursor,
-                    date: cursor,
-                    debit: debit,
-                    credit: credit
-                )
-            )
+            boundaries.append((periodStartBalanceDate, periodEnd, cursor))
 
             if nextStart <= cursor {
                 break
             }
             cursor = nextStart
         }
+        guard let firstBoundary = boundaries.first, let lastBoundary = boundaries.last else { return [] }
 
-        return entries
+        let overviewLegacyValuator = LegacyHistoricalValuator(
+            modelContext: modelContext,
+            currencyService: currencyService
+        )
+        overviewLegacyValuator.reload()
+        let sampleDates = boundaries.flatMap { [$0.start, $0.end] }
+        let query = HistoricalPortfolioSeriesQuery(
+            period: DateInterval(start: firstBoundary.start, end: lastBoundary.end),
+            timeZoneID: calendar.timeZone.identifier,
+            displayCurrency: state.displayCurrency,
+            samplingPolicy: .exact(sampleDates),
+            unresolvedExternalAccountIDs: unresolvedLegacyAccountIDs()
+        )
+        let series = await HistoricalPortfolioSeriesProducer(
+            valuator: financeViewModel.accountsTotalsService,
+            scopeID: financeViewModel.historicalValuationScopeID,
+            closeStore: HistoricalValuationCloseStore(modelContainer: modelContext.container),
+            externalCoverage: overviewLegacyValuator
+        ).series(for: query)
+        let descriptors = structuredAccountDescriptors()
+
+        return boundaries.compactMap { boundary in
+            guard let start = series.point(nearestTo: boundary.start),
+                  let end = series.point(nearestTo: boundary.end),
+                  start.valuation.total != nil,
+                  end.valuation.total != nil else { return nil }
+            let startByID = Dictionary(uniqueKeysWithValues: start.accountContributions.compactMap { contribution in
+                contribution.value.map { (contribution.opaqueAccountID, $0) }
+            })
+            let endByID = Dictionary(uniqueKeysWithValues: end.accountContributions.compactMap { contribution in
+                contribution.value.map { (contribution.opaqueAccountID, $0) }
+            })
+            var debit = 0.0
+            var credit = 0.0
+            for id in Set(startByID.keys).union(endByID.keys) {
+                let startValue = NSDecimalNumber(decimal: startByID[id] ?? 0).doubleValue
+                let endValue = NSDecimalNumber(decimal: endByID[id] ?? 0).doubleValue
+                let rawDelta = endValue - startValue
+                let adjustedDelta = descriptors[id]?.isLiability == true ? -rawDelta : rawDelta
+                if adjustedDelta > 0.01 { debit += adjustedDelta }
+                if adjustedDelta < -0.01 { credit += abs(adjustedDelta) }
+            }
+            return FinanceOverviewPeriodEntry(
+                id: boundary.id,
+                date: boundary.id,
+                debit: debit,
+                credit: credit
+            )
+        }
     }
     
-    /// Рассчитать баланс счетов на конкретную дату с учетом транзакций
+    /// Compatibility API retained for existing Dynamics projections. The replay itself is a
+    /// standalone production service and is also the structured producer's legacy coverage.
     func calculateBalanceAtDate(
+        accounts: [FinanceAccount],
+        date: Date,
+        accountCardIDs: Set<String>,
+        debtAsNegative: Bool = false,
+        includeInitialBeforeCreation: Bool = false
+    ) async -> Double {
+        _ = accountCardIDs // Kept in the compatibility signature; replay derives IDs from accounts.
+        return await legacyHistoricalValuator.balance(
+            accounts: accounts,
+            at: date,
+            displayCurrency: state.displayCurrency,
+            debtAsNegative: debtAsNegative,
+            includeInitialBeforeCreation: includeInitialBeforeCreation
+        )
+    }
+
+    /// Explicit shadow copy kept temporarily for parity review during the Phase 4 cutover. New
+    /// production consumers must use `LegacyHistoricalValuator` or the structured series producer.
+    private func calculateBalanceAtDateCompatibilityShadow(
         accounts: [FinanceAccount],
         date: Date,
         accountCardIDs: Set<String>,
@@ -2866,31 +3303,31 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 sourceCurrencies.insert(currency)
             }
         }
-        guard !sourceCurrencies.isEmpty else { return }
-
+        // Phase 5 warms one shared HistoricalRate cache for both model worlds. Previously the
+        // prefetch inspected only legacy products, so a core-only foreign account stayed incomplete
+        // even while the identical legacy portfolio had an exact persisted FX row.
+        for account in coreAccountsForDynamics() {
+            let currency = normalizedConversionCurrency(account.currency)
+            if currency != displayCurrency {
+                sourceCurrencies.insert(currency)
+            }
+        }
         let accounts = getAccountsForCalculation(
             scope: .historicalInterval(DateInterval(start: .distantPast, end: .distantFuture))
         )
         let (startDate, endDate) = resolvedPeriodDates(for: accounts)
-        let calendar = Calendar.current
-        let startDay = calendar.startOfDay(for: startDate)
-        let endDay = calendar.startOfDay(for: endDate)
-        let days = max(0, calendar.dateComponents([.day], from: startDay, to: endDay).day ?? 0)
-        let step = max(1, days / 90)
-
-        var dates: [Date] = [startDay, endDay]
-        if days > 0 {
-            var offset = 0
-            while offset <= days {
-                if let date = calendar.date(byAdding: .day, value: offset, to: startDay) {
-                    dates.append(date)
-                }
-                offset += step
-            }
-        }
+        // Warm exactly the dates that the producer will request. The former independent 90-point
+        // sampler left most chart dates without exact FX evidence.
+        let dates = historicalDateSkeleton(period: (startDate, endDate)).points.map(\.date)
 
         let pairs = sourceCurrencies.map { (from: $0, to: displayCurrency) }
-        await historicalRateStore.prefetchExactRates(on: Array(Set(dates)), pairs: pairs)
+        if !pairs.isEmpty {
+            await historicalRateStore.prefetchExactRates(on: Array(Set(dates)), pairs: pairs)
+        }
+        await AccountMarketPriceService(
+            modelContext: modelContext,
+            marketDataClient: financeViewModel.marketDataClient
+        ).prefetchHistoricalPrices(on: dates, accounts: coreAccountsForDynamics())
     }
 
     private func resolvedInvestmentCurrency(_ investment: Investment) -> String {

@@ -23,12 +23,21 @@ struct AccountsCoreFeatureRegistration {
         ModelTypeRegistry.shared.register(AccountEvent.self, typeName: "AccountEvent")
         ModelTypeRegistry.shared.register(AccountDailySnapshot.self, typeName: "AccountDailySnapshot")
         ModelTypeRegistry.shared.register(HistoricalAssetPrice.self, typeName: "HistoricalAssetPrice")
+        ModelTypeRegistry.shared.register(
+            HistoricalPortfolioValuation.self,
+            typeName: "HistoricalPortfolioValuation"
+        )
+        ModelTypeRegistry.shared.registerBackupExporter(
+            "HistoricalPortfolioValuation",
+            exporter: HistoricalPortfolioValuationBackupExporter.export
+        )
 
         ModelTypeRegistry.shared.registerImporter(AccountGroupImporter.self)
         ModelTypeRegistry.shared.registerImporter(AccountImporter.self)
         ModelTypeRegistry.shared.registerImporter(AccountEventImporter.self)
         ModelTypeRegistry.shared.registerImporter(AccountDailySnapshotImporter.self)
         ModelTypeRegistry.shared.registerImporter(HistoricalAssetPriceImporter.self)
+        ModelTypeRegistry.shared.registerImporter(HistoricalPortfolioValuationImporter.self)
     }
 }
 
@@ -102,24 +111,88 @@ struct AccountImporter: ModelImporter {
         let includeInTotal = data["includeInTotal"] as? Bool ?? true
         let order = data["order"] as? Int ?? 0
 
+        // Decode and validate the complete product/kind/meta tuple before mutating an existing
+        // row. Old backups have no product columns and stay migration-compatible; once identity is
+        // present, a contradictory tuple is rejected instead of silently becoming `.cash`.
+        let cardMeta = (data["cardMeta"] as? [String: Any]).map(CardMeta.init(exportDict:))
+        let depositMeta = (data["depositMeta"] as? [String: Any]).flatMap(DepositMeta.init(exportDict:))
+        let loanMeta = (data["loanMeta"] as? [String: Any]).flatMap(LoanMeta.init(exportDict:))
+        let debtMeta = (data["debtMeta"] as? [String: Any]).flatMap(DebtMeta.init(exportDict:))
+        let marketMeta = (data["marketMeta"] as? [String: Any]).flatMap(MarketMeta.init(exportDict:))
+        let manualAssetMeta = (data["manualAssetMeta"] as? [String: Any]).map(ManualAssetMeta.init(exportDict:))
+        let productTypeRaw = data["productTypeRaw"] as? String
+        let productMigrationReason = data["productMigrationReason"] as? String
+        let valuationMembershipRevision = (data["valuationMembershipRevision"] as? NSNumber)?.int64Value
+        let valuationFinancialRevision = (data["valuationFinancialRevision"] as? NSNumber)?.int64Value
+        let valuationEventRevision = (data["valuationEventRevision"] as? NSNumber)?.int64Value
+
+        if let productTypeRaw {
+            guard let productType = AccountProductType(rawValue: productTypeRaw) else {
+                throw AppError.backupCorrupted
+            }
+            do {
+                try ProductDefinitionCatalog.validateStoredIdentity(
+                    productType,
+                    kindRaw: kindRaw,
+                    metadata: AccountProductMetadata(
+                        card: cardMeta,
+                        deposit: depositMeta,
+                        loan: loanMeta,
+                        debt: debtMeta,
+                        market: marketMeta,
+                        manualAsset: manualAssetMeta
+                    ),
+                    migrationReason: productMigrationReason
+                )
+            } catch {
+                throw AppError.backupCorrupted
+            }
+        } else if productMigrationReason != nil {
+            throw AppError.backupCorrupted
+        }
+
         let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.id == id })
         let account: Account
+        let isExisting: Bool
         if let existing = try? context.fetch(descriptor).first {
             account = existing
+            isExisting = true
         } else {
             account = Account(
                 id: id, name: name, kind: AccountKind(rawValue: kindRaw) ?? .cash,
                 currency: currency, createdAt: createdAt, includeInTotal: includeInTotal, order: order
             )
             context.insert(account)
+            isExisting = false
         }
 
+        let preservesNewerProductTuple = isExisting
+            && productTypeRaw == nil
+            && account.productTypeRaw != nil
+
         account.name = name
-        account.kindRaw = kindRaw
+        if !preservesNewerProductTuple {
+            account.kindRaw = kindRaw
+        }
+        // An older backup must not erase a newer, already persisted identity during an upsert.
+        // A genuinely new old-format row is classified below instead of remaining silent nil.
+        if !preservesNewerProductTuple {
+            account.productTypeRaw = productTypeRaw
+            account.productMigrationReason = productMigrationReason
+        }
         account.currency = currency
         account.createdAt = createdAt
         account.includeInTotal = includeInTotal
         account.order = order
+        if let valuationMembershipRevision {
+            account.valuationMembershipRevision = valuationMembershipRevision
+        }
+        if let valuationFinancialRevision {
+            account.valuationFinancialRevision = valuationFinancialRevision
+        }
+        if let valuationEventRevision {
+            account.valuationEventRevision = valuationEventRevision
+        }
         account.note = data["note"] as? String
         account.archivedAt = (data["archivedAt"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
         account.deletedAt = (data["deletedAt"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
@@ -131,12 +204,34 @@ struct AccountImporter: ModelImporter {
             account.group = nil
         }
 
-        account.cardMeta = (data["cardMeta"] as? [String: Any]).map(CardMeta.init(exportDict:))
-        account.depositMeta = (data["depositMeta"] as? [String: Any]).flatMap(DepositMeta.init(exportDict:))
-        account.loanMeta = (data["loanMeta"] as? [String: Any]).flatMap(LoanMeta.init(exportDict:))
-        account.debtMeta = (data["debtMeta"] as? [String: Any]).flatMap(DebtMeta.init(exportDict:))
-        account.marketMeta = (data["marketMeta"] as? [String: Any]).flatMap(MarketMeta.init(exportDict:))
-        account.manualAssetMeta = (data["manualAssetMeta"] as? [String: Any]).map(ManualAssetMeta.init(exportDict:))
+        if !preservesNewerProductTuple {
+            account.cardMeta = cardMeta
+            account.depositMeta = depositMeta
+            account.loanMeta = loanMeta
+            account.debtMeta = debtMeta
+            account.marketMeta = marketMeta
+            account.manualAssetMeta = manualAssetMeta
+        }
+
+        let hasValidStoredIdentity: Bool
+        if let productType = account.productType {
+            hasValidStoredIdentity = (try? ProductDefinitionCatalog.validateStoredIdentity(
+                productType,
+                kindRaw: account.kindRaw,
+                metadata: AccountProductMetadata(account: account),
+                migrationReason: account.productMigrationReason
+            )) != nil
+        } else {
+            hasValidStoredIdentity = false
+        }
+        if !hasValidStoredIdentity {
+            AccountProductIdentityMigrator.migrate(account)
+        }
+        var importedRevisionDimensions: Set<HistoricalValuationRevisionDimension> = []
+        if account.valuationMembershipRevision == nil { importedRevisionDimensions.insert(.accountSet) }
+        if account.valuationFinancialRevision == nil { importedRevisionDimensions.insert(.financial) }
+        if account.valuationEventRevision == nil { importedRevisionDimensions.insert(.events) }
+        HistoricalValuationRevisionTracker.bump(importedRevisionDimensions, on: account)
     }
 }
 
@@ -190,6 +285,9 @@ struct AccountEventImporter: ModelImporter {
         // операцию в другой календарный день.
         event.dayKey = dayKey
         context.insert(event)
+        // AccountImporter runs first and either restores the exact source counters or initializes
+        // every missing legacy counter once. Per-event bumps here would turn N into N+eventCount
+        // during restore, so an unchanged graph would no longer address its persisted close.
     }
 }
 

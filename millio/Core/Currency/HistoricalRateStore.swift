@@ -60,7 +60,13 @@ final class HistoricalRateStore {
 
         if !knownUnavailableRequests.contains(requestKey) {
             if let fetched = await currencyService.getHistoricalRate(on: targetDate, from: base, to: quote) {
-                upsertRate(base: base, quote: quote, rate: fetched, date: targetDate, source: "historical")
+                upsertRate(
+                    base: base,
+                    quote: quote,
+                    rate: fetched,
+                    date: targetDate,
+                    source: historicalSource("historical")
+                )
                 return HistoricalRateResult(rate: fetched, resolution: .exact, rateDate: targetDate)
             }
             knownUnavailableRequests.insert(requestKey)
@@ -86,7 +92,11 @@ final class HistoricalRateStore {
         on dates: [Date],
         pairs: [(from: String, to: String)]
     ) async {
-        for date in dates {
+        // Daily fiat providers publish business-day closes. Asking them for Saturday/Sunday either
+        // produces a useless 404 (CBR/Frankfurter) or, worse, lets a previous close masquerade as
+        // exact evidence. Warm the preceding Friday instead; the valuation resolver alone decides
+        // whether that row is eligible as `previousClose` for the requested closed day.
+        for date in providerBusinessDates(for: dates) {
             let targetDate = normalizedDate(date)
             for pair in pairs {
                 let base = pair.from.uppercased()
@@ -99,12 +109,34 @@ final class HistoricalRateStore {
                 if knownUnavailableRequests.contains(requestKey) { continue }
 
                 if let fetched = await currencyService.getHistoricalRate(on: targetDate, from: base, to: quote) {
-                    upsertRate(base: base, quote: quote, rate: fetched, date: targetDate, source: "historical_prefetch")
+                    upsertRate(
+                        base: base,
+                        quote: quote,
+                        rate: fetched,
+                        date: targetDate,
+                        source: historicalSource("historical_prefetch")
+                    )
                 } else {
                     knownUnavailableRequests.insert(requestKey)
                 }
             }
         }
+    }
+
+    private func providerBusinessDates(for dates: [Date]) -> [Date] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let normalized = dates.compactMap { date -> Date? in
+            var candidate = normalizedDate(date)
+            while calendar.isDateInWeekend(candidate) {
+                guard let previous = calendar.date(byAdding: .day, value: -1, to: candidate) else {
+                    return nil
+                }
+                candidate = previous
+            }
+            return candidate
+        }
+        return Array(Set(normalized)).sorted()
     }
 
     /// Сбрасывает in-memory negative cache для исторических запросов.
@@ -121,6 +153,10 @@ final class HistoricalRateStore {
     private func unavailableRequestKey(base: String, quote: String, date: Date) -> String {
         let ts = Int(date.timeIntervalSince1970)
         return "\(ts)|\(base)->\(quote)"
+    }
+
+    private func historicalSource(_ source: String) -> String {
+        "\(source)|tz=\(TimeZone.current.identifier)"
     }
     
     private func fetchExactRate(base: String, quote: String, date: Date) -> HistoricalRate? {

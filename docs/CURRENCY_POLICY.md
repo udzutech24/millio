@@ -81,11 +81,29 @@
 
 ## Historical Rates Policy
 
-- Historical `exact` rates are resolved via provider chain:
-  1. `Frankfurter` (ECB-aligned default source).
-  2. `CBR` fallback for RUB-involved pairs (`RUB -> X` / `X -> RUB`).
+- Historical reads are cache-first for both legacy and core accounts: an exact `HistoricalRate`
+  row (including its inverse) is returned before any provider request. Core compatibility reads and
+  legacy reads use the same SwiftData-backed `HistoricalRateStore`; structured reads consume an
+  immutable snapshot of those rows.
+- Historical `exact` cache misses are resolved via a pair-aware provider chain:
+  1. `CBR` for RUB-involved pairs (`RUB -> X` / `X -> RUB`).
+  2. `Frankfurter` as the RUB fallback and the primary provider for non-RUB fiat pairs.
 - If both providers miss, app falls back to:
   - previously cached historical rate (`previous`);
   - then current spot rate (`current`) as estimated value.
 - Manual `Refresh rates` clears in-memory negative caches for historical providers,
   so transient misses can be retried without app restart.
+- Dynamics prefetch collects currencies from both legacy products and core accounts and warms the
+  exact chart skeleton dates before the structured evidence snapshot is created. It does not use an
+  independent sampling grid.
+- Persisted fiat rows use a versioned business-day policy: previous close is allowed across an
+  explicitly closed weekend, but an ordinary weekday miss remains unavailable.
+
+## Historical Market Prices
+
+- Dynamics warms daily market closes before structured replay through the existing authenticated
+  market client; no second quote provider exists.
+- The cache is checked first. A miss performs at most one chart request per symbol, then appends
+  missing `HistoricalAssetPrice` rows. Previously persisted historical rows are immutable.
+- Replay and resolution never perform network I/O. Stocks may use a persisted previous close only
+  across policy-closed days; crypto remains exact 24/7.

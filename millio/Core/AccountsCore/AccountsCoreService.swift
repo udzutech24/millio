@@ -3,6 +3,8 @@ import SwiftData
 
 /// Ошибки записи в ядро счетов.
 enum AccountsCoreServiceError: Error {
+    /// Semantic edits require exclusive ownership of the caller context for rollback safety.
+    case dirtyContext
     /// `recordEvent` вызван с типом, не предназначенным для генерик-записи (перевод — только через `transfer`).
     case unsupportedEventType(AccountEventType)
     /// Перевод счёта самому себе.
@@ -11,6 +13,12 @@ enum AccountsCoreServiceError: Error {
     case missingFxRate
     /// Событие без привязанного счёта — не может быть отредактировано этим сервисом.
     case eventWithoutAccount
+    /// Ordinary edit cannot safely change a row whose product identity is not classified yet.
+    case missingProductIdentity
+    /// `unknownLegacy` has no proven subtype; its financial meta cannot be converted in place.
+    case unknownLegacySemanticMutation
+    case eventNotAllowed(AccountProductType?, AccountEventType)
+    case capabilityNotAllowed(AccountProductType?, AccountProductCapability)
 }
 
 /// Единственная точка записи в новое ядро счетов (event-sourcing). Любое изменение баланса —
@@ -24,8 +32,38 @@ final class AccountsCoreService {
         self.modelContext = modelContext
     }
 
+    /// Service methods are commit boundaries: on failure, retain neither domain mutations nor
+    /// revision bumps. This also prevents a later unrelated save from resurrecting a failed write.
+    private func saveOrRollback() throws {
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+
+    private func requireEventAllowed(_ type: AccountEventType, for account: Account) throws {
+        guard let productType = account.productType,
+              productType != .unknownLegacy,
+              ProductDefinitionCatalog.isEvent(type, allowedFor: productType) else {
+            throw AccountsCoreServiceError.eventNotAllowed(account.productType, type)
+        }
+    }
+
+    private func requireCapability(_ capability: AccountProductCapability, for account: Account) throws {
+        guard let productType = account.productType,
+              productType != .unknownLegacy,
+              ProductDefinitionCatalog.hasCapability(capability, for: productType) else {
+            throw AccountsCoreServiceError.capabilityNotAllowed(account.productType, capability)
+        }
+    }
+
     // MARK: - Создание счёта
 
+    #if DEBUG
+    /// Test-support compatibility API for pre-factory suites. Release writers cannot call this
+    /// ambiguous kind-based boundary; production creation must use `AccountProductFactory`.
     /// Создаёт счёт и якорное событие `.openingBalance` — ВСЕГДА, даже при нулевом балансе:
     /// без якоря история счёта не имеет точки отсчёта для реплея (первый `balanceAt` до первого
     /// события иначе не отличим от «счёта не существовало»).
@@ -45,7 +83,30 @@ final class AccountsCoreService {
         note: String? = nil,
         date: Date = Date()
     ) throws -> Account {
-        let account = Account(name: name, kind: kind, currency: currency, createdAt: date)
+        let productType: AccountProductType = switch kind {
+        case .cash: cardMeta?.creditLimit.map { $0 > 0 ? .creditCard : .cash } ?? .cash
+        case .debitCard: cardMeta?.creditLimit.map { $0 > 0 ? .creditCard : .debitCard } ?? .debitCard
+        case .bankAccount: .bankAccount
+        case .deposit: .deposit
+        case .loan: .loan
+        case .debt: debtMeta?.direction == .owedToMe ? .receivable : .payable
+        case .marketInvestment:
+            switch marketMeta?.assetClass {
+            case .crypto: .marketCrypto
+            case .bond: .marketBond
+            case .metal: .marketMetal
+            case .stock: .marketStock
+            case nil: .genericMarketInvestment
+            }
+        case .manualAsset: .otherManualAsset
+        }
+        let account = Account(
+            name: name,
+            kind: kind,
+            productType: productType,
+            currency: currency,
+            createdAt: date
+        )
         account.group = group
         account.cardMeta = cardMeta
         account.depositMeta = depositMeta
@@ -58,10 +119,20 @@ final class AccountsCoreService {
 
         let opening = AccountEvent(account: account, date: date, type: .openingBalance, amount: openingBalance)
         modelContext.insert(opening)
+        HistoricalValuationRevisionTracker.bump([.accountSet, .financial, .events], on: account)
 
-        try modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            // Delete only this just-inserted graph. A shared rollback would also discard an
+            // unsaved group or another test fixture already owned by the caller.
+            modelContext.delete(opening)
+            modelContext.delete(account)
+            throw error
+        }
         return account
     }
+    #endif
 
     // MARK: - Запись операции
 
@@ -84,6 +155,7 @@ final class AccountsCoreService {
         guard type == .income || type == .expense || type == .adjustment else {
             throw AccountsCoreServiceError.unsupportedEventType(type)
         }
+        try requireEventAllowed(type, for: account)
 
         let event = AccountEvent(
             account: account,
@@ -98,7 +170,8 @@ final class AccountsCoreService {
         )
         modelContext.insert(event)
         invalidateCache(for: account, from: date)
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.events], on: account)
+        try saveOrRollback()
         return event
     }
 
@@ -107,13 +180,15 @@ final class AccountsCoreService {
     /// а не хранимое поле, остаются единственным источником истины).
     @discardableResult
     func adjustBalance(account: Account, to newValue: Decimal, on date: Date = Date()) throws -> AccountEvent {
+        try requireEventAllowed(.adjustment, for: account)
         let current = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: account.kind, on: date)
         let delta = newValue - current
 
         let event = AccountEvent(account: account, date: date, type: .adjustment, amount: delta)
         modelContext.insert(event)
         invalidateCache(for: account, from: date)
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.events], on: account)
+        try saveOrRollback()
         return event
     }
 
@@ -124,10 +199,12 @@ final class AccountsCoreService {
     @discardableResult
     func buy(account: Account, quantity: Decimal, unitPrice: Decimal, date: Date = Date(), note: String? = nil) throws -> AccountEvent {
         guard account.kind == .marketInvestment else { throw AccountsCoreServiceError.unsupportedEventType(.buy) }
+        try requireEventAllowed(.buy, for: account)
         let event = AccountEvent(account: account, date: date, type: .buy, quantity: quantity, unitPrice: unitPrice, note: note)
         modelContext.insert(event)
         invalidateCache(for: account, from: date)
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.events], on: account)
+        try saveOrRollback()
         return event
     }
 
@@ -136,10 +213,12 @@ final class AccountsCoreService {
     @discardableResult
     func sell(account: Account, quantity: Decimal, unitPrice: Decimal, date: Date = Date(), note: String? = nil) throws -> AccountEvent {
         guard account.kind == .marketInvestment else { throw AccountsCoreServiceError.unsupportedEventType(.sell) }
+        try requireEventAllowed(.sell, for: account)
         let event = AccountEvent(account: account, date: date, type: .sell, quantity: quantity, unitPrice: unitPrice, note: note)
         modelContext.insert(event)
         invalidateCache(for: account, from: date)
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.events], on: account)
+        try saveOrRollback()
         return event
     }
 
@@ -158,9 +237,11 @@ final class AccountsCoreService {
         guard account.kind == .marketInvestment, type == .dividend || type == .fee else {
             throw AccountsCoreServiceError.unsupportedEventType(type)
         }
+        try requireEventAllowed(type, for: account)
         let event = AccountEvent(account: account, date: date, type: type, amount: amount, note: note)
         modelContext.insert(event)
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.events], on: account)
+        try saveOrRollback()
         return event
     }
 
@@ -171,10 +252,12 @@ final class AccountsCoreService {
     @discardableResult
     func revalue(account: Account, newValue: Decimal, date: Date = Date(), note: String? = nil) throws -> AccountEvent {
         guard account.kind == .manualAsset else { throw AccountsCoreServiceError.unsupportedEventType(.revaluation) }
+        try requireEventAllowed(.revaluation, for: account)
         let event = AccountEvent(account: account, date: date, type: .revaluation, amount: newValue, note: note)
         modelContext.insert(event)
         invalidateCache(for: account, from: date)
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.events], on: account)
+        try saveOrRollback()
         return event
     }
 
@@ -201,6 +284,7 @@ final class AccountsCoreService {
         guard type == .income || type == .expense || type == .adjustment else {
             throw AccountsCoreServiceError.unsupportedEventType(type)
         }
+        try requireEventAllowed(type, for: account)
 
         let descriptor = FetchDescriptor<AccountEvent>(
             predicate: #Predicate<AccountEvent> { $0.sourceTransactionID == sourceTransactionID }
@@ -241,7 +325,8 @@ final class AccountsCoreService {
         }
 
         invalidateCache(for: account, from: earliestDate)
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.events], on: account)
+        try saveOrRollback()
         return event
     }
 
@@ -267,8 +352,10 @@ final class AccountsCoreService {
         sourceTransactionID: String,
         account: Account,
         amount: Decimal,
-        date: Date
+        date: Date,
+        saveChanges: Bool = true
     ) throws -> AccountEvent {
+        try requireEventAllowed(.interest, for: account)
         let descriptor = FetchDescriptor<AccountEvent>(
             predicate: #Predicate<AccountEvent> { $0.sourceTransactionID == sourceTransactionID }
         )
@@ -286,7 +373,10 @@ final class AccountsCoreService {
             modelContext.insert(event)
         }
         invalidateCache(for: account, from: date)
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.events], on: account)
+        if saveChanges {
+            try saveOrRollback()
+        }
         return event
     }
 
@@ -295,6 +385,7 @@ final class AccountsCoreService {
     /// `recordEvent`/`upsertEvent`. Не делает save — вызывающий код сам решает, когда сохранять пачку.
     func invalidateSnapshotCache(for account: Account, from date: Date) {
         invalidateCache(for: account, from: date)
+        HistoricalValuationRevisionTracker.bump([.events], on: account)
     }
 
     /// Досрочное закрытие вклада (спека §2.7 п.5, брифинг Фазы 3, п.3): НЕ удаление — последовательность
@@ -368,6 +459,10 @@ final class AccountsCoreService {
         guard source.id != destination.id else {
             throw AccountsCoreServiceError.sameAccountTransfer
         }
+        try requireCapability(.transfers, for: source)
+        try requireCapability(.transfers, for: destination)
+        try requireEventAllowed(.transferOut, for: source)
+        try requireEventAllowed(.transferIn, for: destination)
 
         let rate: Decimal
         if source.currency == destination.currency {
@@ -397,7 +492,9 @@ final class AccountsCoreService {
         modelContext.insert(inEvent)
         invalidateCache(for: source, from: date)
         invalidateCache(for: destination, from: date)
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.events], on: source)
+        HistoricalValuationRevisionTracker.bump([.events], on: destination)
+        try saveOrRollback()
         return (outEvent, inEvent)
     }
 
@@ -406,6 +503,7 @@ final class AccountsCoreService {
     /// Удаляет событие. Если у события есть `transferID` — удаляются ОБЕ ноги перевода: одну ногу
     /// отменить невозможно (иначе нарушается инвариант Σ переводов = 0, AC12).
     func deleteEvent(_ event: AccountEvent) throws {
+        var revisionAccounts: [Account] = []
         if let transferID = event.transferID {
             let descriptor = FetchDescriptor<AccountEvent>(
                 predicate: #Predicate<AccountEvent> { $0.transferID == transferID }
@@ -423,15 +521,20 @@ final class AccountsCoreService {
             for account in touchedAccounts {
                 invalidateCache(for: account, from: earliest)
             }
+            revisionAccounts = touchedAccounts
         } else {
             let account = event.account
             let date = event.date
             modelContext.delete(event)
             if let account {
                 invalidateCache(for: account, from: date)
+                revisionAccounts = [account]
             }
         }
-        try modelContext.save()
+        for account in revisionAccounts {
+            HistoricalValuationRevisionTracker.bump([.events], on: account)
+        }
+        try saveOrRollback()
     }
 
     /// Правка события задним числом (сумма/дата/категория/заметка). Реплей от МИНИМАЛЬНОЙ из
@@ -455,7 +558,8 @@ final class AccountsCoreService {
         if let note { event.note = note }
 
         invalidateCache(for: account, from: min(oldDate, event.date))
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.events], on: account)
+        try saveOrRollback()
         return event
     }
 
@@ -493,6 +597,33 @@ final class AccountsCoreService {
         marketMeta: MarketMeta? = nil,
         manualAssetMeta: ManualAssetMeta? = nil
     ) throws -> Account {
+        guard !modelContext.hasChanges else {
+            throw AccountsCoreServiceError.dirtyContext
+        }
+        guard let productType = account.productType else {
+            throw AccountsCoreServiceError.missingProductIdentity
+        }
+        let currentMetadata = AccountProductMetadata(account: account)
+        let proposedMetadata = AccountProductMetadata(
+            card: cardMeta ?? currentMetadata.card,
+            deposit: depositMeta ?? currentMetadata.deposit,
+            loan: loanMeta ?? currentMetadata.loan,
+            debt: debtMeta ?? currentMetadata.debt,
+            market: marketMeta ?? currentMetadata.market,
+            manualAsset: manualAssetMeta ?? currentMetadata.manualAsset
+        )
+        if productType == .unknownLegacy, proposedMetadata != currentMetadata {
+            throw AccountsCoreServiceError.unknownLegacySemanticMutation
+        }
+        try ProductDefinitionCatalog.validateStoredIdentity(
+            productType,
+            kindRaw: account.kindRaw,
+            metadata: proposedMetadata,
+            migrationReason: account.productMigrationReason
+        )
+
+        // Mutate only after the complete candidate tuple has passed validation. A rejected edit
+        // leaves both the object and context clean rather than partially applying cosmetic fields.
         account.name = name
         account.group = group
         account.note = note
@@ -502,7 +633,15 @@ final class AccountsCoreService {
         if let debtMeta { account.debtMeta = debtMeta }
         if let marketMeta { account.marketMeta = marketMeta }
         if let manualAssetMeta { account.manualAssetMeta = manualAssetMeta }
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.financial], on: account)
+        do {
+            try modelContext.save()
+        } catch {
+            // Safe because the clean-context precondition above makes this method the sole owner
+            // of pending mutations. Never use this rollback pattern without that precondition.
+            modelContext.rollback()
+            throw error
+        }
         return account
     }
 
@@ -511,9 +650,16 @@ final class AccountsCoreService {
     /// «Удалить» в основном UI = архивация, НИКОГДА не деструктивно (AC7). История ДО `archivedAt`
     /// не меняется — `Account.participates(on:)` уже времязависим (Фаза 0).
     func archiveAccount(_ account: Account, on date: Date = Date()) throws {
+        stageArchiveAccount(account, on: date)
+        try saveOrRollback()
+    }
+
+    /// Stages archive/cache invalidation without saving. Batch lifecycle operations own the one
+    /// outer transaction and must call this instead of swallowing per-account save failures.
+    func stageArchiveAccount(_ account: Account, on date: Date = Date()) {
         account.archivedAt = date
         invalidateCache(for: account, from: date)
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.accountSet, .events], on: account)
     }
 
     func restoreAccount(_ account: Account) throws {
@@ -522,7 +668,8 @@ final class AccountsCoreService {
         if let previousArchivedAt {
             invalidateCache(for: account, from: previousArchivedAt)
         }
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.accountSet, .events], on: account)
+        try saveOrRollback()
     }
 
     // MARK: - Мягкое удаление счёта (tombstone, Ф5/Q1 — экран «Архив»)
@@ -536,7 +683,8 @@ final class AccountsCoreService {
     /// что инвариант Σ переводов = 0 сохраняется исторически сам собой.
     func softDelete(_ account: Account, on date: Date = Date()) throws {
         account.deletedAt = date
-        try modelContext.save()
+        HistoricalValuationRevisionTracker.bump([.accountSet, .events], on: account)
+        try saveOrRollback()
     }
 
     // MARK: - Физическое удаление (дедуп-двойники LegacyAccountConverter; истории для сохранения нет)
@@ -590,11 +738,12 @@ final class AccountsCoreService {
             for (survivorID, earliestDate) in earliestBySurvivor {
                 guard let survivor = survivorsByID[survivorID] else { continue }
                 invalidateCache(for: survivor, from: earliestDate)
+                HistoricalValuationRevisionTracker.bump([.events], on: survivor)
             }
         }
 
         modelContext.delete(account) // каскад .cascade удалит events + snapshots самого счёта
-        try modelContext.save()
+        try saveOrRollback()
     }
 
     // MARK: - Инвалидация кэша
