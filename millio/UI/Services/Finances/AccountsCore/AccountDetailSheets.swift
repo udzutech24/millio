@@ -66,16 +66,18 @@ struct AccountAdjustBalanceSheet: View {
     }
 
     private var parsedAmount: Decimal? {
-        let normalized = amountText.replacingOccurrences(of: ",", with: ".")
-        return Decimal(string: normalized)
+        let canonical = AmountInputFormatter.sanitize(amountText)
+        return Decimal(string: canonical)
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField(L("accounts_core.detail.sheet.adjust.new_balance"), text: $amountText)
-                        .keyboardType(.decimalPad)
+                    AmountTextField(
+                        placeholder: L("accounts_core.detail.sheet.adjust.new_balance"),
+                        value: $amountText
+                    )
                 }
             }
             .navigationTitle(titleOverride ?? L("accounts_core.detail.sheet.adjust.title"))
