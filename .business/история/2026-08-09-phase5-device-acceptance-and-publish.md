@@ -2,7 +2,7 @@
 
 **Дата:** 2026-08-09
 **Автор:** Codex
-**Ветка / PR:** публикация подготавливается
+**Ветка / PR:** `agent/accounts-history-source-of-truth`, GitHub PR #1
 
 ## 1. Задача
 
@@ -50,7 +50,9 @@
 ## 7. Артефакты и коммиты
 
 - План и device-validation evidence обновлены.
-- Commit/PR будут дописаны после успешной публикации.
+- iOS commit: `5ae6ff8` (`feat(accounts): unify historical valuation source`).
+- Backend commit: `e39e0c1` (`fix(market-data): support long historical charts`).
+- Draft PR: `udzutech24/millio#1`; связанный backend draft PR: `udzutech24/millio-back#1`.
 
 ## 8. Что дальше
 

@@ -35,4 +35,4 @@ Focused `LegacyAccountsMigratorTests` и grouped cases в
 
 - Сессия: [Phase 5 device acceptance](../../.business/история/2026-08-09-phase5-device-acceptance-and-publish.md)
 - Связанный plan: [Accounts history source of truth](../../plans/2026-08-08__accounts-history-source-of-truth.md)
-- Commit внедрения: будет добавлен после публикации.
+- Commit внедрения: `5ae6ff8`.
