@@ -81,12 +81,13 @@ struct AccountDetailView: View {
                         RealEstateDetailSection(
                             account: account,
                             modelContext: modelContext,
-                            refreshToken: refreshToken
+                            refreshToken: refreshToken,
+                            onEdit: { sheet = .editDetails }
                         )
                     }
                     if account.productType == .creditCard {
                         CreditCardDetailSection(account: account, rawBalance: balanceToday)
-                    } else {
+                    } else if AccountDetailDescriptor.resolve(for: account).showsGenericHeader {
                         header
                     }
                     if account.archivedAt == nil && account.deletedAt == nil {

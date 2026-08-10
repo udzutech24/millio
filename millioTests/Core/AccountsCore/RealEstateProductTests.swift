@@ -127,7 +127,62 @@ struct RealEstateProductTests {
         let realEstate = Account(name: "Home", kind: .manualAsset, productType: .realEstate)
         let business = Account(name: "Business", kind: .manualAsset, productType: .business)
         #expect(AccountDetailDescriptor.resolve(for: realEstate).kind == .realEstate)
+        #expect(!AccountDetailDescriptor.resolve(for: realEstate).showsGenericHeader)
         #expect(AccountDetailDescriptor.resolve(for: business).kind == .generic)
+        #expect(AccountDetailDescriptor.resolve(for: business).showsGenericHeader)
+    }
+
+    @Test("Detail presentation formats valuation metrics deterministically")
+    func detailPresentationFormatting() throws {
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        let summary = RealEstateValuationSummary(
+            currentValue: 123_456_789.5,
+            previousValue: 120_000_000,
+            delta: 3_456_789.5,
+            percentDelta: 2.880657916,
+            lastValuationDate: date,
+            ageInDays: 14
+        )
+
+        let presentation = RealEstateDetailPresentation.make(
+            summary: summary,
+            currency: "RUB",
+            equity: 98_765_432.1,
+            locale: Locale(identifier: "en_US_POSIX"),
+            timeZone: try #require(TimeZone(secondsFromGMT: 0))
+        )
+
+        #expect(presentation.currentValue == "123,456,789.5")
+        #expect(presentation.currency == "RUB")
+        #expect(presentation.delta == "+3,456,789.5")
+        #expect(presentation.percentDelta == "+2.88%")
+        #expect(presentation.lastValuationDate == "Nov 14, 2023")
+        #expect(presentation.ageInDays == "14")
+        #expect(presentation.equity == "98,765,432.1")
+    }
+
+    @Test("Detail presentation distinguishes missing valuation from zero")
+    func detailPresentationMissingValues() {
+        let presentation = RealEstateDetailPresentation.make(
+            summary: RealEstateValuationSummary(
+                currentValue: nil,
+                previousValue: nil,
+                delta: nil,
+                percentDelta: nil,
+                lastValuationDate: nil,
+                ageInDays: nil
+            ),
+            currency: "USD",
+            equity: nil,
+            locale: Locale(identifier: "en_US_POSIX")
+        )
+
+        #expect(presentation.currentValue == "—")
+        #expect(presentation.delta == "—")
+        #expect(presentation.percentDelta == "—")
+        #expect(presentation.lastValuationDate == "—")
+        #expect(presentation.ageInDays == "—")
+        #expect(presentation.equity == nil)
     }
 
     @Test("Valuation summary uses append-only opening and revaluation events") @MainActor
@@ -274,5 +329,51 @@ struct RealEstateProductTests {
         let renderer = ImageRenderer(content: view)
         renderer.scale = 2
         #expect(renderer.uiImage != nil)
+    }
+
+    @Test("Detail keeps corrupt-photo and archived states renderable at supported widths") @MainActor
+    func detailStateRenderMatrix() throws {
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let context = container.mainContext
+        let corruptPhotoAccount = Account(
+            name: "Corrupt cover",
+            kind: .manualAsset,
+            productType: .realEstate,
+            currency: "RUB"
+        )
+        let archivedAccount = Account(
+            name: "Archived property",
+            kind: .manualAsset,
+            productType: .realEstate,
+            currency: "USD"
+        )
+        archivedAccount.archivedAt = Date()
+        context.insert(corruptPhotoAccount)
+        context.insert(archivedAccount)
+        context.insert(RealEstateProfile(accountID: corruptPhotoAccount.id, propertyType: .apartment))
+        context.insert(RealEstateProfile(accountID: archivedAccount.id, propertyType: .house))
+        context.insert(AccountAttachment(
+            accountID: corruptPhotoAccount.id,
+            order: 0,
+            isCover: true,
+            mediaData: Data([0x00, 0x01])
+        ))
+        try context.save()
+
+        for account in [corruptPhotoAccount, archivedAccount] {
+            for width in [375.0, 390.0] {
+                let view = ScrollView {
+                    RealEstateDetailSection(account: account, modelContext: context, refreshToken: UUID())
+                        .padding()
+                }
+                .frame(width: width, height: 844)
+                .preferredColorScheme(.dark)
+                .environment(\.sizeCategory, .accessibilityExtraExtraExtraLarge)
+                .modelContainer(container)
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 1
+                #expect(renderer.uiImage != nil)
+            }
+        }
     }
 }

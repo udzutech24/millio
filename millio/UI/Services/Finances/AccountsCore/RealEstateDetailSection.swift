@@ -1,4 +1,3 @@
-import PhotosUI
 import SwiftData
 import SwiftUI
 import UIKit
@@ -7,18 +6,22 @@ struct RealEstateDetailSection: View {
     let account: Account
     let modelContext: ModelContext
     let refreshToken: UUID
+    let onEdit: () -> Void
 
     @Query private var profiles: [RealEstateProfile]
     @Query private var attachments: [AccountAttachment]
-    @State private var selectedPhoto: PhotosPickerItem?
     @State private var presentedPhoto: AccountAttachment?
-    @State private var deleteCandidate: AccountAttachment?
-    @State private var errorMessage: String?
 
-    init(account: Account, modelContext: ModelContext, refreshToken: UUID) {
+    init(
+        account: Account,
+        modelContext: ModelContext,
+        refreshToken: UUID,
+        onEdit: @escaping () -> Void = {}
+    ) {
         self.account = account
         self.modelContext = modelContext
         self.refreshToken = refreshToken
+        self.onEdit = onEdit
         let accountID = account.id
         _profiles = Query(filter: #Predicate<RealEstateProfile> { $0.accountID == accountID })
         _attachments = Query(
@@ -28,7 +31,9 @@ struct RealEstateDetailSection: View {
     }
 
     private var photos: [AccountAttachment] { attachments.filter { $0.kind == .photo } }
-    private var isReadOnly: Bool { account.archivedAt != nil || account.deletedAt != nil }
+    private var isReadOnly: Bool {
+        RealEstateEditPolicy.isReadOnly(archivedAt: account.archivedAt, deletedAt: account.deletedAt)
+    }
     private var cover: AccountAttachment? { photos.first(where: \.isCover) ?? photos.first }
     private var summary: RealEstateValuationSummary {
         _ = refreshToken
@@ -47,14 +52,21 @@ struct RealEstateDetailSection: View {
         let debt = AccountBalanceEngine.balanceAt(events: linkedLoan.events ?? [], kind: .loan, on: Date())
         return value - abs(debt)
     }
+    private var presentation: RealEstateDetailPresentation {
+        RealEstateDetailPresentation.make(summary: summary, currency: account.currency, equity: equity)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.l) {
+        VStack(alignment: .leading, spacing: 0) {
             hero
-            valuationCard
+            summarySection
+                .padding(.top, AppSpacing.m)
             valuationChart
+                .padding(.top, AppSpacing.l)
             gallery
+                .padding(.top, AppSpacing.l)
             aboutCard
+                .padding(.top, AppSpacing.l)
         }
         .sheet(item: $presentedPhoto) { photo in
             NavigationStack {
@@ -80,26 +92,6 @@ struct RealEstateDetailSection: View {
                 }
             }
         }
-        .alert(L("real_estate.photo.delete.title"), isPresented: Binding(
-            get: { deleteCandidate != nil },
-            set: { if !$0 { deleteCandidate = nil } }
-        )) {
-            Button(L("real_estate.photo.delete.action"), role: .destructive) {
-                guard let deleteCandidate else { return }
-                perform { try AccountAttachmentService(modelContext: modelContext).delete(deleteCandidate) }
-            }
-            Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
-        }
-        .alert(L("accounts_core.detail.error.title"), isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) { Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {} } message: {
-            Text(errorMessage ?? "")
-        }
-        .onChange(of: selectedPhoto) { _, item in
-            guard let item else { return }
-            Task { await importPhoto(item) }
-        }
     }
 
     private var hero: some View {
@@ -119,24 +111,40 @@ struct RealEstateDetailSection: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .aspectRatio(16 / 9, contentMode: .fit)
+            .frame(height: 240)
             .clipped()
 
-            HStack {
-                Label(propertyTypeTitle, systemImage: "building.2.fill")
-                    .font(.millioCaption)
-                    .padding(.horizontal, AppSpacing.s)
-                    .padding(.vertical, AppSpacing.xs)
-                    .background(.ultraThinMaterial, in: Capsule())
-                Spacer()
-                if !isReadOnly && photos.count < AccountAttachmentPolicy.maximumPhotos {
-                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        Label(L("real_estate.photo.add"), systemImage: "photo.badge.plus")
-                            .font(.millioCaption)
-                            .padding(.horizontal, AppSpacing.s)
-                            .padding(.vertical, AppSpacing.xs)
-                            .background(.ultraThinMaterial, in: Capsule())
+            LinearGradient(
+                colors: [.clear, Color.black.opacity(0.2), Color.black],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 112)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+            .allowsHitTesting(false)
+
+            VStack {
+                HStack {
+                    Spacer()
+                    if !isReadOnly {
+                        Button(action: onEdit) {
+                            Image(systemName: "gearshape.fill")
+                                .font(.millioCalloutSemibold)
+                                .frame(width: 40, height: 40)
+                                .background(.ultraThinMaterial, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L("accounts_core.detail.action.edit"))
                     }
+                }
+                Spacer()
+                HStack {
+                    Label(propertyTypeTitle, systemImage: "building.2.fill")
+                        .font(.millioCaption)
+                        .padding(.horizontal, AppSpacing.s)
+                        .padding(.vertical, AppSpacing.xs)
+                        .background(.ultraThinMaterial, in: Capsule())
+                    Spacer()
                 }
             }
             .padding(AppSpacing.s)
@@ -144,28 +152,60 @@ struct RealEstateDetailSection: View {
         .clipShape(RoundedRectangle(cornerRadius: AppSpacing.l, style: .continuous))
         .contentShape(Rectangle())
         .onTapGesture { if let cover { presentedPhoto = cover } }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(L("real_estate.hero.accessibility"))
+        .accessibilityAddTraits(cover == nil ? [] : .isButton)
     }
 
-    private var valuationCard: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.s) {
-            Text(L("real_estate.valuation.title")).font(.millioCaption).foregroundStyle(AppColors.textTertiary)
-            if let date = summary.lastValuationDate {
-                Text(date.formatted(date: .abbreviated, time: .omitted))
-                    .font(.millioCalloutRegular).foregroundStyle(AppColors.textSecondary)
+    private var summarySection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.m) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text(L("real_estate.valuation.title"))
+                    .font(.millioCaption)
+                    .foregroundStyle(AppColors.textTertiary)
+                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
+                    Text(presentation.currentValue)
+                        .font(.millioTitle)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.58)
+                        .foregroundStyle(AppColors.textPrimary)
+                    Text(presentation.currency)
+                        .font(.millioBody)
+                        .foregroundStyle(AppColors.textTertiary)
+                }
+                Text(presentation.lastValuationDate)
+                    .font(.millioCalloutRegular)
+                    .foregroundStyle(AppColors.textSecondary)
             }
-            HStack {
-                metric(L("real_estate.valuation.change"), value: summary.delta.map(formattedSigned) ?? "—")
-                metric(L("real_estate.valuation.percent"), value: summary.percentDelta.map { "\(formattedSigned($0))%" } ?? "—")
-                metric(L("real_estate.valuation.age"), value: summary.ageInDays.map { String(format: L("real_estate.valuation.days"), $0) } ?? "—")
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: AppSpacing.s) { summaryMetrics }
+                VStack(alignment: .leading, spacing: AppSpacing.s) { summaryMetrics }
             }
-            if let equity {
-                detailRow(L("real_estate.valuation.equity"), "\(formattedSigned(equity)) \(account.currency)")
+
+            if let equity = presentation.equity {
+                detailRow(L("real_estate.valuation.equity"), "\(equity) \(presentation.currency)")
+            }
+            if !account.includeInTotal {
+                Label(L("accounts_core.detail.total.excluded"), systemImage: "sum")
+                    .font(.millioCaptionRegular)
+                    .foregroundStyle(AppColors.textSecondary)
+                    .padding(.horizontal, AppSpacing.s)
+                    .padding(.vertical, AppSpacing.xs)
+                    .background(Capsule().fill(AppColors.iconBackground))
             }
         }
-        .padding(AppSpacing.m)
-        .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.iconBackground))
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var summaryMetrics: some View {
+        metric(L("real_estate.valuation.change"), value: presentation.delta, tone: summary.delta)
+        metric(L("real_estate.valuation.percent"), value: presentation.percentDelta, tone: summary.percentDelta)
+        metric(
+            L("real_estate.valuation.age"),
+            value: summary.ageInDays.map { String(format: L("real_estate.valuation.days"), $0) } ?? presentation.ageInDays
+        )
     }
 
     private var valuationEvents: [AccountEvent] {
@@ -218,13 +258,13 @@ struct RealEstateDetailSection: View {
                 Text("\(photos.count)/\(AccountAttachmentPolicy.maximumPhotos)")
                     .font(.millioCaptionRegular).foregroundStyle(AppColors.textTertiary)
             }
-            if photos.isEmpty && !isReadOnly {
-                PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                    Label(L("real_estate.photo.empty"), systemImage: "photo.badge.plus")
-                        .frame(maxWidth: .infinity).padding(AppSpacing.m)
-                        .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.iconBackground))
-                }
-            } else if !photos.isEmpty {
+            if photos.isEmpty {
+                Label(L("real_estate.photo.empty"), systemImage: "photo")
+                    .foregroundStyle(AppColors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(AppSpacing.m)
+                    .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.iconBackground))
+            } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: AppSpacing.s) {
                         ForEach(photos, id: \.id) { photo in photoTile(photo) }
@@ -235,34 +275,20 @@ struct RealEstateDetailSection: View {
     }
 
     private func photoTile(_ photo: AccountAttachment) -> some View {
-        VStack(spacing: AppSpacing.xs) {
-            Group {
-                if let image = UIImage(data: photo.mediaData) {
-                    Image(uiImage: image).resizable().scaledToFill()
-                } else {
-                    Image(systemName: "photo.badge.exclamationmark").foregroundStyle(AppColors.textTertiary)
-                }
-            }
-            .frame(width: 116, height: 82).clipped()
-            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.s))
-            .onTapGesture { presentedPhoto = photo }
-            if !isReadOnly {
-              HStack(spacing: AppSpacing.s) {
-                Button { perform { try AccountAttachmentService(modelContext: modelContext).setCover(photo) } } label: {
-                    Image(systemName: photo.isCover ? "star.fill" : "star")
-                }.accessibilityLabel(L("real_estate.photo.cover"))
-                Button { move(photo, offset: -1) } label: { Image(systemName: "chevron.left") }
-                    .disabled(photo.order == 0)
-                    .accessibilityLabel(L("real_estate.photo.move_left"))
-                Button { move(photo, offset: 1) } label: { Image(systemName: "chevron.right") }
-                    .disabled(photo.order >= photos.count - 1)
-                    .accessibilityLabel(L("real_estate.photo.move_right"))
-                Button(role: .destructive) { deleteCandidate = photo } label: { Image(systemName: "trash") }
-                    .accessibilityLabel(L("real_estate.photo.delete.action"))
-              }
-              .font(.millioCaption)
+        Group {
+            if let image = UIImage(data: photo.mediaData) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                Image(systemName: "photo.badge.exclamationmark").foregroundStyle(AppColors.textTertiary)
             }
         }
+        .frame(width: 132, height: 92)
+        .clipped()
+        .clipShape(RoundedRectangle(cornerRadius: AppSpacing.s))
+        .contentShape(Rectangle())
+        .onTapGesture { presentedPhoto = photo }
+        .accessibilityLabel(L("real_estate.photo.preview"))
+        .accessibilityAddTraits(.isButton)
     }
 
     private var aboutCard: some View {
@@ -285,11 +311,18 @@ struct RealEstateDetailSection: View {
         (profiles.first?.propertyType ?? .other).localizedTitle
     }
 
-    private func metric(_ title: String, value: String) -> some View {
+    private func metric(_ title: String, value: String, tone: Decimal? = nil) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.millioCaptionRegular).foregroundStyle(AppColors.textTertiary)
-            Text(value).font(.millioCalloutSemibold).foregroundStyle(AppColors.textPrimary)
-        }.frame(maxWidth: .infinity, alignment: .leading)
+            Text(value)
+                .font(.millioCalloutSemibold)
+                .foregroundStyle(metricColor(tone))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.s)
+        .background(RoundedRectangle(cornerRadius: AppSpacing.s).fill(AppColors.iconBackground))
     }
 
     private func detailRow(_ title: String, _ value: String) -> some View {
@@ -300,37 +333,10 @@ struct RealEstateDetailSection: View {
         }.font(.millioCalloutRegular)
     }
 
-    private func formattedSigned(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 2
-        formatter.positivePrefix = "+"
-        return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "—"
-    }
-
-    private func move(_ photo: AccountAttachment, offset: Int) {
-        var ids = photos.map(\.id)
-        guard let index = ids.firstIndex(of: photo.id), ids.indices.contains(index + offset) else { return }
-        ids.swapAt(index, index + offset)
-        perform { try AccountAttachmentService(modelContext: modelContext).reorder(accountID: account.id, orderedIDs: ids) }
-    }
-
-    private func perform(_ operation: () throws -> Void) {
-        do { try operation() } catch { errorMessage = error.localizedDescription }
-    }
-
-    private func importPhoto(_ item: PhotosPickerItem) async {
-        do {
-            guard let data = try await item.loadTransferable(type: Data.self) else {
-                throw AccountPhotoProcessorError.invalidImage
-            }
-            let processed = try await AccountPhotoProcessor().process(data)
-            try await MainActor.run {
-                try AccountAttachmentService(modelContext: modelContext).addPhoto(accountID: account.id, processedData: processed)
-                selectedPhoto = nil
-            }
-        } catch {
-            await MainActor.run { errorMessage = error.localizedDescription; selectedPhoto = nil }
-        }
+    private func metricColor(_ value: Decimal?) -> Color {
+        guard let value else { return AppColors.textPrimary }
+        if value > 0 { return AppColors.positiveColor }
+        if value < 0 { return AppColors.negativeColor }
+        return AppColors.textPrimary
     }
 }
