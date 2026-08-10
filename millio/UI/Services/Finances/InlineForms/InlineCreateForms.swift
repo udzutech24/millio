@@ -24,6 +24,7 @@ struct InlineCardDraft {
     var dueDay: Int?
     var minPayment: Double?
     var graceDays: Int?
+    var note: String?
     var expiryDate: String?
     var cardholderName: String?
     var cardColor: String?
@@ -44,6 +45,7 @@ struct InlineCardDraft {
         dueDay: Int? = nil,
         minPayment: Double? = nil,
         graceDays: Int? = nil,
+        note: String? = nil,
         expiryDate: String? = nil,
         cardholderName: String? = nil,
         cardColor: String? = nil,
@@ -63,6 +65,7 @@ struct InlineCardDraft {
         self.dueDay = dueDay
         self.minPayment = minPayment
         self.graceDays = graceDays
+        self.note = note
         self.expiryDate = expiryDate
         self.cardholderName = cardholderName
         self.cardColor = cardColor
@@ -97,6 +100,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     @State private var creditLimitText: String = ""
     @State private var creditDebtText: String = ""
     @State private var minPaymentText: String = ""
+    @State private var noteText: String = ""
     @State private var showsCreditCardTerms = false
     @State private var statementDay = 1
     @State private var dueDay = 20
@@ -145,6 +149,8 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             result.dueDay = dueDay
             result.minPayment = AmountInputFormatter.parse(minPaymentText)
             result.graceDays = graceDays > 0 ? graceDays : nil
+            let trimmedNote = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
+            result.note = trimmedNote.isEmpty ? nil : trimmedNote
         } else {
             if let balance = AmountInputFormatter.parse(balanceText) {
                 result.balance = balance
@@ -225,6 +231,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         .onChange(of: dueDay) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: graceDays) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: minPaymentText) { _, _ in onCardDataChanged(currentCard) }
+        .onChange(of: noteText) { _, _ in onCardDataChanged(currentCard) }
     }
 
     private var presentedForm: some View {
@@ -573,6 +580,10 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                                 .frame(maxWidth: 140)
                         }
                         .padding(16)
+                        FinancesRowDivider(leadingPadding: 16)
+                        TextField(L("accounts_core.detail.sheet.note_placeholder"), text: $noteText, axis: .vertical)
+                            .lineLimit(2...5)
+                            .padding(16)
                     }
                 }
             }

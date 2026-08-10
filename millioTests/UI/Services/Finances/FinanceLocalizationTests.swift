@@ -122,6 +122,31 @@ struct FinanceLocalizationTests {
         #expect(!financesSheets.contains("String(localized: \"finances.savings_goal."))
     }
 
+    @Test("Compact overview не дублирует saldo, а hero содержит donut состава")
+    func compactOverviewKeepsSingleBalanceNumber() throws {
+        let financesView = try String(
+            contentsOf: sourceURL("millio/UI/Services/Finances/FinancesView.swift"),
+            encoding: .utf8
+        )
+        let overviewCardView = try String(
+            contentsOf: sourceURL("millio/UI/Services/Finances/Components/FinanceOverviewCardView.swift"),
+            encoding: .utf8
+        )
+        let compactStart = try #require(
+            overviewCardView.range(of: "private func assetsLiabilitiesStackedBar")
+        )
+        let compactEnd = try #require(
+            overviewCardView.range(
+                of: "private func stackedBarLegend",
+                range: compactStart.upperBound..<overviewCardView.endIndex
+            )
+        )
+        let compactOverview = overviewCardView[compactStart.lowerBound..<compactEnd.lowerBound]
+
+        #expect(!compactOverview.contains("finances.overview.chart.saldo"))
+        #expect(financesView.contains("FinanceBalanceCompositionDonut(presentation: ledgerPresentation)"))
+    }
+
     @Test("Overview и market-data copy локализованы для ru en zh-Hans")
     func overviewAndMarketKeysExistForThreeLanguages() {
         let ru = Locale(identifier: "ru_RU")

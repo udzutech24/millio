@@ -750,7 +750,7 @@ struct AccountDetailView: View {
                     actionButton(expenseActionTitle, icon: "minus.circle.fill") {
                         sheet = .expense
                     }
-                    actionButton(L("accounts_core.detail.action.adjust_balance"), icon: "slider.horizontal.3") {
+                    actionButton(account.productType == .creditCard ? "Изменить сумму долга" : L("accounts_core.detail.action.adjust_balance"), icon: "slider.horizontal.3") {
                         sheet = .adjustBalance
                     }
                     actionButton(L("accounts_core.detail.action.transfer"), icon: "arrow.left.arrow.right") {
@@ -1003,19 +1003,33 @@ struct AccountDetailView: View {
                 }
             )
         case .adjustBalance:
+            let isCreditCard = account.productType == .creditCard
+            let creditLimit = account.cardMeta?.creditLimit ?? 0
+            let debt = max(0, creditLimit - balanceToday)
             AccountAdjustBalanceSheet(
-                currentBalance: balanceToday,
+                currentBalance: isCreditCard ? debt : balanceToday,
+                titleOverride: isCreditCard ? "Изменить сумму долга" : nil,
                 onSave: { newValue in
-                    perform { try service.adjustBalance(account: account, to: newValue) }
+                    perform { try service.adjustBalance(
+                        account: account,
+                        to: isCreditCard
+                            ? CreditCardFinancialContract.rawAvailableBalance(debt: newValue, creditLimit: creditLimit)
+                            : newValue
+                    ) }
                 }
             )
         case .editDetails:
             if account.productType == .creditCard {
-                CreditCardEditSheet(account: account, modelContext: modelContext) { command in
+                CreditCardEditSheet(account: account, modelContext: modelContext, onSave: { command, settings in
                     performEdit {
                         try CreditCardEditorService(modelContext: modelContext).update(account: account, command: command)
+                        CreditCardPaymentSettingsStore().save(settings, accountID: account.id)
+                        Task { await NotificationManager.shared.scheduleCreditCardPaymentReminder(
+                            accountID: account.id, cardName: account.name,
+                            settings: settings, graceDays: account.cardMeta?.graceDays
+                        ) }
                     }
-                }
+                })
             } else if account.productType == .realEstate {
                 RealEstateEditSheet(
                     account: account,

@@ -42,6 +42,7 @@ final class NotificationManager: NotificationManagerProtocol {
     private let defaults: UserDefaults
     private let scheduledReminderIDsKey = "cashflow_scheduled_reminder_ids"
     private static let scheduledReminderIdentifierPrefix = "cashflow_scheduled_reminder"
+    private static let creditCardReminderIdentifierPrefix = "credit_card_payment_reminder"
     
     init(
         notificationCenter: any UserNotificationCenterProtocol = UNUserNotificationCenter.current(),
@@ -178,6 +179,44 @@ final class NotificationManager: NotificationManagerProtocol {
         notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
         notificationCenter.removeDeliveredNotifications(withIdentifiers: identifiers)
         defaults.set([], forKey: scheduledReminderIDsKey)
+    }
+
+    func scheduleCreditCardPaymentReminder(
+        accountID: UUID,
+        cardName: String,
+        settings: CreditCardPaymentSettings,
+        graceDays: Int?
+    ) async {
+        let identifier = Self.creditCardReminderIdentifier(accountID: accountID)
+        cancelCreditCardPaymentReminder(accountID: accountID)
+        guard let fireDate = CreditCardPaymentPolicy.reminderDate(
+            settings: settings, graceDays: graceDays, calendar: calendar
+        ), fireDate > now(), await requestAuthorization() else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = cardName
+        content.body = String(localized: "credit_card.reminder.payment_body", defaultValue: "Скоро платёж по кредитной карте")
+        content.sound = .default
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
+        do {
+            try await notificationCenter.add(UNNotificationRequest(
+                identifier: identifier,
+                content: content,
+                trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            ))
+        } catch {
+            logger.error("Failed to schedule credit-card reminder: \(error.localizedDescription)")
+        }
+    }
+
+    func cancelCreditCardPaymentReminder(accountID: UUID) {
+        let identifiers = [Self.creditCardReminderIdentifier(accountID: accountID)]
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
+        notificationCenter.removeDeliveredNotifications(withIdentifiers: identifiers)
+    }
+
+    static func creditCardReminderIdentifier(accountID: UUID) -> String {
+        "\(creditCardReminderIdentifierPrefix)|\(accountID.uuidString)"
     }
     
     // MARK: - Private Methods

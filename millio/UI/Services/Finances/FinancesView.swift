@@ -480,6 +480,7 @@ struct FinancesMainTabView: View {
     @State private var isHiddenGroupsRowExpanded = false
     @State private var showFinanceSettingsSheet = false
     @State private var showMassTickerImportSheet = false
+    @State private var heroLedgerPresentation: FinanceOverviewLedgerPresentation?
     // Наблюдает за изменениями балансов через SwiftData — гарантирует перерисовку при изменении balance/amount
     @Query private var _allCards: [Card]
 
@@ -594,12 +595,17 @@ struct FinancesMainTabView: View {
             style: .continuous
         )
         return VStack(alignment: .leading, spacing: 0) {
-            totalAmountSection
+            totalAmountSection(
+                ledgerPresentation: hasSnapshot ? heroLedgerPresentation : nil
+            )
 
             if hasSnapshot {
                 FinanceOverviewCardView(
                     financeViewModel: viewModel,
-                    chrome: .embedded
+                    chrome: .embedded,
+                    onLedgerPresentationChange: { presentation in
+                        heroLedgerPresentation = presentation
+                    }
                 )
                 .padding(.top, 10)
             }
@@ -648,7 +654,9 @@ struct FinancesMainTabView: View {
     
     // MARK: - Total Amount Section
     
-    private var totalAmountSection: some View {
+    private func totalAmountSection(
+        ledgerPresentation: FinanceOverviewLedgerPresentation?
+    ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 10) {
@@ -695,16 +703,24 @@ struct FinancesMainTabView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                HStack(spacing: 10) {
-                    headerActionButton(systemName: viewModel.state.isAmountHidden ? "eye.slash" : "eye") {
-                        viewModel.handle(.toggleAmountVisibility)
+                VStack(alignment: .trailing, spacing: 14) {
+                    HStack(spacing: 10) {
+                        headerActionButton(systemName: viewModel.state.isAmountHidden ? "eye.slash" : "eye") {
+                            viewModel.handle(.toggleAmountVisibility)
+                        }
+
+                        headerActionButton(systemName: "gearshape") {
+                            showFinanceSettingsSheet = true
+                        }
+                        .accessibilityLabel(financesLocalized("finances.common.settings"))
                     }
 
-                    headerActionButton(systemName: "gearshape") {
-                        showFinanceSettingsSheet = true
+                    if let ledgerPresentation {
+                        FinanceBalanceCompositionDonut(presentation: ledgerPresentation)
+                            .transition(.opacity.combined(with: .scale(scale: 0.92)))
                     }
-                    .accessibilityLabel(financesLocalized("finances.common.settings"))
                 }
+                .animation(.easeInOut(duration: 0.2), value: ledgerPresentation)
             }
 
             if let warning = viewModel.state.currencyConversionWarning {

@@ -884,7 +884,13 @@ struct FinanceAddAccountView: View {
 
         switch selectedAccountType {
         case .card:
-            return cardData != nil
+            guard let cardData else { return false }
+            if cardData.cardType == .credit {
+                guard let limit = cardData.creditLimit, limit > 0 else { return false }
+                let last4 = cardData.cardNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+                return last4.isEmpty || (last4.count == 4 && last4.allSatisfy(\.isNumber))
+            }
+            return true
         case .credit:
             return creditData != nil
         case .investment:
@@ -1137,7 +1143,8 @@ struct FinanceAddAccountView: View {
                 statementDay: cardData?.statementDay,
                 dueDay: cardData?.dueDay,
                 minPayment: cardData?.minPayment.map { Decimal($0) },
-                graceDays: cardData?.graceDays
+                graceDays: cardData?.graceDays,
+                note: cardData?.note
             ))
             _ = try factory.create(command)
             EventBus.shared.publish(FinanceEvent.investmentsUpdated)

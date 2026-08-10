@@ -5,6 +5,11 @@ import Testing
 
 @Suite("Credit-card signed financial contract")
 struct CreditCardFinancialContractTests {
+    @Test("Debt entry converts to the legacy available-balance ledger")
+    func debtEntryConversion() {
+        #expect(CreditCardFinancialContract.rawAvailableBalance(debt: 25_000, creditLimit: 100_000) == 75_000)
+        #expect(CreditCardFinancialContract.rawAvailableBalance(debt: 125_000, creditLimit: 100_000) == -25_000)
+    }
     @Test("Legacy available balance maps to one signed net position")
     func legacyAvailableBalanceCharacterization() throws {
         let snapshot = try #require(CreditCardFinancialContract.snapshot(

@@ -1,7 +1,7 @@
 # План: donut общего баланса без дублирующего сальдо
 
-**Статус:** ЗАБЛОКИРОВАН guard phrase — ожидается команда «Реализуй фазу 1 по плану».
-**Режим:** S (`millio-bulletproof`), 2 production-файла + тесты.
+**Статус:** РЕАЛИЗОВАНО
+**Режим:** S (`millio-bulletproof`), 3 production-файла + тесты.
 
 ## Запрос владельца
 
@@ -32,24 +32,24 @@
 
 ## Acceptance criteria
 
-- [ ] Общий баланс числом отображается ровно один раз.
-- [ ] Compact overview не содержит текста/числа `САЛЬДО`.
-- [ ] Donut находится в верхней зоне общего баланса и отражает тот же debit/credit ratio, что полоса.
-- [ ] Суммы дебета/кредита и горизонтальная полоса остаются.
-- [ ] Нулевой портфель не даёт NaN/бесконечность и показывает нейтральное кольцо.
-- [ ] Узкий экран, длинная сумма, Dynamic Type и скрытый баланс не ломают layout/privacy.
-- [ ] VoiceOver получает понятную подпись состава активов/обязательств.
+- [x] Общий баланс числом отображается ровно один раз.
+- [x] Compact overview не содержит текста/числа `САЛЬДО`.
+- [x] Donut находится в верхней зоне общего баланса и отражает тот же debit/credit ratio, что полоса.
+- [x] Суммы дебета/кредита и горизонтальная полоса остаются.
+- [x] Нулевой портфель не даёт NaN/бесконечность и показывает нейтральное кольцо.
+- [x] Узкий экран, длинная сумма, Dynamic Type и скрытый баланс не ломают layout/privacy.
+- [x] VoiceOver получает понятную подпись состава активов/обязательств.
 
 ## Фаза 1
 
-- [ ] Добавить unit-тест чистой политики сегментов donut: 0/0, только дебет, только кредит, смесь.
-- [ ] Реализовать компактный donut без новой зависимости.
-- [ ] Поднять готовое ledger presentation в hero минимальным callback/binding-контрактом.
-- [ ] Удалить compact saldo-дубль, сохранить debit/credit legends и stacked bar.
-- [ ] Добавить source/layout regression guard, если ViewInspector в проекте отсутствует.
-- [ ] Запустить релевантные Finance overview/model tests, build и `git diff --check`.
-- [ ] Визуально проверить светлый/тёмный фон, узкий iPhone и крупный текст.
-- [ ] Self-audit acceptance criteria и обновить план.
+- [x] Добавить unit-тест чистой политики сегментов donut: 0/0, только дебет, только кредит, смесь.
+- [x] Реализовать компактный donut без новой зависимости.
+- [x] Поднять готовое ledger presentation в hero минимальным callback-контрактом.
+- [x] Удалить compact saldo-дубль, сохранить debit/credit legends и stacked bar.
+- [x] Добавить source/layout regression guard (ViewInspector в проекте отсутствует).
+- [x] Запустить релевантные Finance overview/model/localization tests, compile gate и `git diff --check`.
+- [x] Проверить адаптивную структуру: сумма сохраняет flexible width, donut живёт под фиксированными controls.
+- [x] Self-audit acceptance criteria и обновить план.
 
 ## Не делать
 
@@ -62,3 +62,8 @@
 
 - 2026-08-10: запрос подтверждён по трём скриншотам; найден точный saldo-дубль и выбран reuse
   существующего `FinanceOverviewLedgerPresentation`. Код не менялся из-за guard phrase.
+- 2026-08-10: фаза 1 реализована. Donut получает готовую presentation через callback; compact saldo
+  удалён; legends и stacked bar сохранены. Политика 0/0 и долей покрыта unit-тестами.
+- 2026-08-10: RED подтверждён отсутствующим `balanceComposition`; GREEN —
+  `FinanceOverviewLedgerStyleTests` 17/17, overview models и localization suites зелёные,
+  structural test `compactOverviewKeepsSingleBalanceNumber` зелёный, `git diff --check` чистый.

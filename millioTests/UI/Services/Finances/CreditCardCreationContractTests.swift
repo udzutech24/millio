@@ -19,7 +19,8 @@ struct CreditCardCreationContractTests {
             statementDay: 5,
             dueDay: 25,
             minPayment: 2_000,
-            graceDays: 60
+            graceDays: 60,
+            note: "Travel"
         ))
         #expect(command.productType == .creditCard)
         #expect(command.includeInTotal == false)
@@ -29,5 +30,22 @@ struct CreditCardCreationContractTests {
         #expect(command.metadata.card?.dueDay == 25)
         #expect(command.metadata.card?.minPayment == 2_000)
         #expect(command.metadata.card?.graceDays == 60)
+        #expect(command.note == "Travel")
+    }
+
+    @Test("Creation rejects malformed last4 and invalid terms")
+    func invalidInputs() {
+        #expect(throws: FinanceProductCreationCommandError.invalidCardLast4) {
+            try FinanceProductCreationCommandResolver.resolve(.init(
+                option: .card, name: "Card", currency: "RUB", amount: 0,
+                cardType: .credit, cardLast4: "12A4", creditLimit: 100_000
+            ))
+        }
+        #expect(throws: FinanceProductCreationCommandError.invalidCardTerms) {
+            try FinanceProductCreationCommandResolver.resolve(.init(
+                option: .card, name: "Card", currency: "RUB", amount: 0,
+                cardType: .credit, creditLimit: 100_000, dueDay: 32
+            ))
+        }
     }
 }

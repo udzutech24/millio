@@ -4,7 +4,7 @@ import SwiftUI
 struct CreditCardEditSheet: View {
     let account: Account
     let modelContext: ModelContext
-    let onSave: (CreditCardEditCommand) -> Void
+    let onSave: (CreditCardEditCommand, CreditCardPaymentSettings) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
@@ -19,8 +19,13 @@ struct CreditCardEditSheet: View {
     @State private var includeInTotal: Bool
     @State private var groupID: UUID?
     @State private var showsAdditional = false
+    @State private var paymentSettings: CreditCardPaymentSettings
 
-    init(account: Account, modelContext: ModelContext, onSave: @escaping (CreditCardEditCommand) -> Void) {
+    init(
+        account: Account,
+        modelContext: ModelContext,
+        onSave: @escaping (CreditCardEditCommand, CreditCardPaymentSettings) -> Void
+    ) {
         self.account = account
         self.modelContext = modelContext
         self.onSave = onSave
@@ -28,22 +33,23 @@ struct CreditCardEditSheet: View {
         _name = State(initialValue: account.name)
         _bank = State(initialValue: meta?.bank ?? "")
         _last4 = State(initialValue: meta?.last4 ?? "")
-        _limit = State(initialValue: meta?.creditLimit.map { "\($0)" } ?? "")
-        _minimumPayment = State(initialValue: meta?.minPayment.map { "\($0)" } ?? "")
+        _limit = State(initialValue: meta?.creditLimit.map { NSDecimalNumber(decimal: $0).stringValue } ?? "")
+        _minimumPayment = State(initialValue: meta?.minPayment.map { NSDecimalNumber(decimal: $0).stringValue } ?? "")
         _note = State(initialValue: account.note ?? "")
         _statementDay = State(initialValue: meta?.statementDay ?? 1)
         _dueDay = State(initialValue: meta?.dueDay ?? 20)
         _graceDays = State(initialValue: meta?.graceDays ?? 0)
         _includeInTotal = State(initialValue: account.includeInTotal)
         _groupID = State(initialValue: account.group?.id)
+        _paymentSettings = State(initialValue: CreditCardPaymentSettingsStore().load(accountID: account.id) ?? .init())
     }
 
     private var groups: [AccountGroup] {
         (try? modelContext.fetch(FetchDescriptor<AccountGroup>(sortBy: [SortDescriptor(\.order)]))) ?? []
     }
-    private var parsedLimit: Decimal? { Decimal(string: limit.replacingOccurrences(of: ",", with: ".")) }
+    private var parsedLimit: Decimal? { Decimal(string: AmountInputFormatter.sanitize(limit)) }
     private var parsedMinimum: Decimal? {
-        minimumPayment.isEmpty ? nil : Decimal(string: minimumPayment.replacingOccurrences(of: ",", with: "."))
+        minimumPayment.isEmpty ? nil : Decimal(string: AmountInputFormatter.sanitize(minimumPayment))
     }
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && (parsedLimit ?? 0) > 0 &&
@@ -65,14 +71,38 @@ struct CreditCardEditSheet: View {
                             ForEach(groups, id: \.id) { Text($0.name).tag(Optional($0.id)) }
                         }
                     }
-                    section("Limit and terms") {
-                        TextField(L("finances.add_account.card.credit_limit"), text: $limit).keyboardType(.decimalPad)
-                        Divider(); Stepper("Grace period: \(graceDays)", value: $graceDays, in: 0...365)
+                    section("Лимит и условия") {
+                        HStack { Text(L("finances.add_account.card.credit_limit")); Spacer(); AmountTextField(placeholder: "0", value: $limit).multilineTextAlignment(.trailing) }
+                        Divider(); Stepper("Отсрочка: \(graceDays) дн.", value: $graceDays, in: 0...365)
                     }
                     section(L("finances.add_account.credit.payment.section")) {
                         Stepper("Statement day: \(statementDay)", value: $statementDay, in: 1...31)
                         Divider(); Stepper("Payment day: \(dueDay)", value: $dueDay, in: 1...31)
-                        Divider(); TextField(L("finances.add_account.credit.monthly_payment"), text: $minimumPayment).keyboardType(.decimalPad)
+                        Divider(); HStack { Text(L("finances.add_account.credit.monthly_payment")); Spacer(); AmountTextField(placeholder: "0", value: $minimumPayment).multilineTextAlignment(.trailing) }
+                    }
+                    section("Дата платежа и напоминание") {
+                        Picker("Дата платежа", selection: $paymentSettings.mode) {
+                            Text("По отсрочке").tag(CreditCardPaymentDateMode.gracePeriod)
+                            Text("Точная дата").tag(CreditCardPaymentDateMode.exactDate)
+                        }.pickerStyle(.segmented)
+                        Divider()
+                        DatePicker(
+                            paymentSettings.mode == .gracePeriod ? "Дата начала" : "Дата платежа",
+                            selection: paymentSettings.mode == .gracePeriod ? $paymentSettings.anchorDate : $paymentSettings.exactDate,
+                            displayedComponents: .date
+                        )
+                        Divider()
+                        Picker("Напомнить", selection: $paymentSettings.reminderLead) {
+                            Text("Выкл.").tag(CreditCardReminderLead.none)
+                            Text("В день платежа").tag(CreditCardReminderLead.dayOf)
+                            Text("За 1 день").tag(CreditCardReminderLead.oneDay)
+                            Text("За 3 дня").tag(CreditCardReminderLead.threeDays)
+                            Text("За 7 дней").tag(CreditCardReminderLead.sevenDays)
+                        }
+                        if paymentSettings.reminderLead != .none {
+                            Divider()
+                            DatePicker("Время напоминания", selection: reminderTimeBinding, displayedComponents: .hourAndMinute)
+                        }
                     }
                     section("Accounting") {
                         Toggle(L("finances.add_account.total_impact.include"), isOn: $includeInTotal).tint(AppColors.toggleOnGreen)
@@ -121,6 +151,19 @@ struct CreditCardEditSheet: View {
             dueDay: dueDay,
             minPayment: parsedMinimum,
             graceDays: graceDays == 0 ? nil : graceDays
-        ))
+        ), paymentSettings)
+    }
+
+    private var reminderTimeBinding: Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.date(from: DateComponents(hour: paymentSettings.reminderHour, minute: paymentSettings.reminderMinute)) ?? Date()
+            },
+            set: {
+                let components = Calendar.current.dateComponents([.hour, .minute], from: $0)
+                paymentSettings.reminderHour = components.hour ?? 10
+                paymentSettings.reminderMinute = components.minute ?? 0
+            }
+        )
     }
 }

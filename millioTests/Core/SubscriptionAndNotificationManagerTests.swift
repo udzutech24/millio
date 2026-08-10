@@ -189,6 +189,37 @@ struct NotificationManagerTests {
         components.minute = 0
         return calendar.date(from: components)!
     }
+
+    @Test("Credit-card reminder reuses NotificationManager with an exact one-time trigger")
+    func creditCardPaymentReminder() async throws {
+        let center = FakeNotificationCenter()
+        let calendar = makeCalendarUTC()
+        let accountID = UUID()
+        var settings = CreditCardPaymentSettings()
+        settings.mode = .exactDate
+        settings.exactDate = makeDate(month: 2, day: 20)
+        settings.reminderLead = .threeDays
+        settings.reminderHour = 9
+        settings.reminderMinute = 15
+        let manager = NotificationManager(
+            notificationCenter: center,
+            now: { self.makeDate(month: 2, day: 1) },
+            calendar: calendar,
+            languageProvider: { .russian }
+        )
+
+        await manager.scheduleCreditCardPaymentReminder(
+            accountID: accountID, cardName: "Card", settings: settings, graceDays: nil
+        )
+
+        let request = try #require(center.addedRequests.first)
+        #expect(request.identifier == NotificationManager.creditCardReminderIdentifier(accountID: accountID))
+        let trigger = try #require(request.trigger as? UNCalendarNotificationTrigger)
+        #expect(trigger.repeats == false)
+        #expect(trigger.dateComponents.day == 17)
+        #expect(trigger.dateComponents.hour == 9)
+        #expect(trigger.dateComponents.minute == 15)
+    }
     
     @Test("scheduleDailyReminder добавляет ежедневный UNNotificationRequest при авторизации")
     func testScheduleDailyReminderAddsRequestWhenAuthorized() async {

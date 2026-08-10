@@ -23,6 +23,11 @@ enum CreditCardFinancialContract {
         rawAvailableBalance - creditLimit
     }
 
+    /// Converts the debt amount entered by the user back to the persisted available-balance ledger.
+    static func rawAvailableBalance(debt: Decimal, creditLimit: Decimal) -> Decimal {
+        creditLimit - max(0, debt)
+    }
+
     static func snapshot(
         rawAvailableBalance: Decimal,
         creditLimit: Decimal,

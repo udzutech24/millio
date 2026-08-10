@@ -13,6 +13,13 @@ struct CreditCardDetailSection: View {
         )
     }
 
+    private var paymentStatus: CreditCardPaymentStatus? {
+        guard let settings = CreditCardPaymentSettingsStore().load(accountID: account.id) else { return nil }
+        return CreditCardPaymentPolicy.status(
+            settings: settings, graceDays: account.cardMeta?.graceDays, now: Date(), calendar: .current
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.m) {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
@@ -50,6 +57,21 @@ struct CreditCardDetailSection: View {
                 .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.iconBackground))
             } else {
                 ContentUnavailableView("Credit terms unavailable", systemImage: "creditcard.trianglebadge.exclamationmark")
+            }
+
+            if let paymentStatus {
+                VStack(alignment: .leading, spacing: AppSpacing.s) {
+                    Label(paymentStatus.isOverdue ? "Платёж просрочен" : "Ближайший платёж", systemImage: paymentStatus.isOverdue ? "exclamationmark.triangle.fill" : "calendar.badge.clock")
+                        .font(.millioHeadline)
+                        .foregroundStyle(paymentStatus.isOverdue ? AppColors.error : AppColors.textPrimary)
+                    adaptiveRow("Дата платежа", value: paymentStatus.dueDate.formatted(date: .long, time: .omitted))
+                    Text(paymentStatus.isOverdue ? "Просрочено на \(-paymentStatus.daysRemaining) дн." : "Осталось \(paymentStatus.daysRemaining) дн.")
+                        .font(.millioCalloutRegular).foregroundStyle(AppColors.textSecondary)
+                }
+                .padding(AppSpacing.m)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppSpacing.m))
+            } else {
+                ContentUnavailableView("Дата платежа не настроена", systemImage: "calendar.badge.exclamationmark")
             }
         }
     }

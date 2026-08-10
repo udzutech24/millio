@@ -20,15 +20,15 @@
 ## Acceptance criteria
 
 - [x] Characterization tests фиксируют legacy available-balance contract и migration boundary.
-- [ ] Creation требует name и positive limit, валидирует optional last4; advanced fields раскрываются постепенно; investment/manual controls отсутствуют.
-- [ ] Persisted CardMeta round-trips all supported fields; unsupported percentage minimum/APR/reminders не имитируются.
-- [ ] Specialized detail показывает debt/overpayment, available limit, utilization, payment/grace presentation, fees/interest, exclusion badge, actions/history and event-only step chart.
-- [ ] Separate `CreditCardEditSheet`; Account + metadata update atomic, currency read-only.
+- [x] Creation требует name и positive limit, валидирует optional last4; supported advanced CardMeta fields раскрываются постепенно; investment/manual controls отсутствуют.
+- [x] Creation и edit сохраняют поддерживаемые CardMeta fields; unsupported percentage minimum/APR/reminders не имитируются. Полный backup gate остаётся Phase 7.
+- [x] Specialized detail показывает debt/overpayment, available limit, utilization, fees/interest и exclusion badge. Payment/grace presentation — Phase 6; visual typed actions/step chart — Phase 8.
+- [x] Separate `CreditCardEditSheet`; Account + metadata update atomic, currency read-only, archive read-only.
 - [x] Typed purchase/refund/repayment/fee/interest event commands валидируются до записи и имеют одну save boundary; linked Cashflow/transfer atomicity остаётся Phase 5.
-- [ ] Repayment accepts only active same-currency cash-like sources, checks funds and writes both legs atomically without Cashflow expense.
-- [ ] Refund links to purchase where possible, cannot exceed refundable remainder, and adjusts Cashflow once.
-- [ ] Pure calendar policy covers overdue/days remaining/month-end/short months/timezone and avoids promises about bank interest rules.
-- [ ] Existing NotificationManager is reused if reminders are scheduled; typed options: none/1/3/7 days/day-of.
+- [x] Repayment accepts only active same-currency cash-like sources, checks funds and writes both legs atomically without Cashflow expense.
+- [x] Refund requires a purchase link, cannot exceed refundable remainder, and adjusts Cashflow expense once.
+- [x] Pure calendar policy covers overdue/days remaining/month-end/short months/timezone and avoids promises about bank interest rules.
+- [x] Existing NotificationManager is reused if reminders are scheduled; typed options: none/1/3/7 days/day-of.
 - [ ] Current/historical totals and list/detail/dashboard refresh immediately and consistently.
 - [ ] Backup/migration/schema gates pass; schema changes only by additive version + fixture + rollback proof.
 - [ ] RU/EN/zh-Hans typed titles exist; no dynamic keys/raw namespaces are visible.

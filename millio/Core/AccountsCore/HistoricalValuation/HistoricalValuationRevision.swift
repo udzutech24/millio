@@ -58,6 +58,7 @@ enum HistoricalValuationWriterInventory {
     static let entries: [HistoricalValuationWriterInventoryEntry] = [
         entry("core-create", "millio/Core/AccountsCore/AccountsCoreService.swift", "createAccount", [.accountSet, .financial, .events]),
         entry("core-events", "millio/Core/AccountsCore/AccountsCoreService.swift", "recordEvent/adjustBalance/buy/sell/revalue/upsertEvent/upsertInterestEvent/transfer/deleteEvent/updateEvent", [.events]),
+        entry("credit-card-operations", "millio/Core/AccountsCore/CreditCard/CreditCardOperationCoordinator.swift", "record/repay", [.events]),
         entry("core-lifecycle", "millio/Core/AccountsCore/AccountsCoreService.swift", "archiveAccount/restoreAccount/softDelete/physicallyDelete", [.accountSet, .events]),
         entry("core-meta", "millio/Core/AccountsCore/AccountsCoreService.swift", "updateAccount", [.accountSet, .financial]),
         entry("deposit-generated-events", "millio/Core/AccountsCore/DepositInterestScheduler.swift", "generate/deleteGeneratedInterestEvents", [.events]),
