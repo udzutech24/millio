@@ -67,7 +67,8 @@ struct FinanceDynamicsState {
     var currentBalance: Double = 0.0
     
     /// Дельта за период (абсолютная и процентная)
-    var periodDelta: (absolute: Double, percent: Double) = (0.0, 0.0)
+    /// `nil` percent means the baseline is financially zero while the absolute delta is non-zero.
+    var periodDelta: (absolute: Double, percent: Double?) = (0.0, 0.0)
     
     /// Начало периода
     var periodStartDate: Date = Date()
@@ -148,6 +149,15 @@ struct DynamicsSeries {
     let points: [ChartDataPoint]
 }
 
+/// One immutable result of a historical request. It is committed only after the request revision
+/// is still current, so chart pixels and every series-derived consumer cannot observe different
+/// bundles when requests finish out of order.
+private struct HistoricalDynamicsProjection {
+    let bundle: HistoricalPortfolioSeriesResult
+    let chartPoints: [ChartDataPoint]
+    let shadowDeltaBucket: HistoricalPortfolioShadowDeltaBucket?
+}
+
 // MARK: - Dynamics Mode
 
 enum DynamicsMode: Equatable {
@@ -179,7 +189,7 @@ struct DynamicsBreakdownItem: Identifiable {
     let startValue: Double
     let endValue: Double
     let delta: Double
-    let deltaPercent: Double
+    let deltaPercent: Double?
     let icon: String?
     let accountType: FinanceAccountType?
     let isCreditCard: Bool
@@ -244,6 +254,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private(set) var historicalPortfolioSeries: HistoricalPortfolioSeriesResult?
     private(set) var historicalShadowDeltaBucket: HistoricalPortfolioShadowDeltaBucket?
     private let historicalReaderMode: HistoricalPortfolioReaderMode
+    private let historicalSeriesLoader: ((HistoricalPortfolioSeriesQuery) async -> HistoricalPortfolioSeriesResult)?
     private lazy var legacyHistoricalValuator = LegacyHistoricalValuator(
         modelContext: modelContext,
         currencyService: currencyService,
@@ -271,13 +282,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         initialAccountID: String? = nil,
         initialAccountCurrency: String? = nil,
         currencyService: CurrencyRateServiceProtocol,
-        historicalReaderMode: HistoricalPortfolioReaderMode? = nil
+        historicalReaderMode: HistoricalPortfolioReaderMode? = nil,
+        historicalSeriesLoader: ((HistoricalPortfolioSeriesQuery) async -> HistoricalPortfolioSeriesResult)? = nil
     ) {
         self.modelContext = modelContext
         self.financeViewModel = financeViewModel
         self.currencyService = currencyService
         self.historicalReaderMode = historicalReaderMode
             ?? HistoricalPortfolioReaderConfiguration.current(defaults: UserDefaults.standard).mode
+        self.historicalSeriesLoader = historicalSeriesLoader
         self.historicalRateStore = HistoricalRateStore(modelContext: modelContext, currencyService: currencyService)
         
         // Если передан initialAccountID, устанавливаем его как выбранный счет и включаем режим одного счета
@@ -869,21 +882,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 state.currencyConversionWarning = L("finances.dynamics.warning.history_incomplete")
                 return
             }
-            let first = series.points.first
-            let selected = selectedDate.flatMap { series.point(nearestTo: $0) } ?? series.points.last
-            if let startTotal = first?.valuation.total,
-               let selectedTotal = selected?.valuation.total {
-                let start = NSDecimalNumber(decimal: startTotal).doubleValue
-                let current = NSDecimalNumber(decimal: selectedTotal).doubleValue
-                state.currentBalance = current
-                let delta = current - start
-                state.periodDelta = (delta, calculateDeltaPercent(delta: delta, startBalance: start))
-                state.currencyConversionWarning = nil
-            } else {
-                // Preserve the last visibly labelled value. A diagnostic subtotal or synthetic zero
-                // would be mathematically false; no legacy replay is allowed as a hidden fallback.
-                state.currencyConversionWarning = L("finances.dynamics.warning.history_incomplete")
-            }
+            // Selection is a pure projection of the already committed bundle. No replay or second
+            // producer request is allowed here.
+            applyStructuredHero(from: series, selectedDate: selectedDate)
             return
         }
 
@@ -1335,25 +1336,58 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 isCreditCard: account.kind == .loan,
                 isArchived: false
             )
-            // Группа core-счёта (`AccountGroup`) связана с легаси `FinanceGroup` по имени — так же матчит
-            // `newCoreAccounts(matching:)`. Резолвим в `groupUniqueID`, чтобы агрегация шла по строкам
-            // state.groups. Псевдогруппу «Без группы» и нераспознанное имя нормализуем в nil (одна ungrouped-строка).
-            let coreGroupName = account.group?.name
-            let groupUniqueID: String? = {
-                guard let coreGroupName, coreGroupName != ungroupedName else { return nil }
-                return state.groups.first(where: { $0.name == coreGroupName })?.groupUniqueID
-            }()
-            rows.append(DynamicsAccountRow(item: item, groupUniqueID: groupUniqueID))
+            // Core identity is preserved directly. Display names are not keys: two unrelated
+            // core/legacy groups may legitimately have the same name.
+            let groupID: DynamicsPresentationGroupID? = account.group.flatMap { group in
+                group.name == ungroupedName ? nil : .core(group.id)
+            }
+            rows.append(DynamicsAccountRow(item: item, groupID: groupID))
         }
         return rows
     }
 
     /// Per-account строка динамики + принадлежность к группе (`nil` → «Без группы»).
     /// Единый промежуточный тип: вкладка «Счета» отдаёт `item` как есть, вкладка «Группы»
-    /// агрегирует те же строки по `groupUniqueID` — один расчёт, инвариант Total(Groups)==Total(Accounts).
+    /// агрегирует те же строки по typed group identity — один расчёт,
+    /// инвариант Total(Groups)==Total(Accounts).
     private struct DynamicsAccountRow {
         let item: DynamicsBreakdownItem
-        let groupUniqueID: String?
+        let groupID: DynamicsPresentationGroupID?
+    }
+
+    private enum DynamicsPresentationGroupID: Hashable {
+        case core(UUID)
+        case legacy(String)
+    }
+
+    private struct DynamicsPresentationGroup {
+        let identity: DynamicsPresentationGroupID
+        let presentationID: String
+        let name: String
+    }
+
+    /// Groups are presentation metadata. Core and legacy identities stay distinct even when their
+    /// labels match; this prevents core-only rows from falling into Ungrouped or disappearing.
+    private func presentationGroups() -> [DynamicsPresentationGroup] {
+        let coreGroups = ((try? modelContext.fetch(FetchDescriptor<AccountGroup>())) ?? [])
+            .sorted { lhs, rhs in
+                lhs.order == rhs.order ? lhs.name < rhs.name : lhs.order < rhs.order
+            }
+            .map {
+                DynamicsPresentationGroup(
+                    identity: .core($0.id),
+                    presentationID: $0.id.uuidString,
+                    name: $0.name
+                )
+            }
+        let legacyGroups = state.groups.map {
+            DynamicsPresentationGroup(
+                identity: .legacy($0.groupUniqueID),
+                presentationID: $0.groupUniqueID,
+                name: $0.name
+            )
+        }
+        return coreGroups + legacyGroups
     }
 
     /// Карта легаси-счёт → группа (`accountUniqueID` → `groupUniqueID`). Псевдогруппу «Без группы»
@@ -1484,7 +1518,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let groupMap = legacyAccountGroupMap()
         return accountsData.compactMap { data -> DynamicsAccountRow? in
             guard let item = orderedItems[data.0] else { return nil }
-            return DynamicsAccountRow(item: item, groupUniqueID: groupMap[data.1])
+            return DynamicsAccountRow(
+                item: item,
+                groupID: groupMap[data.1].map(DynamicsPresentationGroupID.legacy)
+            )
         }
     }
 
@@ -1494,11 +1531,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     /// ровно одна; порядок групп — как в `state.groups`.
     private func aggregateGroupRows(
         from rows: [DynamicsAccountRow],
-        groupsToShow: [FinanceGroup],
+        groupsToShow: [DynamicsPresentationGroup],
         includeUngrouped: Bool
     ) -> [DynamicsBreakdownItem] {
-        var groupStart: [String: Double] = [:]
-        var groupEnd: [String: Double] = [:]
+        var groupStart: [DynamicsPresentationGroupID: Double] = [:]
+        var groupEnd: [DynamicsPresentationGroupID: Double] = [:]
         var ungroupedStart = 0.0
         var ungroupedEnd = 0.0
         var hasUngrouped = false
@@ -1506,7 +1543,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         for row in rows {
             let start = FinanceDynamicsPresentation.signedAccountValue(row.item.startValue, for: row.item)
             let end = FinanceDynamicsPresentation.signedAccountValue(row.item.endValue, for: row.item)
-            if let groupID = row.groupUniqueID {
+            if let groupID = row.groupID {
                 groupStart[groupID, default: 0] += start
                 groupEnd[groupID, default: 0] += end
             } else {
@@ -1518,11 +1555,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
 
         var result: [DynamicsBreakdownItem] = []
         for group in groupsToShow {
-            guard let start = groupStart[group.groupUniqueID] else { continue }
-            let end = groupEnd[group.groupUniqueID] ?? 0
+            guard let start = groupStart[group.identity] else { continue }
+            let end = groupEnd[group.identity] ?? 0
             let delta = end - start
             result.append(DynamicsBreakdownItem(
-                id: group.groupUniqueID,
+                id: group.presentationID,
                 name: group.name,
                 startValue: start,
                 endValue: end,
@@ -1570,8 +1607,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let viewMode = state.viewMode
         let selectedGroupIDs = state.selectedGroupIDs
         let selectedAccountIDs = state.selectedAccountIDs
-        let groups = state.groups
-
         // ЕДИНЫЙ ИСТОЧНИК: per-account строки считаются один раз (легаси + core). Вкладка «Счета»
         // отдаёт их как есть, вкладка «Группы» агрегирует те же строки по группам. Это гарантирует
         // Total(Groups) == Total(Accounts) и устраняет тройной Ungrouped (был второй расчёт в .groups).
@@ -1586,9 +1621,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         case .groups:
             // Агрегируем per-account строки по группам (никакого второго расчёта). Порядок групп — как в
             // state.groups; Ungrouped-строка ровно одна и только когда фильтр по группам не активен.
-            let groupsToShow = selectedGroupIDs.isEmpty
-                ? groups
-                : groups.filter { selectedGroupIDs.contains($0.groupUniqueID) }
+            let groupsToShow = presentationGroups().filter {
+                selectedGroupIDs.isEmpty || selectedGroupIDs.contains($0.presentationID)
+            }
             breakdown = aggregateGroupRows(
                 from: rows,
                 groupsToShow: groupsToShow,
@@ -1608,12 +1643,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private func structuredDynamicsBreakdown(
         from series: HistoricalPortfolioSeriesResult
     ) -> [DynamicsBreakdownItem] {
-        guard let first = series.points.first,
-              let last = series.points.last,
-              first.valuation.total != nil,
-              last.valuation.total != nil else {
+        guard let endpoints = structuredVisibleEndpoints(in: series) else {
             return []
         }
+        let first = endpoints.first
+        let last = endpoints.last
         let descriptors = structuredAccountDescriptors()
         let startByID = Dictionary(uniqueKeysWithValues: first.accountContributions.compactMap { contribution in
             contribution.value.map { value in (contribution.opaqueAccountID, value) }
@@ -1623,12 +1657,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         })
         let contributionIDs = Set(startByID.keys).union(endByID.keys)
         let rows: [DynamicsAccountRow] = contributionIDs.sorted().compactMap { id in
-            guard let startValue = startByID[id],
-                  let endValue = endByID[id] else { return nil }
+            let startValue = startByID[id] ?? 0
+            let endValue = endByID[id] ?? 0
             let descriptor = descriptors[id] ?? StructuredAccountDescriptor(
                 name: L("finances.dynamics.chart.account_fallback"),
                 currency: state.displayCurrency,
-                groupUniqueID: nil,
+                groupID: nil,
                 icon: nil,
                 accountType: nil,
                 isLiability: false,
@@ -1650,16 +1684,16 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     isCreditCard: descriptor.isLiability,
                     isArchived: descriptor.isArchived
                 ),
-                groupUniqueID: descriptor.groupUniqueID
+                groupID: descriptor.groupID
             )
         }
         switch state.viewMode {
         case .accounts:
             return rows.map(\.item)
         case .groups:
-            let groups = state.selectedGroupIDs.isEmpty
-                ? state.groups
-                : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
+            let groups = presentationGroups().filter {
+                state.selectedGroupIDs.isEmpty || state.selectedGroupIDs.contains($0.presentationID)
+            }
             return aggregateGroupRows(
                 from: rows,
                 groupsToShow: groups,
@@ -1674,13 +1708,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private func structuredAccountDescriptors() -> [String: StructuredAccountDescriptor] {
         let coreAccounts = (try? modelContext.fetch(FetchDescriptor<Account>())) ?? []
         var result = Dictionary(uniqueKeysWithValues: coreAccounts.map { account in
-            let groupID = account.group.flatMap { group in
-                state.groups.first(where: { $0.name == group.name })?.groupUniqueID
-            }
+            let groupID = account.group.map { DynamicsPresentationGroupID.core($0.id) }
             return (account.id.uuidString, StructuredAccountDescriptor(
                 name: account.name,
                 currency: account.currency,
-                groupUniqueID: groupID,
+                groupID: groupID,
                 icon: account.kind.fallbackIconName,
                 accountType: nil,
                 isLiability: account.kind == .loan,
@@ -1714,7 +1746,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             result[account.accountUniqueID] = StructuredAccountDescriptor(
                 name: name,
                 currency: currency,
-                groupUniqueID: groupByAccountID[account.accountUniqueID],
+                groupID: groupByAccountID[account.accountUniqueID].map(DynamicsPresentationGroupID.legacy),
                 icon: nil,
                 accountType: account.accountType,
                 isLiability: isLiability,
@@ -1727,7 +1759,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private struct StructuredAccountDescriptor {
         let name: String
         let currency: String
-        let groupUniqueID: String?
+        let groupID: DynamicsPresentationGroupID?
         let icon: String?
         let accountType: FinanceAccountType?
         let isLiability: Bool
@@ -1792,12 +1824,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 historicalDateSkeleton(period: period)
             }
             guard isCurrentChartUpdateRevision(revision) else { return }
-            let structuredSeries = await historicalAggregatedSeries(
+            let projection = await historicalAggregatedSeries(
                 period: period,
                 compatibilitySeries: compatibilitySeries
             )
             guard isCurrentChartUpdateRevision(revision) else { return }
-            state.chartData = structuredSeries.points
+            commitHistoricalProjection(projection)
 
         case .byAccounts:
             // Каждый счет - отдельная линия
@@ -1823,14 +1855,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 allDataPoints = historicalDateSkeleton(period: period).points
             }
             guard isCurrentChartUpdateRevision(revision) else { return }
-            let structuredSeries = await historicalScopedSeries(
+            let projection = await historicalScopedSeries(
                 period: period,
                 compatibilitySeries: DynamicsSeries(points: allDataPoints),
                 accountIDs: scopedCoreAccountIDs(),
                 singleAccountID: nil
             )
             guard isCurrentChartUpdateRevision(revision) else { return }
-            state.chartData = structuredSeries.points
+            commitHistoricalProjection(projection)
 
         case .singleAccount(let accountID):
             // Один выбранный счет
@@ -1853,17 +1885,20 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 }
                 guard isCurrentChartUpdateRevision(revision) else { return }
                 let coreID = coreAccountID(forVisibleAccountID: accountID)
-                let structuredSeries = await historicalScopedSeries(
+                let projection = await historicalScopedSeries(
                     period: period,
                     compatibilitySeries: DynamicsSeries(points: chartData),
                     accountIDs: coreID.map { Set([$0]) } ?? [],
                     singleAccountID: coreID
                 )
                 guard isCurrentChartUpdateRevision(revision) else { return }
-                state.chartData = structuredSeries.points
+                commitHistoricalProjection(projection)
             } else {
                 guard isCurrentChartUpdateRevision(revision) else { return }
+                historicalPortfolioSeries = nil
+                historicalShadowDeltaBucket = nil
                 state.chartData = []
+                state.dynamicsBreakdown = []
             }
         }
     }
@@ -1886,7 +1921,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private func historicalAggregatedSeries(
         period: (start: Date, end: Date),
         compatibilitySeries: DynamicsSeries
-    ) async -> DynamicsSeries {
+    ) async -> HistoricalDynamicsProjection {
         await historicalScopedSeries(
             period: period,
             compatibilitySeries: compatibilitySeries,
@@ -1902,7 +1937,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         accountIDs: Set<UUID>?,
         singleAccountID: UUID?,
         projectsAccountLines: Bool = true
-    ) async -> DynamicsSeries {
+    ) async -> HistoricalDynamicsProjection {
         let query = HistoricalPortfolioSeriesQuery(
             period: DateInterval(start: period.start, end: period.end),
             timeZoneID: TimeZone.current.identifier,
@@ -1916,20 +1951,25 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             valuationPolicyVersion: 1,
             unresolvedExternalAccountIDs: unresolvedLegacyAccountIDs()
         )
-        let result = await HistoricalPortfolioSeriesProducer(
-            valuator: financeViewModel.accountsTotalsService,
-            scopeID: financeViewModel.historicalValuationScopeID,
-            closeStore: HistoricalValuationCloseStore(modelContainer: modelContext.container),
-            externalCoverage: legacyHistoricalValuator
-        ).series(for: query)
-        historicalPortfolioSeries = result
+        let result: HistoricalPortfolioSeriesResult
+        if let historicalSeriesLoader {
+            result = await historicalSeriesLoader(query)
+        } else {
+            result = await HistoricalPortfolioSeriesProducer(
+                valuator: financeViewModel.accountsTotalsService,
+                scopeID: financeViewModel.historicalValuationScopeID,
+                closeStore: HistoricalValuationCloseStore(modelContainer: modelContext.container),
+                externalCoverage: legacyHistoricalValuator
+            ).series(for: query)
+        }
         logIncompleteHistoricalSeries(result, requestedCoreAccountCount: accountIDs?.count)
 
+        let shadowDeltaBucket: HistoricalPortfolioShadowDeltaBucket?
         if historicalReaderMode == .shadow {
             let structuredResult = result.points.last?.valuation
             let structuredEnd = structuredResult?.total
             let compatibilityEnd = compatibilitySeries.points.last.map { Decimal($0.value) }
-            historicalShadowDeltaBucket = .classify(
+            shadowDeltaBucket = .classify(
                 structured: structuredEnd,
                 compatibility: compatibilityEnd
             )
@@ -1945,9 +1985,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 ))
             }
         } else {
-            historicalShadowDeltaBucket = nil
+            shadowDeltaBucket = nil
         }
-        guard historicalReaderMode != .shadow else { return compatibilitySeries }
+        guard historicalReaderMode != .shadow else {
+            return HistoricalDynamicsProjection(
+                bundle: result,
+                chartPoints: compatibilitySeries.points,
+                shadowDeltaBucket: shadowDeltaBucket
+            )
+        }
 
         let label = L("finances.dynamics.chart.total_label")
         let points = result.points.flatMap { point -> [ChartDataPoint] in
@@ -1972,7 +2018,72 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 )
             }
         }
-        return DynamicsSeries(points: points)
+        return HistoricalDynamicsProjection(
+            bundle: result,
+            chartPoints: points,
+            shadowDeltaBucket: shadowDeltaBucket
+        )
+    }
+
+    /// The sole mutation boundary for historical request output. Callers must pass the revision
+    /// guard immediately before this method. Structured readers derive hero and breakdown in the
+    /// same synchronous commit; shadow mode keeps its compatibility consumers unchanged.
+    private func commitHistoricalProjection(_ projection: HistoricalDynamicsProjection) {
+        historicalPortfolioSeries = projection.bundle
+        historicalShadowDeltaBucket = projection.shadowDeltaBucket
+        state.chartData = projection.chartPoints
+
+        guard historicalReaderMode != .shadow else { return }
+        applyStructuredHero(from: projection.bundle, selectedDate: state.selectedDate)
+        state.dynamicsBreakdown = structuredDynamicsBreakdown(from: projection.bundle)
+    }
+
+    private func applyStructuredHero(
+        from series: HistoricalPortfolioSeriesResult,
+        selectedDate: Date?
+    ) {
+        let visiblePoints = structuredVisiblePoints(in: series)
+        guard let first = visiblePoints.first else {
+            state.currencyConversionWarning = L("finances.dynamics.warning.history_incomplete")
+            return
+        }
+        let selected = selectedDate.flatMap { target in
+            visiblePoints.min {
+                abs($0.date.timeIntervalSince(target)) < abs($1.date.timeIntervalSince(target))
+            }
+        } ?? visiblePoints.last
+        guard let selected,
+              let startTotal = first.valuation.total,
+              let selectedTotal = selected.valuation.total else {
+            state.currencyConversionWarning = L("finances.dynamics.warning.history_incomplete")
+            return
+        }
+
+        let start = NSDecimalNumber(decimal: startTotal).doubleValue
+        let current = NSDecimalNumber(decimal: selectedTotal).doubleValue
+        let delta = current - start
+        state.currentBalance = current
+        state.periodDelta = (delta, calculateDeltaPercent(delta: delta, startBalance: start))
+        state.currencyConversionWarning = nil
+    }
+
+    /// The chart omits structured points without a truthful total. Every summary consumer must use
+    /// this exact ordered set, otherwise an incomplete requested boundary can zero the hero while
+    /// the visible line still contains valid data.
+    private func structuredVisiblePoints(
+        in series: HistoricalPortfolioSeriesResult
+    ) -> [HistoricalPortfolioSeriesPoint] {
+        series.points
+            .filter { $0.valuation.total != nil }
+            .sorted { $0.date < $1.date }
+    }
+
+    private func structuredVisibleEndpoints(
+        in series: HistoricalPortfolioSeriesResult
+    ) -> (first: HistoricalPortfolioSeriesPoint, last: HistoricalPortfolioSeriesPoint)? {
+        let points = structuredVisiblePoints(in: series)
+        guard let first = points.first, let last = points.last else { return nil }
+        return (first, last)
     }
 
     /// Non-PII diagnostics for the fail-closed historical reader. Exact balances, names and opaque
@@ -2964,14 +3075,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return isLiabilityAccount(accounts[0]) ? -delta : delta
     }
 
-    private func calculateDeltaPercent(delta: Double, startBalance: Double) -> Double {
+    private func calculateDeltaPercent(delta: Double, startBalance: Double) -> Double? {
         if abs(startBalance) < 0.01 {
             if abs(delta) < 0.01 {
                 return 0.0
             }
-            return delta > 0 ? 999999.0 : -999999.0
+            return nil
         }
-        return (delta / abs(startBalance)) * 100
+        let percent = (delta / abs(startBalance)) * 100
+        return percent.isFinite ? percent : nil
     }
 
     private func resolveCardInitialBalance(card: Card, accountCurrency: String) async -> Double {

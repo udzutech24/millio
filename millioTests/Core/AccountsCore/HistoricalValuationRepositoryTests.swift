@@ -666,6 +666,45 @@ struct HistoricalValuationRepositoryTests {
         }
     }
 
+    @Test("Invalid cleanup is scoped, preserves valid closes and is idempotent") @MainActor
+    func invalidCleanupIsSafeAndIdempotent() async throws {
+        let container = try Self.memoryContainer()
+        let validResult = Self.result(total: 100)
+        let valid = try HistoricalPortfolioValuation.make(
+            from: validResult,
+            publishedAt: Self.publicationDate
+        )
+        let invalid = try HistoricalPortfolioValuation.make(
+            from: validResult,
+            publishedAt: Self.publicationDate.addingTimeInterval(1),
+            id: UUID()
+        )
+        invalid.manifestData = Data("invalid-manifest".utf8)
+        let invalidOtherScope = try HistoricalPortfolioValuation.make(
+            from: validResult,
+            publishedAt: Self.publicationDate.addingTimeInterval(2),
+            id: UUID()
+        )
+        invalidOtherScope.scopeID = "scope-user-2"
+        invalidOtherScope.manifestData = Data("invalid-other-scope".utf8)
+        container.mainContext.insert(valid)
+        container.mainContext.insert(invalid)
+        container.mainContext.insert(invalidOtherScope)
+        try container.mainContext.save()
+        let repository = HistoricalValuationRepository(modelContainer: container)
+
+        let first = try await repository.deleteInvalidRecords(scopeID: validResult.key.scopeID)
+        let second = try await repository.deleteInvalidRecords(scopeID: validResult.key.scopeID)
+
+        #expect(first == .init(inspectedCount: 2, deletedCount: 1))
+        #expect(second == .init(inspectedCount: 1, deletedCount: 0))
+        let remaining = try container.mainContext.fetch(FetchDescriptor<HistoricalPortfolioValuation>())
+        #expect(remaining.count == 2)
+        #expect(remaining.contains(where: { $0.id == valid.id }))
+        #expect(remaining.contains(where: { $0.id == invalidOtherScope.id }))
+        #expect(!remaining.contains(where: { $0.id == invalid.id }))
+    }
+
     @Test("Manifest cap fits measured portfolio and rejects oversized evidence")
     func measuredManifestCapacity() throws {
         func result(accountCount: Int) -> HistoricalValuationResult {

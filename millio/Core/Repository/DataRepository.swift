@@ -18,8 +18,8 @@ protocol DataRepositoryProtocol {
     func clearAllDataAsync() async throws
 }
 
-final class DataRepository: DataRepositoryProtocol {
-    static let unknownModelTypesErrorPrefix = "Неизвестные типы моделей в backup: "
+final class DataRepository: @MainActor DataRepositoryProtocol {
+    nonisolated static let unknownModelTypesErrorPrefix = "Неизвестные типы моделей в backup: "
 
     private let modelContext: ModelContext
     private let worker: DataRepositoryWorker
@@ -48,7 +48,7 @@ final class DataRepository: DataRepositoryProtocol {
     ///   AccountEvent/AccountGroup/AccountDailySnapshot) имеют свой выделенный merge-путь
     ///   (`ScopeMergeDedup.copyNewCore`) и не должны попадать сюда — иначе reconciliation
     ///   импортирует их дважды двумя независимыми путями (см. `ScopeMergeReader.newCoreTypeNames`).
-    static func exportAllData(from context: ModelContext, excluding excludedTypeNames: Set<String> = []) throws -> Data {
+    nonisolated static func exportAllData(from context: ModelContext, excluding excludedTypeNames: Set<String> = []) throws -> Data {
         let metadata = BackupMetadata(
             version: .current,
             timestamp: Date(),
@@ -83,7 +83,7 @@ final class DataRepository: DataRepositoryProtocol {
         return try JSONSerialization.data(withJSONObject: exportDict, options: .prettyPrinted)
     }
     
-    static func metadataToDict(_ metadata: BackupMetadata) throws -> [String: Any] {
+    nonisolated static func metadataToDict(_ metadata: BackupMetadata) throws -> [String: Any] {
         let encoder = JSONEncoder()
         let data = try encoder.encode(metadata)
         let object = try JSONSerialization.jsonObject(with: data)
@@ -114,7 +114,7 @@ final class DataRepository: DataRepositoryProtocol {
     /// - Parameter save: по умолчанию `true` (поведение restore не меняется). Reconciliation (Track B)
     ///   передаёт `false`: весь merge идёт в одном дочернем контексте с ЕДИНСТВЕННЫМ save в конце
     ///   (митигация B1b №5) — промежуточный save здесь сломал бы атомарность.
-    static func importAllData(_ data: Data, into context: ModelContext, save: Bool = true) throws {
+    nonisolated static func importAllData(_ data: Data, into context: ModelContext, save: Bool = true) throws {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let modelsData = json["models"] as? [[String: Any]] else {
             throw AppError.backupCorrupted
@@ -180,7 +180,7 @@ final class DataRepository: DataRepositoryProtocol {
         }
     }
     
-    static func clearAllData(in context: ModelContext) throws {
+    nonisolated static func clearAllData(in context: ModelContext) throws {
         let registeredTypes = ModelTypeRegistry.shared.getExportableTypes()
         let typeNames = registeredTypes.keys.sorted { lhs, rhs in
             let lhsPriority = ModelTypeRegistry.shared.getImporter(for: lhs)?.importPriority ?? 100

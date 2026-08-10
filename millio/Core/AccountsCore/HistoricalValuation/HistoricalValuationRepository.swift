@@ -25,6 +25,11 @@ private final class HistoricalValuationPublicationCoordinator: @unchecked Sendab
 /// losers are quarantined without deleting their evidence.
 @ModelActor
 actor HistoricalValuationRepository {
+    struct InvalidRecordCleanup: Equatable, Sendable {
+        let inspectedCount: Int
+        let deletedCount: Int
+    }
+
     private struct Candidate {
         let model: HistoricalPortfolioValuation
         let result: HistoricalValuationResult
@@ -148,6 +153,43 @@ actor HistoricalValuationRepository {
         try fetchRows(logicalID: HistoricalPortfolioValuation.logicalID(for: key))
             .filter(\.isQuarantined)
             .count
+    }
+
+    /// Removes only derived close rows that fail the same canonical decoder used by readers.
+    /// Source accounts/events and valid closes are outside this repair boundary. The shared
+    /// publication lock prevents a concurrent publisher from racing the scan-and-save transaction.
+    func deleteInvalidRecords(
+        scopeID: String,
+        maximumManifestBytes: Int = HistoricalPortfolioValuation.maximumManifestBytes
+    ) throws -> InvalidRecordCleanup {
+        try HistoricalValuationPublicationCoordinator.shared.withLock {
+            let requestedScopeID = scopeID
+            let rows = try modelContext.fetch(FetchDescriptor<HistoricalPortfolioValuation>(
+                predicate: #Predicate { $0.scopeID == requestedScopeID }
+            ))
+            let invalidRows = rows.filter { row in
+                do {
+                    _ = try row.decodedResult(maximumManifestBytes: maximumManifestBytes)
+                    return false
+                } catch {
+                    return true
+                }
+            }
+            guard !invalidRows.isEmpty else {
+                return InvalidRecordCleanup(inspectedCount: rows.count, deletedCount: 0)
+            }
+            invalidRows.forEach(modelContext.delete)
+            do {
+                try modelContext.save()
+            } catch {
+                modelContext.rollback()
+                throw error
+            }
+            return InvalidRecordCleanup(
+                inspectedCount: rows.count,
+                deletedCount: invalidRows.count
+            )
+        }
     }
 
     private func fetchRows(logicalID: String) throws -> [HistoricalPortfolioValuation] {

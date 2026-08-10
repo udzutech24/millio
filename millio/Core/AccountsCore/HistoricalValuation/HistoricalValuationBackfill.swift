@@ -132,8 +132,8 @@ actor HistoricalValuationBackfillCoordinator {
 /// after every requested unit is durably complete. A newer concurrently-enqueued marker is kept by
 /// `HistoricalValuationRebuildQueue.acknowledge`'s compare-and-remove contract.
 actor HistoricalValuationRebuildBackfillRunner {
-    typealias Pending = @Sendable (String) throws -> HistoricalValuationRebuildRequest?
-    typealias Acknowledge = @Sendable (HistoricalValuationRebuildRequest) throws -> Bool
+    typealias Pending = @Sendable (String) async throws -> HistoricalValuationRebuildRequest?
+    typealias Acknowledge = @Sendable (HistoricalValuationRebuildRequest) async throws -> Bool
 
     private let coordinator: HistoricalValuationBackfillCoordinator
     private let pending: Pending
@@ -151,12 +151,38 @@ actor HistoricalValuationRebuildBackfillRunner {
 
     @discardableResult
     func resume(scopeID: String, keys: [HistoricalValuationBackfillKey]) async throws -> Bool {
-        guard let request = try pending(scopeID) else { return true }
+        guard let request = try await pending(scopeID) else { return true }
         guard !keys.isEmpty, keys.allSatisfy({ $0.scopeID == scopeID }) else { return false }
         // A rebuild request represents a new source generation. Old `.complete` checkpoints may
         // predate restore/reconciliation and therefore cannot prove this marker; force replay.
         guard await coordinator.resume(keys, force: true) else { return false }
-        return try acknowledge(request)
+        return try await acknowledge(request)
+    }
+}
+
+/// Actor boundary for the mutable UserDefaults-backed rebuild marker. Sendable closures capture
+/// this adapter, never UserDefaults itself, and every read/compare/remove operation is serialized.
+private actor HistoricalValuationRebuildQueueStorage {
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults) {
+        self.defaults = defaults
+    }
+
+    func pending(scopeID: String) throws -> HistoricalValuationRebuildRequest? {
+        try HistoricalValuationRebuildQueue.pending(scopeID: scopeID, defaults: defaults)
+    }
+
+    func enqueue(scopeID: String, reasonCode: String) throws {
+        _ = try HistoricalValuationRebuildQueue.enqueue(
+            scopeID: scopeID,
+            reasonCode: reasonCode,
+            defaults: defaults
+        )
+    }
+
+    func acknowledge(_ request: HistoricalValuationRebuildRequest) throws -> Bool {
+        try HistoricalValuationRebuildQueue.acknowledge(request, defaults: defaults)
     }
 }
 
@@ -234,6 +260,8 @@ final class HistoricalValuationProductionMaintenance {
     private let scopeID: String
     private let clock: any HistoricalValuationClock
     private let defaults: UserDefaults
+    private let rebuildStorage: HistoricalValuationRebuildQueueStorage
+    private let repository: HistoricalValuationRepository
     private let coordinator: HistoricalValuationBackfillCoordinator
     private let rebuildRunner: HistoricalValuationRebuildBackfillRunner
 
@@ -247,6 +275,9 @@ final class HistoricalValuationProductionMaintenance {
         self.scopeID = scopeID
         self.clock = clock
         self.defaults = defaults
+        let rebuildStorage = HistoricalValuationRebuildQueueStorage(defaults: defaults)
+        self.rebuildStorage = rebuildStorage
+        self.repository = HistoricalValuationRepository(modelContainer: modelContainer)
 
         let totals = AccountsTotalsService(
             modelContext: modelContainer.mainContext,
@@ -271,14 +302,34 @@ final class HistoricalValuationProductionMaintenance {
         self.coordinator = coordinator
         self.rebuildRunner = HistoricalValuationRebuildBackfillRunner(
             coordinator: coordinator,
-            pending: { try HistoricalValuationRebuildQueue.pending(scopeID: $0, defaults: defaults) },
-            acknowledge: { try HistoricalValuationRebuildQueue.acknowledge($0, defaults: defaults) }
+            pending: { try await rebuildStorage.pending(scopeID: $0) },
+            acknowledge: { try await rebuildStorage.acknowledge($0) }
         )
     }
 
     /// Runs at cold start and app activation. It closes every eligible civil day in order, then
     /// acknowledges a pending full-scope rebuild only after those same durable units are complete.
     func resumeMissedDays() async {
+        do {
+            let cleanup = try await repository.deleteInvalidRecords(scopeID: scopeID)
+            if cleanup.deletedCount > 0 {
+                try await rebuildStorage.enqueue(
+                    scopeID: scopeID,
+                    reasonCode: "invalid_historical_close_cleanup"
+                )
+                AppLogger.log(
+                    .warning,
+                    category: "AccountsCore",
+                    "Invalid historical closes removed; full rebuild queued count=\(cleanup.deletedCount)"
+                )
+            }
+        } catch {
+            // Do not continue into publication while known-invalid rows may still occupy logical
+            // keys. A later activation retries the repair without touching source financial data.
+            AppLogger.log(.error, category: "AccountsCore", "Historical close cleanup failed")
+            return
+        }
+
         guard let keys = plannedKeys() else {
             AppLogger.log(.error, category: "AccountsCore", "Historical close planning failed")
             return
@@ -286,7 +337,7 @@ final class HistoricalValuationProductionMaintenance {
         guard !keys.isEmpty else { return }
 
         do {
-            if try HistoricalValuationRebuildQueue.pending(scopeID: scopeID, defaults: defaults) != nil {
+            if try await rebuildStorage.pending(scopeID: scopeID) != nil {
                 guard try await rebuildRunner.resume(scopeID: scopeID, keys: keys) else {
                     AppLogger.log(.warning, category: "AccountsCore", "Historical rebuild incomplete")
                     return

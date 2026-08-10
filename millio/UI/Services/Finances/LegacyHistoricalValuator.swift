@@ -43,14 +43,15 @@ final class LegacyHistoricalValuator: HistoricalPortfolioExternalCoverageProvidi
 
     init(
         modelContext: ModelContext,
-        currencyService: CurrencyRateServiceProtocol = CurrencyRateService.shared,
+        currencyService: CurrencyRateServiceProtocol? = nil,
         onEstimatedConversion: (() -> Void)? = nil
     ) {
+        let resolvedCurrencyService = currencyService ?? CurrencyRateService.shared
         self.modelContext = modelContext
-        self.currencyService = currencyService
+        self.currencyService = resolvedCurrencyService
         self.historicalRateStore = HistoricalRateStore(
             modelContext: modelContext,
-            currencyService: currencyService
+            currencyService: resolvedCurrencyService
         )
         self.onEstimatedConversion = onEstimatedConversion
         reload()

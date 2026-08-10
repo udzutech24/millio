@@ -42,18 +42,6 @@ enum FinanceAmountText {
             return "\(maskedDigits(for: value, minimumDigits: minimumMaskDigits))%"
         }
 
-        if abs(value) >= 999999 {
-            return value > 0 ? "+∞" : "-∞"
-        }
-
         return String(format: "%+.1f%%", value)
-    }
-
-    /// Процент не определён (near-zero база: `calculateDeltaPercent` вернул sentinel ±999999).
-    /// Решение владельца (2026-07-13): в этом случае процентный лейбл НЕ рендерится вообще —
-    /// ни «н/д», ни «—», ни «+∞». Не путать с приватным маскированием (`isHidden`): при
-    /// `isHidden` показываем маскированные точки, поэтому «не определён» — только для видимого случая.
-    static func isPercentUndefined(value: Double, isHidden: Bool) -> Bool {
-        !isHidden && abs(value) >= 999999
     }
 }
