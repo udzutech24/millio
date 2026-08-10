@@ -22,7 +22,6 @@ struct FinanceOverviewCardView: View {
 
     @ObservedObject var financeViewModel: FinanceViewModel
     let chrome: FinanceOverviewCardChrome
-    let onLedgerPresentationChange: (FinanceOverviewLedgerPresentation?) -> Void
 
     @State private var dynamicsViewModel: FinanceDynamicsViewModel?
     @State private var isLoading: Bool = false
@@ -33,12 +32,10 @@ struct FinanceOverviewCardView: View {
 
     init(
         financeViewModel: FinanceViewModel,
-        chrome: FinanceOverviewCardChrome = .standalone,
-        onLedgerPresentationChange: @escaping (FinanceOverviewLedgerPresentation?) -> Void = { _ in }
+        chrome: FinanceOverviewCardChrome = .standalone
     ) {
         self.financeViewModel = financeViewModel
         self.chrome = chrome
-        self.onLedgerPresentationChange = onLedgerPresentationChange
     }
 
     private var localizationLocale: Locale { AppLocalization.currentAppLocale }
@@ -106,7 +103,6 @@ struct FinanceOverviewCardView: View {
         guard let dynamicsViewModel else { return }
         guard EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) else {
             ledgerPresentation = nil
-            onLedgerPresentationChange(nil)
             return
         }
 
@@ -114,9 +110,6 @@ struct FinanceOverviewCardView: View {
         dynamicsViewModel.handle(.loadData)
         let presentation = await buildLedgerPresentation(with: dynamicsViewModel)
         ledgerPresentation = presentation
-        // Передаём и пустую презентацию: hero покажет нейтральное кольцо вместо исчезающего
-        // элемента, а `balanceComposition` гарантирует безопасные 0/0 без NaN.
-        onLedgerPresentationChange(presentation)
         isLoading = false
     }
 
@@ -170,7 +163,7 @@ struct FinanceOverviewCardView: View {
 
         for group in groups {
             // Core-счета группы — ПЕРВИЧНЫЙ источник (было: легаси-junction + отдельный core-луп).
-            for account in sortedCoreAccounts(group.accounts ?? []) {
+            for account in sortedCoreAccounts(financeViewModel.coreAccountsSnapshot(matching: group)) {
                 if let item = await makeCoreLedgerItem(
                     account: account,
                     groupID: group.groupUniqueID,
@@ -521,6 +514,8 @@ struct FinanceOverviewCardView: View {
                 }
 
                 Spacer(minLength: 0)
+
+                FinanceBalanceCompositionDonut(presentation: presentation)
             }
 
             GeometryReader { proxy in

@@ -122,7 +122,7 @@ struct FinanceLocalizationTests {
         #expect(!financesSheets.contains("String(localized: \"finances.savings_goal."))
     }
 
-    @Test("Compact overview не дублирует saldo, а hero содержит donut состава")
+    @Test("Compact overview не дублирует saldo, содержит donut и читает канонический snapshot")
     func compactOverviewKeepsSingleBalanceNumber() throws {
         let financesView = try String(
             contentsOf: sourceURL("millio/UI/Services/Finances/FinancesView.swift"),
@@ -144,7 +144,10 @@ struct FinanceLocalizationTests {
         let compactOverview = overviewCardView[compactStart.lowerBound..<compactEnd.lowerBound]
 
         #expect(!compactOverview.contains("finances.overview.chart.saldo"))
-        #expect(financesView.contains("FinanceBalanceCompositionDonut(presentation: ledgerPresentation)"))
+        #expect(compactOverview.contains("FinanceBalanceCompositionDonut(presentation: presentation)"))
+        #expect(!financesView.contains("heroLedgerPresentation"))
+        #expect(overviewCardView.contains("financeViewModel.coreAccountsSnapshot(matching: group)"))
+        #expect(!overviewCardView.contains("sortedCoreAccounts(group.accounts ?? [])"))
     }
 
     @Test("Overview и market-data copy локализованы для ru en zh-Hans")
