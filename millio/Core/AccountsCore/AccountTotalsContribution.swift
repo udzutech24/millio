@@ -25,6 +25,9 @@ enum AccountTotalsContribution {
     /// `openingBalance` конвертером (`LegacyAccountConversion`), поэтому двойного применения нет.
     static func signedValue(rawBalance: Decimal, kind: AccountKind, creditLimit: Decimal?) -> Decimal {
         guard kind == .debitCard || kind == .cash, let creditLimit else { return rawBalance }
-        return rawBalance - creditLimit
+        return CreditCardFinancialContract.netPosition(
+            rawAvailableBalance: rawBalance,
+            creditLimit: creditLimit
+        )
     }
 }

@@ -177,26 +177,39 @@ struct AccountTransferSheet: View {
 struct AccountBuySellSheet: View {
     let title: String
     let currentQuantity: Decimal
+    let initialUnitPrice: Decimal?
+    let currency: String
     /// `true` для формы продажи — включает предупреждение о превышении остатка.
     let showsSellWarning: Bool
-    let onSave: (Decimal, Decimal, Date, String?) -> Void
+    let onSave: (Decimal, Decimal, Decimal, Date, String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var quantityText = ""
     @State private var unitPriceText = ""
+    @State private var feeText = ""
     @State private var date = Date()
     @State private var note = ""
 
     private var parsedQuantity: Decimal? {
-        let normalized = quantityText.replacingOccurrences(of: ",", with: ".")
-        guard let value = Decimal(string: normalized), value > 0 else { return nil }
+        let canonical = AmountTextField.canonical(from: quantityText, maxFractionDigits: 8)
+        guard let value = Decimal(string: canonical), value > 0 else { return nil }
         return value
     }
 
     private var parsedUnitPrice: Decimal? {
-        let normalized = unitPriceText.replacingOccurrences(of: ",", with: ".")
-        guard let value = Decimal(string: normalized), value > 0 else { return nil }
+        let canonical = AmountTextField.canonical(from: unitPriceText, maxFractionDigits: 8)
+        guard let value = Decimal(string: canonical), value > 0 else { return nil }
         return value
+    }
+
+    private var parsedFee: Decimal {
+        let canonical = AmountTextField.canonical(from: feeText, maxFractionDigits: 8)
+        return max(0, Decimal(string: canonical) ?? 0)
+    }
+
+    private var grossTotal: Decimal? {
+        guard let quantity = parsedQuantity, let price = parsedUnitPrice else { return nil }
+        return quantity * price
     }
 
     private var exceedsCurrentQuantity: Bool {
@@ -207,13 +220,50 @@ struct AccountBuySellSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let price = initialUnitPrice, price > 0 {
+                    Section {
+                        HStack {
+                            Label(L("accounts_core.detail.market.price_label"), systemImage: "waveform.path.ecg")
+                            Spacer()
+                            Text("\(AmountInputFormatter.display(NSDecimalNumber(decimal: price).stringValue, maxFractionDigits: 8)) \(currency)")
+                                .font(.millioBodySemibold)
+                        }
+                    }
+                    .listRowBackground(AppColors.brandPrimary.opacity(0.14))
+                }
                 Section {
-                    TextField(L("accounts_core.detail.sheet.market.quantity_placeholder"), text: $quantityText)
-                        .keyboardType(.decimalPad)
-                    TextField(L("accounts_core.detail.sheet.market.unit_price_placeholder"), text: $unitPriceText)
-                        .keyboardType(.decimalPad)
+                    AmountTextField(
+                        placeholder: L("accounts_core.detail.sheet.market.quantity_placeholder"),
+                        value: $quantityText,
+                        maxFractionDigits: 8
+                    )
+                    AmountTextField(
+                        placeholder: L("accounts_core.detail.sheet.market.unit_price_placeholder"),
+                        value: $unitPriceText,
+                        maxFractionDigits: 8
+                    )
+                    AmountTextField(
+                        placeholder: L("accounts_core.detail.market.action.fee"),
+                        value: $feeText,
+                        maxFractionDigits: 8
+                    )
                     DatePicker(L("accounts_core.detail.sheet.date_label"), selection: $date, displayedComponents: .date)
                     TextField(L("accounts_core.detail.sheet.note_placeholder"), text: $note)
+                }
+                if let grossTotal {
+                    Section {
+                        HStack(alignment: .firstTextBaseline) {
+                            Image(systemName: showsSellWarning ? "arrow.down.right.circle.fill" : "arrow.up.right.circle.fill")
+                                .foregroundStyle(showsSellWarning ? AppColors.warning : AppColors.positiveColor)
+                            Spacer()
+                            Text("\(AmountInputFormatter.display(NSDecimalNumber(decimal: grossTotal).stringValue, maxFractionDigits: 8)) \(currency)")
+                                .font(.millioTitle)
+                                .minimumScaleFactor(0.7)
+                        }
+                    }
+                    .listRowBackground(
+                        (showsSellWarning ? AppColors.warning : AppColors.positiveColor).opacity(0.13)
+                    )
                 }
                 if exceedsCurrentQuantity {
                     Section {
@@ -224,6 +274,10 @@ struct AccountBuySellSheet: View {
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                guard unitPriceText.isEmpty, let initialUnitPrice, initialUnitPrice > 0 else { return }
+                unitPriceText = NSDecimalNumber(decimal: initialUnitPrice).stringValue
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(L("accounts_core.detail.sheet.cancel")) { dismiss() }
@@ -231,9 +285,9 @@ struct AccountBuySellSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L("accounts_core.detail.sheet.save")) {
                         guard let quantity = parsedQuantity, let unitPrice = parsedUnitPrice else { return }
-                        onSave(quantity, unitPrice, date, note.isEmpty ? nil : note)
+                        onSave(quantity, unitPrice, parsedFee, date, note.isEmpty ? nil : note)
                     }
-                    .disabled(parsedQuantity == nil || parsedUnitPrice == nil)
+                    .disabled(parsedQuantity == nil || parsedUnitPrice == nil || exceedsCurrentQuantity)
                 }
             }
         }

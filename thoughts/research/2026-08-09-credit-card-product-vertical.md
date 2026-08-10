@@ -30,6 +30,10 @@ Result: `TEST SUCCEEDED`; creation identity, current contribution formula, inclu
 2. Introduce a parallel CreditCardTransaction model. Rejected: duplicates AccountEvent, totals, history, backup and Cashflow integration.
 3. Recommended: keep Account/AccountEvent, define credit-card-specific event semantics and a pure presentation adapter where canonical account balance is signed net position (`-debt`, overpayment positive). Use a single atomic coordinator for AccountEvent + Cashflow projection/transfer legs. Migrate legacy credit-card event interpretation only through an explicit additive migration if fixtures prove it necessary.
 
+## Phase 3 decision
+
+Migration/schema change is not required. Existing `AccountEvent.typeRaw` accepts additive semantic raw values, while legacy opening events remain replay-compatible. `CreditCardFinancialContract` is the only conversion boundary from persisted available balance to canonical signed net position. New typed events preserve the legacy raw ledger signs, so old and new histories can be replayed together without a version marker or silent data rewrite.
+
 ## Risks and mitigations
 
 - Existing persisted credit cards use available-balance semantics. Impact critical; do not flip engine semantics in place. Add characterization fixtures and a versioned migration/compatibility marker before Phase 3.

@@ -29,6 +29,7 @@ struct StockLotEngineTests {
         #expect(snapshot.openCostBasis == 1_615)
         #expect(snapshot.averageUnitCost == Decimal(1_615) / 15)
         #expect(snapshot.openLots.map(\.unitCost) == [101, 121])
+        #expect(snapshot.totalFees == 15)
     }
 
     @Test("Partial sale consumes FIFO cost and subtracts sell fee once")
@@ -92,5 +93,18 @@ struct StockLotEngineTests {
         #expect(throws: StockLotEngineError.invalidFee) {
             try StockLotEngine.replay(events: [event(date: day1, type: .buy, amount: -1, quantity: 1, unitPrice: 1)])
         }
+    }
+
+    @Test("Absolute correction replaces open lots without creating realized P&L")
+    func absoluteCorrection() throws {
+        let snapshot = try StockLotEngine.replay(events: [
+            event(date: day1, type: .buy, quantity: 10, unitPrice: 100),
+            event(date: day2, type: .adjustment, quantity: 7.5, unitPrice: 123.4567)
+        ])
+
+        #expect(snapshot.quantity == 7.5)
+        #expect(snapshot.averageUnitCost == 123.4567)
+        #expect(snapshot.openCostBasis == Decimal(string: "925.92525"))
+        #expect(snapshot.realizedProfitLoss == 0)
     }
 }

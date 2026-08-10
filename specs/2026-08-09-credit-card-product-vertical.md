@@ -19,12 +19,12 @@
 
 ## Acceptance criteria
 
-- [ ] Characterization tests фиксируют legacy available-balance contract и migration boundary.
+- [x] Characterization tests фиксируют legacy available-balance contract и migration boundary.
 - [ ] Creation требует name и positive limit, валидирует optional last4; advanced fields раскрываются постепенно; investment/manual controls отсутствуют.
 - [ ] Persisted CardMeta round-trips all supported fields; unsupported percentage minimum/APR/reminders не имитируются.
 - [ ] Specialized detail показывает debt/overpayment, available limit, utilization, payment/grace presentation, fees/interest, exclusion badge, actions/history and event-only step chart.
 - [ ] Separate `CreditCardEditSheet`; Account + metadata update atomic, currency read-only.
-- [ ] Typed purchase/refund/repayment/fee/interest commands валидируются до записи и имеют одну save boundary.
+- [x] Typed purchase/refund/repayment/fee/interest event commands валидируются до записи и имеют одну save boundary; linked Cashflow/transfer atomicity остаётся Phase 5.
 - [ ] Repayment accepts only active same-currency cash-like sources, checks funds and writes both legs atomically without Cashflow expense.
 - [ ] Refund links to purchase where possible, cannot exceed refundable remainder, and adjusts Cashflow once.
 - [ ] Pure calendar policy covers overdue/days remaining/month-end/short months/timezone and avoids promises about bank interest rules.

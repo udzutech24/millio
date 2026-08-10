@@ -19,6 +19,10 @@ struct InlineCardDraftTests {
         #expect(draft.priority == .normal)
         #expect(draft.balance == 0.0)
         #expect(draft.creditLimit == nil)
+        #expect(draft.statementDay == nil)
+        #expect(draft.dueDay == nil)
+        #expect(draft.minPayment == nil)
+        #expect(draft.graceDays == nil)
         #expect(draft.expiryDate == nil)
         #expect(draft.cardholderName == nil)
         #expect(draft.cardColor == nil)
@@ -73,6 +77,10 @@ struct InlineCardDraftTests {
             currency: "EUR",
             balance: 1500,
             creditLimit: 3000,
+            statementDay: 5,
+            dueDay: 25,
+            minPayment: 300,
+            graceDays: 60,
             expiryDate: "12/28",
             cardholderName: "IVAN IVANOV",
             cardColor: "#FF0000",
@@ -89,6 +97,10 @@ struct InlineCardDraftTests {
         #expect(draft.currency == "EUR")
         #expect(draft.balance == 1500)
         #expect(draft.creditLimit == 3000)
+        #expect(draft.statementDay == 5)
+        #expect(draft.dueDay == 25)
+        #expect(draft.minPayment == 300)
+        #expect(draft.graceDays == 60)
         #expect(draft.expiryDate == "12/28")
         #expect(draft.cardholderName == "IVAN IVANOV")
         #expect(draft.cardColor == "#FF0000")

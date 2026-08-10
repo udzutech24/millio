@@ -373,10 +373,13 @@ struct FinanceGroupRow: View {
     private var showsPrimaryCurrencySubtitle: Bool {
         guard let groupCurrency = group.displayCurrency else { return false }
         return groupCurrency.uppercased() != viewModel.state.displayCurrency.uppercased()
+            && viewModel.state.groupTotalsPrimaryCurrency[groupID] != nil
     }
 
     private var primaryCurrencySubtitleText: String {
-        let converted = viewModel.state.groupTotalsPrimaryCurrency[groupID] ?? 0
+        // `showsPrimaryCurrencySubtitle` гарантирует наличие значения. Не подменяем состояние
+        // «ещё не рассчитано» доказанным финансовым нулём: это и было причиной ложного `≈ 0 ₽`.
+        guard let converted = viewModel.state.groupTotalsPrimaryCurrency[groupID] else { return "" }
         let symbol = MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency
         return "≈ \(formatBalance(converted, isHidden: viewModel.state.isAmountHidden)) \(symbol)"
     }

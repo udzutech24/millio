@@ -1133,7 +1133,11 @@ struct FinanceAddAccountView: View {
                 cardType: cardData?.cardType,
                 bank: cardData?.bank,
                 cardLast4: cardData?.cardNumber,
-                creditLimit: cardMeta?.creditLimit
+                creditLimit: cardMeta?.creditLimit,
+                statementDay: cardData?.statementDay,
+                dueDay: cardData?.dueDay,
+                minPayment: cardData?.minPayment.map { Decimal($0) },
+                graceDays: cardData?.graceDays
             ))
             _ = try factory.create(command)
             EventBus.shared.publish(FinanceEvent.investmentsUpdated)

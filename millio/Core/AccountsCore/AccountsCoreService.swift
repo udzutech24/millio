@@ -19,6 +19,10 @@ enum AccountsCoreServiceError: Error {
     case unknownLegacySemanticMutation
     case eventNotAllowed(AccountProductType?, AccountEventType)
     case capabilityNotAllowed(AccountProductType?, AccountProductCapability)
+    /// Credit-card commands accept positive magnitudes only; event type owns the sign.
+    case invalidCreditCardAmount
+    /// Archived/deleted credit cards are immutable; their event history remains readable.
+    case archivedCreditCard
 }
 
 /// Единственная точка записи в новое ядро счетов (event-sourcing). Любое изменение баланса —
@@ -180,6 +184,44 @@ final class AccountsCoreService {
         return event
     }
 
+    /// Typed credit-card event boundary. Financial sign is owned by `CreditCardOperationKind`;
+    /// callers always pass a positive magnitude. Cashflow projection and repayment transfer legs
+    /// intentionally remain Phase 5 concerns and must wrap this graph in their atomic coordinator.
+    @discardableResult
+    func recordCreditCardEvent(
+        account: Account,
+        operation: CreditCardOperationKind,
+        amount: Decimal,
+        date: Date = Date(),
+        categoryID: String? = nil,
+        note: String? = nil,
+        sourceTransactionID: String? = nil
+    ) throws -> AccountEvent {
+        guard account.productType == .creditCard else {
+            throw AccountsCoreServiceError.eventNotAllowed(account.productType, operation.eventType)
+        }
+        guard account.archivedAt == nil, account.deletedAt == nil else {
+            throw AccountsCoreServiceError.archivedCreditCard
+        }
+        guard amount > 0 else { throw AccountsCoreServiceError.invalidCreditCardAmount }
+        try requireEventAllowed(operation.eventType, for: account)
+
+        let event = AccountEvent(
+            account: account,
+            date: date,
+            type: operation.eventType,
+            amount: amount,
+            categoryID: categoryID,
+            note: note,
+            sourceTransactionID: sourceTransactionID
+        )
+        modelContext.insert(event)
+        invalidateCache(for: account, from: date)
+        HistoricalValuationRevisionTracker.bump([.events], on: account)
+        try saveOrRollback()
+        return event
+    }
+
     /// Корректировка баланса «до значения» (UI: пользователь вбивает новый остаток) — считает
     /// ДЕЛЬТУ от текущего `balanceAt` и создаёт `adjustment`-событие с этой дельтой (AC1: события,
     /// а не хранимое поле, остаются единственным источником истины).
@@ -281,6 +323,59 @@ final class AccountsCoreService {
         let event = AccountEvent(account: account, date: date, type: type, amount: amount, note: note)
         modelContext.insert(event)
         HistoricalValuationRevisionTracker.bump([.events], on: account)
+        try saveOrRollback()
+        return event
+    }
+
+    /// Atomically updates stock presentation metadata and appends an explicit absolute position
+    /// correction. Existing trades remain immutable; replay replaces only the open lots at the
+    /// correction timestamp and preserves already realized P&L/dividends.
+    @discardableResult
+    func correctStockPosition(
+        account: Account,
+        name: String,
+        group: AccountGroup?,
+        note: String?,
+        includeInTotal: Bool,
+        targetQuantity: Decimal,
+        targetAverageCost: Decimal?,
+        date: Date = Date()
+    ) throws -> AccountEvent {
+        guard !modelContext.hasChanges else { throw AccountsCoreServiceError.dirtyContext }
+        guard account.productType == .marketStock, account.kind == .marketInvestment else {
+            throw AccountsCoreServiceError.unsupportedEventType(.adjustment)
+        }
+        try requireEventAllowed(.adjustment, for: account)
+        guard targetQuantity >= 0 else { throw StockLotEngineError.invalidQuantity }
+        if targetQuantity > 0 {
+            guard let targetAverageCost, targetAverageCost > 0 else {
+                throw StockLotEngineError.invalidUnitPrice
+            }
+        }
+
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { throw AccountsCoreServiceError.missingProductIdentity }
+
+        let event = AccountEvent(
+            account: nil,
+            date: date,
+            type: .adjustment,
+            quantity: targetQuantity,
+            unitPrice: targetQuantity == 0 ? nil : targetAverageCost
+        )
+        _ = try StockLotEngine.replay(events: (account.events ?? []) + [event])
+
+        let membershipChanged = includeInTotal != account.includeInTotal
+        account.name = trimmedName
+        account.group = group
+        account.note = note
+        account.includeInTotal = includeInTotal
+        event.account = account
+        modelContext.insert(event)
+        invalidateCache(for: account, from: date)
+        var impacts: Set<HistoricalValuationRevisionDimension> = [.financial, .events]
+        if membershipChanged { impacts.insert(.accountSet) }
+        HistoricalValuationRevisionTracker.bump(impacts, on: account)
         try saveOrRollback()
         return event
     }

@@ -63,7 +63,11 @@ struct AccountDetailView: View {
 
     private var sortedEvents: [AccountEvent] {
         _ = refreshToken
-        return (account.events ?? []).sorted { lhs, rhs in
+        return (account.events ?? [])
+            .filter { event in
+                !(account.kind == .marketInvestment && event.type == .openingBalance && (event.amount ?? 0) == 0)
+            }
+            .sorted { lhs, rhs in
             lhs.date != rhs.date ? lhs.date > rhs.date : lhs.createdAt > rhs.createdAt
         }
     }
@@ -80,7 +84,11 @@ struct AccountDetailView: View {
                             refreshToken: refreshToken
                         )
                     }
-                    header
+                    if account.productType == .creditCard {
+                        CreditCardDetailSection(account: account, rawBalance: balanceToday)
+                    } else {
+                        header
+                    }
                     if account.archivedAt == nil && account.deletedAt == nil {
                         actionsRow
                     }
@@ -158,11 +166,25 @@ struct AccountDetailView: View {
         } message: {
             Text(errorMessage ?? "")
         }
+        .task(id: account.id) {
+            guard account.kind == .marketInvestment else { return }
+            await AccountMarketPriceService(modelContext: modelContext).refreshTodayPrices()
+            refreshToken = UUID()
+        }
     }
 
     // MARK: - Header
 
+    @ViewBuilder
     private var header: some View {
+        if account.kind == .marketInvestment {
+            stockHero
+        } else {
+            standardHeader
+        }
+    }
+
+    private var standardHeader: some View {
         VStack(alignment: .leading, spacing: AppSpacing.s) {
             HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
                 Text(formattedBalance)
@@ -217,6 +239,70 @@ struct AccountDetailView: View {
                 )
             }
         }
+    }
+
+    private var stockHero: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.m) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    Text(account.marketMeta?.symbol.uppercased() ?? account.name)
+                        .font(.millioHeadline)
+                        .foregroundStyle(.white)
+                    if account.name.caseInsensitiveCompare(account.marketMeta?.symbol ?? "") != .orderedSame {
+                        Text(account.name)
+                            .font(.millioCalloutRegular)
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+                }
+                Spacer()
+                Label(
+                    isPriceStale ? L("accounts_core.detail.market.price_stale_badge") : L("accounts_core.detail.market.price_today_badge"),
+                    systemImage: isPriceStale ? "clock.badge.exclamationmark" : "bolt.fill"
+                )
+                .font(.millioCaptionRegular)
+                .foregroundStyle(isPriceStale ? AppColors.warning : AppColors.positiveColor)
+                .padding(.horizontal, AppSpacing.s)
+                .padding(.vertical, AppSpacing.xs)
+                .background(Capsule().fill(Color.black.opacity(0.22)))
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
+                Text(formattedBalance)
+                    .font(.millioTitle)
+                    .foregroundStyle(.white)
+                    .minimumScaleFactor(0.65)
+                Text(account.currency)
+                    .font(.millioBody)
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+
+            Label(
+                "\(signedAmountText(unrealizedPL, type: .adjustment)) \(account.currency)",
+                systemImage: unrealizedPL < 0 ? "arrow.down.right" : "arrow.up.right"
+            )
+            .font(.millioBodySemibold)
+            .foregroundStyle(unrealizedPL < 0 ? AppColors.negativeColor : AppColors.positiveColor)
+        }
+        .padding(AppSpacing.l)
+        .background(
+            ZStack {
+                LinearGradient(
+                    colors: [Color(hex: "102A56"), Color(hex: "123F7A"), Color(hex: "0D6B78")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                Circle()
+                    .fill(AppColors.brandPrimary.opacity(0.28))
+                    .frame(width: 180, height: 180)
+                    .offset(x: 130, y: -80)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.xl, style: .continuous))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.xl, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
     }
 
     private var bankLine: String? {
@@ -394,19 +480,39 @@ struct AccountDetailView: View {
         stockSnapshot?.quantity ?? 0
     }
 
+    private var todayQuote: HistoricalAssetPrice? {
+        guard let symbol = account.marketMeta?.symbol.uppercased() else { return nil }
+        let dayKey = AccountEvent.dayKey(for: Date())
+        let descriptor = FetchDescriptor<HistoricalAssetPrice>(
+            predicate: #Predicate { $0.symbol == symbol && $0.dayKey == dayKey }
+        )
+        return try? modelContext.fetch(descriptor).first
+    }
+
+    private var latestCachedQuote: HistoricalAssetPrice? {
+        guard let symbol = account.marketMeta?.symbol.uppercased() else { return nil }
+        let descriptor = FetchDescriptor<HistoricalAssetPrice>(
+            predicate: #Predicate { $0.symbol == symbol },
+            sortBy: [SortDescriptor(\.dayKey, order: .reverse)]
+        )
+        return try? modelContext.fetch(descriptor).first
+    }
+
     /// Unrealized P&L excludes realized proceeds and is based only on remaining FIFO lots.
     private var unrealizedPL: Decimal {
         stockSnapshot?.unrealizedProfitLoss(at: currentUnitPrice) ?? 0
+    }
+
+    private var stockTotalReturn: Decimal {
+        stockSnapshot?.totalReturn(at: currentUnitPrice) ?? 0
     }
 
     /// Текущая цена за единицу + признак «не сегодняшняя» (пометка «посл. известная»). `nil` цены из
     /// live-кэша (`AccountMarketPriceService`) трактуем как «нет сегодняшних данных» — падаем на
     /// последнюю цену buy/sell/revaluation из событий (офлайн/auth-error, брифинг Фазы 4, задача 2).
     private var currentUnitPrice: Decimal {
-        if let meta = account.marketMeta,
-           let cached = priceProviderForThisAccount?.price(symbol: meta.symbol, assetClass: meta.assetClass, on: Date()) {
-            return cached
-        }
+        if let todayQuote { return todayQuote.price }
+        if let latestCachedQuote { return latestCachedQuote.price }
         return (account.events ?? [])
             .sorted { $0.date < $1.date }
             .last(where: { ($0.type == .buy || $0.type == .sell) && $0.unitPrice != nil })?
@@ -416,8 +522,7 @@ struct AccountDetailView: View {
     /// `true`, если сегодняшней живой цены в кэше нет вовсе — карточка показывает пометку
     /// «посл. известная цена» (упрощение, задокументировано: не различаем «вчера»/«неделю назад»).
     private var isPriceStale: Bool {
-        guard let meta = account.marketMeta else { return true }
-        return priceProviderForThisAccount?.price(symbol: meta.symbol, assetClass: meta.assetClass, on: Date()) == nil
+        todayQuote == nil
     }
 
     private var marketInfoSection: some View {
@@ -426,6 +531,21 @@ struct AccountDetailView: View {
                 .font(.millioCaption)
                 .foregroundStyle(AppColors.textTertiary)
                 .textCase(.uppercase)
+
+            HStack(spacing: AppSpacing.s) {
+                stockHighlightCard(
+                    title: L("stock.detail.market_value"),
+                    value: "\(formattedBalance) \(account.currency)",
+                    icon: "chart.line.uptrend.xyaxis",
+                    tint: AppColors.brandPrimary
+                )
+                stockHighlightCard(
+                    title: L("stock.detail.total_return"),
+                    value: "\(signedAmountText(stockTotalReturn, type: .adjustment)) \(account.currency)",
+                    icon: stockTotalReturn < 0 ? "arrow.down.right" : "arrow.up.right",
+                    tint: stockTotalReturn < 0 ? AppColors.negativeColor : AppColors.positiveColor
+                )
+            }
 
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 HStack {
@@ -453,22 +573,90 @@ struct AccountDetailView: View {
                         }
                     }
                 }
-                HStack {
-                    Text(L("accounts_core.detail.market.pl_label"))
-                        .font(.millioCalloutRegular)
-                        .foregroundStyle(AppColors.textSecondary)
-                    Spacer()
-                    Text("\(signedAmountText(unrealizedPL, type: .adjustment)) \(account.currency)")
-                        .font(.millioBodySemibold)
-                        .foregroundStyle(unrealizedPL < 0 ? AppColors.error : AppColors.textPrimary)
-                }
+                marketMetricRow(
+                    L("accounts_core.detail.market.average_cost_label"),
+                    value: stockSnapshot?.averageUnitCost.map { "\(formattedAmount($0)) \(account.currency)" } ?? "—"
+                )
+                marketMetricRow(
+                    L("accounts_core.detail.market.cost_basis_label"),
+                    value: "\(formattedAmount(stockSnapshot?.openCostBasis ?? 0)) \(account.currency)"
+                )
+                marketMetricRow(
+                    L("accounts_core.detail.market.unrealized_label"),
+                    value: "\(signedAmountText(unrealizedPL, type: .adjustment)) \(account.currency)",
+                    tone: unrealizedPL
+                )
+                marketMetricRow(
+                    L("accounts_core.detail.market.realized_label"),
+                    value: "\(signedAmountText(stockSnapshot?.realizedProfitLoss ?? 0, type: .adjustment)) \(account.currency)",
+                    tone: stockSnapshot?.realizedProfitLoss
+                )
+                marketMetricRow(
+                    L("accounts_core.detail.market.dividends_label"),
+                    value: "\(formattedAmount(stockSnapshot?.dividends ?? 0)) \(account.currency)"
+                )
+                marketMetricRow(
+                    L("accounts_core.detail.market.fees_label"),
+                    value: "\(formattedAmount(stockSnapshot?.totalFees ?? 0)) \(account.currency)"
+                )
             }
             .padding(AppSpacing.m)
             .background(
+                LinearGradient(
+                    colors: [Color(hex: "14233A"), Color(hex: "102D35")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous))
+            )
+            .overlay(
                 RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                    .fill(AppColors.iconBackground)
+                    .stroke(AppColors.brandPrimary.opacity(0.18), lineWidth: 1)
             )
         }
+    }
+
+    private func stockHighlightCard(title: String, value: String, icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.s) {
+            Image(systemName: icon)
+                .font(.millioHeadline)
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.millioCaptionRegular)
+                .foregroundStyle(AppColors.textSecondary)
+            Text(value)
+                .font(.millioBodySemibold)
+                .foregroundStyle(AppColors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.m)
+        .background(
+            RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                .fill(tint.opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                .stroke(tint.opacity(0.25), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    private func marketMetricRow(_ title: String, value: String, tone: Decimal? = nil) -> some View {
+        HStack {
+            Text(title)
+                .font(.millioCalloutRegular)
+                .foregroundStyle(AppColors.textSecondary)
+            Spacer()
+            Text(value)
+                .font(.millioBodySemibold)
+                .foregroundStyle(
+                    tone.map { $0 < 0 ? AppColors.negativeColor : ($0 > 0 ? AppColors.positiveColor : AppColors.textPrimary) }
+                        ?? AppColors.textPrimary
+                )
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private var formattedBalance: String {
@@ -483,23 +671,74 @@ struct AccountDetailView: View {
 
     // MARK: - Actions
 
+    @ViewBuilder
     private var actionsRow: some View {
+        if account.kind == .marketInvestment {
+            marketActions
+        } else {
+            genericActions
+        }
+    }
+
+    private var marketActions: some View {
+        HStack(spacing: AppSpacing.s) {
+            compactMarketAction(L("accounts_core.detail.market.action.buy"), icon: "plus.circle.fill", tint: AppColors.positiveColor, prominent: true) {
+                sheet = .buy
+            }
+            compactMarketAction(L("accounts_core.detail.market.action.sell"), icon: "minus.circle.fill", tint: AppColors.warning) {
+                sheet = .sell
+            }
+            compactMarketAction(L("accounts_core.detail.market.action.dividend"), icon: "banknote.fill", tint: Color(hex: "FFD166")) {
+                sheet = .dividend
+            }
+            Menu {
+                Button(L("accounts_core.detail.market.action.fee"), systemImage: "minus.circle") { sheet = .fee }
+                Button(L("accounts_core.detail.action.edit"), systemImage: "pencil") { sheet = .editDetails }
+                Button(archiveActionTitle, systemImage: "archivebox", role: .destructive) { requestArchiveConfirmation() }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.millioHeadline)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: 48, height: 64)
+                    .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.iconBackground))
+            }
+            .accessibilityLabel(L("accounts_core.detail.action.edit"))
+        }
+    }
+
+    private func compactMarketAction(
+        _ title: String,
+        icon: String,
+        tint: Color,
+        prominent: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: AppSpacing.xs) {
+                Image(systemName: icon).font(.millioHeadline)
+                Text(title)
+                    .font(.millioCaptionRegular)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .foregroundStyle(prominent ? Color.white : tint)
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .background(
+                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                    .fill(prominent ? tint : tint.opacity(0.14))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                    .stroke(tint.opacity(0.28), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var genericActions: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: AppSpacing.s) {
                 switch account.kind {
-                case .marketInvestment:
-                    actionButton(L("accounts_core.detail.market.action.buy"), icon: "plus.circle.fill") {
-                        sheet = .buy
-                    }
-                    actionButton(L("accounts_core.detail.market.action.sell"), icon: "minus.circle.fill") {
-                        sheet = .sell
-                    }
-                    actionButton(L("accounts_core.detail.market.action.dividend"), icon: "banknote.fill") {
-                        sheet = .dividend
-                    }
-                    actionButton(L("accounts_core.detail.market.action.fee"), icon: "minus.circle") {
-                        sheet = .fee
-                    }
                 case .manualAsset:
                     actionButton(L("accounts_core.detail.manual_asset.action.revalue"), icon: "arrow.triangle.2.circlepath") {
                         sheet = .revalue
@@ -559,20 +798,35 @@ struct AccountDetailView: View {
         }
     }
 
-    private func actionButton(_ title: String, icon: String, isDestructive: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private func actionButton(
+        _ title: String,
+        icon: String,
+        isDestructive: Bool = false,
+        tint: Color? = nil,
+        isProminent: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        let foreground = isDestructive ? AppColors.error : (isProminent ? Color.white : (tint ?? AppColors.textPrimary))
+        let background = isProminent
+            ? (tint ?? AppColors.brandPrimary)
+            : (tint ?? Color.white).opacity(tint == nil ? 0.2 : 0.14)
+        return Button(action: action) {
             VStack(spacing: AppSpacing.xs) {
                 Image(systemName: icon)
                     .font(.millioHeadline)
                 Text(title)
                     .font(.millioCaptionRegular)
             }
-            .foregroundStyle(isDestructive ? AppColors.error : AppColors.textPrimary)
+            .foregroundStyle(foreground)
             .padding(.horizontal, AppSpacing.m)
             .padding(.vertical, AppSpacing.s)
             .background(
                 RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                    .fill(AppColors.iconBackground)
+                    .fill(background)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                    .stroke(isProminent ? Color.white.opacity(0.14) : (tint ?? Color.clear).opacity(0.28), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -676,10 +930,11 @@ struct AccountDetailView: View {
                 }
             }
             Spacer()
-            if event.type == .buy || event.type == .sell, let quantity = event.quantity, let unitPrice = event.unitPrice {
+            if (event.type == .buy || event.type == .sell || event.type == .adjustment),
+               let quantity = event.quantity {
                 // buy/sell не имеют `amount` (движок E считает по quantity×price, не по денежной сумме) —
                 // показываем позицию явно, а не пустую строку.
-                Text("\(formattedAmount(quantity)) × \(formattedAmount(unitPrice))")
+                Text(event.unitPrice.map { "\(formattedAmount(quantity)) × \(formattedAmount($0))" } ?? formattedAmount(quantity))
                     .font(.millioBodySemibold)
                     .foregroundStyle(AppColors.textPrimary)
             } else if let amount = event.amount {
@@ -712,6 +967,9 @@ struct AccountDetailView: View {
         case .adjustment: return L("accounts_core.detail.event.adjustment")
         case .interest: return L("accounts_core.detail.event.interest")
         case .fee: return L("accounts_core.detail.event.fee")
+        case .creditCardPurchase: return L("accounts_core.detail.event.expense")
+        case .creditCardRefund, .creditCardRepayment: return L("accounts_core.detail.event.income")
+        case .creditCardFee, .creditCardInterest: return L("accounts_core.detail.event.fee")
         case .extraPayment: return L("accounts_core.detail.event.extra_payment")
         case .buy: return L("accounts_core.detail.event.buy")
         case .sell: return L("accounts_core.detail.event.sell")
@@ -752,7 +1010,13 @@ struct AccountDetailView: View {
                 }
             )
         case .editDetails:
-            if account.productType == .realEstate {
+            if account.productType == .creditCard {
+                CreditCardEditSheet(account: account, modelContext: modelContext) { command in
+                    performEdit {
+                        try CreditCardEditorService(modelContext: modelContext).update(account: account, command: command)
+                    }
+                }
+            } else if account.productType == .realEstate {
                 RealEstateEditSheet(
                     account: account,
                     modelContext: modelContext,
@@ -768,6 +1032,25 @@ struct AccountDetailView: View {
                                 reminderMonths: reminderMonths,
                                 linkedLoanID: linkedLoanID,
                                 photos: photos
+                            )
+                        }
+                    }
+                )
+            } else if account.productType == .marketStock, let stockSnapshot {
+                StockPositionEditSheet(
+                    account: account,
+                    modelContext: modelContext,
+                    snapshot: stockSnapshot,
+                    onSave: { name, group, note, includeInTotal, quantity, averageCost in
+                        performEdit {
+                            try service.correctStockPosition(
+                                account: account,
+                                name: name,
+                                group: group,
+                                note: note,
+                                includeInTotal: includeInTotal,
+                                targetQuantity: quantity,
+                                targetAverageCost: averageCost
                             )
                         }
                     }
@@ -809,18 +1092,22 @@ struct AccountDetailView: View {
             AccountBuySellSheet(
                 title: L("accounts_core.detail.market.action.buy"),
                 currentQuantity: currentQuantity,
+                initialUnitPrice: currentUnitPrice > 0 ? currentUnitPrice : nil,
+                currency: account.currency,
                 showsSellWarning: false,
-                onSave: { quantity, unitPrice, date, note in
-                    perform { try service.buy(account: account, quantity: quantity, unitPrice: unitPrice, date: date, note: note) }
+                onSave: { quantity, unitPrice, fee, date, note in
+                    perform { try service.buy(account: account, quantity: quantity, unitPrice: unitPrice, fee: fee, date: date, note: note) }
                 }
             )
         case .sell:
             AccountBuySellSheet(
                 title: L("accounts_core.detail.market.action.sell"),
                 currentQuantity: currentQuantity,
+                initialUnitPrice: currentUnitPrice > 0 ? currentUnitPrice : nil,
+                currency: account.currency,
                 showsSellWarning: true,
-                onSave: { quantity, unitPrice, date, note in
-                    perform { try service.sell(account: account, quantity: quantity, unitPrice: unitPrice, date: date, note: note) }
+                onSave: { quantity, unitPrice, fee, date, note in
+                    perform { try service.sell(account: account, quantity: quantity, unitPrice: unitPrice, fee: fee, date: date, note: note) }
                 }
             )
         case .dividend:

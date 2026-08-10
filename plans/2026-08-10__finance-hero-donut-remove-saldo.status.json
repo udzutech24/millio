@@ -1,0 +1,70 @@
+{
+  "_generated": true,
+  "planFile": "2026-08-10__finance-hero-donut-remove-saldo.md",
+  "title": "План: donut общего баланса без дублирующего сальдо",
+  "updated": "2026-08-10T03:16:25.488Z",
+  "phases": [
+    {
+      "name": "Общий баланс числом отображается ровно один раз.",
+      "status": "pending"
+    },
+    {
+      "name": "Compact overview не содержит текста/числа САЛЬДО.",
+      "status": "pending"
+    },
+    {
+      "name": "Donut находится в верхней зоне общего баланса и отражает тот же debit/credit ratio, что полоса.",
+      "status": "pending"
+    },
+    {
+      "name": "Суммы дебета/кредита и горизонтальная полоса остаются.",
+      "status": "pending"
+    },
+    {
+      "name": "Нулевой портфель не даёт NaN/бесконечность и показывает нейтральное кольцо.",
+      "status": "pending"
+    },
+    {
+      "name": "Узкий экран, длинная сумма, Dynamic Type и скрытый баланс не ломают layout/privacy.",
+      "status": "pending"
+    },
+    {
+      "name": "VoiceOver получает понятную подпись состава активов/обязательств.",
+      "status": "pending"
+    },
+    {
+      "name": "Добавить unit-тест чистой политики сегментов donut: 0/0, только дебет, только кредит, смесь.",
+      "status": "pending"
+    },
+    {
+      "name": "Реализовать компактный donut без новой зависимости.",
+      "status": "pending"
+    },
+    {
+      "name": "Поднять готовое ledger presentation в hero минимальным callback/binding-контрактом.",
+      "status": "pending"
+    },
+    {
+      "name": "Удалить compact saldo-дубль, сохранить debit/credit legends и stacked bar.",
+      "status": "pending"
+    },
+    {
+      "name": "Добавить source/layout regression guard, если ViewInspector в проекте отсутствует.",
+      "status": "pending"
+    },
+    {
+      "name": "Запустить релевантные Finance overview/model tests, build и git diff --check.",
+      "status": "pending"
+    },
+    {
+      "name": "Визуально проверить светлый/тёмный фон, узкий iPhone и крупный текст.",
+      "status": "pending"
+    },
+    {
+      "name": "Self-audit acceptance criteria и обновить план.",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

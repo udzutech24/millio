@@ -13,6 +13,10 @@ struct FinanceProductCreationInput {
     let bank: Bank?
     let cardLast4: String?
     let creditLimit: Decimal?
+    let statementDay: Int?
+    let dueDay: Int?
+    let minPayment: Decimal?
+    let graceDays: Int?
     let depositMeta: DepositMeta?
     let loanMeta: LoanMeta?
     let debtDirection: DebtDirection?
@@ -33,6 +37,10 @@ struct FinanceProductCreationInput {
         bank: Bank? = nil,
         cardLast4: String? = nil,
         creditLimit: Decimal? = nil,
+        statementDay: Int? = nil,
+        dueDay: Int? = nil,
+        minPayment: Decimal? = nil,
+        graceDays: Int? = nil,
         depositMeta: DepositMeta? = nil,
         loanMeta: LoanMeta? = nil,
         debtDirection: DebtDirection? = nil,
@@ -52,6 +60,10 @@ struct FinanceProductCreationInput {
         self.bank = bank
         self.cardLast4 = cardLast4
         self.creditLimit = creditLimit
+        self.statementDay = statementDay
+        self.dueDay = dueDay
+        self.minPayment = minPayment
+        self.graceDays = graceDays
         self.depositMeta = depositMeta
         self.loanMeta = loanMeta
         self.debtDirection = debtDirection
@@ -66,6 +78,8 @@ struct FinanceProductCreationInput {
 enum FinanceProductCreationCommandError: Error, Equatable {
     case missingCardType
     case missingCreditLimit
+    case invalidCardLast4
+    case invalidCardTerms
     case missingDepositMeta
     case missingLoanMeta
     case missingDebtDirection
@@ -104,11 +118,25 @@ enum FinanceProductCreationCommandResolver {
                 guard let limit = input.creditLimit, limit > 0 else {
                     throw FinanceProductCreationCommandError.missingCreditLimit
                 }
+                guard input.statementDay.map({ (1...31).contains($0) }) ?? true,
+                      input.dueDay.map({ (1...31).contains($0) }) ?? true,
+                      input.minPayment.map({ $0 > 0 }) ?? true,
+                      input.graceDays.map({ (1...365).contains($0) }) ?? true else {
+                    throw FinanceProductCreationCommandError.invalidCardTerms
+                }
+            }
+            let last4 = input.cardLast4?.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard last4.map({ $0.isEmpty || ($0.count == 4 && $0.allSatisfy(\.isNumber)) }) ?? true else {
+                throw FinanceProductCreationCommandError.invalidCardLast4
             }
             let meta = CardMeta(
                 bank: input.bank == nil || input.bank == .other ? nil : input.bank?.rawValue,
-                last4: input.cardLast4?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-                creditLimit: cardType == .credit ? input.creditLimit : nil
+                last4: last4?.nilIfEmpty,
+                creditLimit: cardType == .credit ? input.creditLimit : nil,
+                statementDay: cardType == .credit ? input.statementDay : nil,
+                dueDay: cardType == .credit ? input.dueDay : nil,
+                minPayment: cardType == .credit ? input.minPayment : nil,
+                graceDays: cardType == .credit ? input.graceDays : nil
             )
             return common(productType, input.amount, .init(card: meta), nil)
 

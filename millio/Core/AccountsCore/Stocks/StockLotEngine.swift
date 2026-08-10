@@ -23,6 +23,7 @@ struct StockPositionSnapshot: Equatable, Sendable {
     let realizedProfitLoss: Decimal
     let dividends: Decimal
     let standaloneFees: Decimal
+    let totalFees: Decimal
 
     func marketValue(at unitPrice: Decimal) -> Decimal { quantity * unitPrice }
 
@@ -54,6 +55,7 @@ enum StockLotEngine {
         var realized: Decimal = 0
         var dividends: Decimal = 0
         var standaloneFees: Decimal = 0
+        var totalFees: Decimal = 0
 
         for event in ordered {
             switch event.type {
@@ -61,6 +63,7 @@ enum StockLotEngine {
                 let quantity = try positive(event.quantity, error: .invalidQuantity)
                 let price = try positive(event.unitPrice, error: .invalidUnitPrice)
                 let fee = try nonNegative(event.amount)
+                totalFees += fee
                 lots.append(StockOpenLot(
                     sourceEventID: event.id,
                     quantity: quantity,
@@ -71,6 +74,7 @@ enum StockLotEngine {
                 let quantity = try positive(event.quantity, error: .invalidQuantity)
                 let price = try positive(event.unitPrice, error: .invalidUnitPrice)
                 let fee = try nonNegative(event.amount)
+                totalFees += fee
                 let available = lots.reduce(Decimal.zero) { $0 + $1.quantity }
                 guard quantity <= available else {
                     throw StockLotEngineError.oversell(requested: quantity, available: available)
@@ -82,7 +86,24 @@ enum StockLotEngine {
                 dividends += event.amount ?? 0
 
             case .fee:
-                standaloneFees += try nonNegative(event.amount)
+                let fee = try nonNegative(event.amount)
+                standaloneFees += fee
+                totalFees += fee
+
+            case .adjustment where event.quantity != nil:
+                guard let quantity = event.quantity, quantity >= 0 else {
+                    throw StockLotEngineError.invalidQuantity
+                }
+                if quantity == 0 {
+                    lots.removeAll()
+                } else {
+                    let averageCost = try positive(event.unitPrice, error: .invalidUnitPrice)
+                    lots = [StockOpenLot(
+                        sourceEventID: event.id,
+                        quantity: quantity,
+                        unitCost: averageCost
+                    )]
+                }
 
             default:
                 continue
@@ -99,7 +120,8 @@ enum StockLotEngine {
             averageUnitCost: quantity > 0 ? costBasis / quantity : nil,
             realizedProfitLoss: realized,
             dividends: dividends,
-            standaloneFees: standaloneFees
+            standaloneFees: standaloneFees,
+            totalFees: totalFees
         )
     }
 

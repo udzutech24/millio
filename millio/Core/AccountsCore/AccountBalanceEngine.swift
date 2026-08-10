@@ -109,9 +109,10 @@ enum AccountBalanceEngine {
     /// adjustment — дельта как есть (знак хранит создатель события).
     private static func cashLikeSignMap(_ type: AccountEventType) -> Decimal {
         switch type {
-        case .openingBalance, .income, .transferIn, .interest, .dividend, .extraPayment, .adjustment:
+        case .openingBalance, .income, .transferIn, .interest, .dividend, .extraPayment, .adjustment,
+             .creditCardRefund, .creditCardRepayment:
             return 1
-        case .expense, .transferOut, .fee:
+        case .expense, .transferOut, .fee, .creditCardPurchase, .creditCardFee, .creditCardInterest:
             return -1
         case .buy, .sell, .rollover, .revaluation, .redenomination:
             return 0
@@ -128,7 +129,9 @@ enum AccountBalanceEngine {
             return 1
         case .transferOut:
             return -1
-        case .dividend, .buy, .sell, .rollover, .revaluation, .redenomination:
+        case .dividend, .buy, .sell, .rollover, .revaluation, .redenomination,
+             .creditCardPurchase, .creditCardRefund, .creditCardRepayment,
+             .creditCardFee, .creditCardInterest:
             return 0
         }
     }
@@ -153,7 +156,7 @@ enum AccountBalanceEngine {
 
         let lastKnownPrice = events.reversed().first { event in
             switch event.type {
-            case .buy, .sell, .revaluation: return event.unitPrice != nil
+            case .buy, .sell, .revaluation, .adjustment: return event.unitPrice != nil
             default: return false
             }
         }?.unitPrice
@@ -167,6 +170,7 @@ enum AccountBalanceEngine {
             switch event.type {
             case .buy: return acc + (event.quantity ?? 0)
             case .sell: return acc - (event.quantity ?? 0)
+            case .adjustment where event.quantity != nil: return event.quantity ?? acc
             default: return acc
             }
         }

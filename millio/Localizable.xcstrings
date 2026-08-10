@@ -131,16 +131,6 @@
         }
       }
     },
-    "%@ × %@" : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ × %2$@"
-          }
-        }
-      }
-    },
     "%@: %@" : {
       "localizations" : {
         "fr" : {
@@ -304,6 +294,9 @@
 
     },
     "0" : {
+
+    },
+    "1234" : {
 
     },
     "Account balance adjustment" : {
@@ -2860,6 +2853,98 @@
         }
       }
     },
+    "accounts_core.detail.market.average_cost_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Average cost"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Средняя цена"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "平均成本"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.cost_basis_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open cost basis"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Себестоимость"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "持仓成本"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.dividends_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dividends"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дивиденды"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "股息"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.fees_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fees"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Комиссии"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "费用"
+          }
+        }
+      }
+    },
     "accounts_core.detail.market.info_title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2952,6 +3037,29 @@
         }
       }
     },
+    "accounts_core.detail.market.price_today_badge" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "today"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "сегодня"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今日"
+          }
+        }
+      }
+    },
     "accounts_core.detail.market.quantity_label" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2975,6 +3083,29 @@
         }
       }
     },
+    "accounts_core.detail.market.realized_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Realized P&L"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Реализованный P&L"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已实现盈亏"
+          }
+        }
+      }
+    },
     "accounts_core.detail.market.sell_exceeds_warning_format" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2994,6 +3125,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "您只有 %@ — 持仓将变为负数"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.unrealized_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unrealized P&L"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нереализованный P&L"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未实现盈亏"
           }
         }
       }
@@ -7694,6 +7848,9 @@
           }
         }
       }
+    },
+    "Bank / issuer" : {
+
     },
     "Bills" : {
       "extractionState" : "stale",
@@ -38063,6 +38220,12 @@
         }
       }
     },
+    "Credit terms unavailable" : {
+
+    },
+    "Credit utilization" : {
+
+    },
     "Currency" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -38109,6 +38272,9 @@
           }
         }
       }
+    },
+    "Current debt %@" : {
+
     },
     "Custom period" : {
       "extractionState" : "stale",
@@ -69770,6 +69936,9 @@
         }
       }
     },
+    "Grace period: %lld" : {
+
+    },
     "Groceries" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -72725,6 +72894,9 @@
         }
       }
     },
+    "Overpayment %@" : {
+
+    },
     "Passphrase" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -72818,6 +72990,9 @@
           }
         }
       }
+    },
+    "Payment day: %lld" : {
+
     },
     "Period" : {
       "extractionState" : "stale",
@@ -89368,6 +89543,101 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "开始"
+          }
+        }
+      }
+    },
+    "Statement day: %lld" : {
+
+    },
+    "stock.detail.market_value" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Market value"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Стоимость"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "市值"
+          }
+        }
+      }
+    },
+    "stock.detail.total_return" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total return"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Общий доход"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "总收益"
+          }
+        }
+      }
+    },
+    "stock.edit.position.section" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Position correction"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Корректировка позиции"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "持仓调整"
+          }
+        }
+      }
+    },
+    "stock.edit.position.warning" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This appends a correction event. Existing trades remain unchanged."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Будет добавлено событие корректировки. Старые сделки не изменятся."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这将新增一条调整事件，既有交易不会被修改。"
           }
         }
       }

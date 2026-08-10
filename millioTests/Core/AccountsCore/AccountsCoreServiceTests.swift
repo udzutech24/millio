@@ -297,6 +297,35 @@ struct AccountsCoreServiceTests {
     }
 
     @Test
+    func stockCorrectionAtomicallyUpdatesMetadataAndAbsolutePosition() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(
+            name: "QQQ", kind: .marketInvestment, currency: "USD", openingBalance: 0,
+            marketMeta: MarketMeta(symbol: "QQQ", assetClass: .stock)
+        )
+        try service.buy(account: account, quantity: 10, unitPrice: 100)
+
+        try service.correctStockPosition(
+            account: account,
+            name: "NASDAQ 100",
+            group: nil,
+            note: "Broker correction",
+            includeInTotal: false,
+            targetQuantity: 7.5,
+            targetAverageCost: 123.4567
+        )
+
+        let snapshot = try StockLotEngine.replay(events: account.events ?? [])
+        #expect(account.name == "NASDAQ 100")
+        #expect(account.includeInTotal == false)
+        #expect(snapshot.quantity == 7.5)
+        #expect(snapshot.averageUnitCost == 123.4567)
+        #expect((account.events ?? []).filter { $0.type == .adjustment && $0.quantity != nil }.count == 1)
+    }
+
+    @Test
     func buySellRejectedForNonMarketKind() throws {
         let (container, ctx) = try makeContext()
         _ = container

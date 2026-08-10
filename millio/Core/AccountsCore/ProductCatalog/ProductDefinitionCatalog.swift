@@ -165,7 +165,17 @@ enum ProductDefinitionCatalog {
         return [
             .cash: definition(.cash, .cash, events: cashEvents, capabilities: [.cashflow, .transfers]),
             .debitCard: definition(.debitCard, .debitCard, allowed: [.card], events: cashEvents, capabilities: [.cashflow, .transfers]),
-            .creditCard: definition(.creditCard, .debitCard, required: [.card], allowed: [.card], events: cashEvents, capabilities: [.cashflow, .transfers, .creditLimit]),
+            .creditCard: definition(
+                .creditCard,
+                .debitCard,
+                required: [.card],
+                allowed: [.card],
+                events: cashEvents + [
+                    .creditCardPurchase, .creditCardRefund, .creditCardRepayment,
+                    .creditCardFee, .creditCardInterest
+                ],
+                capabilities: [.cashflow, .transfers, .creditLimit]
+            ),
             .bankAccount: definition(.bankAccount, .bankAccount, allowed: [.card], events: cashEvents, capabilities: [.cashflow, .transfers]),
             .deposit: definition(.deposit, .deposit, required: [.deposit], allowed: [.deposit], opening: .openingBalanceAndDepositSchedule, events: cashEvents + [.interest, .rollover], capabilities: [.depositTerms, .transfers]),
             .loan: definition(.loan, .loan, required: [.loan], allowed: [.loan], events: [.openingBalance, .income, .expense, .extraPayment, .fee, .adjustment, .redenomination], capabilities: [.loanTerms]),
@@ -376,6 +386,8 @@ enum ProductDefinitionCatalog {
 private extension AccountEventType {
     static let allCatalogCases: [AccountEventType] = [
         .openingBalance, .income, .expense, .transferOut, .transferIn, .buy, .sell, .interest,
-        .dividend, .fee, .extraPayment, .rollover, .revaluation, .adjustment, .redenomination
+        .dividend, .fee, .creditCardPurchase, .creditCardRefund, .creditCardRepayment,
+        .creditCardFee, .creditCardInterest, .extraPayment, .rollover, .revaluation,
+        .adjustment, .redenomination
     ]
 }

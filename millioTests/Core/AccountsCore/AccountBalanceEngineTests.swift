@@ -206,6 +206,17 @@ struct AccountBalanceEngineTests {
     }
 
     @Test
+    func marketQuantityAbsoluteCorrectionReplacesPriorQuantity() {
+        let events = [
+            event(date: day1, type: .buy, quantity: 10, unitPrice: 100),
+            event(date: day2, type: .adjustment, quantity: 4, unitPrice: 125)
+        ]
+
+        #expect(AccountBalanceEngine.marketQuantityAt(events: events, on: day2) == 4)
+        #expect(AccountBalanceEngine.balanceAt(events: events, kind: .marketInvestment, on: day2) == 500)
+    }
+
+    @Test
     func engineE_fallsBackToLastKnownPriceWhenProviderReturnsNil() {
         let events = [
             event(date: day1, type: .buy, quantity: 10, unitPrice: 100),

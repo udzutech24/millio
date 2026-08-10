@@ -15,7 +15,7 @@
 
 - [x] Phase 1 — research and characterization of current contract. Evidence: baseline trace + targeted suites pass.
 - [x] Phase 2 — spec, architecture decision and phased plan. No production code by guard phrase.
-- [ ] Phase 3 — financial semantics/event contracts: add failing characterization/contract tests first; decide compatibility marker/migration; implement pure credit-card balance/presentation semantics and allowed typed events; verify current/historical totals and overpayment.
+- [x] Phase 3 — financial semantics/event contracts: legacy available-balance semantics characterized; pure signed snapshot and typed persisted events implemented; current/historical contribution remains one shared path; schema migration proven unnecessary.
 - [ ] Phase 4 — specialized creation/detail/edit UX: dedicated drafts, validation, `CreditCardDetailSection`, `CreditCardEditSheet`, atomic metadata update; unit + render fixtures.
 - [ ] Phase 5 — purchase/refund/repayment/Cashflow: atomic coordinator, stable links/idempotency, source-account policy, insufficient funds, refund cap, once-only expense recognition and rollback tests.
 - [ ] Phase 6 — payment/grace/reminders: pure injected-calendar policy, month-end/timezone tests, honest empty states, reuse NotificationManager only.
@@ -37,3 +37,4 @@ Implementation must be requested literally one phase at a time, beginning with: 
 ## Status journal
 
 - 2026-08-09: Phase 1–2 completed on dirty user baseline. No production code/schema changed. Baseline targeted tests succeeded. Blocked by required explicit Phase 3 command.
+- 2026-08-09: Phase 3 completed. Added `CreditCardFinancialContract`, typed purchase/refund/repayment/fee/interest event types and a guarded service writer. Schema unchanged: `AccountEvent.typeRaw` already safely persists additive enum raw values. Serial semantic/catalog/revision suites: 23 tests passed, including historical event-boundary replay. Backup/schema/migration suites passed; full totals gate retains two pre-existing stale characterization failures (`missingHistoricalFX...`, old `.cash` expectation for bankless credit card) unrelated to Phase 3.

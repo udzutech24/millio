@@ -10,7 +10,7 @@
 
 ## Решена ли задача
 
-Частично: исследование и проектирование (фазы 1–2) завершены. Код не реализован, потому что обязательный guard phrase требует отдельную команду `Реализуй фазу N по плану`.
+Частично: фазы 1–3 завершены. Signed financial contract и typed event semantics реализованы; UX и linked Cashflow/transfer writers остаются в следующих фазах.
 
 ## Эффективно ли решение
 
@@ -18,7 +18,13 @@
 
 ## Как было до и как стало
 
-До: кредитка — generic cash account с available-balance semantics и без специализированных операций/UX. После: проблемы доказаны, целевой signed contract и последовательность безопасной реализации зафиксированы.
+До: кредитка — generic cash account с available-balance semantics и без специализированных операций/UX. После фазы 3: legacy ledger сохранён, но все consumers получили чистый signed contract; purchase/refund/repayment/fee/interest имеют отдельные persisted event types и guarded writer. Schema не менялась.
+
+## Проверки фазы 3
+
+- 23 serial semantic/catalog/totals-revision tests — passed, включая historical event-boundary replay.
+- Account product/Core backup, SchemaConsistency, SchemaMigration — passed.
+- Полный `AccountsTotalsServiceTests` сохранил два baseline failure: stale historical-FX characterization и старое ожидание `.cash` вместо канонического `.debitCard`. Они не вызваны фазой 3 и не маскировались изменением тестов.
 
 ## Идеи по улучшению
 

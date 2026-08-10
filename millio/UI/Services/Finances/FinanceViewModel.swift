@@ -494,6 +494,14 @@ final class FinanceViewModel: ViewModelProtocol {
             FinanceSystemGroups.normalizeUngroupedGroupName(in: modelContext)
             loadGroups()
             loadAccounts()
+            // Cold-start обязан публиковать оба групповых представления одним атомарным проходом:
+            // native (`groupTotals`) и в валюте шапки (`groupTotalsPrimaryCurrency`). Row `.task`
+            // считает только native-сумму и не может быть источником primary subtitle/секций.
+            // Без этого до первого FinanceEvent или pull-to-refresh валютная группа показывала
+            // корректные `$`, но ложное `≈ 0 ₽` из-за отсутствующего primary-ключа.
+            scheduleBackgroundTask { viewModel in
+                await viewModel.refreshGroupTotalsAndAmounts()
+            }
         }
         scheduleBackgroundTask { viewModel in
             await viewModel.convertSavingsGoalAmountIfNeeded(from: storedGoalCurrency, to: viewModel.state.displayCurrency)

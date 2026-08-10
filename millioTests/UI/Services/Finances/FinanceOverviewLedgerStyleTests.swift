@@ -132,4 +132,42 @@ struct FinanceOverviewLedgerStyleTests {
         #expect(widths.debit == 0)
         #expect(widths.credit == 0)
     }
+
+    // MARK: - balanceComposition (donut общего баланса)
+
+    @Test("Donut: пустой портфель возвращает нейтральное состояние без NaN")
+    func balanceCompositionHandlesZeroGross() {
+        let composition = FinanceOverviewLedgerStyle.balanceComposition(debitTotal: 0, creditTotal: 0)
+
+        #expect(composition == .empty)
+        #expect(composition.debitFraction.isFinite)
+        #expect(composition.creditFraction.isFinite)
+    }
+
+    @Test("Donut: только активы занимают полный круг")
+    func balanceCompositionAllDebit() {
+        let composition = FinanceOverviewLedgerStyle.balanceComposition(debitTotal: 100, creditTotal: 0)
+
+        #expect(composition.debitFraction == 1)
+        #expect(composition.creditFraction == 0)
+        #expect(composition.hasData)
+    }
+
+    @Test("Donut: только обязательства занимают полный круг")
+    func balanceCompositionAllCredit() {
+        let composition = FinanceOverviewLedgerStyle.balanceComposition(debitTotal: 0, creditTotal: 100)
+
+        #expect(composition.debitFraction == 0)
+        #expect(composition.creditFraction == 1)
+        #expect(composition.hasData)
+    }
+
+    @Test("Donut: смешанный портфель сохраняет точную долю и сумму 1")
+    func balanceCompositionMixedPortfolio() {
+        let composition = FinanceOverviewLedgerStyle.balanceComposition(debitTotal: 75, creditTotal: 25)
+
+        #expect(abs(composition.debitFraction - 0.75) < 0.000_001)
+        #expect(abs(composition.creditFraction - 0.25) < 0.000_001)
+        #expect(abs(composition.debitFraction + composition.creditFraction - 1) < 0.000_001)
+    }
 }

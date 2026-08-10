@@ -20,6 +20,10 @@ struct InlineCardDraft {
     var currency: String
     var balance: Double
     var creditLimit: Double?
+    var statementDay: Int?
+    var dueDay: Int?
+    var minPayment: Double?
+    var graceDays: Int?
     var expiryDate: String?
     var cardholderName: String?
     var cardColor: String?
@@ -36,6 +40,10 @@ struct InlineCardDraft {
         currency: String,
         balance: Double = 0.0,
         creditLimit: Double? = nil,
+        statementDay: Int? = nil,
+        dueDay: Int? = nil,
+        minPayment: Double? = nil,
+        graceDays: Int? = nil,
         expiryDate: String? = nil,
         cardholderName: String? = nil,
         cardColor: String? = nil,
@@ -51,6 +59,10 @@ struct InlineCardDraft {
         self.currency = currency
         self.balance = balance
         self.creditLimit = creditLimit
+        self.statementDay = statementDay
+        self.dueDay = dueDay
+        self.minPayment = minPayment
+        self.graceDays = graceDays
         self.expiryDate = expiryDate
         self.cardholderName = cardholderName
         self.cardColor = cardColor
@@ -84,6 +96,11 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     @State private var balanceText: String = ""
     @State private var creditLimitText: String = ""
     @State private var creditDebtText: String = ""
+    @State private var minPaymentText: String = ""
+    @State private var showsCreditCardTerms = false
+    @State private var statementDay = 1
+    @State private var dueDay = 20
+    @State private var graceDays = 0
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
     @State private var showCurrencyPicker: Bool = false
@@ -124,7 +141,10 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             let debt = AmountInputFormatter.parse(creditDebtText) ?? 0
             result.creditLimit = creditLimitText.isEmpty ? nil : limit
             result.balance = max(0, limit - debt)
-            result.includeInTotal = true
+            result.statementDay = statementDay
+            result.dueDay = dueDay
+            result.minPayment = AmountInputFormatter.parse(minPaymentText)
+            result.graceDays = graceDays > 0 ? graceDays : nil
         } else {
             if let balance = AmountInputFormatter.parse(balanceText) {
                 result.balance = balance
@@ -135,21 +155,42 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     }
     
     var isValid: Bool { !name.isEmpty }
-    
+
     var body: some View {
+        presentedForm
+    }
+
+    private var formSections: some View {
         VStack(spacing: 18) {
             typeSection
             balanceSection
             groupSection
             calculationsSection
             prioritySection
+            if card.cardType == .credit { creditCardTermsSection }
         }
         .onAppear {
             loadAvailableCurrencies()
         }
+    }
+
+    /// Keep observation chains in small compiler boundaries. A single chain of all fields makes
+    /// the Release SwiftUI generic expression exceed the type-checker budget.
+    private var identityObservedForm: some View {
+        formSections
         .onChange(of: name) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.cardTypeRaw) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.currency) { _, _ in onCardDataChanged(currentCard) }
+        .onChange(of: card.bank) { _, _ in onCardDataChanged(currentCard) }
+        .onChange(of: card.cardNumber) { _, value in
+            let normalized = String(value.filter(\.isNumber).prefix(4))
+            if normalized != value { card.cardNumber = normalized }
+            onCardDataChanged(currentCard)
+        }
+    }
+
+    private var balanceObservedForm: some View {
+        identityObservedForm
         .onChange(of: balanceText) { _, newValue in
             // AmountTextField держит raw canonical в balanceText; card.balance пересчитываем
             // здесь (раньше это делал set-closure поля). currentCard всё равно берёт из текста.
@@ -169,44 +210,27 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             card.balance = max(0, limit - debt)
             onCardDataChanged(currentCard)
         }
+    }
+
+    private var preferencesObservedForm: some View {
+        balanceObservedForm
         .onChange(of: card.priority) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.isFavorite) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.includeInTotal) { _, _ in onCardDataChanged(currentCard) }
+    }
+
+    private var termsObservedForm: some View {
+        preferencesObservedForm
+        .onChange(of: statementDay) { _, _ in onCardDataChanged(currentCard) }
+        .onChange(of: dueDay) { _, _ in onCardDataChanged(currentCard) }
+        .onChange(of: graceDays) { _, _ in onCardDataChanged(currentCard) }
+        .onChange(of: minPaymentText) { _, _ in onCardDataChanged(currentCard) }
+    }
+
+    private var presentedForm: some View {
+        termsObservedForm
         .sheet(isPresented: $showCurrencyPicker) {
-            NavigationStack {
-                let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
-                let canUseCrypto = EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
-                CurrencyPickerView(
-                    allCodes: availableCurrencies,
-                    searchText: $currencySearchText,
-                    selectedCodes: favoriteCodes,
-                    favoriteCodes: Set(favoriteCodes),
-                    currentSelection: card.currency,
-                    primaryPinnedCode: SettingsManager.shared.primaryCurrencyCode,
-                    onToggleFavorite: nil,
-                    badgeForCode: { code in
-                        guard CurrencySelectionSupport.isCrypto(code), !canUseCrypto else { return nil }
-                        return .pro
-                    },
-                    onSelect: { currency in
-                        if CurrencySelectionSupport.isCrypto(currency), !canUseCrypto {
-                            showCryptoProAlert = true
-                            return
-                        }
-                        card.currency = currency
-                        showCurrencyPicker = false
-                    }
-                )
-                .navigationTitle(L("finances.add_account.currency_picker.title"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(L("finances.common.cancel")) { showCurrencyPicker = false }
-                    }
-                }
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+            currencyPickerSheet
         }
         .premiumUpsellAlert(
             isPresented: $showCryptoProAlert,
@@ -214,6 +238,43 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             message: .key("monetization.crypto.pro_message"),
             onSubscribe: { router.push(.subscription) }
         )
+    }
+
+    private var currencyPickerSheet: some View {
+        let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
+        let canUseCrypto = EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
+        return NavigationStack {
+            CurrencyPickerView(
+                allCodes: availableCurrencies,
+                searchText: $currencySearchText,
+                selectedCodes: favoriteCodes,
+                favoriteCodes: Set(favoriteCodes),
+                currentSelection: card.currency,
+                primaryPinnedCode: SettingsManager.shared.primaryCurrencyCode,
+                onToggleFavorite: nil,
+                badgeForCode: { code in
+                    guard CurrencySelectionSupport.isCrypto(code), !canUseCrypto else { return nil }
+                    return .pro
+                },
+                onSelect: { currency in
+                    if CurrencySelectionSupport.isCrypto(currency), !canUseCrypto {
+                        showCryptoProAlert = true
+                        return
+                    }
+                    card.currency = currency
+                    showCurrencyPicker = false
+                }
+            )
+            .navigationTitle(L("finances.add_account.currency_picker.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("finances.common.cancel")) { showCurrencyPicker = false }
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
     
     private var accentColor: Color { AppColors.financesGradient.first ?? AppColors.brandPrimary }
@@ -298,6 +359,24 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                         .padding(.horizontal, 16)
                         .contentShape(Rectangle())
                     }
+                    if card.cardType == .credit {
+                        FinancesRowDivider(leadingPadding: 16)
+                        Picker("Bank / issuer", selection: $card.bank) {
+                            ForEach(Bank.allCases, id: \.self) { bank in Text(bank.displayName).tag(bank) }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        FinancesRowDivider(leadingPadding: 16)
+                        HStack {
+                            Text(L("finances.editor.card.number_placeholder"))
+                            Spacer()
+                            TextField("1234", text: $card.cardNumber)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(maxWidth: 100)
+                        }
+                        .padding(16)
+                    }
                 }
             }
         }
@@ -307,7 +386,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                 creditLimitText = ""
                 creditDebtText = ""
             } else {
-                card.includeInTotal = true
                 let limit = AmountInputFormatter.parse(creditLimitText) ?? card.creditLimit ?? 0
                 if creditLimitText.isEmpty {
                     creditLimitText = AmountInputFormatter.plainString(from: limit)
@@ -417,20 +495,9 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             FinancesSectionHeader(title: L("finances.add_account.section.calculations"))
             FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                 VStack(alignment: .leading, spacing: 14) {
-                    if card.cardType == .credit {
-                        HStack(spacing: 10) {
-                            Text(L("finances.add_account.total_impact.title"))
-                                .foregroundStyle(AppColors.textPrimary)
-                            Spacer()
-                            Text(L("finances.add_account.total_impact.decreases"))
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(AppColors.error.opacity(0.9))
-                        }
-                    } else {
-                        Toggle(L("finances.add_account.total_impact.include"), isOn: $card.includeInTotal)
-                            .tint(AppColors.toggleOnGreen)
-                            .foregroundStyle(AppColors.textPrimary)
-                    }
+                    Toggle(L("finances.add_account.total_impact.include"), isOn: $card.includeInTotal)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
                     
                     Text(L("finances.add_account.total_impact.description"))
                         .font(.system(size: 12, weight: .regular))
@@ -468,6 +535,45 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                     Text(L("finances.add_account.priority.hint"))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+                }
+            }
+        }
+    }
+
+    private var creditCardTermsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: L("finances.editor.section.additional"))
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    Button { withAnimation { showsCreditCardTerms.toggle() } } label: {
+                        HStack {
+                            Label(L("finances.add_account.credit.payment.section"), systemImage: "calendar")
+                            Spacer()
+                            Image(systemName: showsCreditCardTerms ? "chevron.up" : "chevron.down")
+                        }
+                        .padding(16)
+                    }
+                    .buttonStyle(.plain)
+                    if showsCreditCardTerms {
+                        FinancesRowDivider(leadingPadding: 16)
+                        Stepper("Statement day: \(statementDay)", value: $statementDay, in: 1...31)
+                            .padding(16)
+                        FinancesRowDivider(leadingPadding: 16)
+                        Stepper("Payment day: \(dueDay)", value: $dueDay, in: 1...31)
+                            .padding(16)
+                        FinancesRowDivider(leadingPadding: 16)
+                        Stepper("Grace period: \(graceDays)", value: $graceDays, in: 0...365)
+                            .padding(16)
+                        FinancesRowDivider(leadingPadding: 16)
+                        HStack {
+                            Text(L("finances.add_account.credit.monthly_payment"))
+                            Spacer()
+                            AmountTextField(placeholder: "0", value: $minPaymentText)
+                                .multilineTextAlignment(.trailing)
+                                .frame(maxWidth: 140)
+                        }
+                        .padding(16)
+                    }
                 }
             }
         }
