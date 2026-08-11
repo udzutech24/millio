@@ -1189,7 +1189,7 @@ struct AccountDetailView: View {
             }
         case .depositTerms:
             if let meta = account.depositMeta, let snapshot = depositPresentation?.snapshot {
-                DepositTermsEditSheet(meta: meta, snapshot: snapshot) { updatedMeta in
+                DepositTermsEditSheet(meta: meta, snapshot: snapshot, openingDate: account.createdAt) { updatedMeta in
                     performDeposit {
                         let result = try DepositOperationCoordinator(modelContext: modelContext).editTerms(
                             depositID: account.id,

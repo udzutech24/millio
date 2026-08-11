@@ -110,21 +110,32 @@ struct DepositCloseSheet: View {
 struct DepositTermsEditSheet: View {
     let meta: DepositMeta
     let snapshot: DepositPresentationSnapshot
+    let openingDate: Date
     let onSave: (DepositMeta) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var rateText: String
     @State private var termEnd: Date
+    @State private var capitalization: AccountDepositCapitalization
+    @State private var payoutDay: Int
     @State private var allowsTopUp: Bool
     @State private var allowsEarlyClose: Bool
     @State private var penaltyText: String
 
-    init(meta: DepositMeta, snapshot: DepositPresentationSnapshot, onSave: @escaping (DepositMeta) -> Void) {
+    init(
+        meta: DepositMeta,
+        snapshot: DepositPresentationSnapshot,
+        openingDate: Date,
+        onSave: @escaping (DepositMeta) -> Void
+    ) {
         self.meta = meta
         self.snapshot = snapshot
+        self.openingDate = openingDate
         self.onSave = onSave
         _rateText = State(initialValue: NSDecimalNumber(decimal: meta.rate).stringValue)
         _termEnd = State(initialValue: meta.termEnd ?? Date())
+        _capitalization = State(initialValue: meta.capitalization)
+        _payoutDay = State(initialValue: meta.payoutDay ?? Calendar.current.component(.day, from: openingDate))
         _allowsTopUp = State(initialValue: meta.allowsTopUp)
         _allowsEarlyClose = State(initialValue: meta.allowsEarlyClose)
         _penaltyText = State(initialValue: NSDecimalNumber(decimal: (meta.earlyClosePenalty ?? 0) * 100).stringValue)
@@ -136,8 +147,9 @@ struct DepositTermsEditSheet: View {
         guard let rate, rate > 0,
               !allowsEarlyClose || penalty.map({ $0 >= 0 && $0 <= 100 }) == true else { return nil }
         return DepositMeta(
-            rate: rate, capitalization: meta.capitalization, termEnd: meta.termEnd == nil ? nil : termEnd,
-            payoutDay: meta.payoutDay, allowsTopUp: allowsTopUp, allowsEarlyClose: allowsEarlyClose,
+            rate: rate, capitalization: capitalization, termEnd: meta.termEnd == nil ? nil : termEnd,
+            payoutDay: capitalization == .none ? nil : payoutDay,
+            allowsTopUp: allowsTopUp, allowsEarlyClose: allowsEarlyClose,
             earlyClosePenalty: allowsEarlyClose ? penalty.map { $0 / 100 } : nil,
             remindEnd: meta.remindEnd, autoRollover: meta.autoRollover
         )
@@ -148,6 +160,19 @@ struct DepositTermsEditSheet: View {
             Form {
                 Section(L("accounts_core.deposit.action.edit_terms")) {
                     AmountTextField(placeholder: L("accounts_core.deposit_form.rate_placeholder"), value: $rateText)
+                    Picker(L("accounts_core.deposit_form.capitalization_label"), selection: $capitalization) {
+                        Text(L("accounts_core.deposit_form.capitalization.none")).tag(AccountDepositCapitalization.none)
+                        Text(L("accounts_core.deposit_form.capitalization.monthly")).tag(AccountDepositCapitalization.monthly)
+                        Text(L("accounts_core.deposit_form.capitalization.quarterly")).tag(AccountDepositCapitalization.quarterly)
+                    }
+                    if capitalization != .none {
+                        Picker(L("accounts_core.deposit_form.payout_day"), selection: $payoutDay) {
+                            ForEach(1...31, id: \.self) { day in Text("\(day)").tag(day) }
+                        }
+                        Text(L("accounts_core.deposit_form.payout_day_hint"))
+                            .font(.millioCaptionRegular)
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
                     if meta.termEnd != nil {
                         DatePicker(L("accounts_core.deposit_form.term_end"), selection: $termEnd, in: Date()..., displayedComponents: .date)
                     }

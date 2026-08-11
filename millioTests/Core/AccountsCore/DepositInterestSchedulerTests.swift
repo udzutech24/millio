@@ -68,6 +68,37 @@ struct DepositInterestSchedulerTests {
         #expect(balanceAtTerm == Decimal(string: "1082714.54")!)
     }
 
+    @Test
+    func explicitPayoutDayControlsFutureScheduleAndClampsShortMonths() throws {
+        let opening = calendar.date(from: DateComponents(year: 2025, month: 1, day: 11))!
+        let termEnd = calendar.date(from: DateComponents(year: 2025, month: 4, day: 30))!
+        let drafts = DepositInterestScheduler.buildInitialSchedule(
+            accountID: UUID(),
+            meta: DepositMeta(
+                rate: 12, capitalization: .monthly, termEnd: termEnd, payoutDay: 31,
+                allowsTopUp: false, allowsEarlyClose: true, earlyClosePenalty: 0,
+                remindEnd: false, autoRollover: false
+            ),
+            openingBalance: 100_000,
+            openingDate: opening,
+            calendar: calendar
+        )
+
+        #expect(drafts.map { calendar.component(.day, from: $0.date) } == [28, 31, 30])
+        #expect(drafts.map { calendar.component(.month, from: $0.date) } == [2, 3, 4])
+    }
+
+    @Test
+    func nilPayoutDayPreservesOpeningDaySchedule() {
+        let opening = calendar.date(from: DateComponents(year: 2025, month: 1, day: 11))!
+
+        let result = DepositInterestScheduler.scheduledPeriodEnd(
+            openingDate: opening, months: 1, payoutDay: nil, calendar: calendar
+        )
+
+        #expect(result == calendar.date(from: DateComponents(year: 2025, month: 2, day: 11)))
+    }
+
     // MARK: - Квартальная капитализация: сумма периодов совпадает с рынком за квартал (sanity)
 
     @Test

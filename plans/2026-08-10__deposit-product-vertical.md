@@ -221,6 +221,7 @@
 ## Journal
 
 - 2026-08-11: Device-feedback polish for the deposit hero. Added locale-aware grouped money formatting, clearer type hierarchy, adaptive interest metric cards, readable date/amount rows, larger actions, and an explicitly labelled term-progress bar instead of the ambiguous bare percentage. Deposit presentation/render tests pass.
+- 2026-08-11: Added editable interest payout day and capitalization to «Изменить условия». Fixed the scheduler to honor `DepositMeta.payoutDay` for future monthly/quarterly accruals, clamp days 29–31 to the last valid day of short months, preserve legacy nil behavior, and rebuild only future generated events.
 
 - 2026-08-10: Phase 0 complete on dirty user baseline. Research/spec/plan created; production/schema/tests unchanged. Awaiting the literal Phase 1 guard phrase.
 - 2026-08-10: Phase 1 complete. Added deposit characterization and serial multi-context projection fixtures; focused gate succeeded in 28.506s. Schema remains unchanged. Production/UI/schema untouched; next guard is Phase 2.

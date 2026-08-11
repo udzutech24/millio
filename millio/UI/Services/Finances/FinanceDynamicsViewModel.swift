@@ -1256,10 +1256,25 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     /// легаси-`FinanceGroup` используется только как name bridge для старых filter IDs. После
     /// core-primary flip сбор через `state.groups: [FinanceGroup]` возвращал пустой scope
     /// на реальном core-only профиле, хотя экран «Счета» видел все данны.
-    private func coreAccountsForDynamics() -> [Account] {
-        let today = Date()
-        let allCoreAccounts = ((try? modelContext.fetch(FetchDescriptor<Account>())) ?? [])
-            .filter { $0.participates(on: today) }
+    private func coreAccountsForDynamics(scope: BalanceScope = .currentVisible) -> [Account] {
+        let fetchedAccounts = (try? modelContext.fetch(FetchDescriptor<Account>())) ?? []
+        let allCoreAccounts: [Account]
+        switch scope {
+        case .historicalAsOf(let date):
+            allCoreAccounts = fetchedAccounts.filter { $0.participates(on: date) }
+        case .historicalInterval(let interval):
+            // Historical readers must receive every account that participated at any point in
+            // the requested interval. Filtering by `participates(on: Date())` erased archived
+            // accounts before the time-aware valuator could preserve their earlier points.
+            allCoreAccounts = fetchedAccounts.filter { account in
+                guard account.includeInTotal, account.createdAt <= interval.end else { return false }
+                let cutoff = [account.archivedAt, account.deletedAt].compactMap { $0 }.min()
+                guard let cutoff else { return true }
+                return cutoff > interval.start
+            }
+        case .currentVisible, .dashboardSnapshot, .cashflowContribution:
+            allCoreAccounts = fetchedAccounts.filter { $0.participates(on: Date()) }
+        }
         guard !state.selectedGroupIDs.isEmpty else { return allCoreAccounts }
 
         let selectedCoreGroupIDs = Set(state.selectedGroupIDs.compactMap { UUID(uuidString: $0) })
@@ -1906,7 +1921,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
 
     private func scopedCoreAccountIDs() -> Set<UUID> {
         let selected = state.selectedAccountIDs
-        let available = Set(coreAccountsForDynamics().map(\.id))
+        let period = DateInterval(start: state.periodStartDate, end: state.periodEndDate)
+        let available = Set(coreAccountsForDynamics(scope: .historicalInterval(period)).map(\.id))
         guard !selected.isEmpty else { return available }
         return Set(selected.compactMap(coreAccountID(forVisibleAccountID:))).intersection(available)
     }
@@ -3419,7 +3435,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         // Phase 5 warms one shared HistoricalRate cache for both model worlds. Previously the
         // prefetch inspected only legacy products, so a core-only foreign account stayed incomplete
         // even while the identical legacy portfolio had an exact persisted FX row.
-        for account in coreAccountsForDynamics() {
+        let historicalPeriod = DateInterval(start: .distantPast, end: .distantFuture)
+        let historicalCoreAccounts = coreAccountsForDynamics(scope: .historicalInterval(historicalPeriod))
+        for account in historicalCoreAccounts {
             let currency = normalizedConversionCurrency(account.currency)
             if currency != displayCurrency {
                 sourceCurrencies.insert(currency)
@@ -3440,7 +3458,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         await AccountMarketPriceService(
             modelContext: modelContext,
             marketDataClient: financeViewModel.marketDataClient
-        ).prefetchHistoricalPrices(on: dates, accounts: coreAccountsForDynamics())
+        ).prefetchHistoricalPrices(on: dates, accounts: historicalCoreAccounts)
     }
 
     private func resolvedInvestmentCurrency(_ investment: Investment) -> String {

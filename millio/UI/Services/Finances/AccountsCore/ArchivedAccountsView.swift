@@ -88,20 +88,28 @@ struct ArchivedAccountsView: View {
 
     private func row(for account: Account) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.s) {
-            HStack {
-                VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                    Text(account.name)
+            NavigationLink {
+                AccountDetailView(account: account, modelContext: modelContext)
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                        Text(account.name)
+                            .font(.millioSubheadline)
+                            .foregroundStyle(AppColors.textPrimary)
+                        Text(closedSubtitle(for: account))
+                            .font(.millioCaptionRegular)
+                            .foregroundStyle(AppColors.textTertiary)
+                    }
+                    Spacer()
+                    Text(formattedBalanceAtClose(for: account))
                         .font(.millioSubheadline)
-                        .foregroundStyle(AppColors.textPrimary)
-                    Text(closedSubtitle(for: account))
+                        .foregroundStyle(AppColors.textSecondary)
+                    Image(systemName: "chevron.right")
                         .font(.millioCaptionRegular)
                         .foregroundStyle(AppColors.textTertiary)
                 }
-                Spacer()
-                Text(formattedBalanceAtClose(for: account))
-                    .font(.millioSubheadline)
-                    .foregroundStyle(AppColors.textSecondary)
             }
+            .buttonStyle(.plain)
 
             HStack(spacing: AppSpacing.s) {
                 Button(L("accounts_core.archive.action.restore")) {

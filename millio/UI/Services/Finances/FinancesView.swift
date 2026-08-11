@@ -17,6 +17,19 @@ enum FinancesInternalTab: String {
     case dynamics = "dynamics"
 }
 
+enum FinanceArchiveRoute: Equatable {
+    case none, core, legacy, split
+
+    static func resolve(hasCore: Bool, hasLegacy: Bool) -> Self {
+        switch (hasCore, hasLegacy) {
+        case (false, false): .none
+        case (true, false): .core
+        case (false, true): .legacy
+        case (true, true): .split
+        }
+    }
+}
+
 @MainActor
 enum FinancesDeepLinkHandler {
     static func openAddCardIfRequested(appState: AppState, viewModel: FinanceViewModel?) {
@@ -173,6 +186,10 @@ struct FinancesSettingsSheet: View {
         viewModel.hasArchivedNewCoreAccounts()
     }
 
+    private var archiveRoute: FinanceArchiveRoute {
+        .resolve(hasCore: hasArchivedNewCoreAccounts, hasLegacy: !archivedAccounts.isEmpty)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -201,24 +218,12 @@ struct FinancesSettingsSheet: View {
                     }
                     .buttonStyle(.plain)
 
-                    if !archivedAccounts.isEmpty {
+                    if archiveRoute != .none {
                         NavigationLink {
-                            ArchivedFinanceAccountsView(
-                                viewModel: viewModel
+                            UnifiedFinanceArchiveView(
+                                viewModel: viewModel,
+                                route: archiveRoute
                             )
-                        } label: {
-                            settingsRow(
-                                title: financesLocalized("finances.settings.archived_accounts.title"),
-                                subtitle: financesLocalized("finances.settings.archived_accounts.subtitle"),
-                                icon: "archivebox.fill"
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    if hasArchivedNewCoreAccounts {
-                        NavigationLink {
-                            ArchivedAccountsView(modelContext: viewModel.modelContext)
                         } label: {
                             settingsRow(
                                 title: L("accounts_core.archive.title"),
@@ -299,7 +304,65 @@ struct FinancesSettingsSheet: View {
     }
 }
 
-private struct ArchivedFinanceAccountsView: View {
+private struct UnifiedFinanceArchiveView: View {
+    @ObservedObject var viewModel: FinanceViewModel
+    let route: FinanceArchiveRoute
+
+    var body: some View {
+        Group {
+            if route == .core {
+                ArchivedAccountsView(modelContext: viewModel.modelContext)
+            } else if route == .legacy {
+                ArchivedFinanceAccountsView(viewModel: viewModel)
+            } else {
+                ZStack {
+                    GradientBackground()
+                    VStack(spacing: AppSpacing.s) {
+                        NavigationLink {
+                            ArchivedAccountsView(modelContext: viewModel.modelContext)
+                        } label: {
+                            archiveRow(
+                                title: L("accounts_core.archive.current_accounts"),
+                                subtitle: L("accounts_core.archive.current_accounts.subtitle")
+                            )
+                        }
+                        NavigationLink {
+                            ArchivedFinanceAccountsView(viewModel: viewModel)
+                        } label: {
+                            archiveRow(
+                                title: L("accounts_core.archive.legacy_accounts"),
+                                subtitle: L("accounts_core.archive.legacy_accounts.subtitle")
+                            )
+                        }
+                        Spacer()
+                    }
+                    .padding(AppSpacing.l)
+                }
+                .navigationTitle(L("accounts_core.archive.title"))
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+    }
+
+    private func archiveRow(title: String, subtitle: String) -> some View {
+        HStack(spacing: AppSpacing.m) {
+            Image(systemName: "archivebox.fill")
+                .frame(width: 36, height: 36)
+                .background(Color.white.opacity(0.08), in: Circle())
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text(title).font(.millioBodySemibold)
+                Text(subtitle).font(.millioCaptionRegular).foregroundStyle(AppColors.textSecondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").foregroundStyle(AppColors.textTertiary)
+        }
+        .foregroundStyle(AppColors.textPrimary)
+        .padding(AppSpacing.m)
+        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: AppSpacing.m))
+    }
+}
+
+struct ArchivedFinanceAccountsView: View {
     @ObservedObject var viewModel: FinanceViewModel
 
     private var accounts: [ArchivedFinanceAccountRow] {

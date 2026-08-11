@@ -285,6 +285,62 @@ struct FinanceDynamicsSeriesInvariantTests {
         await assertInvariantHoldsForAllPeriods(dynamicsViewModel, sourceLabel: "archived-in-history")
     }
 
+    @Test("AC4: архивный core-счёт остаётся в прошлых точках графика")
+    func coreArchivedAccountRemainsInHistoricalChartPoints() async throws {
+        let ctx = try makeContext()
+        let now = Date()
+        let createdAt = now.addingTimeInterval(-100 * 86_400)
+        let archivedAt = now.addingTimeInterval(-20 * 86_400)
+
+        let coreGroup = AccountGroup(name: "Основная")
+        ctx.insert(coreGroup)
+        let accountsService = AccountsCoreService(modelContext: ctx)
+        let archivedAccount = try accountsService.createAccount(
+            name: "Архивный счёт",
+            kind: .cash,
+            currency: "RUB",
+            openingBalance: 60_000,
+            group: coreGroup,
+            date: createdAt
+        )
+        _ = try accountsService.createAccount(
+            name: "Живой счёт",
+            kind: .cash,
+            currency: "RUB",
+            openingBalance: 30_000,
+            group: coreGroup,
+            date: createdAt
+        )
+        try accountsService.archiveAccount(archivedAccount, on: archivedAt)
+        try ctx.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: ctx,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: ctx,
+            financeViewModel: financeViewModel,
+            currencyService: MockCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        await waitUntil { !dynamicsViewModel.state.isLoading }
+        dynamicsViewModel.state.period = .month
+        dynamicsViewModel.state.dynamicsMode = .aggregated
+
+        await dynamicsViewModel.updateChartDataAsync()
+
+        let points = dynamicsViewModel.state.chartData.sorted { $0.date < $1.date }
+        let first = try #require(points.first?.value)
+        let last = try #require(points.last?.value)
+        #expect(abs(first - 90_000) < 0.01, "До archivedAt график должен включать оба core-счёта")
+        #expect(abs(last - 30_000) < 0.01, "После archivedAt архивный core-счёт должен исчезнуть")
+    }
+
     // MARK: - Только core
 
     @Test("AC1+AC5: только core-портфель — инвариант держится на всех периодах")

@@ -264,7 +264,12 @@ enum DepositInterestScheduler {
             let periodRate = meta.capitalization == .quarterly ? meta.rate / 4 : meta.rate / 12
             var n = 1
             while true {
-                guard let periodEnd = calendar.date(byAdding: .month, value: n * stepMonths, to: openingDate),
+                guard let periodEnd = scheduledPeriodEnd(
+                    openingDate: openingDate,
+                    months: n * stepMonths,
+                    payoutDay: meta.payoutDay,
+                    calendar: calendar
+                ),
                       periodEnd <= horizon else { break }
                 n += 1
                 guard periodEnd > asOf else { continue }
@@ -283,6 +288,24 @@ enum DepositInterestScheduler {
             }
             return drafts
         }
+    }
+
+    /// Keeps legacy schedules anchored to the opening day when `payoutDay == nil`. An explicit
+    /// day is clamped to the last valid day of each target month (31 → Feb 28/29), matching the
+    /// user-facing "day of month" contract without skipping a period.
+    static func scheduledPeriodEnd(
+        openingDate: Date,
+        months: Int,
+        payoutDay: Int?,
+        calendar: Calendar
+    ) -> Date? {
+        guard let base = calendar.date(byAdding: .month, value: months, to: openingDate) else { return nil }
+        guard let payoutDay else { return base }
+        guard (1...31).contains(payoutDay),
+              let range = calendar.range(of: .day, in: .month, for: base) else { return nil }
+        var components = calendar.dateComponents([.year, .month], from: base)
+        components.day = min(payoutDay, range.count)
+        return calendar.date(from: components)
     }
 
     /// Округление процентов до копейки — ОБЫЧНОЕ (`.plain`, «половина вверх»), НЕ bankers rounding

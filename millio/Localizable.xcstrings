@@ -701,6 +701,34 @@
         }
       }
     },
+    "accounts_core.archive.current_accounts" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Accounts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Счета" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "账户" } }
+      }
+    },
+    "accounts_core.archive.current_accounts.subtitle" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive with complete operation history" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архив с полной историей операций" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "包含完整操作历史的归档" } }
+      }
+    },
+    "accounts_core.archive.legacy_accounts" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Previous-version accounts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Счета предыдущей версии" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "旧版账户" } }
+      }
+    },
+    "accounts_core.archive.legacy_accounts.subtitle" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Kept for safe migration and restoration" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранены для безопасного переноса и восстановления" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "保留用于安全迁移和恢复" } }
+      }
+    },
     "accounts_core.archive.delete_forever_confirm.message_format" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1205,6 +1233,20 @@
             "value" : "存款名称"
           }
         }
+      }
+    },
+    "accounts_core.deposit_form.payout_day" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Interest payment day" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "День выплаты процентов" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "利息支付日" } }
+      }
+    },
+    "accounts_core.deposit_form.payout_day_hint" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "For shorter months, payment occurs on the last day." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "В коротком месяце выплата произойдёт в последний день." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "较短月份将在最后一天支付。" } }
       }
     },
     "accounts_core.deposit_form.rate_placeholder" : {

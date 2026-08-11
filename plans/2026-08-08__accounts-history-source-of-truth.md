@@ -746,3 +746,28 @@ excuse to miss a writer.
 - This is device visual acceptance, not the full Phase 5 operational exit. Thirty observations over
   seven civil days, an offline transition, explicit rollback drill, and backend publication remain
   mandatory. Phase 6 deletion is still blocked.
+
+### 2026-08-11 — Archive history access and single entry point
+
+- Device feedback showed that archived core data still participated correctly before `archivedAt`,
+  but the archive row did not navigate to `AccountDetailView`; operation history was therefore
+  inaccessible and appeared deleted. Archived rows now open the read-only detail/history screen.
+- Finance settings now expose one «Архив» entry. Core and legacy stores are routed internally;
+  when both contain rows, one archive hub identifies the previous-version storage explicitly.
+- Existing archive historical-total invariants and the new exhaustive archive-route test pass.
+
+### 2026-08-11 — Archived core accounts restored to Dynamics history
+
+- Physical-device feedback disproved the earlier lower-level-only acceptance: `AccountsTotalsService`
+  preserved pre-archive values, but Dynamics built its structured account scope from accounts that
+  participated today. An archived core account was therefore removed before the time-aware valuator
+  received the request.
+- `coreAccountsForDynamics(scope:)` now distinguishes current and historical selection. Historical
+  intervals include every core account whose lifetime overlaps the interval; current summaries keep
+  excluding archived accounts.
+- Historical FX and market-price warming use the same historical core scope.
+- Added a core-specific regression: a 60,000 archived account plus a 30,000 live account produces
+  90,000 before `archivedAt` and 30,000 after it. The new test passes. Six of eight tests in the
+  surrounding invariant suite pass; two pre-existing one-point-series assertions remain unrelated.
+- Debug device build succeeded and was installed on `iPhone A (2)`. Automatic launch was denied only
+  because the phone was locked; installation itself completed successfully.
