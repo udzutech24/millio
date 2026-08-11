@@ -796,7 +796,8 @@ final class FinanceViewModel: ViewModelProtocol {
             switch event {
             case FinanceEvent.creditsUpdated:
                 self.handleCreditsUpdated()
-            case FinanceEvent.cardsUpdated, FinanceEvent.investmentsUpdated:
+            case FinanceEvent.cardsUpdated, FinanceEvent.investmentsUpdated,
+                 FinanceEvent.depositOperationCommitted:
                 self.loadAccounts()
                 // [Ф5c.7 expand-contract, root-фикс] Общая точка рефреша `state.coreAccounts`/`coreGroups`
                 // для ВСЕХ core-мутаций, публикующих этот канал: archiveAccount/performEdit

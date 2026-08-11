@@ -70,6 +70,7 @@ enum AccountProductFactoryError: Error, Equatable {
     case missingMarketPurchase
     case unexpectedMarketPurchase
     case invalidMarketPurchase
+    case invalidDepositTerms
     case injectedFailure(ProductCreationStage)
 }
 
@@ -102,6 +103,18 @@ enum AccountProductGraphBuilder {
             throw ProductCatalogValidationError.unknownLegacyCannotBeCreated
         }
         try ProductDefinitionCatalog.validateNewProduct(command.productType, kind: kind, metadata: command.metadata)
+        if command.productType == .deposit {
+            guard let meta = command.metadata.deposit,
+                  command.openingBalance > 0,
+                  meta.rate > 0,
+                  meta.termEnd.map({ $0 > command.date }) ?? true,
+                  meta.payoutDay.map({ (1...31).contains($0) }) ?? true,
+                  meta.allowsEarlyClose || meta.earlyClosePenalty == nil,
+                  !meta.autoRollover || meta.termEnd != nil,
+                  !meta.remindEnd || meta.termEnd != nil else {
+                throw AccountProductFactoryError.invalidDepositTerms
+            }
+        }
 
         let group: AccountGroup?
         if let groupID = command.groupID {

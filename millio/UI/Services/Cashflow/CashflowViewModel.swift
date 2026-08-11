@@ -615,6 +615,8 @@ final class CashflowViewModel: ViewModelProtocol {
                 self.loadLinkedInvestments()
             case FinanceEvent.transactionsUpdated:
                 self.loadTransactions()
+            case FinanceEvent.depositOperationCommitted:
+                self.loadTransactionsSnapshot()
             case BackupEvent.restoreCompleted:
                 self.reloadAfterRestoreCompleted()
             default:

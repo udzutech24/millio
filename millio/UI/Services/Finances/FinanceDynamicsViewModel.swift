@@ -391,7 +391,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                  FinanceEvent.investmentsUpdated,
                  FinanceEvent.creditsUpdated,
                  FinanceEvent.transactionsUpdated,
-                 FinanceEvent.auditSnapshotsUpdated:
+                 FinanceEvent.auditSnapshotsUpdated,
+                 FinanceEvent.depositOperationCommitted:
                 self.loadData()
             case BackupEvent.restoreCompleted:
                 self.loadData()

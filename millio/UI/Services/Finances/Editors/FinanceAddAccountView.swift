@@ -1093,6 +1093,13 @@ struct FinanceAddAccountView: View {
                 note: depositData.comment.isEmpty ? nil : depositData.comment
             ))
             _ = try factory.create(command)
+            if meta.remindEnd, let maturity = meta.termEnd {
+                Task { @MainActor in
+                    _ = await NotificationManager.shared.scheduleAccountDepositMaturityReminder(
+                        accountID: command.accountID, accountName: resolvedName, maturityDate: maturity
+                    )
+                }
+            }
             EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             dismiss()
         } catch {

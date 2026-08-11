@@ -56,6 +56,30 @@ enum DepositInterestScheduler {
         )
     }
 
+    /// Pure future-batch builder for atomic deposit commands. Callers own persistence and pass
+    /// only confirmed historical events; generated estimates are rebuilt from the command date.
+    static func buildFutureSchedule(
+        accountID: UUID,
+        meta: DepositMeta,
+        openingDate: Date,
+        confirmedEvents: [AccountEvent],
+        after asOf: Date,
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) -> [InterestEventDraft] {
+        let horizon = effectiveHorizon(meta: meta, asOf: asOf, calendar: calendar)
+        guard horizon > asOf else { return [] }
+        return buildSchedule(
+            accountID: accountID,
+            kind: .deposit,
+            meta: meta,
+            openingDate: openingDate,
+            existingEvents: confirmedEvents,
+            after: asOf,
+            horizon: horizon,
+            calendar: calendar
+        )
+    }
+
     /// Роллинг-догенерация горизонта ДЛЯ ВСЕХ активных вкладов (план `2026-07-05__cashflow-add-transaction-redesign.md`,
     /// Фаза 0). До этого метода `regenerateFutureInterestEvents` вызывался ТОЛЬКО при создании/правке
     /// счёта — бессрочный вклад (`termEnd == nil`) получал события лишь на первые `perpetualHorizonMonths`

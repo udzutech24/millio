@@ -27,6 +27,8 @@ enum FinanceEvent: AppEvent {
     case investmentsUpdated
     case transactionsUpdated
     case auditSnapshotsUpdated
+    /// One post-commit signal for an atomic deposit graph (AccountsCore + optional Cashflow row).
+    case depositOperationCommitted
 }
 
 /// Event Bus для слабой связанности между компонентами

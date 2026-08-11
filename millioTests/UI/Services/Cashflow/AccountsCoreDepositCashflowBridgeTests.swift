@@ -37,6 +37,14 @@ struct AccountsCoreDepositCashflowBridgeTests {
         return try ctx.fetch(descriptor)
     }
 
+    private func markGeneratedInterestConfirmed(_ ctx: ModelContext, through date: Date) throws {
+        for event in try ctx.fetch(FetchDescriptor<AccountEvent>())
+        where event.type == .interest && event.date <= date {
+            event.sourceTransactionID = "confirmed:\(event.id.uuidString)"
+        }
+        try ctx.save()
+    }
+
     // MARK: - Acceptance: due-проценты появляются доходной транзакцией на верную дату/сумму
 
     @Test
@@ -63,21 +71,10 @@ struct AccountsCoreDepositCashflowBridgeTests {
         let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { firstPayoutDate }, calendar: calendar)
 
         let didMaterialize = bridge.materializeDueInterestIncome()
-        #expect(didMaterialize)
+        #expect(didMaterialize == false)
 
         let transactions = try fetchInterestTransactions(ctx)
-        #expect(transactions.count == 1) // только 1-й период due, 2-й и 3-й ещё не наступили
-        let tx = try #require(transactions.first)
-        #expect(tx.transactionType == .income)
-        #expect(tx.incomeCategory == .interest)
-        #expect(tx.currency == "RUB")
-        #expect(calendar.isDate(tx.transactionDate, inSameDayAs: firstPayoutDate))
-        #expect(tx.amount == 1_000) // 100 000 * 12% / 12 = 1000.00
-        #expect(tx.note == "Тинькофф Вклад")
-        // Баланс вклада уже отражён в AccountsCore самим AccountEvent — материализованная строка
-        // не должна ещё раз трогать баланс карты (иначе двойной учёт).
-        #expect(tx.affectsCardBalance == false)
-        #expect(tx.cardID == nil)
+        #expect(transactions.isEmpty) // due scheduler estimate — всё ещё прогноз, а не доход
     }
 
     // MARK: - Идемпотентность: повторный вызов не плодит дубликаты
@@ -102,6 +99,7 @@ struct AccountsCoreDepositCashflowBridgeTests {
         )
 
         let asOf = calendar.date(byAdding: .month, value: 2, to: opening)!
+        try markGeneratedInterestConfirmed(ctx, through: asOf)
         let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { asOf }, calendar: calendar)
 
         #expect(bridge.materializeDueInterestIncome() == true)
@@ -109,6 +107,39 @@ struct AccountsCoreDepositCashflowBridgeTests {
 
         let transactions = try fetchInterestTransactions(ctx)
         #expect(transactions.count == 2) // ровно 2 периода, не 4
+    }
+
+    @Test("Phase 1: two serial ModelContexts do not duplicate the same due projection")
+    func serialMultiContextCallsDoNotDuplicateMaterializedTransaction() throws {
+        let (container, context, service) = try makeContext()
+        let opening = calendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+        let payout = calendar.date(byAdding: .month, value: 1, to: opening)!
+        let account = try service.createAccount(
+            name: "Multi-context", kind: .deposit, currency: "RUB", openingBalance: 100_000, date: opening
+        )
+        account.depositMeta = DepositMeta(
+            rate: 12, capitalization: .monthly, termEnd: payout, payoutDay: nil,
+            allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: nil,
+            remindEnd: false, autoRollover: false
+        )
+        try DepositInterestScheduler.regenerateFutureInterestEvents(
+            for: account, service: service, asOf: opening, calendar: calendar, context: context
+        )
+
+        let firstContext = ModelContext(container)
+        let secondContext = ModelContext(container)
+        try markGeneratedInterestConfirmed(context, through: payout)
+        let firstBridge = AccountsCoreDepositCashflowBridge(
+            modelContext: firstContext, now: { payout }, calendar: calendar
+        )
+        let secondBridge = AccountsCoreDepositCashflowBridge(
+            modelContext: secondContext, now: { payout }, calendar: calendar
+        )
+
+        #expect(firstBridge.materializeDueInterestIncome())
+        #expect(secondBridge.materializeDueInterestIncome() == false)
+        let verificationContext = ModelContext(container)
+        #expect(try fetchInterestTransactions(verificationContext).count == 1)
     }
 
     // MARK: - Будущие (ещё не наступившие) события не показываются раньше срока
@@ -162,6 +193,7 @@ struct AccountsCoreDepositCashflowBridgeTests {
         // Пользователь не открывал приложение с даты создания до конца 4-го месяца — 4 периода
         // должны материализоваться ОДНИМ вызовом с их исторически верными датами.
         let asOf = calendar.date(byAdding: .month, value: 4, to: opening)!
+        try markGeneratedInterestConfirmed(ctx, through: asOf)
         let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { asOf }, calendar: calendar)
 
         #expect(bridge.materializeDueInterestIncome() == true)
@@ -210,7 +242,7 @@ struct AccountsCoreDepositCashflowBridgeTests {
         let asOf = calendar.date(byAdding: .day, value: 1, to: calendar.date(byAdding: .month, value: 13, to: opening)!)!
         let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { asOf }, calendar: calendar)
         let didMaterialize = bridge.syncDepositInterestLedger()
-        #expect(didMaterialize) // горизонт продлился → появился due-период 13 месяца → материализован
+        #expect(didMaterialize == false) // горизонт продлён, но estimates не стали доходом
 
         let eventsAfter = try ctx.fetch(FetchDescriptor<AccountEvent>()).filter {
             $0.account?.id == account.id && $0.type == .interest
@@ -218,7 +250,7 @@ struct AccountsCoreDepositCashflowBridgeTests {
         #expect(eventsAfter.count > 12) // горизонт продлён за пределы исходных 12 периодов
 
         let transactions = try fetchInterestTransactions(ctx)
-        #expect(transactions.count == 13) // все 13 due-периодов видимы в Cashflow, включая новый
+        #expect(transactions.isEmpty)
     }
 
     // MARK: - Архивный (закрытый) вклад не продлевает горизонт, но прошлые due-события материализуются
@@ -248,8 +280,8 @@ struct AccountsCoreDepositCashflowBridgeTests {
         #expect(generatedByExtension == 0) // архивный счёт исключён из продления горизонта
 
         let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { asOf }, calendar: calendar)
-        #expect(bridge.materializeDueInterestIncome() == true) // но уже сгенерированный 1-й период всё равно виден
-        #expect(try fetchInterestTransactions(ctx).count == 1)
+        #expect(bridge.materializeDueInterestIncome() == false)
+        #expect(try fetchInterestTransactions(ctx).isEmpty)
     }
 
     // MARK: - upcomingInterestEvents (Фаза 0, Шаг 6 — секция «Предстоящие»)
@@ -292,8 +324,8 @@ struct AccountsCoreDepositCashflowBridgeTests {
         #expect(upcoming.map(\.date) == upcoming.map(\.date).sorted())
 
         // Материализация due-периода не пересекается с upcoming (разные множества).
-        #expect(bridge.materializeDueInterestIncome() == true)
-        #expect(try fetchInterestTransactions(ctx).count == 1)
+        #expect(bridge.materializeDueInterestIncome() == false)
+        #expect(try fetchInterestTransactions(ctx).isEmpty)
         #expect(bridge.upcomingInterestEvents().count == 3) // материализация 1-го периода не трогает будущие
     }
 

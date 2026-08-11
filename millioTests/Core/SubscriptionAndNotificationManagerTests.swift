@@ -190,6 +190,43 @@ struct NotificationManagerTests {
         return calendar.date(from: components)!
     }
 
+    @Test("AccountsCore deposit reminder schedules one day before maturity and cancels by namespace")
+    func accountDepositMaturityReminderLifecycle() async throws {
+        let center = FakeNotificationCenter()
+        let accountID = UUID()
+        let manager = NotificationManager(
+            notificationCenter: center, now: { self.makeDate(day: 10) },
+            calendar: makeCalendarUTC(), defaults: UserDefaults(suiteName: UUID().uuidString)!
+        )
+        let scheduled = await manager.scheduleAccountDepositMaturityReminder(
+            accountID: accountID, accountName: "Deposit", maturityDate: makeDate(day: 20)
+        )
+        #expect(scheduled)
+        let request = try #require(center.addedRequests.first)
+        #expect(request.identifier == NotificationManager.accountDepositReminderIdentifier(accountID))
+        let trigger = try #require(request.trigger as? UNCalendarNotificationTrigger)
+        #expect(trigger.dateComponents.day == 19)
+        #expect(trigger.dateComponents.hour == 9)
+        manager.cancelAccountDepositMaturityReminder(accountID: accountID)
+        #expect(center.removedPending.last == [NotificationManager.accountDepositReminderIdentifier(accountID)])
+    }
+
+    @Test("AccountsCore deposit reminder stays unscheduled after denial or past maturity")
+    func accountDepositReminderDenialAndPastDate() async {
+        let denied = FakeNotificationCenter(); denied.authorizationGranted = false
+        let manager = NotificationManager(
+            notificationCenter: denied, now: { self.makeDate(day: 10) }, calendar: makeCalendarUTC(),
+            defaults: UserDefaults(suiteName: UUID().uuidString)!
+        )
+        #expect(await !manager.scheduleAccountDepositMaturityReminder(
+            accountID: UUID(), accountName: "Deposit", maturityDate: makeDate(day: 20)
+        ))
+        #expect(await !manager.scheduleAccountDepositMaturityReminder(
+            accountID: UUID(), accountName: "Deposit", maturityDate: makeDate(day: 9)
+        ))
+        #expect(denied.addedRequests.isEmpty)
+    }
+
     @Test("Credit-card reminder reuses NotificationManager with an exact one-time trigger")
     func creditCardPaymentReminder() async throws {
         let center = FakeNotificationCenter()

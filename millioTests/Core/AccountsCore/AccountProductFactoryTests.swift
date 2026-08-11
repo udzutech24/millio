@@ -54,6 +54,36 @@ struct AccountProductFactoryTests {
         #expect(events.filter { $0.type == .interest }.count == 3)
     }
 
+    @Test("Deposit creation rejects inconsistent terms before inserting a graph")
+    func invalidDepositTermsDoNotMutateStore() throws {
+        let (_, context, factory) = try makeStack()
+        let opening = utcCalendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+        let invalidMetadata: [DepositMeta] = [
+            DepositMeta(
+                rate: 0, capitalization: .monthly, termEnd: opening, payoutDay: nil,
+                allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: nil,
+                remindEnd: false, autoRollover: false
+            ),
+            DepositMeta(
+                rate: 12, capitalization: .monthly, termEnd: nil, payoutDay: 32,
+                allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: 0.5,
+                remindEnd: true, autoRollover: true
+            )
+        ]
+
+        for (index, meta) in invalidMetadata.enumerated() {
+            #expect(throws: AccountProductFactoryError.invalidDepositTerms) {
+                try factory.create(CreateProductCommand(
+                    productType: .deposit, name: "Invalid \(index)", currency: "RUB",
+                    openingBalance: index == 0 ? 100_000 : 0,
+                    metadata: .init(deposit: meta), date: opening, calendar: utcCalendar
+                ))
+            }
+        }
+        #expect(try context.fetchCount(FetchDescriptor<Account>()) == 0)
+        #expect(try context.fetchCount(FetchDescriptor<AccountEvent>()) == 0)
+    }
+
     @Test("Market account never commits without its mandatory buy")
     func marketGraphRequiresAndCommitsBuy() throws {
         let (_, context, factory) = try makeStack()

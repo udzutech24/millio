@@ -30,6 +30,9 @@ struct AccountDetailView: View {
         case editDetails
         case transfer
         case earlyClose
+        case depositTopUp
+        case depositTerms
+        case depositMaturity
         case buy
         case sell
         case dividend
@@ -65,11 +68,31 @@ struct AccountDetailView: View {
         _ = refreshToken
         return (account.events ?? [])
             .filter { event in
-                !(account.kind == .marketInvestment && event.type == .openingBalance && (event.amount ?? 0) == 0)
+                if account.kind == .deposit {
+                    return !DepositDetailPresentation.isGeneratedForecastEvent(event, accountID: account.id)
+                }
+                return !(account.kind == .marketInvestment && event.type == .openingBalance && (event.amount ?? 0) == 0)
             }
             .sorted { lhs, rhs in
             lhs.date != rhs.date ? lhs.date > rhs.date : lhs.createdAt > rhs.createdAt
         }
+    }
+
+    private var depositPresentation: DepositDetailPresentation? {
+        guard account.kind == .deposit else { return nil }
+        _ = refreshToken
+        let snapshot = DepositFinancialContract.snapshot(
+            accountID: account.id,
+            currency: account.currency,
+            openingDate: account.createdAt,
+            archivedAt: account.archivedAt,
+            deletedAt: account.deletedAt,
+            meta: account.depositMeta,
+            events: account.events ?? [],
+            asOf: Date(),
+            calendarPolicy: DepositCalendarPolicy(timeZone: .current)
+        )
+        return DepositDetailPresentation.make(snapshot: snapshot)
     }
 
     var body: some View {
@@ -85,16 +108,20 @@ struct AccountDetailView: View {
                             onEdit: { sheet = .editDetails }
                         )
                     }
-                    if account.productType == .creditCard {
+                    if let depositPresentation {
+                        DepositDetailSection(
+                            presentation: depositPresentation,
+                            accountName: account.name,
+                            taxPresentation: depositTaxPresentation,
+                            onAction: handleDepositAction
+                        )
+                    } else if account.productType == .creditCard {
                         CreditCardDetailSection(account: account, rawBalance: balanceToday)
                     } else if AccountDetailDescriptor.resolve(for: account).showsGenericHeader {
                         header
                     }
-                    if account.archivedAt == nil && account.deletedAt == nil {
+                    if account.kind != .deposit && account.archivedAt == nil && account.deletedAt == nil {
                         actionsRow
-                    }
-                    if account.kind == .deposit {
-                        depositForecastSection
                     }
                     if account.kind == .marketInvestment {
                         marketInfoSection
@@ -429,8 +456,8 @@ struct AccountDetailView: View {
     /// Эффективная ставка налога «чистыми» для ЭТОГО вклада за текущий календарный год (спека §2.8):
     /// доля Σ interest всех вкладов владельца, отнесённая налогом на ЭТОТ счёт, делённая на его gross.
     /// Приближение для прогноза (месяц/срок ещё не наступили — используем ставку текущего года).
-    /// TODO Фаза 3+: конвертация процентов валютных вкладов в ₽ курсом даты события (см. докстринг
-    /// `DepositTaxCalculator`) — сейчас берём amount как есть, корректно только для ₽-вкладов.
+    /// Foreign interest is deliberately incomplete here until event-date historical evidence is
+    /// loaded asynchronously. Relabelling its nominal amount as RUB would fabricate a tax value.
     private var depositTaxAllocationForThisAccount: DepositTaxAllocation? {
         guard account.kind == .deposit else { return nil }
         let year = Calendar.current.component(.year, from: Date())
@@ -442,14 +469,40 @@ struct AccountDetailView: View {
         guard let yearStart = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
               let yearEnd = calendar.date(from: DateComponents(year: year + 1, month: 1, day: 1)) else { return nil }
 
-        let inputs: [DepositTaxCalculator.InterestEventInput] = allDeposits.flatMap { deposit -> [DepositTaxCalculator.InterestEventInput] in
-            (deposit.events ?? [])
-                .filter { $0.type == .interest && $0.date >= yearStart && $0.date < yearEnd }
-                .map { DepositTaxCalculator.InterestEventInput(accountID: deposit.id, amountRUB: $0.amount ?? 0) }
+        let yearDeposits = allDeposits.flatMap { deposit in
+            (deposit.events ?? []).filter {
+                $0.type == .interest && $0.date >= yearStart && $0.date < yearEnd && $0.date <= Date()
+                    && !DepositDetailPresentation.isGeneratedForecastEvent($0, accountID: deposit.id)
+            }
+                .map { (deposit, $0) }
+        }
+        guard yearDeposits.allSatisfy({ $0.0.currency.uppercased() == "RUB" }) else { return nil }
+        let inputs: [DepositTaxCalculator.InterestEventInput] = yearDeposits.map { deposit, event in
+            DepositTaxCalculator.InterestEventInput(accountID: deposit.id, amountRUB: event.amount ?? 0)
         }
 
         let result = DepositTaxCalculator.calculate(interestEventsInRUB: inputs, year: year, settings: SettingsManager.shared.depositTaxSettings)
         return result.perAccount.first(where: { $0.accountID == account.id })
+    }
+
+    private var depositTaxPresentation: DepositTaxPresentation? {
+        guard account.kind == .deposit else { return nil }
+        let year = Calendar.current.component(.year, from: Date())
+        let deposits = (try? modelContext.fetch(FetchDescriptor<Account>(
+            predicate: #Predicate<Account> { $0.kindRaw == "deposit" }
+        ))) ?? []
+        let events = deposits.flatMap { deposit in
+            (deposit.events ?? []).compactMap { event -> DepositTaxEvent? in
+                guard event.type == .interest, event.date <= Date(),
+                      !DepositDetailPresentation.isGeneratedForecastEvent(event, accountID: deposit.id),
+                      let amount = event.amount else { return nil }
+                return .init(accountID: deposit.id, date: event.date, currency: deposit.currency, amount: amount)
+            }
+        }
+        return DepositTaxPresentationBuilder.make(
+            events: events, year: year, settings: SettingsManager.shared.depositTaxSettings,
+            historicalFX: [:], calendar: .current
+        )
     }
 
     /// Эффективная ставка налога «чистыми» для ЭТОГО вклада за текущий год — доля, применяемая
@@ -1075,16 +1128,17 @@ struct AccountDetailView: View {
                     account: account,
                     modelContext: modelContext,
                     onSave: { name, group, note, includeInTotal, _, _, _ in
-                    performEdit {
-                        try service.updateAccount(
-                            account,
-                            name: name,
-                            group: group,
-                            note: note,
-                            includeInTotal: includeInTotal
-                        )
-                    }
-                    }
+                        performEdit {
+                            try service.updateAccount(
+                                account,
+                                name: name,
+                                group: group,
+                                note: note,
+                                includeInTotal: includeInTotal
+                            )
+                        }
+                    },
+                    onProductTransitionCommitted: productTransitionCommitted
                 )
             }
         case .transfer:
@@ -1096,13 +1150,72 @@ struct AccountDetailView: View {
                 }
             )
         case .earlyClose:
-            AccountEarlyCloseSheet(
-                source: account,
-                modelContext: modelContext,
-                onSave: { destination in
-                    performEarlyClose(transferTo: destination)
+            if let snapshot = depositPresentation?.snapshot {
+                DepositCloseSheet(
+                    source: account,
+                    modelContext: modelContext,
+                    preview: DepositDetailPresentation.earlyClosePreview(
+                        snapshot: snapshot,
+                        penaltyShare: account.depositMeta?.earlyClosePenalty
+                    ),
+                    isMaturity: false,
+                    onSave: { destination in
+                        performDepositAndDismiss {
+                            let result = try DepositOperationCoordinator(modelContext: modelContext).earlyClose(
+                                depositID: account.id,
+                                command: DepositTransferCommand(
+                                    operationID: "deposit-early-close:\(UUID().uuidString)",
+                                    destinationAccountID: destination.id
+                                )
+                            )
+                            NotificationManager.shared.cancelAccountDepositMaturityReminder(accountID: account.id)
+                            return result
+                        }
+                    }
+                )
+            }
+        case .depositTopUp:
+            DepositTopUpSheet(deposit: account, modelContext: modelContext) { source, amount in
+                performDeposit {
+                    try DepositOperationCoordinator(modelContext: modelContext).topUp(
+                        depositID: account.id,
+                        command: DepositTopUpCommand(
+                            operationID: "deposit-top-up:\(UUID().uuidString)",
+                            sourceAccountID: source.id,
+                            amount: amount
+                        )
+                    )
                 }
-            )
+            }
+        case .depositTerms:
+            if let meta = account.depositMeta, let snapshot = depositPresentation?.snapshot {
+                DepositTermsEditSheet(meta: meta, snapshot: snapshot) { updatedMeta in
+                    performDeposit {
+                        let result = try DepositOperationCoordinator(modelContext: modelContext).editTerms(
+                            depositID: account.id,
+                            command: DepositTermsEditCommand(meta: updatedMeta)
+                        )
+                        synchronizeDepositReminder(meta: updatedMeta)
+                        return result
+                    }
+                }
+            }
+        case .depositMaturity:
+            if depositPresentation?.snapshot != nil {
+                DepositCloseSheet(source: account, modelContext: modelContext, preview: nil, isMaturity: true) { destination in
+                    performDepositAndDismiss {
+                        let result = try DepositOperationCoordinator(modelContext: modelContext).mature(
+                            depositID: account.id,
+                            command: DepositTransferCommand(
+                                operationID: "deposit-maturity:\(UUID().uuidString)",
+                                destinationAccountID: destination.id
+                            )
+                        )
+                        NotificationManager.shared.cancelAccountDepositMaturityReminder(accountID: account.id)
+                        return result
+                    }
+                }
+            }
         case .buy:
             AccountBuySellSheet(
                 title: L("accounts_core.detail.market.action.buy"),
@@ -1162,6 +1275,36 @@ struct AccountDetailView: View {
         }
     }
 
+    private func handleDepositAction(_ action: DepositDetailAction) {
+        switch action {
+        case .topUp: sheet = .depositTopUp
+        case .editTerms: sheet = .depositTerms
+        case .earlyClose: sheet = .earlyClose
+        case .withdrawAtMaturity: sheet = .depositMaturity
+        case .archive: showArchiveConfirm = true
+        }
+    }
+
+    private func performDeposit(_ operation: () throws -> DepositOperationResult) {
+        do {
+            _ = try operation()
+            refreshToken = UUID()
+            sheet = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func performDepositAndDismiss(_ operation: () throws -> DepositOperationResult) {
+        do {
+            _ = try operation()
+            sheet = nil
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func perform(_ operation: () throws -> Void) {
         do {
             try operation()
@@ -1186,9 +1329,20 @@ struct AccountDetailView: View {
         }
     }
 
+    /// Product transitions commit in an isolated context. Closing this stale detail instance makes
+    /// the accounts list refetch the committed product (and is also required for replacement flows).
+    private func productTransitionCommitted() {
+        EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+        sheet = nil
+        dismiss()
+    }
+
     private func archiveAccount() {
         do {
             try service.archiveAccount(account)
+            if account.kind == .deposit {
+                NotificationManager.shared.cancelAccountDepositMaturityReminder(accountID: account.id)
+            }
             // Track D1: этот экран не хранит ссылку на FinanceViewModel — без события список
             // счетов и «Общий баланс» на экране Счетов не пересчитываются до перезапуска приложения
             // (FinanceViewModel.state.totalAmount обновляется только явным calculateTotalAmount(),
@@ -1198,6 +1352,18 @@ struct AccountDetailView: View {
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func synchronizeDepositReminder(meta: DepositMeta) {
+        guard meta.remindEnd, let maturity = meta.termEnd else {
+            NotificationManager.shared.cancelAccountDepositMaturityReminder(accountID: account.id)
+            return
+        }
+        Task { @MainActor in
+            _ = await NotificationManager.shared.scheduleAccountDepositMaturityReminder(
+                accountID: account.id, accountName: account.name, maturityDate: maturity
+            )
         }
     }
 }

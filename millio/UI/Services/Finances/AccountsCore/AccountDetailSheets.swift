@@ -366,6 +366,7 @@ struct AccountEditDetailsSheet: View {
     let modelContext: ModelContext
     /// Generic fields plus optional real-estate metadata.
     let onSave: (String, AccountGroup?, String?, Bool, RealEstatePropertyType, Int?, UUID?) -> Void
+    let onProductTransitionCommitted: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
@@ -377,10 +378,16 @@ struct AccountEditDetailsSheet: View {
     /// nil = «Без группы» (счёт без группы = `account.group == nil`, канон Ungrouped ядра).
     @State private var selectedGroupID: UUID?
 
-    init(account: Account, modelContext: ModelContext, onSave: @escaping (String, AccountGroup?, String?, Bool, RealEstatePropertyType, Int?, UUID?) -> Void) {
+    init(
+        account: Account,
+        modelContext: ModelContext,
+        onSave: @escaping (String, AccountGroup?, String?, Bool, RealEstatePropertyType, Int?, UUID?) -> Void,
+        onProductTransitionCommitted: @escaping () -> Void
+    ) {
         self.account = account
         self.modelContext = modelContext
         self.onSave = onSave
+        self.onProductTransitionCommitted = onProductTransitionCommitted
         _name = State(initialValue: account.name)
         _note = State(initialValue: account.note ?? "")
         _includeInTotal = State(initialValue: account.includeInTotal)
@@ -448,6 +455,11 @@ struct AccountEditDetailsSheet: View {
                         }
                     }
                 }
+                AccountProductTransitionSection(
+                    account: account,
+                    modelContext: modelContext,
+                    onCommitted: onProductTransitionCommitted
+                )
             }
             .navigationTitle(L("accounts_core.detail.sheet.edit.title"))
             .navigationBarTitleDisplayMode(.inline)
