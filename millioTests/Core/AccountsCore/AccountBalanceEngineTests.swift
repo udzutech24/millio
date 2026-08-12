@@ -47,7 +47,8 @@ struct AccountBalanceEngineTests {
         #expect(balance == 1200)
     }
 
-    /// Расход больше баланса даёт отрицательный баланс — НЕ обрезается нулём (AC9).
+    /// Compatibility-bug characterization for the debit vertical: replay itself is deliberately
+    /// arithmetic-only, so the writer must reject this operation before it reaches the ledger.
     @Test
     func engineA_expenseExceedingBalanceGoesNegative() {
         let events = [

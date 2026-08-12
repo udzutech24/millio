@@ -71,6 +71,7 @@ enum AccountProductFactoryError: Error, Equatable {
     case unexpectedMarketPurchase
     case invalidMarketPurchase
     case invalidDepositTerms
+    case invalidDebitOpeningBalance
     case injectedFailure(ProductCreationStage)
 }
 
@@ -113,6 +114,11 @@ enum AccountProductGraphBuilder {
                   !meta.autoRollover || meta.termEnd != nil,
                   !meta.remindEnd || meta.termEnd != nil else {
                 throw AccountProductFactoryError.invalidDepositTerms
+            }
+        }
+        if command.productType == .debitCard || command.productType == .bankAccount {
+            guard command.openingBalance >= 0 else {
+                throw AccountProductFactoryError.invalidDebitOpeningBalance
             }
         }
 

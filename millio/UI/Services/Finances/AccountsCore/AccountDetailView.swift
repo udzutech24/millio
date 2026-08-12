@@ -37,6 +37,7 @@ struct AccountDetailView: View {
         case sell
         case dividend
         case fee
+        case refund
         case revalue
 
         var id: Int { hashValue }
@@ -44,6 +45,10 @@ struct AccountDetailView: View {
 
     private var service: AccountsCoreService {
         AccountsCoreService(modelContext: modelContext)
+    }
+
+    private var isDebitProduct: Bool {
+        DebitCardContract.products.contains(account.productType ?? .unknownLegacy)
     }
 
     /// Провайдер живых цен нового ядра (Фаза 4) — синхронный снэпшот append-only кэша
@@ -95,6 +100,12 @@ struct AccountDetailView: View {
         return DepositDetailPresentation.make(snapshot: snapshot)
     }
 
+    private var debitSnapshot: DebitCardSnapshot? {
+        guard isDebitProduct else { return nil }
+        _ = refreshToken
+        return DebitCardContract.snapshot(account: account, events: account.events ?? [], on: Date())
+    }
+
     var body: some View {
         ZStack {
             GradientBackground()
@@ -117,10 +128,13 @@ struct AccountDetailView: View {
                         )
                     } else if account.productType == .creditCard {
                         CreditCardDetailSection(account: account, rawBalance: balanceToday)
+                    } else if let snapshot = debitSnapshot {
+                        DebitCardDetailSection(account: account, snapshot: snapshot)
                     } else if AccountDetailDescriptor.resolve(for: account).showsGenericHeader {
                         header
                     }
-                    if account.kind != .deposit && account.archivedAt == nil && account.deletedAt == nil {
+                    if account.kind != .deposit && account.archivedAt == nil && account.deletedAt == nil
+                        && (debitSnapshot?.canWrite ?? true) {
                         actionsRow
                     }
                     if account.kind == .marketInvestment {
@@ -804,6 +818,14 @@ struct AccountDetailView: View {
                     actionButton(expenseActionTitle, icon: "minus.circle.fill") {
                         sheet = .expense
                     }
+                    if isDebitProduct {
+                        actionButton(L("debit_card.action.fee"), icon: "banknote") {
+                            sheet = .fee
+                        }
+                        actionButton(L("debit_card.action.refund"), icon: "arrow.uturn.backward.circle") {
+                            sheet = .refund
+                        }
+                    }
                     actionButton(account.productType == .creditCard ? "Изменить сумму долга" : L("accounts_core.detail.action.adjust_balance"), icon: "slider.horizontal.3") {
                         sheet = .adjustBalance
                     }
@@ -1042,7 +1064,16 @@ struct AccountDetailView: View {
             AccountEventEntrySheet(
                 title: incomeActionTitle,
                 onSave: { amount, date, note in
-                    perform { try service.recordEvent(account: account, type: incomeSheetEventType, amount: amount, date: date, note: note) }
+                    perform {
+                        if isDebitProduct {
+                            _ = try DebitCardOperationCoordinator(modelContext: modelContext).record(
+                                account: account,
+                                command: .init(operationID: "debit-detail:\(UUID().uuidString)", kind: .income, amount: amount, date: date, note: note)
+                            )
+                        } else {
+                            try service.recordEvent(account: account, type: incomeSheetEventType, amount: amount, date: date, note: note)
+                        }
+                    }
                 }
             )
         case .expense:
@@ -1053,7 +1084,16 @@ struct AccountDetailView: View {
             AccountEventEntrySheet(
                 title: expenseActionTitle,
                 onSave: { amount, date, note in
-                    perform { try service.recordEvent(account: account, type: expenseSheetEventType, amount: amount, date: date, note: note) }
+                    perform {
+                        if isDebitProduct {
+                            _ = try DebitCardOperationCoordinator(modelContext: modelContext).record(
+                                account: account,
+                                command: .init(operationID: "debit-detail:\(UUID().uuidString)", kind: .expense, amount: amount, date: date, note: note)
+                            )
+                        } else {
+                            try service.recordEvent(account: account, type: expenseSheetEventType, amount: amount, date: date, note: note)
+                        }
+                    }
                 }
             )
         case .adjustBalance:
@@ -1064,12 +1104,22 @@ struct AccountDetailView: View {
                 currentBalance: isCreditCard ? debt : balanceToday,
                 titleOverride: isCreditCard ? "Изменить сумму долга" : nil,
                 onSave: { newValue in
-                    perform { try service.adjustBalance(
-                        account: account,
-                        to: isCreditCard
-                            ? CreditCardFinancialContract.rawAvailableBalance(debt: newValue, creditLimit: creditLimit)
-                            : newValue
-                    ) }
+                    perform {
+                        if isDebitProduct {
+                            _ = try DebitCardOperationCoordinator(modelContext: modelContext).adjust(
+                                account: account, to: newValue,
+                                operationID: "debit-detail:\(UUID().uuidString)",
+                                reason: "manual_balance_correction"
+                            )
+                        } else {
+                            try service.adjustBalance(
+                                account: account,
+                                to: isCreditCard
+                                    ? CreditCardFinancialContract.rawAvailableBalance(debt: newValue, creditLimit: creditLimit)
+                                    : newValue
+                            )
+                        }
+                    }
                 }
             )
         case .editDetails:
@@ -1146,7 +1196,16 @@ struct AccountDetailView: View {
                 source: account,
                 modelContext: modelContext,
                 onSave: { destination, amount in
-                    perform { try service.transfer(from: account, to: destination, amountInSourceCurrency: amount) }
+                    perform {
+                        if isDebitProduct {
+                            _ = try DebitCardOperationCoordinator(modelContext: modelContext).transfer(
+                                from: account, to: destination,
+                                operationID: "debit-detail:\(UUID().uuidString)", amount: amount
+                            )
+                        } else {
+                            try service.transfer(from: account, to: destination, amountInSourceCurrency: amount)
+                        }
+                    }
                 }
             )
         case .earlyClose:
@@ -1247,11 +1306,36 @@ struct AccountDetailView: View {
             )
         case .fee:
             AccountEventEntrySheet(
-                title: L("accounts_core.detail.market.action.fee"),
+                title: isDebitProduct ? L("debit_card.action.fee") : L("accounts_core.detail.market.action.fee"),
                 onSave: { amount, date, note in
-                    perform { try service.recordMarketCashEvent(account: account, type: .fee, amount: amount, date: date, note: note) }
+                    perform {
+                        if isDebitProduct {
+                            _ = try DebitCardOperationCoordinator(modelContext: modelContext).record(
+                                account: account,
+                                command: .init(operationID: "debit-detail:\(UUID().uuidString)", kind: .fee, amount: amount, date: date, note: note)
+                            )
+                        } else {
+                            try service.recordMarketCashEvent(account: account, type: .fee, amount: amount, date: date, note: note)
+                        }
+                    }
                 }
             )
+        case .refund:
+            DebitCardRefundSheet(
+                expenses: sortedEvents.filter { $0.type == .expense && $0.sourceTransactionID != nil },
+                currency: account.currency
+            ) { originalOperationID, amount, date, note in
+                perform {
+                    _ = try DebitCardOperationCoordinator(modelContext: modelContext).record(
+                        account: account,
+                        command: .init(
+                            operationID: "debit-detail:\(UUID().uuidString)",
+                            kind: .refund(originalOperationID: originalOperationID),
+                            amount: amount, date: date, note: note
+                        )
+                    )
+                }
+            }
         case .revalue:
             AccountAdjustBalanceSheet(
                 currentBalance: balanceToday,
@@ -1308,6 +1392,7 @@ struct AccountDetailView: View {
     private func perform(_ operation: () throws -> Void) {
         do {
             try operation()
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             refreshToken = UUID()
             sheet = nil
         } catch {
@@ -1339,7 +1424,11 @@ struct AccountDetailView: View {
 
     private func archiveAccount() {
         do {
-            try service.archiveAccount(account)
+            if isDebitProduct {
+                try DebitCardOperationCoordinator(modelContext: modelContext).archive(account)
+            } else {
+                try service.archiveAccount(account)
+            }
             if account.kind == .deposit {
                 NotificationManager.shared.cancelAccountDepositMaturityReminder(accountID: account.id)
             }

@@ -61,6 +61,16 @@
         }
       }
     },
+    "%@ · %@ %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ %3$@"
+          }
+        }
+      }
+    },
     "%@ / %@ %@" : {
       "localizations" : {
         "fr" : {
@@ -703,30 +713,46 @@
     },
     "accounts_core.archive.current_accounts" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Accounts" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Счета" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "账户" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accounts"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Счета"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "账户"
+          }
+        }
       }
     },
     "accounts_core.archive.current_accounts.subtitle" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive with complete operation history" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архив с полной историей операций" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "包含完整操作历史的归档" } }
-      }
-    },
-    "accounts_core.archive.legacy_accounts" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Previous-version accounts" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Счета предыдущей версии" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "旧版账户" } }
-      }
-    },
-    "accounts_core.archive.legacy_accounts.subtitle" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Kept for safe migration and restoration" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранены для безопасного переноса и восстановления" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "保留用于安全迁移和恢复" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive with complete operation history"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Архив с полной историей операций"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "包含完整操作历史的归档"
+          }
+        }
       }
     },
     "accounts_core.archive.delete_forever_confirm.message_format" : {
@@ -794,6 +820,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有已归档的账户"
+          }
+        }
+      }
+    },
+    "accounts_core.archive.legacy_accounts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous-version accounts"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Счета предыдущей версии"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "旧版账户"
+          }
+        }
+      }
+    },
+    "accounts_core.archive.legacy_accounts.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kept for safe migration and restoration"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранены для безопасного переноса и восстановления"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留用于安全迁移和恢复"
           }
         }
       }
@@ -1237,16 +1307,46 @@
     },
     "accounts_core.deposit_form.payout_day" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Interest payment day" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "День выплаты процентов" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "利息支付日" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interest payment day"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "День выплаты процентов"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "利息支付日"
+          }
+        }
       }
     },
     "accounts_core.deposit_form.payout_day_hint" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "For shorter months, payment occurs on the last day." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "В коротком месяце выплата произойдёт в последний день." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "较短月份将在最后一天支付。" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For shorter months, payment occurs on the last day."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В коротком месяце выплата произойдёт в последний день."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "较短月份将在最后一天支付。"
+          }
+        }
       }
     },
     "accounts_core.deposit_form.rate_placeholder" : {
@@ -1899,9 +1999,24 @@
     },
     "accounts_core.deposit.detail.term_progress" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Term progress" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Срок вклада" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "存期进度" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Term progress"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Срок вклада"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存期进度"
+          }
+        }
       }
     },
     "accounts_core.deposit.detail.unavailable" : {
@@ -36408,6 +36523,17 @@
         }
       }
     },
+    "common.more" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "More"
+          }
+        }
+      }
+    },
     "converter.accessibility.add_currency" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -40052,6 +40178,292 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "日期"
+          }
+        }
+      }
+    },
+    "debit_card.action.fee" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fee"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Комиссия"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手续费"
+          }
+        }
+      }
+    },
+    "debit_card.action.refund" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refund"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Возврат"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退款"
+          }
+        }
+      }
+    },
+    "debit_card.balance.actual" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Available balance"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступный остаток"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可用余额"
+          }
+        }
+      }
+    },
+    "debit_card.balance.converted" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Converted"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В пересчёте"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换算"
+          }
+        }
+      }
+    },
+    "debit_card.balance.converted.provisional" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estimated conversion"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Предварительный пересчёт"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预估换算"
+          }
+        }
+      }
+    },
+    "debit_card.balance.converted.unavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversion unavailable"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пересчёт недоступен"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法换算"
+          }
+        }
+      }
+    },
+    "debit_card.refund.empty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No expenses available for refund"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет расходов для возврата"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有可退款的支出"
+          }
+        }
+      }
+    },
+    "debit_card.refund.original" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original expense"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Исходный расход"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原始支出"
+          }
+        }
+      }
+    },
+    "debit_card.refund.select" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select an expense"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите расход"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择支出"
+          }
+        }
+      }
+    },
+    "debit_card.state.archived" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archived · read only"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В архиве · только чтение"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已归档 · 只读"
+          }
+        }
+      }
+    },
+    "debit_card.state.excluded" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Excluded from total"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не входит в общий баланс"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不计入总额"
+          }
+        }
+      }
+    },
+    "debit_card.state.incomplete.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Card details are incomplete. Financial actions are unavailable."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные карты неполны. Финансовые операции недоступны."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卡片信息不完整，暂时无法进行资金操作。"
+          }
+        }
+      }
+    },
+    "debit_card.state.incomplete.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Card data incomplete"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные карты неполны"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卡片信息不完整"
           }
         }
       }

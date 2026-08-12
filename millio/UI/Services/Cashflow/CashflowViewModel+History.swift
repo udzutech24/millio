@@ -405,6 +405,7 @@ extension CashflowViewModel {
     }
 
     func persistBulkExpenseImport(_ request: CashflowBulkExpensePersistRequest) async throws -> Int {
+        try CashflowMonthMutationPolicy(modelContext: modelContext).validate(.manualBulk, date: request.month)
         guard !request.entries.isEmpty else {
             throw CashflowBulkExpenseImportError.noRowsToSave
         }

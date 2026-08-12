@@ -227,12 +227,13 @@ final class CashflowScheduledService {
     func scheduleDueAutoApplyIfNeeded() {
         guard !isDueAutoApplyInProgress else { return }
         isDueAutoApplyInProgress = true
+        let scheduledAt = now()
 
         Task(priority: .userInitiated) { @MainActor [weak self] in
             guard let self else { return }
             defer { self.isDueAutoApplyInProgress = false }
 
-            let didApply = await self.applyDuePlannedTransactionsIfNeeded()
+            let didApply = await self.applyDuePlannedTransactionsIfNeeded(referenceNow: scheduledAt)
             if didApply {
                 self.onTransactionsMutated()
             }
@@ -273,9 +274,10 @@ final class CashflowScheduledService {
             let templateDate = calendar.startOfDay(for: template.transactionDate)
             guard templateDate <= today else { continue }
             let expectedSeriesKey = "\(templateSeriesID)|\(template.transactionTypeRaw)"
-            // Начинаем с 0: шаблон — маркер настройки, не транзакция.
-            // Для каждой даты (включая первую) создаём отдельный сгенерированный экземпляр.
-            var occurrenceIndex = 0
+            // The persisted template occupies its anchor date. Generation starts with the next
+            // occurrence, otherwise the anchor is duplicated and its balance effect is applied
+            // immediately when the user merely creates the template.
+            var occurrenceIndex = 1
 
             while let expectedDate = Self.recurrenceOccurrenceDate(
                 templateDate: templateDate,
@@ -319,6 +321,13 @@ final class CashflowScheduledService {
                     generated.exchangeRate = exchangeInfo.rate
                     generated.exchangeRateDate = exchangeInfo.rateDate
                     generated.exchangeRateCurrency = exchangeInfo.rateCurrency
+                    guard (try? CashflowMonthMutationPolicy(modelContext: modelContext).validate(
+                        .scheduledApply,
+                        date: generated.transactionDate
+                    )) != nil else {
+                        occurrenceIndex += 1
+                        continue
+                    }
                     modelContext.insert(generated)
                     await onApplyRecurringToCard(generated)
                     allTransactions.append(generated)
@@ -340,8 +349,8 @@ final class CashflowScheduledService {
     }
 
     @discardableResult
-    func applyDuePlannedTransactionsIfNeeded() async -> Bool {
-        let referenceNow = now()
+    func applyDuePlannedTransactionsIfNeeded(referenceNow: Date? = nil) async -> Bool {
+        let referenceNow = referenceNow ?? now()
         guard let storedCheckpoint = defaults.object(forKey: dueAutoApplyCheckpointKey) as? Date else {
             defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
             return false
@@ -371,6 +380,12 @@ final class CashflowScheduledService {
         }
 
         for transaction in dueTransactions {
+            guard (try? CashflowMonthMutationPolicy(modelContext: modelContext).validate(
+                .scheduledApply,
+                date: transaction.transactionDate
+            )) != nil else {
+                continue
+            }
             do {
                 try await onApplyDuePlannedEffect(transaction)
                 transaction.hasAppliedBalanceEffect = true

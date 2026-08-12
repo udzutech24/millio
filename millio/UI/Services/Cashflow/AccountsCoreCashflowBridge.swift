@@ -42,6 +42,12 @@ final class AccountsCoreCashflowBridge {
         return try? modelContext.fetch(descriptor).first
     }
 
+    func touchesDebitAccount(_ transaction: CashflowTransaction) -> Bool {
+        [resolveNewCoreAccount(id: transaction.cardID), resolveNewCoreAccount(id: transaction.toCardID)]
+            .compactMap { $0?.productType }
+            .contains(where: DebitCardContract.products.contains)
+    }
+
     // MARK: - Публичная точка входа
 
     /// Синхронизирует событие(я) нового ядра для сохранённой транзакции. Вызывается ПОСЛЕ того,
@@ -72,6 +78,32 @@ final class AccountsCoreCashflowBridge {
             // Цель — легаси-карта. Если раньше (до правки) целью был новый счёт — снимаем
             // оставшееся событие (риск №2, ветка новый→старый).
             try accountsCoreService.deleteEvents(bySourceTransactionID: transaction.uniqueID)
+            return
+        }
+
+        if let product = account.productType, DebitCardContract.products.contains(product) {
+            let resolved = try await resolveAmount(transaction: transaction, targetCurrency: account.currency)
+            let kind: DebitCardOperationKind
+            switch transaction.transactionType {
+            case .income:
+                kind = .income
+            case .expense where transaction.amount < 0:
+                guard let original = transaction.operationGroupID, !original.isEmpty else {
+                    throw DebitCardOperationCoordinatorError.originalExpenseNotFound
+                }
+                kind = .refund(originalOperationID: original)
+            case .expense:
+                kind = .expense
+            case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+                kind = .adjustment(reason: transaction.note ?? "")
+            case .transfer:
+                return
+            }
+            _ = try DebitCardOperationCoordinator(modelContext: modelContext).commitStagedCashflow(
+                transaction, account: account, kind: kind, resolvedAmount: resolved.amount,
+                originalAmount: resolved.originalAmount, originalCurrency: resolved.originalCurrency,
+                fxRate: resolved.fxRate, fxProvisional: resolved.fxProvisional
+            )
             return
         }
 
@@ -122,6 +154,16 @@ final class AccountsCoreCashflowBridge {
             try accountsCoreService.deleteEvents(bySourceTransactionID: transaction.uniqueID)
 
         case let (.some(source), .some(destination)):
+            if DebitCardContract.products.contains(source.productType ?? .unknownLegacy),
+               DebitCardContract.products.contains(destination.productType ?? .unknownLegacy) {
+                let sourceAmount = try await convert(transaction.amount, from: transaction.currency, to: source.currency, on: transaction.transactionDate)
+                let destinationAmount = try await convert(transaction.amount, from: transaction.currency, to: destination.currency, on: transaction.transactionDate)
+                _ = try DebitCardOperationCoordinator(modelContext: modelContext).commitStagedTransfer(
+                    transaction, from: source, to: destination,
+                    sourceAmount: sourceAmount, destinationAmount: destinationAmount
+                )
+                return
+            }
             // Пересоздаём пару целиком (просто и корректно для правок задним числом — сумма/курс
             // всегда пересчитываются заново; стабильность transferID между правками не нужна).
             try accountsCoreService.deleteEvents(bySourceTransactionID: transaction.uniqueID)
@@ -147,6 +189,15 @@ final class AccountsCoreCashflowBridge {
 
         case let (.some(source), nil):
             let resolved = try await resolveAmount(transaction: transaction, targetCurrency: source.currency)
+            if DebitCardContract.products.contains(source.productType ?? .unknownLegacy) {
+                _ = try DebitCardOperationCoordinator(modelContext: modelContext).commitStagedCashflow(
+                    transaction, account: source, kind: .expense, resolvedAmount: resolved.amount,
+                    eventNote: bridgeNote(transaction.note), originalAmount: resolved.originalAmount,
+                    originalCurrency: resolved.originalCurrency, fxRate: resolved.fxRate,
+                    fxProvisional: resolved.fxProvisional
+                )
+                return
+            }
             try accountsCoreService.upsertEvent(
                 sourceTransactionID: transaction.uniqueID,
                 account: source,
@@ -162,6 +213,15 @@ final class AccountsCoreCashflowBridge {
 
         case let (nil, .some(destination)):
             let resolved = try await resolveAmount(transaction: transaction, targetCurrency: destination.currency)
+            if DebitCardContract.products.contains(destination.productType ?? .unknownLegacy) {
+                _ = try DebitCardOperationCoordinator(modelContext: modelContext).commitStagedCashflow(
+                    transaction, account: destination, kind: .income, resolvedAmount: resolved.amount,
+                    eventNote: bridgeNote(transaction.note), originalAmount: resolved.originalAmount,
+                    originalCurrency: resolved.originalCurrency, fxRate: resolved.fxRate,
+                    fxProvisional: resolved.fxProvisional
+                )
+                return
+            }
             try accountsCoreService.upsertEvent(
                 sourceTransactionID: transaction.uniqueID,
                 account: destination,

@@ -129,6 +129,7 @@ enum ProductDefinitionCatalog {
         let cashEvents: [AccountEventType] = [
             .openingBalance, .income, .expense, .transferOut, .transferIn, .adjustment, .redenomination
         ]
+        let debitEvents = cashEvents + [AccountEventType.fee]
         let manualEvents: [AccountEventType] = [.openingBalance, .revaluation, .adjustment, .redenomination]
         let marketEvents: [AccountEventType] = [
             .openingBalance, .buy, .sell, .dividend, .fee, .adjustment, .redenomination
@@ -164,7 +165,7 @@ enum ProductDefinitionCatalog {
 
         return [
             .cash: definition(.cash, .cash, events: cashEvents, capabilities: [.cashflow, .transfers]),
-            .debitCard: definition(.debitCard, .debitCard, allowed: [.card], events: cashEvents, capabilities: [.cashflow, .transfers]),
+            .debitCard: definition(.debitCard, .debitCard, allowed: [.card], events: debitEvents, capabilities: [.cashflow, .transfers]),
             .creditCard: definition(
                 .creditCard,
                 .debitCard,
@@ -176,7 +177,7 @@ enum ProductDefinitionCatalog {
                 ],
                 capabilities: [.cashflow, .transfers, .creditLimit]
             ),
-            .bankAccount: definition(.bankAccount, .bankAccount, allowed: [.card], events: cashEvents, capabilities: [.cashflow, .transfers]),
+            .bankAccount: definition(.bankAccount, .bankAccount, allowed: [.card], events: debitEvents, capabilities: [.cashflow, .transfers]),
             .deposit: definition(.deposit, .deposit, required: [.deposit], allowed: [.deposit], opening: .openingBalanceAndDepositSchedule, events: cashEvents + [.interest, .rollover], capabilities: [.depositTerms, .transfers]),
             .loan: definition(.loan, .loan, required: [.loan], allowed: [.loan], events: [.openingBalance, .income, .expense, .extraPayment, .fee, .adjustment, .redenomination], capabilities: [.loanTerms]),
             .receivable: definition(.receivable, .debt, required: [.debt], allowed: [.debt], events: cashEvents + [.extraPayment], capabilities: [.debtDirection]),

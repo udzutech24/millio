@@ -364,6 +364,15 @@ extension CashflowViewModel {
         historicalAssetsSeries = structured
 
         let structuredSnapshot = completeAssetsSnapshot(from: structured)
+        if structuredSnapshot == nil, !query.unresolvedExternalAccountIDs.isEmpty {
+            // A partial structured series must not blank an otherwise fully valuated legacy
+            // portfolio. Keep the fallback explicit and limited to predecessor accounts.
+            return await resolveCompatibilityAssetsSnapshot(
+                startDate: normalizedStartDate,
+                endDate: normalizedEndDate,
+                legacyValuator: legacyValuator
+            )
+        }
         guard historicalReaderMode == .shadow else {
             historicalAssetsShadowDeltaBucket = nil
             return structuredSnapshot

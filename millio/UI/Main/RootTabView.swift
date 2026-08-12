@@ -57,7 +57,9 @@ struct RootTabView: View {
 
     @ViewBuilder var body: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.environment["MILLIO_REAL_ESTATE_HOTFIX_QA"] == "1" {
+        if ProcessInfo.processInfo.environment["MILLIO_DEBIT_CARD_QA"] == "1" {
+            DebitCardQAHarness(modelContext: modelContext)
+        } else if ProcessInfo.processInfo.environment["MILLIO_REAL_ESTATE_HOTFIX_QA"] == "1" {
             RealEstateEditQAHarness(modelContext: modelContext)
         } else {
             productionBody

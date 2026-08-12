@@ -51,33 +51,12 @@ enum CardSnapshotFactory {
 }
 
 enum CardCatalog {
-    static func fetchAll(in modelContext: ModelContext, removeDuplicates: Bool = true) -> [Card] {
+    /// Pure read boundary. Duplicate rows are collapsed only in the returned read model; persisted
+    /// rows and their relationships are never repaired or deleted as a side effect of navigation.
+    static func fetchAll(in modelContext: ModelContext) -> [Card] {
         let descriptor = FetchDescriptor<Card>()
         let rawCards = (try? modelContext.fetch(descriptor)) ?? []
-        let deduped = deduped(rawCards)
-
-        guard removeDuplicates, rawCards.count > deduped.count else {
-            return deduped
-        }
-
-        let dedupedIDs = Set(deduped.map(\.persistentModelID))
-        let duplicatesToDelete = rawCards.filter { !dedupedIDs.contains($0.persistentModelID) }
-
-        guard !duplicatesToDelete.isEmpty else {
-            return deduped
-        }
-
-        for duplicate in duplicatesToDelete {
-            modelContext.delete(duplicate)
-        }
-
-        do {
-            try modelContext.save()
-        } catch {
-            AppLogger.log(.error, category: "CardCatalog", "Failed to remove duplicate cards: \(error.localizedDescription)")
-        }
-
-        return deduped
+        return deduped(rawCards)
     }
 
     static func deduped(_ cards: [Card]) -> [Card] {
