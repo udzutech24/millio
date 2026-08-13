@@ -1,0 +1,42 @@
+{
+  "_generated": true,
+  "planFile": "2026-08-11__cashflow-month-workspace-redesign.md",
+  "title": "Plan: Cashflow month workspace redesign",
+  "updated": "2026-08-12T07:21:30.799Z",
+  "phases": [
+    {
+      "name": "Phase 1 — presentation contract and navigation boundary",
+      "status": "done"
+    },
+    {
+      "name": "Phase 2 — Apple-style monthly overview",
+      "status": "done"
+    },
+    {
+      "name": "Phase 3 — import hub and manual bulk boundary",
+      "status": "done"
+    },
+    {
+      "name": "Phase 4 — bank statement file selection and review",
+      "status": "done"
+    },
+    {
+      "name": "Phase 5 — transaction-level statement apply and duplicate safety",
+      "status": "done"
+    },
+    {
+      "name": "Phase 6 — month closing domain and mutation policy",
+      "status": "in_progress"
+    },
+    {
+      "name": "Phase 7 — close/reopen UI and status integration",
+      "status": "done"
+    },
+    {
+      "name": "Phase 8 — accessibility, localization and visual QA",
+      "status": "in_progress"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

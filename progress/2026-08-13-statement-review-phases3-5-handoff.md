@@ -1,0 +1,12 @@
+# Handoff: statement review Phases 3–5
+
+- Phase 3 complete: typed review dispositions replace the import boolean as domain state. Internal transfers, duplicates and technical rows remain locked; external transfers start excluded and require explicit income/expense conversion plus category. `Exclude all transfers` is available.
+- Phase 4 complete: statement review is a dedicated navigation destination with `Needs attention / Categories / All`, search, kind+category+currency groups and a persistent bottom import action. Account attribution was removed from review and moved to confirmation.
+- Phase 5 implementation is present: confirmation separates source reconciliation from proposed totals, counts exclusions/reclassified transfers, groups totals by currency and states that linked-account balance remains unchanged.
+- Month UX was revised after user feedback: the selected month is now a prominent hero with arrows and an explicit `Choose month` affordance. Add/Import are modern sibling action cards and both display the canonical month they will use.
+- Focused and extended Cashflow regression gates passed, including 0/52/200 policy inputs, route ownership, month preservation, transfer safety, category resolution, closed-month atomicity and duplicate handling.
+- Signed generic iOS Debug build passed with Apple Development provisioning. A direct physical-device rerun could not start because the previously used iPhone was disconnected and absent from Xcode destinations.
+- Manual compact/large iPhone screenshots, VoiceOver traversal and largest Dynamic Type inspection remain required before Phase 0/5 may honestly be marked complete. Localization hardening for all new review copy also remains in the Phase 5 acceptance gate.
+- Phase 5 account-picker fix: confirmation now reuses `CashflowSelectableAccountResolver`, refreshes legacy cards on entry and immediately before apply, includes active AccountsCore cash/debit/bank accounts, displays account currency, filters against imported currencies and rejects stale/archived selections before persistence. A real empty state replaces an empty picker.
+- Account-picker focused tests and signed generic iOS build passed. The broader Finance lifecycle run remains red only on the already documented baseline `duplicateCardsStayConsistentAcrossModules`; all statement tests passed.
+- No backend/data mutation, commit, push, install or deploy was performed.

@@ -1,0 +1,18 @@
+{
+  "_generated": false,
+  "planFile": "2026-08-13__statement-review-ux-and-categorization.md",
+  "title": "Statement review UX and automatic categorization (stress-tested)",
+  "updated": "2026-08-13T15:43:00+03:00",
+  "deployment": {
+    "phase1Backend": "deployed_real_statement_mcc_verified_phone_reimport_pending",
+    "rollbackTag": "millio-back:rollback-pre-mcc-20260813"
+  },
+  "phases": [
+    { "name": "Phase 0 — Cashflow information architecture and route ownership", "status": "implemented_pending_manual_qa" },
+    { "name": "Phase 1 — category taxonomy and deterministic backend rules", "status": "complete" },
+    { "name": "Phase 2 — iOS category resolution and learning", "status": "complete" },
+    { "name": "Phase 3 — transfer and exclusion domain policy", "status": "complete" },
+    { "name": "Phase 4 — dedicated review navigation and presentation", "status": "complete" },
+    { "name": "Phase 5 — confirmation, accessibility and visual acceptance", "status": "implemented_pending_manual_qa" }
+  ]
+}

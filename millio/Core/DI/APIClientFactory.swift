@@ -46,6 +46,17 @@ struct APIClientFactory {
         SheetsExportTrigger(exportService: exportService)
     }
 
+    func makeCashflowStatementImportClient(
+        authService: any AuthServiceProtocol,
+        session: URLSession = .shared
+    ) -> any CashflowStatementImportClient {
+        BackendCashflowStatementImportClient(
+            authService: authService,
+            configurationProvider: authConfigurationProvider(),
+            session: session
+        )
+    }
+
     func authConfigurationProvider() -> @Sendable () throws -> AuthConfiguration {
         let configuration = runtime.authConfiguration
         return { configuration }

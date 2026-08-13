@@ -170,11 +170,13 @@ struct CashflowView: View {
 // MARK: - Cashflow Content View
 
 private struct CashflowContentView: View {
+    @Query(sort: \CashflowMonthClosureEvent.occurredAt, order: .reverse) private var closureEvents: [CashflowMonthClosureEvent]
     @ObservedObject var viewModel: CashflowViewModel
     var isTabMode: Bool = false
     @Environment(\.dismiss) private var dismiss
     @Environment(AppRouter.self) private var router
     @Environment(AppState.self) private var appState
+    @Environment(\.diContainer) private var diContainer
     @State private var draftStartDate: Date = CashflowViewModel.defaultPeriodRange(referenceDate: Date()).start
     @State private var draftEndDate: Date = CashflowViewModel.defaultPeriodRange(referenceDate: Date()).end
     @State private var showAssetChangeInfoSheet: Bool = false
@@ -197,8 +199,15 @@ private struct CashflowContentView: View {
     @State private var historyInitialFilter: CashflowHistoryTypeFilter = .all
     @State private var historyInitialStartDate: Date? = nil
     @State private var historyInitialEndDate: Date? = nil
+    @State private var showMonthWorkspace = false
+    @State private var showImportHub = false
+    @State private var showScopedMonthPicker = false
+    @State private var scopedMonth = CashflowMonthSelectionPolicy.canonicalMonth(.now)
+    @State private var pendingMonthAction: CashflowMonthScopedAction?
+    @State private var showClosedMonthExplanation = false
+    @State private var presentedEditorMonth: Date?
     private let currentRoute: AppRoute = .cashflow
-    
+
     private let neonCyan = Color(hex: "35B8DC")
     private let neonViolet = Color(hex: "7460E0")
     private let neonPositive = Color(hex: "4ECFA0")
@@ -218,10 +227,14 @@ private struct CashflowContentView: View {
         ZStack {
             Color.black
                 .ignoresSafeArea()
-            
+
             ScrollView {
                 VStack(spacing: 16) {
                     cashflowChartSection
+
+                    monthContextActions
+
+                    operationsEntryPoint
 
                     // Сводка активов за период
                     assetBreakdownSection
@@ -240,7 +253,7 @@ private struct CashflowContentView: View {
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.top, 18)
+                .padding(.top, isTabMode ? 6 : 18)
                 .padding(.bottom, 20)
             }
         }
@@ -248,10 +261,16 @@ private struct CashflowContentView: View {
         .navigationBarBackButtonHidden(true)
         .interactiveBackSwipe()
         .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar(isTabMode ? .hidden : .visible, for: .navigationBar)
         .toolbar { topToolbar }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showTransactionEditor },
-            set: { if !$0 { viewModel.handle(.hideTransactionEditor) } }
+            set: {
+                if !$0 {
+                    viewModel.handle(.hideTransactionEditor)
+                    presentedEditorMonth = nil
+                }
+            }
         )) {
             if let editingTransaction = viewModel.state.editingTransaction {
                 CashflowTransactionEditorView(
@@ -261,11 +280,23 @@ private struct CashflowContentView: View {
             } else if let creatingType = viewModel.state.creatingTransactionType {
                 switch creatingType {
                 case .income:
-                    CashflowUnifiedEntryContainer(viewModel: viewModel, initialTab: .incomes)
+                    CashflowUnifiedEntryContainer(
+                        viewModel: viewModel,
+                        initialTab: .incomes,
+                        initialMonth: presentedEditorMonth
+                    )
                 case .expense:
-                    CashflowUnifiedEntryContainer(viewModel: viewModel, initialTab: .expenses)
+                    CashflowUnifiedEntryContainer(
+                        viewModel: viewModel,
+                        initialTab: .expenses,
+                        initialMonth: presentedEditorMonth
+                    )
                 case .transfer:
-                    CashflowUnifiedEntryContainer(viewModel: viewModel, initialTab: .transfer)
+                    CashflowUnifiedEntryContainer(
+                        viewModel: viewModel,
+                        initialTab: .transfer,
+                        initialMonth: presentedEditorMonth
+                    )
                 case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
                     CashflowTransactionEditorView(
                         viewModel: viewModel,
@@ -296,6 +327,37 @@ private struct CashflowContentView: View {
             set: { if !$0 { viewModel.handle(.hideCurrencySelector) } }
         )) {
             CashflowCurrencySelectorView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showMonthWorkspace) {
+            NavigationStack {
+                CashflowMonthWorkspaceView(
+                    viewModel: viewModel,
+                    month: scopedMonth,
+                    statementClient: statementImportClient
+                )
+            }
+        }
+        .sheet(isPresented: $showImportHub) {
+            CashflowImportHubView(
+                viewModel: viewModel,
+                month: scopedMonth,
+                statementClient: statementImportClient
+            )
+        }
+        .sheet(isPresented: $showScopedMonthPicker) {
+            CashflowMonthPickerSheet(selection: $scopedMonth) { month in
+                guard let action = pendingMonthAction else { return }
+                pendingMonthAction = nil
+                performMonthAction(action, month: month)
+            }
+        }
+        .alert(
+            CashflowMonthWorkspaceLocalization.closed,
+            isPresented: $showClosedMonthExplanation
+        ) {
+            Button(CashflowMonthWorkspaceLocalization.done, role: .cancel) {}
+        } message: {
+            Text(CashflowMonthWorkspaceLocalization.closedExplanation)
         }
         .sheet(isPresented: $showAssetChangeInfoSheet) {
             assetChangeInfoSheet
@@ -331,9 +393,146 @@ private struct CashflowContentView: View {
             }
         }
     }
-    
+
+    // MARK: - Month context actions
+
+    private var monthContextActions: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                monthActionButton(
+                    title: CashflowMonthWorkspaceLocalization.add,
+                    systemImage: "plus",
+                    action: .addOperation,
+                    prominent: true
+                )
+                monthActionButton(
+                    title: CashflowMonthWorkspaceLocalization.importData,
+                    systemImage: "square.and.arrow.down",
+                    action: .importData,
+                    prominent: false
+                )
+            }
+
+            if isSelectedSpecificMonthClosed {
+                Label(CashflowMonthWorkspaceLocalization.closedExplanation, systemImage: "lock.fill")
+                    .font(.footnote)
+                    .foregroundStyle(primarySecondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .background(financeCardBackground(cornerRadius: panelCornerRadius))
+    }
+
+    private func monthActionButton(
+        title: String,
+        systemImage: String,
+        action: CashflowMonthScopedAction,
+        prominent: Bool
+    ) -> some View {
+        Button { requestMonthAction(action) } label: {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, minHeight: 48)
+        }
+        .buttonStyle(.bordered)
+        .tint(prominent ? neonCyan : primarySecondaryText)
+        .disabled(isSelectedSpecificMonthClosed)
+        .accessibilityHint(
+            isSelectedSpecificMonthClosed
+                ? CashflowMonthWorkspaceLocalization.closedExplanation
+                : monthActionAccessibilityHint
+        )
+    }
+
+    private var operationsEntryPoint: some View {
+        Button { requestMonthAction(.operations) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "list.bullet.rectangle")
+                    .font(.title3)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(CashflowMonthWorkspaceLocalization.title)
+                        .font(.headline)
+                    Text(CashflowMonthWorkspaceLocalization.history)
+                        .font(.subheadline)
+                        .foregroundStyle(primarySecondaryText)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(primarySecondaryText)
+            }
+            .frame(minHeight: 52)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+        .background(financeCardBackground(cornerRadius: panelCornerRadius))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(CashflowMonthWorkspaceLocalization.chooseMonth)
+    }
+
+    private var monthActionAccessibilityHint: String {
+        viewModel.state.chartPeriod == .specificMonth
+            ? monthTitle(for: viewModel.state.selectedMonth)
+            : CashflowMonthWorkspaceLocalization.chooseMonth
+    }
+
+    private var isSelectedSpecificMonthClosed: Bool {
+        guard viewModel.state.chartPeriod == .specificMonth else { return false }
+        return isClosed(month: viewModel.state.selectedMonth)
+    }
+
+    private func requestMonthAction(_ action: CashflowMonthScopedAction) {
+        switch CashflowMonthScopePolicy.resolve(
+            chartPeriod: viewModel.state.chartPeriod,
+            selectedMonth: viewModel.state.selectedMonth
+        ) {
+        case .ready(let month):
+            performMonthAction(action, month: month)
+        case .requiresExplicitMonth:
+            scopedMonth = CashflowMonthSelectionPolicy.canonicalMonth(.now)
+            pendingMonthAction = action
+            showScopedMonthPicker = true
+        }
+    }
+
+    private func performMonthAction(_ action: CashflowMonthScopedAction, month: Date) {
+        let canonical = CashflowMonthSelectionPolicy.canonicalMonth(month)
+        scopedMonth = canonical
+
+        if action != .operations, isClosed(month: canonical) {
+            showClosedMonthExplanation = true
+            return
+        }
+
+        switch action {
+        case .addOperation:
+            viewModel.handle(.setSelectedMonth(canonical))
+            presentedEditorMonth = canonical
+            viewModel.handle(.addTransaction(.expense))
+        case .importData:
+            showImportHub = true
+        case .operations:
+            showMonthWorkspace = true
+        }
+        fireLightImpact()
+    }
+
+    private func isClosed(month: Date) -> Bool {
+        let canonical = CashflowMonthSelectionPolicy.canonicalMonth(month)
+        return closureEvents.first {
+            CashflowMonthSelectionPolicy.canonicalMonth($0.monthStart) == canonical
+        }?.kind == .close
+    }
+
+    private func monthTitle(for month: Date) -> String {
+        month.formatted(.dateTime.month(.wide).year().locale(AppLocalization.currentAppLocale))
+    }
+
     // MARK: - Action Buttons Section
-    
+
     private var actionButtonsSection: some View {
         GeometryReader { proxy in
             let useCompactMetrics = CashflowActionButtonsLayout.shouldUseCompactMetrics(
@@ -383,9 +582,9 @@ private struct CashflowContentView: View {
         }
         .frame(height: 64)
     }
-    
+
     // MARK: - Period Stats Section
-    
+
     private var assetBreakdownSection: some View {
         VStack(spacing: 14) {
             statRow(
@@ -405,7 +604,7 @@ private struct CashflowContentView: View {
                 valueColor: positiveColor(for: viewModel.state.totalIncome),
                 isExpanded: $showIncomeBreakdown
             )
-            
+
             if showIncomeBreakdown {
                 breakdownList(
                     entries: viewModel.state.incomeBreakdown,
@@ -452,7 +651,7 @@ private struct CashflowContentView: View {
                 valueColor: negativeColor(for: -viewModel.state.contributedExpense),
                 isExpanded: $showExpenseBreakdown
             )
-            
+
             if showExpenseBreakdown {
                 breakdownList(
                     entries: viewModel.state.expenseBreakdown,
@@ -760,7 +959,6 @@ private struct CashflowContentView: View {
 
     private var periodSelectionHeader: some View {
         let range = viewModel.currentDateRange()
-        let canExpand = hasChartData && EntitlementPolicy.canUseCashflowChart(isPro: appState.isPro)
         return HStack(spacing: 8) {
             Button {
                 draftStartDate = viewModel.state.customStartDate
@@ -789,47 +987,14 @@ private struct CashflowContentView: View {
 
             Spacer()
 
-            // Правые контролы в едином чипе
-            HStack(spacing: 0) {
-                Button {
-                    viewModel.handle(.showCurrencySelector)
-                    fireLightImpact()
-                } label: {
-                    Text(toolbarCurrencyLabel())
-                        .font(.system(size: 11, weight: .bold))
-                        .tracking(0.5)
-                        .foregroundStyle(primarySecondaryText)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(L("cashflow.accessibility.display_currency_selector")))
-
-                if canExpand {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.12))
-                        .frame(width: 0.5)
-                        .padding(.vertical, 6)
-
-                    Button {
-                        showExpandedChart = true
-                        fireLightImpact()
-                    } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary.opacity(0.85))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Text(L("cashflow.chart.expand")))
-                }
+            if isTabMode {
+                cashflowMenu
+                    .background(periodControlBackground)
             }
-            .background(periodControlBackground)
         }
         .animation(.easeInOut(duration: 0.2), value: viewModel.state.customStartDate)
     }
-    
+
     @ToolbarContentBuilder
     private var topToolbar: some ToolbarContent {
         let itemSize: CGFloat = 28
@@ -874,8 +1039,51 @@ private struct CashflowContentView: View {
             }
         }
 
+        if !isTabMode {
+            ToolbarItem(placement: .topBarTrailing) {
+                cashflowMenu
+            }
+        }
+
     }
-    
+
+    private var cashflowMenu: some View {
+        Menu {
+            ForEach(CashflowMenuPresentation.sections, id: \.kind) { section in
+                Section {
+                    ForEach(section.destinations) { destination in
+                        Button {
+                            handleMenuDestination(destination)
+                        } label: {
+                            Label(menuTitle(for: destination), systemImage: destination.systemImage)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary.opacity(0.90))
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(L("common.more")))
+    }
+
+    private func handleMenuDestination(_ destination: CashflowMenuDestination) {
+        fireLightImpact()
+        viewModel.handle(.showCurrencySelector)
+    }
+
+    private var statementImportClient: any CashflowStatementImportClient {
+        guard let diContainer else { return UnavailableCashflowStatementImportClient() }
+        return diContainer.apiClientFactory.makeCashflowStatementImportClient(authService: diContainer.authService)
+    }
+
+    private func menuTitle(for destination: CashflowMenuDestination) -> String {
+        "\(L("cashflow.accessibility.display_currency_selector")): \(toolbarCurrencyLabel())"
+    }
+
     private func formatPeriod(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "dd.MM.yyyy"
@@ -1003,6 +1211,21 @@ private struct CashflowContentView: View {
         let granularity = cashflowInsightsGranularity
 
         return VStack(spacing: 18) {
+            HStack {
+                Spacer()
+                Button {
+                    showExpandedChart = true
+                    fireLightImpact()
+                } label: {
+                    Label(L("cashflow.chart.expand"), systemImage: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(primarySecondaryText)
+                .accessibilityLabel(Text(L("cashflow.chart.expand")))
+            }
+
             cashflowVariantAChart(
                 presentation: presentation,
                 granularity: granularity,
@@ -2048,7 +2271,7 @@ private struct CashflowContentView: View {
             .replacingOccurrences(of: "%@", with: "")
             .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
     }
-    
+
     private var customPeriodSheet: some View {
         CashflowCustomPeriodSheetView(
             viewModel: viewModel,
@@ -2073,9 +2296,9 @@ private struct CashflowActionButton: View {
     let style: Style
     let compactMetrics: Bool
     let action: () -> Void
-    
+
     private let cornerRadius: CGFloat = 28
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {

@@ -301,6 +301,9 @@ final class CashflowCategoryService {
         if let system = systemCategoryOptions(for: kind).first(where: {
             $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
         }) {
+            guard linkedTransactions(for: rawValue, kind: kind).allSatisfy(canMutateTransaction) else {
+                return false
+            }
             migrateTransactions(fromRaw: rawValue, toRaw: system.rawValue, kind: kind, nowDate: nowDate)
             modelContext.delete(sourceCategory)
             return saveCategoriesAndTransactions()
@@ -309,6 +312,9 @@ final class CashflowCategoryService {
         if let duplicate = customCategoriesProvider().first(where: {
             $0.kind == kind && $0.normalizedName == normalized && $0.categoryID != sourceID
         }) {
+            guard linkedTransactions(for: rawValue, kind: kind).allSatisfy(canMutateTransaction) else {
+                return false
+            }
             let duplicateRaw = Self.customRawValue(from: duplicate.categoryID)
             migrateTransactions(fromRaw: rawValue, toRaw: duplicateRaw, kind: kind, nowDate: nowDate)
             modelContext.delete(sourceCategory)
@@ -373,6 +379,9 @@ final class CashflowCategoryService {
             kind: kind,
             targetRawValue: targetRawValue
         ) else {
+            return nil
+        }
+        guard linkedTransactions(for: rawValue, kind: kind).allSatisfy(canMutateTransaction) else {
             return nil
         }
         let undoAction = makeCategoryMutationUndoAction(
@@ -469,6 +478,9 @@ final class CashflowCategoryService {
 
     @discardableResult
     func undoCategoryMutation(_ action: CashflowCategoryMutationUndoAction) -> Bool {
+        guard action.transactionSnapshots.allSatisfy({ canMutateTransaction($0.transaction) }) else {
+            return false
+        }
         if let customSnapshot = action.customCategorySnapshot {
             restoreCustomCategory(from: customSnapshot)
         }
@@ -843,6 +855,9 @@ final class CashflowCategoryService {
         if let duplicateSystem = systemCategoryOptions(for: kind, includeHidden: true).first(where: {
             $0.rawValue != rawValue && $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
         }) {
+            guard linkedTransactions(for: rawValue, kind: kind).allSatisfy(canMutateTransaction) else {
+                return false
+            }
             migrateTransactions(
                 fromRaw: rawValue,
                 toRaw: duplicateSystem.rawValue,
@@ -902,6 +917,9 @@ final class CashflowCategoryService {
         ) else {
             return nil
         }
+        guard linkedTransactions(for: rawValue, kind: kind).allSatisfy(canMutateTransaction) else {
+            return nil
+        }
         let undoAction = makeCategoryMutationUndoAction(
             sourceRaw: rawValue,
             kind: kind,
@@ -954,6 +972,13 @@ final class CashflowCategoryService {
             }
             transaction.updatedAt = nowDate
         }
+    }
+
+    private func canMutateTransaction(_ transaction: CashflowTransaction) -> Bool {
+        (try? CashflowMonthMutationPolicy(modelContext: modelContext).validate(
+            .edit,
+            date: transaction.transactionDate
+        )) != nil
     }
 
     private func migrateBudgetCategoryLimits(
