@@ -9,6 +9,22 @@ import Testing
 @testable import millio
 
 struct FinanceOverviewLedgerModelsTests {
+    @Test("Overview reload: stale async result cannot overwrite the latest request")
+    func staleReloadGenerationDoesNotPublish() {
+        #expect(
+            !FinanceOverviewReloadPolicy.shouldPublish(
+                requestGeneration: 1,
+                latestGeneration: 2
+            )
+        )
+        #expect(
+            FinanceOverviewReloadPolicy.shouldPublish(
+                requestGeneration: 2,
+                latestGeneration: 2
+            )
+        )
+    }
+
     @Test("Ledger builder считает saldo и сортирует группы по сумме")
     func ledgerBuilderBuildsDebitCreditSides() {
         let presentation = FinanceOverviewLedgerBuilder.makePresentation(

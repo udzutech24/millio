@@ -65217,43 +65217,43 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Noch kein Saldoverlauf"
+            "value" : "Noch keine Aktiva oder Verbindlichkeiten"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No balance flow yet"
+            "value" : "No assets or liabilities yet"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sin flujo de saldo aún"
+            "value" : "Aún no hay activos ni pasivos"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun flux de solde pour l'instant"
+            "value" : "Aucun actif ni passif pour l'instant"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Пока нет движения баланса"
+            "value" : "Пока нет активов или обязательств"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Henüz bakiye akışı yok"
+            "value" : "Henüz varlık veya yükümlülük yok"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "暂无余额变动"
+            "value" : "暂无资产或负债"
           }
         }
       }

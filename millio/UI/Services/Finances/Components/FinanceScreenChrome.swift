@@ -62,15 +62,18 @@ struct FinanceChromeCardBackground: View {
     let cornerRadius: CGFloat
     let accentColor: Color
     let isElevated: Bool
+    let showsStroke: Bool
 
     init(
         cornerRadius: CGFloat = FinanceScreenChrome.sectionCornerRadius,
         accentColor: Color = FinanceScreenChrome.accentColor,
-        isElevated: Bool = false
+        isElevated: Bool = false,
+        showsStroke: Bool = true
     ) {
         self.cornerRadius = cornerRadius
         self.accentColor = accentColor
         self.isElevated = isElevated
+        self.showsStroke = showsStroke
     }
 
     var body: some View {
@@ -96,20 +99,22 @@ struct FinanceChromeCardBackground: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(strokeColor, lineWidth: 0.9)
+                    .stroke(showsStroke ? strokeColor : Color.clear, lineWidth: 0.9)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.18),
-                                Color.white.opacity(0.05),
-                                Color.clear
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
+                        showsStroke
+                            ? LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.18),
+                                    Color.white.opacity(0.05),
+                                    Color.clear
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            : LinearGradient(colors: [.clear], startPoint: .top, endPoint: .bottom),
                         lineWidth: 0.6
                     )
             )

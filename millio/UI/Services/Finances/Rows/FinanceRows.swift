@@ -246,7 +246,12 @@ struct FinanceGroupRow: View {
     var body: some View {
         groupContent
             .background(groupBackground)
-            .clipShape(RoundedRectangle(cornerRadius: FinanceScreenChrome.groupRowCornerRadius, style: .continuous))
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(FinanceScreenChrome.surfaceStrokeColor)
+                    .frame(height: FinancesMainLayoutPolicy.accountsListGroupSeparatorHeight)
+            }
+            .clipShape(Rectangle())
             .onDrop(
                 of: [UTType.text],
                 delegate: FinanceGroupIndexDropDelegate(
@@ -506,8 +511,9 @@ struct FinanceGroupRow: View {
     // отдельная капсула-полоска слева больше не нужна.
     private var groupBackground: some View {
         FinanceChromeCardBackground(
-            cornerRadius: FinanceScreenChrome.groupRowCornerRadius,
-            accentColor: group.color
+            cornerRadius: FinancesMainLayoutPolicy.accountsListGroupCornerRadius,
+            accentColor: group.color,
+            showsStroke: false
         )
     }
     

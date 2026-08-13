@@ -29,6 +29,7 @@ struct FinanceOverviewCardView: View {
     @State private var ledgerPresentation: FinanceOverviewLedgerPresentation?
     @State private var expandedSheetSide: FinanceOverviewLedgerSide?
     @State private var expandedDetailGroupIDs: Set<String> = []
+    @State private var reloadGeneration: Int = 0
 
     init(
         financeViewModel: FinanceViewModel,
@@ -101,14 +102,27 @@ struct FinanceOverviewCardView: View {
 
     private func reload() async {
         guard let dynamicsViewModel else { return }
+        reloadGeneration += 1
+        let generation = reloadGeneration
+
         guard EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) else {
-            ledgerPresentation = nil
+            if FinanceOverviewReloadPolicy.shouldPublish(
+                requestGeneration: generation,
+                latestGeneration: reloadGeneration
+            ) {
+                ledgerPresentation = nil
+                isLoading = false
+            }
             return
         }
 
         isLoading = true
         dynamicsViewModel.handle(.loadData)
         let presentation = await buildLedgerPresentation(with: dynamicsViewModel)
+        guard FinanceOverviewReloadPolicy.shouldPublish(
+            requestGeneration: generation,
+            latestGeneration: reloadGeneration
+        ) else { return }
         ledgerPresentation = presentation
         isLoading = false
     }

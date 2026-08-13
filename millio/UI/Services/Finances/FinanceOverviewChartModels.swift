@@ -430,3 +430,10 @@ enum FinanceOverviewLedgerInteraction {
         current == tapped ? nil : tapped
     }
 }
+
+/// Не позволяет более старому async-reload перезаписать результат последнего запроса.
+enum FinanceOverviewReloadPolicy {
+    static func shouldPublish(requestGeneration: Int, latestGeneration: Int) -> Bool {
+        requestGeneration == latestGeneration
+    }
+}

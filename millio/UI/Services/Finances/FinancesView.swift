@@ -997,7 +997,7 @@ struct FinancesMainTabView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.isHeader)
 
-                VStack(spacing: AppSpacing.s) {
+                VStack(spacing: FinancesMainLayoutPolicy.accountsListGroupSpacing) {
                     ForEach(groups) { group in
                         FinanceGroupRow(
                             group: group,
@@ -1082,9 +1082,17 @@ struct FinancesMainTabView: View {
             }
         }
         .background(
-            FinanceChromeCardBackground(cornerRadius: FinanceScreenChrome.groupRowCornerRadius)
+            FinanceChromeCardBackground(
+                cornerRadius: FinancesMainLayoutPolicy.accountsListGroupCornerRadius,
+                showsStroke: false
+            )
         )
-        .clipShape(RoundedRectangle(cornerRadius: FinanceScreenChrome.groupRowCornerRadius, style: .continuous))
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(FinanceScreenChrome.surfaceStrokeColor)
+                .frame(height: FinancesMainLayoutPolicy.accountsListGroupSeparatorHeight)
+        }
+        .clipShape(Rectangle())
     }
 
     private func hiddenGroupsRow(count: Int) -> some View {

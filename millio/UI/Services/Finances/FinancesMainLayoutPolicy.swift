@@ -14,6 +14,10 @@ enum FinancesMainLayoutPolicy {
     static let horizontalPadding: CGFloat = 16
     static let heroCornerRadius: CGFloat = FinanceScreenChrome.heroCornerRadius
     static let sectionCardCornerRadius: CGFloat = FinanceScreenChrome.sectionCornerRadius
+    /// Группы в реестре счетов — прямые секции, а не отдельные card-капсулы.
+    static let accountsListGroupCornerRadius: CGFloat = 0
+    static let accountsListGroupSpacing: CGFloat = 0
+    static let accountsListGroupSeparatorHeight: CGFloat = 0.9
     static let groupRowChevronSize: CGFloat = 24
     static let groupRowAmountMinWidth: CGFloat = 110
     static let groupRowAmountMaxWidth: CGFloat = 126
