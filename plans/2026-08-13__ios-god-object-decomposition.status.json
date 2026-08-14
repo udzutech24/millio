@@ -1,0 +1,16 @@
+{
+  "updatedAt": "2026-08-13",
+  "status": "planned",
+  "nextPhase": "FD-0",
+  "phases": [
+    { "id": "FD-0", "status": "pending" },
+    { "id": "FD-1", "status": "pending" },
+    { "id": "FD-2", "status": "pending" },
+    { "id": "FD-3", "status": "pending" },
+    { "id": "FD-4", "status": "blocked", "note": "Depends on Item 4 cutover gates." },
+    { "id": "CF-0", "status": "blocked", "note": "Starts after selected FinanceDynamics milestone and fresh Cashflow ownership baseline." },
+    { "id": "CF-1", "status": "pending" },
+    { "id": "CF-2", "status": "pending" },
+    { "id": "CF-3", "status": "pending" }
+  ]
+}
