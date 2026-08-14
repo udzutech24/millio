@@ -45,13 +45,7 @@ struct CashflowCategorySettingsSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text(
-                                String(
-                                    localized: "cashflow.category.settings.title",
-                                    defaultValue: "Category settings",
-                                    comment: "Category settings section title"
-                                )
-                            )
+                            Text(L("cashflow.category.settings.title"))
                             .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
 
@@ -60,11 +54,7 @@ struct CashflowCategorySettingsSheet: View {
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(AppColors.textSecondary)
                                 TextField(
-                                    String(
-                                        localized: "cashflow.operation.search_category",
-                                        defaultValue: "Search category",
-                                        comment: "Category settings search placeholder"
-                                    ),
+                                    L("cashflow.operation.search_category"),
                                     text: $searchText
                                 )
                                 .textInputAutocapitalization(.words)
@@ -95,13 +85,7 @@ struct CashflowCategorySettingsSheet: View {
                     .padding(.bottom, 28)
                 }
             }
-            .navigationTitle(
-                String(
-                    localized: "cashflow.category.settings.title",
-                    defaultValue: "Category settings",
-                    comment: "Settings sheet title"
-                )
-            )
+            .navigationTitle(L("cashflow.category.settings.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -137,11 +121,7 @@ struct CashflowCategorySettingsSheet: View {
                     },
                     deleteActionTitle: option.isCustom
                         ? L("cashflow.category.actions.delete")
-                        : String(
-                            localized: "cashflow.category.actions.archive",
-                            defaultValue: "Archive",
-                            comment: "Archive system category action title"
-                        ),
+                        : L("cashflow.category.actions.archive"),
                     deleteActionIcon: option.isCustom ? "trash" : "archivebox",
                     onDelete: viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind.categoryKind) ? {
                         closeSettingsCategoryActions()

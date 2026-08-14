@@ -568,11 +568,7 @@ private struct CashflowContentView: View {
             rowDivider
 
             expandableStatRow(
-                title: String(
-                    localized: "cashflow.stats.income",
-                    defaultValue: "Доходы",
-                    comment: "Cashflow stats income row title"
-                ),
+                title: L("cashflow.stats.income"),
                 value: formatSignedMoney(viewModel.state.totalIncome),
                 valueColor: positiveColor(for: viewModel.state.totalIncome),
                 isExpanded: $showIncomeBreakdown
@@ -2039,22 +2035,12 @@ private struct CashflowContentView: View {
                             .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
 
-                        Text(
-                            String(
-                                localized: "cashflow.asset_change.subtitle",
-                                defaultValue: "Это разница между началом и концом периода после учёта всех зафиксированных доходов и расходов",
-                                comment: "Cashflow asset change info subtitle"
-                            )
-                        )
+                        Text(L("cashflow.asset_change.subtitle"))
                             .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
 
                         assetChangeInfoCard(
-                            title: String(
-                                localized: "cashflow.asset_change.formula_title",
-                                defaultValue: "Формула",
-                                comment: "Cashflow asset change formula section title"
-                            )
+                            title: L("cashflow.asset_change.formula_title")
                         ) {
                             Text(L("cashflow.asset_change.formula"))
                                 .font(.system(size: 18, weight: .semibold, design: .rounded))
@@ -2121,16 +2107,8 @@ private struct CashflowContentView: View {
 
                                     Text(
                                         isBalanced
-                                        ? String(
-                                            localized: "cashflow.asset_change.matches_detail",
-                                            defaultValue: "Итог периода сходится с движением активов",
-                                            comment: "Cashflow asset change balanced detail"
-                                        )
-                                        : String(
-                                            localized: "cashflow.asset_change.mismatch_detail",
-                                            defaultValue: "Есть расхождение между итогом периода и движением активов",
-                                            comment: "Cashflow asset change mismatch detail"
-                                        )
+                                        ? L("cashflow.asset_change.matches_detail")
+                                        : L("cashflow.asset_change.mismatch_detail")
                                     )
                                     .font(.system(size: 15, weight: .regular))
                                     .foregroundStyle(AppColors.textSecondary)

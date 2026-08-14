@@ -255,23 +255,11 @@ struct CashflowScheduledTransactionsView: View {
                         .background(Circle().fill(kind.accentColor.opacity(0.14)))
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(
-                            String(
-                                localized: "cashflow.scheduled.recurring_total.title",
-                                defaultValue: kind == .income ? "Monthly income" : "Monthly expenses",
-                                comment: "Header label for monthly recurring total"
-                            )
-                        )
+                        Text(L("cashflow.scheduled.recurring_total.title"))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppColors.textSecondary)
 
-                        Text(
-                            String(
-                                localized: "cashflow.scheduled.recurring_total.subtitle",
-                                defaultValue: "Total per month across all recurring",
-                                comment: "Subtitle for monthly recurring total"
-                            )
-                        )
+                        Text(L("cashflow.scheduled.recurring_total.subtitle"))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(AppColors.textSecondary.opacity(0.7))
                     }
@@ -286,13 +274,7 @@ struct CashflowScheduledTransactionsView: View {
                     ForEach(recurringMonthlyTotals.indices, id: \.self) { idx in
                         let entry = recurringMonthlyTotals[idx]
                         HStack(alignment: .firstTextBaseline) {
-                            Text(
-                                String(
-                                    localized: "cashflow.scheduled.recurring_total.per_month",
-                                    defaultValue: "/ month",
-                                    comment: "Per month suffix"
-                                )
-                            )
+                            Text(L("cashflow.scheduled.recurring_total.per_month"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
 
@@ -415,13 +397,7 @@ struct CashflowScheduledTransactionsView: View {
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(AppColors.textSecondary)
                         } else {
-                            Text(
-                                String(
-                                    localized: "cashflow.scheduled.overview.empty",
-                                    defaultValue: "No upcoming scheduled items yet.",
-                                    comment: "Empty subtitle for planner overview"
-                                )
-                            )
+                            Text(L("cashflow.scheduled.overview.empty"))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
                         }
@@ -441,11 +417,7 @@ struct CashflowScheduledTransactionsView: View {
 
                 HStack(spacing: 10) {
                     plannerMetricCard(
-                        title: String(
-                            localized: "cashflow.scheduled.overview.next",
-                            defaultValue: "Next",
-                            comment: "Label for next scheduled item"
-                        ),
+                        title: L("cashflow.scheduled.overview.next"),
                         value: plannerOverviewEntry.map { shortDate($0.scheduledDate) } ?? "-"
                     )
                     plannerMetricCard(
@@ -677,25 +649,13 @@ struct CashflowScheduledTransactionsView: View {
     private var dayAgendaEmptyState: some View {
         FinancesGlassCard(cornerRadius: 20, contentPadding: EdgeInsets(top: 18, leading: 16, bottom: 18, trailing: 16)) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(
-                    String(
-                        localized: "cashflow.scheduled.day_agenda.empty_title",
-                        defaultValue: "Nothing due on this day",
-                        comment: "Empty state title for selected planner day"
-                    )
-                )
+                Text(L("cashflow.scheduled.day_agenda.empty_title"))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
 
-                Text(
-                    String(
-                        localized: "cashflow.scheduled.day_agenda.empty_subtitle",
-                        defaultValue: "Pick another date or switch to the list to review all monthly and one-time items.",
-                        comment: "Empty state subtitle for selected planner day"
-                    )
-                )
+                Text(L("cashflow.scheduled.day_agenda.empty_subtitle"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
             }
@@ -708,13 +668,7 @@ struct CashflowScheduledTransactionsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(
-                            String(
-                                localized: "cashflow.scheduled.day_agenda.title",
-                                defaultValue: "Due on \(formatDayHeader(selectedPlannerDate))",
-                                comment: "Header for scheduled items due on the selected planner day"
-                            )
-                        )
+                        Text(String(format: L("cashflow.scheduled.day_agenda.title"), formatDayHeader(selectedPlannerDate)))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1028,7 +982,7 @@ struct CashflowScheduledTransactionsView: View {
 
     private var plannerMonthTitle: String {
         let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
+        formatter.locale = AppLocalization.currentAppLocale
         formatter.setLocalizedDateFormatFromTemplate("LLLL y")
         return formatter.string(from: plannerMonthAnchor)
     }
@@ -1132,7 +1086,9 @@ struct CashflowScheduledTransactionsView: View {
     }
 
     private func rotatedWeekdaySymbols() -> [String] {
-        let symbols = Calendar.current.shortStandaloneWeekdaySymbols
+        var calendar = Calendar.current
+        calendar.locale = AppLocalization.currentAppLocale
+        let symbols = calendar.shortStandaloneWeekdaySymbols
         guard let first = symbols.first else { return symbols }
         return Array(symbols.dropFirst()) + [first]
     }
