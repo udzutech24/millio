@@ -91,13 +91,14 @@ final class CashflowScheduledService {
         relativeTo referenceDate: Date? = nil
     ) -> [CashflowTransaction] {
         let baseline = referenceDate ?? now()
+        let plannedDatePolicy = CashflowPlannedDatePolicy(calendar: .current)
         let targetType = transactionType(for: kind)
 
         return transactionsProvider()
             .filter { transaction in
                 guard transaction.transactionType == targetType else { return false }
                 guard transaction.recurrenceRule == .none else { return false }
-                return transaction.transactionDate > baseline
+                return plannedDatePolicy.isOneTimePlanned(transaction.transactionDate, relativeTo: baseline)
             }
             .sorted { $0.transactionDate < $1.transactionDate }
     }
@@ -108,6 +109,7 @@ final class CashflowScheduledService {
         relativeTo referenceDate: Date? = nil
     ) -> [CashflowScheduledEntry] {
         let baseline = Calendar.current.startOfDay(for: referenceDate ?? now())
+        let plannedDatePolicy = CashflowPlannedDatePolicy(calendar: .current)
         let targetType = transactionType(for: kind)
 
         return transactionsProvider()
@@ -123,7 +125,8 @@ final class CashflowScheduledService {
                     )
                 }
 
-                guard transaction.recurrenceRule == .none, transaction.transactionDate > baseline else {
+                guard transaction.recurrenceRule == .none,
+                      plannedDatePolicy.isOneTimePlanned(transaction.transactionDate, relativeTo: baseline) else {
                     return nil
                 }
                 return CashflowScheduledEntry(
@@ -143,6 +146,7 @@ final class CashflowScheduledService {
     ) -> [CashflowScheduledEntry] {
         let calendar = Calendar.current
         let baseline = calendar.startOfDay(for: referenceDate ?? now())
+        let plannedDatePolicy = CashflowPlannedDatePolicy(calendar: calendar)
         let targetType = transactionType(for: kind)
         let monthStart = Self.monthStart(for: month, calendar: calendar)
 
@@ -170,7 +174,9 @@ final class CashflowScheduledService {
                 guard calendar.isDate(transaction.transactionDate, equalTo: monthStart, toGranularity: .month) else {
                     return nil
                 }
-                guard transaction.transactionDate > baseline else { return nil }
+                guard plannedDatePolicy.isOneTimePlanned(transaction.transactionDate, relativeTo: baseline) else {
+                    return nil
+                }
                 return CashflowScheduledEntry(
                     transaction: transaction,
                     scheduledDate: transaction.transactionDate,

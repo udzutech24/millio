@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import SwiftData
 import Testing
 @testable import millio
 
@@ -98,6 +99,14 @@ struct CashflowUpcomingSectionBuilderTests {
         #expect(items.count == 2)
     }
 
+    @Test("Полный source не имеет compact cap, а карточка берёт prefix того же набора")
+    func fullSourceAndCompactPrefixHaveParity() {
+        let full = build(income: (0..<5).map { incomeEntry(daysFromNow: $0) }, limit: .max)
+        let compact = Array(full.prefix(CashflowUpcomingSectionBuilder.defaultVisibleCount))
+        #expect(full.count == 5)
+        #expect(compact.map(\.id) == full.prefix(3).map(\.id))
+    }
+
     @Test("Доход → kind .income, сумма положительная как есть")
     func incomeItemKindAndAmount() {
         let items = build(income: [incomeEntry(daysFromNow: 1, amount: 1_500)])
@@ -119,7 +128,45 @@ struct CashflowUpcomingSectionBuilderTests {
         let items = build(deposits: [depositEvent(daysFromNow: 2, amount: 300)])
         #expect(items.first?.kind == .income)
         #expect(items.first?.amount == 300)
-        #expect(items.first?.title == "Доход")
+        #expect(items.first?.title == "Вклад")
+        #expect(items.first?.categoryTitle == "Доход")
+        #expect(items.first?.source == .depositInterest)
+    }
+
+    @Test("Плановый тип и заметка не теряются в компактной карточке")
+    func plannedSourceAndNoteArePreserved() throws {
+        let transaction = CashflowTransaction(
+            transactionType: .expense,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: date(1),
+            expenseCategory: .other,
+            note: "Оплата сервиса"
+        )
+        let entry = CashflowScheduledEntry(
+            transaction: transaction,
+            scheduledDate: date(1),
+            kind: .oneTimePlanned
+        )
+
+        let item = try #require(build(expense: [entry]).first)
+        #expect(item.title == "Оплата сервиса")
+        #expect(item.categoryTitle == "Расход")
+        #expect(item.source == .oneTimePlanned)
+        #expect(item.reference == .transaction(persistentID: transaction.persistentModelID))
+    }
+
+    @Test("Ссылка на editor различает две локальные записи с одинаковым uniqueID")
+    func editorReferenceUsesExactPersistentIdentity() throws {
+        let first = incomeEntry(daysFromNow: 1)
+        let second = incomeEntry(daysFromNow: 2)
+        first.transaction.uniqueID = "duplicate-business-id"
+        second.transaction.uniqueID = "duplicate-business-id"
+
+        let items = build(income: [first, second], limit: 2)
+        #expect(items[0].reference == .transaction(persistentID: first.transaction.persistentModelID))
+        #expect(items[1].reference == .transaction(persistentID: second.transaction.persistentModelID))
+        #expect(items[0].reference != items[1].reference)
     }
 
     @Test("Идентификаторы разных источников не пересекаются даже при совпадающей дате")

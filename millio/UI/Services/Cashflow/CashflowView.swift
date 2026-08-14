@@ -186,7 +186,6 @@ private struct CashflowContentView: View {
     @State private var budgetSetupExistingCategoryLimits: [String: Double] = [:]
     @State private var budgetSetupCategorySnapshots: [BudgetCategoryProgressSnapshot] = []
     @State private var showUpcomingPlanner: Bool = false
-    @State private var upcomingPlannerKind: CashflowCategoryKind = .expense
     @State private var showIncomeBreakdown: Bool = false
     @State private var showExpenseBreakdown: Bool = false
     @State private var showExpandedChart: Bool = false
@@ -733,22 +732,13 @@ private struct CashflowContentView: View {
         CashflowUpcomingCard(items: upcomingItems, onShowAll: openUpcomingPlanner)
     }
 
-    /// Полный «Планировщик» (`CashflowScheduledTransactionsView`) построен вокруг одного `kind`
-    /// (доход ИЛИ расход) — управление им не меняется (§5 плана). Ссылка «Все» открывает его для
-    /// kind ближайшей (первой в списке) предстоящей операции — так пользователь попадает туда,
-    /// где реально есть данные, вместо произвольного дефолта.
     private func openUpcomingPlanner() {
-        upcomingPlannerKind = upcomingItems.first?.kind ?? .expense
         showUpcomingPlanner = true
     }
 
     private var upcomingPlannerSheet: some View {
         NavigationStack {
-            CashflowScheduledTransactionsView(
-                viewModel: viewModel,
-                kind: upcomingPlannerKind,
-                mode: .planner
-            )
+            CashflowUnifiedUpcomingView(viewModel: viewModel)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {

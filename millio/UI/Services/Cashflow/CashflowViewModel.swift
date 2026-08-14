@@ -690,15 +690,18 @@ final class CashflowViewModel: ViewModelProtocol {
     /// Секция «Предстоящие» на главном экране Cashflow (Фаза 0, Шаг 6) — переиспользует те же
     /// источники, что и полный «Планировщик» (`scheduledPlannerEntries`), плюс будущие проценты
     /// по вкладам; merge/сортировка/cap — в `CashflowUpcomingSectionBuilder`.
-    func upcomingSectionItems(limit: Int = CashflowUpcomingSectionBuilder.defaultVisibleCount) -> [CashflowUpcomingItem] {
+    func allUpcomingItems() -> [CashflowUpcomingItem] {
         CashflowUpcomingSectionBuilder.items(
             incomeEntries: scheduledPlannerEntries(for: .income),
             expenseEntries: scheduledPlannerEntries(for: .expense),
             depositInterestEvents: accountsCoreDepositCashflowBridge.upcomingInterestEvents(),
             incomeCategoryTitle: { [weak self] raw in self?.incomeCategoryDisplayName(for: raw) ?? "" },
-            expenseCategoryTitle: { [weak self] raw in self?.expenseCategoryDisplayName(for: raw) ?? "" },
-            limit: limit
+            expenseCategoryTitle: { [weak self] raw in self?.expenseCategoryDisplayName(for: raw) ?? "" }
         )
+    }
+
+    func upcomingSectionItems(limit: Int = CashflowUpcomingSectionBuilder.defaultVisibleCount) -> [CashflowUpcomingItem] {
+        Array(allUpcomingItems().prefix(max(0, limit)))
     }
 
     private func monthlyTotal(
