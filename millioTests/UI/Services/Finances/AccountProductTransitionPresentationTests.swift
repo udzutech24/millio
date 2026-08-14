@@ -18,6 +18,54 @@ final class AccountProductTransitionPresentationTests: XCTestCase {
         XCTAssertFalse(targets.contains(.unknownLegacy))
     }
 
+    func testRussianTitlesMatchCreateFlowAndHaveNoDuplicates() {
+        let locale = Locale(identifier: "ru")
+        let targets = AccountProductTransitionPresentation.availableTargets(current: .unknownLegacy)
+        let titles = targets.map {
+            AccountProductTransitionPresentation.title(for: $0, locale: locale)
+        }
+
+        XCTAssertEqual(Set(titles).count, titles.count)
+        XCTAssertEqual(
+            AccountProductTransitionPresentation.title(for: .bankAccount, locale: locale),
+            FinanceAddAccountProductOption.account.title(locale: locale)
+        )
+        XCTAssertEqual(
+            AccountProductTransitionPresentation.title(for: .loan, locale: locale),
+            FinanceAddAccountProductOption.credit.title(locale: locale)
+        )
+        XCTAssertEqual(
+            AccountProductTransitionPresentation.title(for: .realEstate, locale: locale),
+            FinanceAddAccountProductOption.house.title(locale: locale)
+        )
+        XCTAssertTrue(
+            AccountProductTransitionPresentation.title(for: .creditCard, locale: locale)
+                .hasPrefix(FinanceAddAccountProductOption.card.title(locale: locale))
+        )
+        XCTAssertTrue(
+            AccountProductTransitionPresentation.title(for: .payable, locale: locale)
+                .hasPrefix(FinanceAddAccountProductOption.debt.title(locale: locale))
+        )
+    }
+
+    func testTitlesHaveNoDuplicatesInEverySupportedLanguage() {
+        let targets = AccountProductTransitionPresentation.availableTargets(current: .unknownLegacy)
+        let languages = Language.allCases.filter { $0 != .system }
+
+        for language in languages {
+            let locale = Locale(identifier: language.rawValue)
+            let titles = targets.map {
+                AccountProductTransitionPresentation.title(for: $0, locale: locale)
+            }
+
+            XCTAssertEqual(
+                Set(titles).count,
+                titles.count,
+                "Duplicate transition title for locale \(language.rawValue): \(titles)"
+            )
+        }
+    }
+
     func testDepositTermsProduceValidMetadata() throws {
         let end = Date(timeIntervalSince1970: 2_000_000_000)
 

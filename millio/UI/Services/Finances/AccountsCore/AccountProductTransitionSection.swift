@@ -26,9 +26,7 @@ struct AccountProductTransitionSection: View {
     }
 
     static func availableTargets(current: AccountProductType?) -> [AccountProductType] {
-        AccountProductType.allCases.filter {
-            $0 != .unknownLegacy && $0 != (current ?? .unknownLegacy)
-        }
+        AccountProductTransitionPresentation.availableTargets(current: current)
     }
 
     private var depositMetadata: DepositMeta? {
@@ -158,7 +156,10 @@ struct AccountProductTransitionSection: View {
     }
 
     private func productTitle(_ value: AccountProductType) -> String {
-        FinancesL10n.tr(value.localizationKey, locale: AppLocalization.currentAppLocale)
+        AccountProductTransitionPresentation.title(
+            for: value,
+            locale: AppLocalization.currentAppLocale
+        )
     }
 
     private func reasonTitle(_: AccountProductTransitionBlockedReason) -> String {
@@ -203,25 +204,5 @@ enum AccountProductTransitionFormMapper {
             remindEnd: hasTerm,
             autoRollover: false
         )
-    }
-}
-
-private extension AccountProductType {
-    var localizationKey: String {
-        switch self {
-        case .cash: "accounts_core.kind.cash"
-        case .debitCard: "finances.add_account.product.card.title"
-        case .creditCard, .loan: "finances.add_account.product.credit.title"
-        case .bankAccount: "finances.add_account.product.account.title"
-        case .deposit: "finances.add_account.product.deposit.title"
-        case .receivable, .payable: "finances.add_account.product.debt.title"
-        case .marketStock: "finances.add_account.product.stocks.title"
-        case .marketCrypto: "finances.add_account.product.crypto.title"
-        case .marketBond, .marketMetal, .genericMarketInvestment:
-            "finances.add_account.product.investment.title"
-        case .realEstate: "finances.add_account.product.house.title"
-        case .business: "finances.add_account.product.business.title"
-        case .vehicle, .otherManualAsset, .unknownLegacy: "finances.add_account.product.other.title"
-        }
     }
 }
