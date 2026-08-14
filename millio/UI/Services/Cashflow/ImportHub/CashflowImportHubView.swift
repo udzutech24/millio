@@ -4,7 +4,6 @@ import SwiftData
 
 struct CashflowImportHubView: View {
     @ObservedObject var viewModel: CashflowViewModel
-    let month: Date
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var showManualBulk = false
@@ -13,6 +12,8 @@ struct CashflowImportHubView: View {
     @State private var selectedAccountID = ""
     @State private var linksOperationsToAccount = true
     @State private var showStatementReview = false
+    @State private var showMonthPicker = false
+    @State private var selectedMonth: Date
     @StateObject private var statementController: CashflowStatementImportController
 
     init(
@@ -21,12 +22,13 @@ struct CashflowImportHubView: View {
         statementClient: any CashflowStatementImportClient = UnavailableCashflowStatementImportClient()
     ) {
         self.viewModel = viewModel
-        self.month = month
+        let canonicalMonth = CashflowMonthSelectionPolicy.canonicalMonth(month)
+        _selectedMonth = State(initialValue: canonicalMonth)
         let income = Set(viewModel.categoryOptions(for: .income, includeHiddenSystem: true).map(\.rawValue))
         let expense = Set(viewModel.categoryOptions(for: .expense, includeHiddenSystem: true).map(\.rawValue))
         _statementController = StateObject(wrappedValue: CashflowStatementImportController(
             client: statementClient,
-            selectedMonth: month,
+            selectedMonth: canonicalMonth,
             categoryCatalog: .init(income: income, expense: expense)
         ))
     }
@@ -34,6 +36,23 @@ struct CashflowImportHubView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section(CashflowMonthWorkspaceLocalization.importMonth) {
+                    Button { showMonthPicker = true } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "calendar")
+                            Text(monthTitle(selectedMonth))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Text(CashflowMonthWorkspaceLocalization.importMonthHint)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section {
                     Button {
                         showManualBulk = true
@@ -67,10 +86,13 @@ struct CashflowImportHubView: View {
                 }
             }
             .sheet(isPresented: $showManualBulk) {
-                CashflowBulkExpenseImportSheet(viewModel: viewModel, month: month, onComplete: {
+                CashflowBulkExpenseImportSheet(viewModel: viewModel, month: selectedMonth, onComplete: {
                     showManualBulk = false
                     dismiss()
                 })
+            }
+            .sheet(isPresented: $showMonthPicker) {
+                CashflowMonthPickerSheet(selection: $selectedMonth)
             }
             .fileImporter(
                 isPresented: $showFileImporter,
@@ -101,8 +123,11 @@ struct CashflowImportHubView: View {
                 CashflowStatementReviewView(
                     viewModel: viewModel,
                     controller: statementController,
-                    month: month
+                    month: selectedMonth
                 )
+            }
+            .onChange(of: selectedMonth) { _, month in
+                statementController.selectMonth(month)
             }
         }
     }
@@ -121,11 +146,21 @@ struct CashflowImportHubView: View {
         case .reconciliationFailed:
             Section { Label(CashflowMonthWorkspaceLocalization.reconciliationFailed, systemImage: "exclamationmark.triangle") }
         case .monthMismatch:
-            Section { Label(CashflowMonthWorkspaceLocalization.monthMismatch, systemImage: "calendar.badge.exclamationmark") }
+            Section {
+                Label(CashflowMonthWorkspaceLocalization.monthMismatch, systemImage: "calendar.badge.exclamationmark")
+                if let detectedMonth = statementController.detectedStatementMonth {
+                    Button(CashflowMonthWorkspaceLocalization.switchToMonth(monthTitle(detectedMonth))) {
+                        selectedMonth = detectedMonth
+                    }
+                }
+                Button(CashflowMonthWorkspaceLocalization.chooseAnotherMonth) {
+                    showMonthPicker = true
+                }
+            }
         case .needsReview:
             Section {
                 NavigationLink("Открыть проверку выписки") {
-                    CashflowStatementReviewView(viewModel: viewModel, controller: statementController, month: month)
+                    CashflowStatementReviewView(viewModel: viewModel, controller: statementController, month: selectedMonth)
                 }
             }
         case .applying:
@@ -310,5 +345,9 @@ struct CashflowImportHubView: View {
                 ? transaction.importReferenceKey
                 : nil
         })
+    }
+
+    private func monthTitle(_ month: Date) -> String {
+        month.formatted(.dateTime.month(.wide).year().locale(AppLocalization.currentAppLocale))
     }
 }

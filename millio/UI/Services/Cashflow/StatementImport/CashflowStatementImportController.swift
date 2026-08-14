@@ -10,9 +10,9 @@ final class CashflowStatementImportController: ObservableObject {
     @Published private(set) var categoryResolutionByFingerprint: [String: CashflowStatementCategoryResolution] = [:]
     @Published private(set) var localDuplicateFingerprints: Set<String> = []
     @Published private(set) var dispositionByFingerprint: [String: CashflowStatementReviewDisposition] = [:]
+    @Published private(set) var selectedMonth: Date
 
     private let client: any CashflowStatementImportClient
-    private let selectedMonth: Date
     private let categoryCatalog: CashflowStatementCategoryCatalog
     private let merchantStore: any CashflowStatementMerchantCategoryStore
     private var explicitCorrections: [String: CashflowStatementCategoryCorrection] = [:]
@@ -62,19 +62,7 @@ final class CashflowStatementImportController: ObservableObject {
             })
             categoryByFingerprint = categoryResolutionByFingerprint.mapValues(\.categoryRaw)
             initialCategoryByFingerprint = categoryByFingerprint
-            if value.status == "unsupported" {
-                state = .unsupported
-            } else if CashflowStatementMonthPolicy.validate(
-                periodFrom: value.statement.period.from,
-                periodTo: value.statement.period.to,
-                selectedMonth: selectedMonth
-            ) != .matches {
-                state = .monthMismatch
-            } else if !value.reconciliation.balanced {
-                state = .reconciliationFailed
-            } else {
-                state = .needsReview(operationCount: value.operations.count)
-            }
+            evaluatePreview(value)
         } catch CashflowStatementImportError.backendUnavailable {
             state = .backendUnavailable
         } catch CashflowStatementImportError.unsupported {
@@ -91,6 +79,21 @@ final class CashflowStatementImportController: ObservableObject {
         state = .completed(importedCount: result.insertedFingerprints.count)
     }
     func markApplyFailure() { state = .failed(retryable: false) }
+
+    var detectedStatementMonth: Date? {
+        guard let preview else { return nil }
+        return CashflowStatementMonthPolicy.resolve(
+            periodFrom: preview.statement.period.from,
+            periodTo: preview.statement.period.to
+        ).date()
+    }
+
+    /// Revalidates an already parsed preview locally. Changing the target month must
+    /// never upload a sensitive statement for a second time.
+    func selectMonth(_ month: Date) {
+        selectedMonth = CashflowMonthSelectionPolicy.canonicalMonth(month)
+        if let preview { evaluatePreview(preview) }
+    }
 
     func setCategory(_ categoryRaw: String, for operation: CashflowStatementPreviewDTO.Operation) {
         let kind: CashflowCategoryKind = (operation.validatedAmount ?? 0) > 0 ? .income : .expense
@@ -192,5 +195,21 @@ final class CashflowStatementImportController: ObservableObject {
             stableMerchant: operation.merchant,
             categoryRaw: resolution.categoryRaw
         )
+    }
+
+    private func evaluatePreview(_ value: CashflowStatementPreviewDTO) {
+        if value.status == "unsupported" {
+            state = .unsupported
+        } else if CashflowStatementMonthPolicy.validate(
+            periodFrom: value.statement.period.from,
+            periodTo: value.statement.period.to,
+            selectedMonth: selectedMonth
+        ) != .matches {
+            state = .monthMismatch
+        } else if !value.reconciliation.balanced {
+            state = .reconciliationFailed
+        } else {
+            state = .needsReview(operationCount: value.operations.count)
+        }
     }
 }

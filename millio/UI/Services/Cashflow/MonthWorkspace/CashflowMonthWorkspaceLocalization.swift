@@ -12,6 +12,9 @@ enum CashflowMonthWorkspaceLocalization {
     static var title: String { value(ru: "Месяц", en: "Month", zh: "月度") }
     static var year: String { value(ru: "Год", en: "Year", zh: "年") }
     static var chooseMonth: String { value(ru: "Выбрать месяц", en: "Choose month", zh: "选择月份") }
+    static var chooseMonthHint: String { value(ru: "Открывает выбор месяца", en: "Opens month selection", zh: "打开月份选择") }
+    static var monthActions: String { value(ru: "Действия с месяцем", en: "Month actions", zh: "月度操作") }
+    static func monthDestinationHint(_ month: String) -> String { value(ru: "Новые операции и импорт попадут в \(month)", en: "New transactions and imports will be added to \(month)", zh: "新交易和导入将添加到\(month)") }
     static var wholeMonthHint: String { value(ru: "весь календарный месяц", en: "full calendar month", zh: "整个日历月") }
     static var previousMonth: String { value(ru: "Предыдущий месяц", en: "Previous month", zh: "上个月") }
     static var nextMonth: String { value(ru: "Следующий месяц", en: "Next month", zh: "下个月") }
@@ -23,6 +26,10 @@ enum CashflowMonthWorkspaceLocalization {
     static var noTransactions: String { value(ru: "Нет операций", en: "No transactions", zh: "无交易") }
     static var emptyHint: String { value(ru: "Добавьте операцию или импортируйте данные.", en: "Add a transaction or import data.", zh: "添加交易或导入数据。") }
     static var importData: String { value(ru: "Импорт", en: "Import", zh: "导入") }
+    static var importMonth: String { value(ru: "Месяц импорта", en: "Import month", zh: "导入月份") }
+    static var importMonthHint: String { value(ru: "Операции будут проверены и добавлены в этот месяц.", en: "Transactions will be validated and added to this month.", zh: "交易将验证并添加到此月份。") }
+    static var chooseAnotherMonth: String { value(ru: "Выбрать другой месяц", en: "Choose another month", zh: "选择其他月份") }
+    static func switchToMonth(_ month: String) -> String { value(ru: "Переключиться на \(month)", en: "Switch to \(month)", zh: "切换到\(month)") }
     static var history: String { value(ru: "Вся история", en: "Full history", zh: "全部历史") }
     static var analytics: String { value(ru: "Аналитика и бюджеты", en: "Analytics & budgets", zh: "分析与预算") }
     static var expenseBudget: String { value(ru: "Бюджет расходов", en: "Expense budget", zh: "支出预算") }

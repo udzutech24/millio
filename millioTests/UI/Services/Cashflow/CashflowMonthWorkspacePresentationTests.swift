@@ -78,6 +78,13 @@ struct CashflowMonthWorkspacePresentationTests {
         #expect(importData == add)
     }
 
+    @Test("Dashboard exposes Add and Month as its only contextual actions")
+    func dashboardContextualActions() {
+        #expect(CashflowDashboardActionPolicy.actions == [.addOperation, .operations])
+        #expect(CashflowNavigationPolicy.ownerByDestination[.operations] == .contextualActions)
+        #expect(CashflowNavigationPolicy.ownerByDestination[.importData] == .monthOperations)
+    }
+
     @Test("Custom and multi-period scopes require an explicit month")
     func nonMonthlyPeriodsRejectStaleSelectedMonth() {
         for period in ChartPeriod.allCases where period != .specificMonth {

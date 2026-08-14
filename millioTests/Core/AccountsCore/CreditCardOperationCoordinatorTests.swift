@@ -144,4 +144,23 @@ struct CreditCardOperationCoordinatorTests {
         #expect(try context.fetch(FetchDescriptor<AccountEvent>()).count == baselineEvents)
         #expect(!context.hasChanges)
     }
+
+    @Test("Closed month blocks credit-card purchase before any graph insert")
+    func closedMonthBlocksPurchase() throws {
+        let (container, context, card, _) = try fixture()
+        _ = container
+        let date = Date(timeIntervalSince1970: 1_751_328_000)
+        let monthStart = try #require(Calendar.autoupdatingCurrent.dateInterval(of: .month, for: date)?.start)
+        context.insert(CashflowMonthClosureEvent(monthStart: monthStart, kind: .close, occurredAt: .now))
+        try context.save()
+
+        #expect(throws: CashflowMonthMutationPolicyError.closedMonth) {
+            try CreditCardOperationCoordinator(modelContext: context).record(
+                card: card,
+                command: .init(operationID: "closed-purchase", kind: .purchase, amount: 100, date: date)
+            )
+        }
+        #expect(try context.fetch(FetchDescriptor<CashflowTransaction>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<AccountEvent>()).allSatisfy { $0.sourceTransactionID != "closed-purchase" })
+    }
 }

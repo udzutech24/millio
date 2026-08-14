@@ -104,6 +104,27 @@ struct DepositCashflowProjectionTests {
         #expect(refreshCount == 0)
     }
 
+    @Test("Closed month blocks confirmed-interest Cashflow projection")
+    func closedMonthBlocksProjection() throws {
+        let (container, context, depositID, opening, calendar) = try fixture()
+        _ = container
+        let account = try #require(context.fetch(FetchDescriptor<Account>()).first { $0.id == depositID })
+        let date = calendar.date(byAdding: .month, value: 1, to: opening)!
+        let monthStart = try #require(calendar.dateInterval(of: .month, for: date)?.start)
+        context.insert(CashflowMonthClosureEvent(monthStart: monthStart, kind: .close, occurredAt: .now))
+        let event = AccountEvent(
+            account: account, date: date, type: .interest, amount: 100,
+            sourceTransactionID: "closed-interest"
+        )
+        context.insert(event)
+        try context.save()
+
+        #expect(throws: CashflowMonthMutationPolicyError.closedMonth) {
+            try DepositCashflowProjector.project(events: [event], through: date, context: context)
+        }
+        #expect(try projectedRows(context).isEmpty)
+    }
+
 }
 
 private extension Collection {

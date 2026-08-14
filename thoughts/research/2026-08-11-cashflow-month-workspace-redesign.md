@@ -222,3 +222,22 @@ Close/reopen should be append-only audit events. Mutation of transactions in a c
   - `CashflowCategoryGridLayoutTests.swift`
   - `CashflowTransactionEditorViewLayoutTests.swift`
   - localization tests under `millioTests/Core/Localization/` and `millioTests/UI/Services/Cashflow/`.
+
+## 2026-08-14 follow-up: device UI audit and import month recovery
+
+The current device build proves that the architectural pieces exist, but their composition is still weak:
+
+- `CashflowView` renders three competing entry points in sequence: Add, Import, then a separate Month card. Import is month-scoped too, so exposing it before the month workspace duplicates navigation and hides the stronger mental model: choose/manage a month, then act inside it.
+- `CashflowMonthWorkspaceView` uses a stock `List(.insetGrouped)`, segmented control and light material while the parent Cashflow screen uses black glass cards and custom finance tokens. The visual mismatch reported by the user is real, not subjective polish.
+- The workspace repeats month status, close/reopen controls, empty-state import, and a persistent bottom Add/Import bar. This gives rare period-closing administration the same weight as everyday transaction review.
+- `CashflowImportHubView.month` and `CashflowStatementImportController.selectedMonth` are immutable. `CashflowStatementMonthPolicy` correctly detects a mismatch, but `.monthMismatch` exposes no recovery action. The user must dismiss the flow, change month elsewhere and restart the import.
+- The manual bulk sheet already owns a local selectable month. The statement path is the inconsistent one.
+
+Recommended correction:
+
+1. Main Cashflow actions become `Add operation` and `Month`; remove the separate Month card.
+2. Month workspace becomes the only visible home for monthly transaction review and import.
+3. Restyle the workspace with the parent screen's black background, `financeCardBackground`-equivalent shared tokens, readable rows and one compact sticky Add/Import action area.
+4. Keep close/reopen in an overflow menu/status detail because it is infrequent administration, not primary navigation.
+5. Make import month explicit and mutable. Preserve the parsed preview on mismatch, derive the statement month when the period belongs to one calendar month, and offer `Switch to <month>` plus manual month selection. Multi-month/invalid statements remain blocked with a precise explanation.
+6. Revalidation must happen locally from the retained preview; selecting another month must not upload the bank file again.

@@ -2,7 +2,7 @@
 
 ## Status
 
-`PARTIALLY IMPLEMENTED` — Phases 1–5 and 7 complete; Phases 6 and 8 remain partial. Live Alfa-Bank XLSX preview/review/apply is wired and proven against the real July export; closure evidence breadth and durable screenshot matrix remain incomplete.
+`PARTIALLY IMPLEMENTED` — Phases 1–5 and 7 complete; Phases 6, 8 and the 2026-08-14 UX correction remain partial. Live Alfa-Bank XLSX preview/review/apply is wired and proven against the real July export; closure evidence breadth, visual consistency, mismatch recovery and durable screenshot matrix remain incomplete.
 
 ## Inputs
 
@@ -228,6 +228,41 @@ Do not add all state to `CashflowViewModel`. New presentation/import/closure res
 
 - Accessibility/localization fixes are retained where independent; obsolete component removal is a separate reversible commit.
 
+### [~] Phase 9 — unify Month entry, visual language and import-month recovery
+
+**Change**
+
+- Replace the main action-row Import destination with Month and remove the separate Month/history card.
+- Keep Add direct; route Month to `CashflowMonthWorkspaceView` using the currently selected specific month or the existing explicit month picker for broader chart ranges.
+- Extract a small shared Cashflow surface style instead of copying private `CashflowView` constants into the workspace. Restyle workspace background, header, filter, summary, transaction rows, empty state and sticky actions with those tokens.
+- Move close/reopen and readiness administration behind a contextual overflow/status action; preserve all existing domain enforcement.
+- Give `CashflowImportHubView` its own mutable canonical `selectedMonth`, visible month selector, and pass that month into both manual bulk and statement review/apply.
+- Refactor the statement controller so a retained preview can be revalidated against a changed month. Expose a pure detected-single-month result; do not re-upload on month changes.
+- In `.monthMismatch`, show the detected statement month when valid, a one-tap switch action and manual month selection. Keep invalid/multi-month periods blocked.
+
+**Expected files**
+
+- `CashflowView.swift`
+- `MonthWorkspace/CashflowMonthWorkspaceView.swift`
+- `MonthWorkspace/CashflowMonthWorkspacePresentation.swift` and/or one new shared style file
+- `ImportHub/CashflowImportHubView.swift`
+- `StatementImport/CashflowStatementImportController.swift`
+- `StatementImport/CashflowStatementMonthPolicy.swift`
+- localization catalog and focused tests
+
+**Acceptance/evidence**
+
+- Exactly two main actions are visible: Add operation and Month; no duplicate Month card remains.
+- Import is reachable from Month and honors the visible selected month.
+- A July statement opened while August is selected can switch to July and continue review without a second upload.
+- Multi-month or malformed statement periods cannot proceed.
+- Close/reopen behavior and all closed-month mutation gates remain unchanged.
+- Focused unit/presentation/localization tests pass, followed by simulator build and device/simulator screenshot comparison.
+
+**Rollback**
+
+- Restore the old action routing and workspace composition without touching imported transactions or closure events. Controller month mutability is behavior-compatible and can remain if UI rollback is required.
+
 ## Verification
 
 - Unit tests: presentation builder, import state machine, DTO contract, duplicate/apply policy, readiness calculator and mutation policy.
@@ -261,3 +296,5 @@ Do not add all state to `CashflowViewModel`. New presentation/import/closure res
 - 2026-08-12: Device screenshot audit found the month domain rendered as an arbitrary day (`12 Aug 2026`). Replaced it with a canonical month/year picker plus 44 pt previous/next controls, removed the duplicate empty-state Add action, and added a hard statement-period boundary: a preview whose first or last operation period is outside the selected calendar month cannot reach review/apply. Focused month/import tests pass. A true bank E2E/reconciliation proof remains blocked because no sanitized export file is present in the workspace or supplied attachment.
 - 2026-08-12: Expanded search found a real Alfa-Bank July XLSX on Desktop. Backend production adapter confirmed exact declared/computed reconciliation and stable repeated-preview fingerprints; exact financial totals and identifiers were intentionally omitted from documentation. iOS now excludes both internal and external transfers by default. Raw file/PII was not copied, logged or persisted.
 - 2026-08-12: Mutation self-audit closed additional category-merge and legacy linked-transaction purge bypasses. Added repeated-close idempotency and backup-import dedup tests. Real bank adapter/golden parsing and six target-state screenshots remain unproven because the required sanitized statement fixture is absent and no durable QA-state harness exists yet.
+- 2026-08-14: Connected-device screenshot and code audit confirmed duplicate Month navigation, mismatched workspace styling, over-prominent close controls and a dead-end statement month mismatch. Added Phase 9 for a single Month entry, shared visual language and in-flow import month recovery. No production code changed; awaiting guard phrase `Реализуй фазу 9 по плану`.
+- 2026-08-14: Phase 9 implemented: dashboard now exposes Add + Month, duplicate Month card and direct dashboard Import are removed, workspace uses shared Cashflow glass tokens, closure administration moved to overflow, and import supports visible mutable month plus local mismatch recovery without re-upload. Focused and broader Cashflow test gates passed; UI route test passed on the 390-pt simulator and generic signed device build succeeded. Phase remains partial only because the connected iPhone became unavailable before install/device visual inspection.

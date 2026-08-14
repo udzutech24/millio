@@ -36,9 +36,9 @@ enum CashflowNavigationPolicy {
         .expandedChart: .chart,
         .expenseBudget: .budgetCard,
         .incomeBudget: .budgetCard,
-        .operations: .operationsContent,
+        .operations: .contextualActions,
         .addOperation: .contextualActions,
-        .importData: .contextualActions,
+        .importData: .monthOperations,
         .currency: .overflow
     ]
 
@@ -49,7 +49,7 @@ enum CashflowNavigationPolicy {
         .chart: [.expandedChart],
         .budgetCard: [.budgetEditor],
         .operationsContent: [.monthOperations, .history],
-        .contextualActions: [.operationEditor, .importHub],
+        .contextualActions: [.operationEditor, .monthOperations],
         .overflow: [.currencySettings],
         .currencySettings: [],
         .operationEditor: [],
@@ -83,6 +83,18 @@ enum CashflowMonthScopedAction: Equatable {
     case addOperation
     case importData
     case operations
+
+    var accessibilityIdentifier: String {
+        switch self {
+        case .addOperation: "cashflow.action.add"
+        case .importData: "cashflow.action.import"
+        case .operations: "cashflow.action.month"
+        }
+    }
+}
+
+enum CashflowDashboardActionPolicy {
+    static let actions: [CashflowMonthScopedAction] = [.addOperation, .operations]
 }
 
 enum CashflowMonthScopeResolution: Equatable {

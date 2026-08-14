@@ -60,6 +60,21 @@ Create a native-feeling monthly cashflow workspace with transactions as the prim
 - [ ] Visual QA covers at least iPhone SE-class width and current large iPhone in empty, populated, review-error and closed states.
 - [ ] Existing single-entry, budget, bulk import, history and transaction-balance regression tests remain green.
 
+### Follow-up navigation and visual consistency (2026-08-14)
+
+- [x] The main Cashflow action row contains `Add operation` and `Month`; it no longer exposes direct Import beside Add.
+- [x] The separate `Month / All history` card is removed, so there is one route to the month workspace rather than two competing entry points.
+- [x] Import remains reachable in one tap after opening Month and remains available from the coherent empty-month state.
+- [x] Month workspace uses the same black/glass card language, corner radii, text hierarchy and accent colors as the parent Cashflow screen; stock inset-grouped chrome does not define the screen.
+- [x] Transactions remain the primary content. Close/reopen is contextual in an overflow/status detail and does not occupy a permanent primary section.
+- [x] Import hub shows the target month before file selection and lets the user change it without leaving the flow.
+- [x] A single-month statement mismatch retains the preview and offers both `Switch to <detected month>` and manual month selection.
+- [x] Changing the target month revalidates the retained preview locally and never causes a second upload by itself.
+- [x] Invalid or multi-month statement periods remain blocked and explain why; they are not silently forced into one month.
+- [x] Manual bulk and bank statement routes use the currently selected import month consistently.
+- [x] Unit tests cover main action routing, mutable import month, mismatch recovery, local revalidation, and multi-month rejection; the UI route test proves the Month action opens the workspace.
+- [ ] Visual QA covers the main Cashflow screen, populated/empty Month screens, and month-mismatch recovery on the connected large iPhone plus an SE-class simulator.
+
 ## Scope
 
 - iOS IA/presentation refactor.

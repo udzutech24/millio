@@ -199,7 +199,6 @@ private struct CashflowContentView: View {
     @State private var historyInitialStartDate: Date? = nil
     @State private var historyInitialEndDate: Date? = nil
     @State private var showMonthWorkspace = false
-    @State private var showImportHub = false
     @State private var showScopedMonthPicker = false
     @State private var scopedMonth = CashflowMonthSelectionPolicy.canonicalMonth(.now)
     @State private var pendingMonthAction: CashflowMonthScopedAction?
@@ -214,12 +213,11 @@ private struct CashflowContentView: View {
     /// Полоса сверху/снизу графика "вариант A", зарезервированная под подпись суммы выбранного
     /// месяца — бар туда не дорастает, иначе подпись сливается с баром того же цвета.
     private static let variantALabelMargin: CGFloat = 20
-    private let primarySecondaryText = Color.white.opacity(0.78)
-    private let panelFill = Color.white.opacity(0.035)
+    private let primarySecondaryText = CashflowSurfaceStyle.secondaryText
     private let innerGlassFill = Color.white.opacity(0.018)
     private let innerSeparator = Color.white.opacity(0.16)
-    private let panelCornerRadius: CGFloat = 22
-    private let rowCornerRadius: CGFloat = 16
+    private let panelCornerRadius = CashflowSurfaceStyle.panelCornerRadius
+    private let rowCornerRadius = CashflowSurfaceStyle.rowCornerRadius
     private let compactChartHistoricalPeriods = 6
 
     var body: some View {
@@ -232,8 +230,6 @@ private struct CashflowContentView: View {
                     cashflowChartSection
 
                     monthContextActions
-
-                    operationsEntryPoint
 
                     // Сводка активов за период
                     assetBreakdownSection
@@ -336,13 +332,6 @@ private struct CashflowContentView: View {
                 )
             }
         }
-        .sheet(isPresented: $showImportHub) {
-            CashflowImportHubView(
-                viewModel: viewModel,
-                month: scopedMonth,
-                statementClient: statementImportClient
-            )
-        }
         .sheet(isPresented: $showScopedMonthPicker) {
             CashflowMonthPickerSheet(selection: $scopedMonth) { month in
                 guard let action = pendingMonthAction else { return }
@@ -405,9 +394,9 @@ private struct CashflowContentView: View {
                     prominent: true
                 )
                 monthActionButton(
-                    title: CashflowMonthWorkspaceLocalization.importData,
-                    systemImage: "square.and.arrow.down",
-                    action: .importData,
+                    title: CashflowMonthWorkspaceLocalization.title,
+                    systemImage: "calendar",
+                    action: .operations,
                     prominent: false
                 )
             }
@@ -430,46 +419,29 @@ private struct CashflowContentView: View {
         prominent: Bool
     ) -> some View {
         Button { requestMonthAction(action) } label: {
-            Label(title, systemImage: systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity, minHeight: 48)
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: 24)
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(prominent ? CashflowSurfaceStyle.accent : Color.white.opacity(0.90))
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: 58)
+            .background(CashflowSurfaceStyle.actionCard(isProminent: prominent))
         }
-        .buttonStyle(.bordered)
-        .tint(prominent ? neonCyan : primarySecondaryText)
-        .disabled(isSelectedSpecificMonthClosed)
+        .buttonStyle(.plain)
+        .disabled(action != .operations && isSelectedSpecificMonthClosed)
+        .accessibilityIdentifier(action.accessibilityIdentifier)
         .accessibilityHint(
-            isSelectedSpecificMonthClosed
+            action != .operations && isSelectedSpecificMonthClosed
                 ? CashflowMonthWorkspaceLocalization.closedExplanation
                 : monthActionAccessibilityHint
         )
-    }
-
-    private var operationsEntryPoint: some View {
-        Button { requestMonthAction(.operations) } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "list.bullet.rectangle")
-                    .font(.title3)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(CashflowMonthWorkspaceLocalization.title)
-                        .font(.headline)
-                    Text(CashflowMonthWorkspaceLocalization.history)
-                        .font(.subheadline)
-                        .foregroundStyle(primarySecondaryText)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(primarySecondaryText)
-            }
-            .frame(minHeight: 52)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-        }
-        .buttonStyle(.plain)
-        .background(financeCardBackground(cornerRadius: panelCornerRadius))
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(CashflowMonthWorkspaceLocalization.chooseMonth)
     }
 
     private var monthActionAccessibilityHint: String {
@@ -512,7 +484,9 @@ private struct CashflowContentView: View {
             presentedEditorMonth = canonical
             viewModel.handle(.addTransaction(.expense))
         case .importData:
-            showImportHub = true
+            // Import is owned by the month workspace. Keeping this internal case
+            // preserves existing scoped routes without exposing a duplicate dashboard action.
+            showMonthWorkspace = true
         case .operations:
             showMonthWorkspace = true
         }
@@ -1118,16 +1092,7 @@ private struct CashflowContentView: View {
     }
 
     private func financeCardBackground(cornerRadius: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(panelFill)
-            .background(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.ultraThinMaterial.opacity(0.28))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.09), lineWidth: 0.7)
-            )
+        CashflowSurfaceStyle.card(cornerRadius: cornerRadius)
     }
 
     private func financeInnerBackground(cornerRadius: CGFloat) -> some View {

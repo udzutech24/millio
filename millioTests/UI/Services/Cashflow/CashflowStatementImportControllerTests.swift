@@ -49,6 +49,31 @@ struct CashflowStatementImportControllerTests {
         #expect(CashflowStatementMonthPolicy.validate(
             periodFrom: "bad", periodTo: "2026-08-31", selectedMonth: august2026
         ) == .invalidPeriod)
+        #expect(CashflowStatementMonthPolicy.resolve(
+            periodFrom: "2026-07-01", periodTo: "2026-07-31"
+        ) == .singleMonth(year: 2026, month: 7))
+        #expect(CashflowStatementMonthPolicy.resolve(
+            periodFrom: "2026-07-31", periodTo: "2026-08-01"
+        ) == .multipleMonths)
+    }
+
+    @Test("Month mismatch can recover locally without a second preview request")
+    func monthMismatchRecoveryReusesPreview() async throws {
+        let data = Data(#"{"schemaVersion":1,"status":"ready","statement":{"bankId":"fixture","templateVersion":"v1","format":"csv","accountScope":"opaque","period":{"from":"2026-07-01","to":"2026-07-31"}},"operations":[{"fingerprint":"purchase","operationDate":"2026-07-31","postingDate":null,"description":"Store","amount":"-10","currency":"RUB","type":"card_purchase","categorySuggestion":null,"extractionConfidence":1,"reviewReasons":[],"sourceReference":{"row":2,"sequence":0}}],"reconciliation":{"balanced":true,"declaredIncome":"0","declaredExpense":"10","computedIncome":"0","computedExpense":"10","difference":"0","reasons":[]},"warnings":[]}"#.utf8)
+        let preview = try JSONDecoder().decode(CashflowStatementPreviewDTO.self, from: data)
+        let controller = CashflowStatementImportController(
+            client: StatementClientStub(result: .success(preview)), selectedMonth: august2026
+        )
+
+        await controller.preview(fileURL: URL(fileURLWithPath: "/tmp/fixture.csv"))
+        #expect(controller.state == .monthMismatch)
+        let detected = try #require(controller.detectedStatementMonth)
+
+        controller.selectMonth(detected)
+
+        #expect(controller.state == .needsReview(operationCount: 1))
+        #expect(controller.preview == preview)
+        #expect(Calendar.current.isDate(controller.selectedMonth, equalTo: detected, toGranularity: .month))
     }
 
     @Test("Internal and external transfers cannot be included")

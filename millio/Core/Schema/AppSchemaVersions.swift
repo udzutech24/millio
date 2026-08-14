@@ -151,6 +151,15 @@ enum AppSchemaV8: VersionedSchema {
     ]
 }
 
+// MARK: - V9 (append-only Cashflow month closure audit)
+
+enum AppSchemaV9: VersionedSchema {
+    static var versionIdentifier = Schema.Version(9, 0, 0)
+    static var models: [any PersistentModel.Type] = AppSchemaV8.models + [
+        CashflowMonthClosureEvent.self,
+    ]
+}
+
 // MARK: - Текущая схема (единственный источник правды)
 
 // При добавлении нового @Model:
@@ -161,7 +170,7 @@ enum AppSchemaV8: VersionedSchema {
 // ВАЖНО: models уже выпущенной версии (или версии, под идентификатором которой уже
 // существуют сторы на дисках — dev/sim в том числе) — не редактировать задним числом.
 // Это ломает staged migration (см. комментарий V4 выше, Находка 2).
-typealias AppSchemaCurrent = AppSchemaV8
+typealias AppSchemaCurrent = AppSchemaV9
 
 // MARK: - План миграции
 
@@ -176,6 +185,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         AppSchemaV6.self,
         AppSchemaV7.self,
         AppSchemaV8.self,
+        AppSchemaV9.self,
     ]
 
     static var stages: [MigrationStage] = [
@@ -186,6 +196,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         .lightweight(fromVersion: AppSchemaV5.self, toVersion: AppSchemaV6.self),
         .lightweight(fromVersion: AppSchemaV6.self, toVersion: AppSchemaV7.self),
         .lightweight(fromVersion: AppSchemaV7.self, toVersion: AppSchemaV8.self),
+        .lightweight(fromVersion: AppSchemaV8.self, toVersion: AppSchemaV9.self),
     ]
 }
 

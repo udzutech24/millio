@@ -97,6 +97,7 @@ final class CreditCardOperationCoordinator {
             }
             return existing
         }
+        try CashflowMonthMutationPolicy(modelContext: modelContext).validate(.create, date: command.date)
 
         var groupID = command.operationID
         if command.kind == .refund {
@@ -160,6 +161,7 @@ final class CreditCardOperationCoordinator {
             }
             return existing
         }
+        try CashflowMonthMutationPolicy(modelContext: modelContext).validate(.create, date: command.date)
 
         let transferID = UUID()
         let createdAt = Date()

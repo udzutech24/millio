@@ -49,84 +49,34 @@ struct CashflowMonthWorkspaceView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            monthHero
+        ZStack {
+            CashflowSurfaceStyle.background.ignoresSafeArea()
 
-            Picker("", selection: $filter) {
-                Text(CashflowMonthWorkspaceLocalization.expense).tag(CashflowMonthFilter.expense)
-                Text(CashflowMonthWorkspaceLocalization.income).tag(CashflowMonthFilter.income)
-                Text(CashflowMonthWorkspaceLocalization.transfer).tag(CashflowMonthFilter.transfer)
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
-            .padding(.bottom, 8)
+            ScrollView {
+                VStack(spacing: 14) {
+                    monthHero
 
-            List {
-                Section {
-                    HStack {
-                        Text(filterTitle)
-                        Spacer()
-                        Text("\(cashflowAmountText(total)) \(cashflowCurrencyCodeLabel(viewModel.state.displayCurrency))")
-                            .font(.headline.monospacedDigit())
+                    Picker("", selection: $filter) {
+                        Text(CashflowMonthWorkspaceLocalization.expense).tag(CashflowMonthFilter.expense)
+                        Text(CashflowMonthWorkspaceLocalization.income).tag(CashflowMonthFilter.income)
+                        Text(CashflowMonthWorkspaceLocalization.transfer).tag(CashflowMonthFilter.transfer)
                     }
+                    .pickerStyle(.segmented)
+                    .tint(CashflowSurfaceStyle.accent)
 
-                    Label(
-                        isClosed ? CashflowMonthWorkspaceLocalization.closed : CashflowMonthWorkspaceLocalization.open,
-                        systemImage: isClosed ? "lock.fill" : "lock.open"
-                    )
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    if isClosed {
-                        Text(CashflowMonthWorkspaceLocalization.closedExplanation)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button(isClosed ? CashflowMonthWorkspaceLocalization.reopenMonth : CashflowMonthWorkspaceLocalization.closeMonth) {
-                        if isClosed { showReopenConfirmation = true } else { showClosureChecklist = true }
-                    }
-                    .disabled(!isClosed && !readiness.canClose)
+                    summaryCard
+                    transactionsContent
                 }
-
-                if monthTransactions.isEmpty {
-                    ContentUnavailableView {
-                        Label(CashflowMonthWorkspaceLocalization.noTransactions, systemImage: "tray")
-                    } description: {
-                        Text(CashflowMonthWorkspaceLocalization.emptyHint)
-                    } actions: {
-                        Button(CashflowMonthWorkspaceLocalization.statement) { showImportHub = true }
-                            .disabled(isClosed)
-                    }
-                    .listRowBackground(Color.clear)
-                } else {
-                    Section {
-                        ForEach(monthTransactions) { transaction in
-                            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                                Image(systemName: transaction.transactionType.icon)
-                                    .frame(width: 28, height: 44)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(transaction.note?.isEmpty == false ? transaction.note! : transaction.transactionType.displayName)
-                                        .lineLimit(2)
-                                    Text(transaction.transactionDate, style: .date)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Text("\(cashflowAmountText(transaction.amount)) \(cashflowCurrencyCodeLabel(transaction.currency))")
-                                    .font(.body.monospacedDigit())
-                            }
-                            .accessibilityElement(children: .combine)
-                        }
-                    }
-                }
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 92)
             }
-            .listStyle(.insetGrouped)
-
-            monthActions
         }
+        .safeAreaInset(edge: .bottom) { monthActions }
         .navigationTitle(monthTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar { monthManagementToolbar }
+        .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(isPresented: Binding(
             get: { viewModel.state.showTransactionEditor },
             set: { if !$0 { viewModel.handle(.hideTransactionEditor) } }
@@ -202,26 +152,114 @@ struct CashflowMonthWorkspaceView: View {
         }
     }
 
-    private var monthSelector: some View {
-        HStack(spacing: 12) {
-            monthArrow(systemImage: "chevron.left", offset: -1, label: CashflowMonthWorkspaceLocalization.previousMonth)
-            Button {
-                showMonthPicker = true
-            } label: {
-                VStack(spacing: 2) {
-                    Text(monthTitle)
-                        .font(.headline)
-                    Text(CashflowMonthWorkspaceLocalization.wholeMonthHint)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+    @ToolbarContentBuilder
+    private var monthManagementToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Menu {
+                Button {
+                    if isClosed { showReopenConfirmation = true } else { showClosureChecklist = true }
+                } label: {
+                    Label(
+                        isClosed ? CashflowMonthWorkspaceLocalization.reopenMonth : CashflowMonthWorkspaceLocalization.closeMonth,
+                        systemImage: isClosed ? "lock.open" : "lock"
+                    )
                 }
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .contentShape(Rectangle())
+                .disabled(!isClosed && !readiness.canClose)
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .frame(width: 44, height: 44)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(CashflowMonthWorkspaceLocalization.chooseMonth): \(monthTitle)")
-            monthArrow(systemImage: "chevron.right", offset: 1, label: CashflowMonthWorkspaceLocalization.nextMonth)
+            .accessibilityLabel(CashflowMonthWorkspaceLocalization.monthActions)
         }
+    }
+
+    private var summaryCard: some View {
+        VStack(spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(filterTitle)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(CashflowSurfaceStyle.secondaryText)
+                Spacer()
+                Text("\(cashflowAmountText(total)) \(cashflowCurrencyCodeLabel(viewModel.state.displayCurrency))")
+                    .font(.title3.weight(.bold).monospacedDigit())
+                    .foregroundStyle(.white)
+            }
+
+            HStack(spacing: 8) {
+                Image(systemName: isClosed ? "lock.fill" : "lock.open")
+                Text(isClosed ? CashflowMonthWorkspaceLocalization.closed : CashflowMonthWorkspaceLocalization.open)
+                Spacer()
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(isClosed ? Color.orange : CashflowSurfaceStyle.secondaryText)
+
+            if isClosed {
+                Text(CashflowMonthWorkspaceLocalization.closedExplanation)
+                    .font(.footnote)
+                    .foregroundStyle(CashflowSurfaceStyle.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(16)
+        .background(CashflowSurfaceStyle.card())
+    }
+
+    @ViewBuilder
+    private var transactionsContent: some View {
+        if monthTransactions.isEmpty {
+            VStack(spacing: 12) {
+                Image(systemName: "tray")
+                    .font(.title)
+                    .foregroundStyle(CashflowSurfaceStyle.secondaryText)
+                Text(CashflowMonthWorkspaceLocalization.noTransactions)
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                Text(CashflowMonthWorkspaceLocalization.emptyHint)
+                    .font(.subheadline)
+                    .foregroundStyle(CashflowSurfaceStyle.secondaryText)
+                    .multilineTextAlignment(.center)
+                Button(CashflowMonthWorkspaceLocalization.importData) { showImportHub = true }
+                    .buttonStyle(.bordered)
+                    .tint(CashflowSurfaceStyle.secondaryText)
+                    .disabled(isClosed)
+            }
+            .frame(maxWidth: .infinity, minHeight: 210)
+            .padding(20)
+            .background(CashflowSurfaceStyle.card())
+        } else {
+            LazyVStack(spacing: 0) {
+                ForEach(Array(monthTransactions.enumerated()), id: \.element.id) { index, transaction in
+                    transactionRow(transaction)
+                    if index < monthTransactions.count - 1 {
+                        Divider().overlay(CashflowSurfaceStyle.separator)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .background(CashflowSurfaceStyle.card())
+        }
+    }
+
+    private func transactionRow(_ transaction: CashflowTransaction) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: transaction.transactionType.icon)
+                .foregroundStyle(transaction.transactionType == .expense ? CashflowSurfaceStyle.negative : CashflowSurfaceStyle.positive)
+                .frame(width: 30, height: 48)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(transaction.note?.isEmpty == false ? transaction.note! : transaction.transactionType.displayName)
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                Text(transaction.transactionDate, style: .date)
+                    .font(.caption)
+                    .foregroundStyle(CashflowSurfaceStyle.secondaryText)
+            }
+            Spacer(minLength: 8)
+            Text("\(cashflowAmountText(transaction.amount)) \(cashflowCurrencyCodeLabel(transaction.currency))")
+                .font(.body.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.white)
+        }
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
     }
 
     private var monthHero: some View {
@@ -232,33 +270,26 @@ struct CashflowMonthWorkspaceView: View {
                     VStack(spacing: 5) {
                         Text(monthTitle)
                             .font(.title2.weight(.bold))
-                            .foregroundStyle(.primary)
-                        Label("Выбрать месяц", systemImage: "calendar")
+                            .foregroundStyle(.white)
+                        Label(CashflowMonthWorkspaceLocalization.chooseMonth, systemImage: "calendar")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.tint)
+                            .foregroundStyle(CashflowSurfaceStyle.accent)
                     }
                     .frame(maxWidth: .infinity, minHeight: 64)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(CashflowMonthWorkspaceLocalization.chooseMonth): \(monthTitle)")
-                .accessibilityHint("Открывает календарь выбора месяца")
+                .accessibilityHint(CashflowMonthWorkspaceLocalization.chooseMonthHint)
                 monthArrow(systemImage: "chevron.right", offset: 1, label: CashflowMonthWorkspaceLocalization.nextMonth)
             }
-            Text(isClosed ? "Месяц закрыт — просмотр доступен, изменения заблокированы" : "Все новые операции и импорт попадут в \(monthTitle)")
+            Text(isClosed ? CashflowMonthWorkspaceLocalization.closedExplanation : CashflowMonthWorkspaceLocalization.monthDestinationHint(monthTitle))
                 .font(.caption)
-                .foregroundStyle(isClosed ? .orange : .secondary)
+                .foregroundStyle(isClosed ? .orange : CashflowSurfaceStyle.secondaryText)
                 .multilineTextAlignment(.center)
         }
         .padding(14)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.accentColor.opacity(0.16), lineWidth: 1)
-        }
-        .padding(.horizontal)
-        .padding(.top, 6)
-        .padding(.bottom, 12)
+        .background(CashflowSurfaceStyle.card())
     }
 
     private var monthActions: some View {
@@ -285,10 +316,9 @@ struct CashflowMonthWorkspaceView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal)
-        .padding(.top, 8)
-        .padding(.bottom, 6)
-        .background(.ultraThinMaterial)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.black.opacity(0.94))
     }
 
     private func monthActionButton(
@@ -307,16 +337,14 @@ struct CashflowMonthWorkspaceView: View {
                 }
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(prominent ? Color.white : Color.primary)
+            .foregroundStyle(prominent ? CashflowSurfaceStyle.accent : Color.white.opacity(0.90))
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, minHeight: 58)
-            .background(
-                prominent ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.secondary.opacity(0.12)),
-                in: RoundedRectangle(cornerRadius: 17, style: .continuous)
-            )
+            .background(CashflowSurfaceStyle.actionCard(isProminent: prominent))
         }
         .buttonStyle(.plain)
         .disabled(isClosed)
+        .accessibilityIdentifier(prominent ? "cashflow.month.add" : "cashflow.month.import")
         .accessibilityLabel("\(title), \(monthTitle)")
         .accessibilityHint(isClosed ? CashflowMonthWorkspaceLocalization.closedExplanation : "")
     }

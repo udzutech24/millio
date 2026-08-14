@@ -52,6 +52,7 @@ enum DepositCashflowProjector {
             guard rows.isEmpty else { continue }
             let event = sourceEvents[0]
             guard let account = event.account, let amount = event.amount, amount > 0 else { continue }
+            try CashflowMonthMutationPolicy(modelContext: context).validate(.scheduledApply, date: event.date)
             context.insert(CashflowTransaction(
                 transactionType: .income,
                 amount: NSDecimalNumber(decimal: amount).doubleValue,
