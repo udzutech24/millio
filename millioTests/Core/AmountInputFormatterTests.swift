@@ -48,6 +48,16 @@ struct AmountInputFormatterTests {
         #expect(displayed == "2 222 222")
     }
 
+    @Test("shared amount field groups a real-estate-sized valuation and preserves canonical value")
+    func amountFieldFormatsLargeValuation() {
+        let raw = AmountTextField.canonical(from: "54 321 000,75")
+        let displayed = AmountTextField.formatted(from: raw)
+
+        #expect(raw == "54321000.75")
+        #expect(displayed == "54 321 000.75")
+        #expect(AmountInputFormatter.parse(displayed) == 54_321_000.75)
+    }
+
     @Test("display groups four-digit integer input")
     func displayGroupsFourDigitIntegerInput() {
         let displayed = AmountInputFormatter.display("2222", maxFractionDigits: 0)

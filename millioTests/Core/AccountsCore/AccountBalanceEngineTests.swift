@@ -47,7 +47,8 @@ struct AccountBalanceEngineTests {
         #expect(balance == 1200)
     }
 
-    /// Расход больше баланса даёт отрицательный баланс — НЕ обрезается нулём (AC9).
+    /// Compatibility-bug characterization for the debit vertical: replay itself is deliberately
+    /// arithmetic-only, so the writer must reject this operation before it reaches the ledger.
     @Test
     func engineA_expenseExceedingBalanceGoesNegative() {
         let events = [
@@ -175,6 +176,45 @@ struct AccountBalanceEngineTests {
         )
         // quantity = 10 - 3 = 7; provider цена 150 → 1050
         #expect(balance == 1050)
+    }
+
+    @Test
+    func marketQuantityReplayIsCanonicalAcrossOrderingAndTimestampBoundary() {
+        let buyBeforeBoundary = event(date: day1, type: .buy, quantity: 10, unitPrice: 100)
+        let sellOnBoundary = event(date: day2, type: .sell, quantity: 3, unitPrice: 110)
+        let irrelevantDividend = event(date: day2, type: .dividend, amount: 50)
+        let futureBuy = event(date: day3, type: .buy, quantity: 100, unitPrice: 120)
+        let orders = [
+            [futureBuy, irrelevantDividend, buyBeforeBoundary, sellOnBoundary],
+            [sellOnBoundary, buyBeforeBoundary, futureBuy, irrelevantDividend],
+            [irrelevantDividend, futureBuy, sellOnBoundary, buyBeforeBoundary]
+        ]
+        let meta = MarketMeta(symbol: "AAPL", assetClass: .stock)
+
+        for events in orders {
+            let quantity = AccountBalanceEngine.marketQuantityAt(events: events, on: day2)
+            let balance = AccountBalanceEngine.balanceAt(
+                events: events,
+                kind: .marketInvestment,
+                on: day2,
+                priceProvider: MockPriceProvider(price: 11),
+                marketMeta: meta
+            )
+
+            #expect(quantity == 7)
+            #expect(balance == quantity * 11)
+        }
+    }
+
+    @Test
+    func marketQuantityAbsoluteCorrectionReplacesPriorQuantity() {
+        let events = [
+            event(date: day1, type: .buy, quantity: 10, unitPrice: 100),
+            event(date: day2, type: .adjustment, quantity: 4, unitPrice: 125)
+        ]
+
+        #expect(AccountBalanceEngine.marketQuantityAt(events: events, on: day2) == 4)
+        #expect(AccountBalanceEngine.balanceAt(events: events, kind: .marketInvestment, on: day2) == 500)
     }
 
     @Test

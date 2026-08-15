@@ -10,6 +10,18 @@ import Foundation
 import CoreGraphics
 
 enum FinanceOverviewLedgerStyle {
+    struct BalanceComposition: Equatable {
+        let debitFraction: Double
+        let creditFraction: Double
+        let hasData: Bool
+
+        static let empty = BalanceComposition(
+            debitFraction: 0,
+            creditFraction: 0,
+            hasData: false
+        )
+    }
+
     static func countsText(groups: Int, accounts: Int) -> String {
         "\(groups) \(L("finances.overview.groups_suffix")) · \(accounts) \(L("finances.overview.accounts_suffix"))"
     }
@@ -69,5 +81,25 @@ enum FinanceOverviewLedgerStyle {
             debitWidth = availableWidth - creditWidth
         }
         return (max(0, debitWidth), max(0, creditWidth))
+    }
+
+    /// Доли для donut общего баланса. Использует ту же gross-базу, что stacked bar, но без
+    /// минимальной визуальной ширины: круг показывает фактическую пропорцию активов/обязательств.
+    static func balanceComposition(
+        debitTotal: Double,
+        creditTotal: Double,
+        epsilon: Double = 0.01
+    ) -> BalanceComposition {
+        let debit = max(0, debitTotal.isFinite ? debitTotal : 0)
+        let credit = max(0, creditTotal.isFinite ? creditTotal : 0)
+        let gross = debit + credit
+        guard gross > epsilon, gross.isFinite else { return .empty }
+
+        let debitFraction = debit / gross
+        return BalanceComposition(
+            debitFraction: debitFraction,
+            creditFraction: 1 - debitFraction,
+            hasData: true
+        )
     }
 }

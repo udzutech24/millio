@@ -22,7 +22,9 @@ enum FinanceDynamicsPresentation {
             partial + signedValue(item.endValue, for: item, viewMode: viewMode)
         }
         let delta = endSum - startSum
-        let percent: Double = abs(startSum) > 0.01 ? (delta / abs(startSum)) * 100 : 0
+        let percent: Double? = abs(startSum) >= 0.01
+            ? (delta / abs(startSum)) * 100
+            : (abs(delta) < 0.01 ? 0 : nil)
 
         return DynamicsBreakdownItem(
             id: "total",

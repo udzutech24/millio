@@ -126,7 +126,7 @@ struct AccountsCoreCashflowBridgeTests {
         rateService.historicalRatesByPair["USD_RUB"] = 90
         let (container, ctx, service, bridge) = try makeContext(rateService: rateService)
         _ = container
-        let account = try service.createAccount(name: "Карта", kind: .debitCard, currency: "RUB", openingBalance: 0)
+        let account = try service.createAccount(name: "Карта", kind: .debitCard, currency: "RUB", openingBalance: 2_000)
 
         let tx = makeTransaction(type: .expense, amount: 10, currency: "USD", cardID: account.id.uuidString)
         ctx.insert(tx)
@@ -325,9 +325,11 @@ struct AccountsCoreCashflowBridgeTests {
         rateService.historicalRatesByPair["USD_RUB"] = 80 // курс на дату события
         let (container, ctx, service, bridge) = try makeContext(rateService: rateService)
         _ = container
-        let account = try service.createAccount(name: "Карта", kind: .debitCard, currency: "RUB", openingBalance: 0)
-
         let eventDate = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+        let openingDate = Calendar.current.date(byAdding: .day, value: -1, to: eventDate)!
+        let account = try service.createAccount(
+            name: "Карта", kind: .debitCard, currency: "RUB", openingBalance: 2_000, date: openingDate
+        )
         let tx = makeTransaction(type: .expense, amount: 10, currency: "USD", cardID: account.id.uuidString, date: eventDate)
         ctx.insert(tx)
         try ctx.save()

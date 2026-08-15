@@ -40,24 +40,25 @@ struct CardImporter: ModelImporter {
             throw AppError.backupCorrupted
         }
         
-        // Проверяем, не существует ли уже карта с такими же данными (по cardUniqueID)
-        // Используем комбинацию полей без createdAt для проверки, так как createdAt может немного отличаться
-        let existingCardDescriptor = FetchDescriptor<Card>(
-            predicate: #Predicate<Card> { card in
-                card.name == name &&
-                card.cardNumber == cardNumber &&
-                card.bankRaw == bankRaw &&
-                card.cardTypeRaw == cardTypeRaw &&
-                card.currency == currency
+        // Stable ID is authoritative. Mutable display fields are a compatibility fallback only
+        // for old backups that genuinely predate `cardUniqueID`.
+        let backupUniqueID = (data["cardUniqueID"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let allCards = try context.fetch(FetchDescriptor<Card>())
+        let existingCard = if let backupUniqueID, !backupUniqueID.isEmpty {
+            allCards.first { $0.uniqueID == backupUniqueID }
+        } else {
+            allCards.first {
+                $0.name == name && $0.cardNumber == cardNumber && $0.bankRaw == bankRaw
+                    && $0.cardTypeRaw == cardTypeRaw && $0.currency == currency
             }
-        )
+        }
         
         // Получаем priority (для обратной совместимости используем normal по умолчанию)
         let priorityRaw = data["priorityRaw"] as? String ?? "normal"
         let priority = CardPriority(rawValue: priorityRaw) ?? .normal
         
         // Если карта уже существует, обновляем её данные вместо создания новой
-        if let existingCard = try? context.fetch(existingCardDescriptor).first {
+        if let existingCard {
             // Обновляем существующую карту
             if let uniqueID = data["cardUniqueID"] as? String, !uniqueID.isEmpty {
                 existingCard.uniqueID = uniqueID
@@ -92,7 +93,7 @@ struct CardImporter: ModelImporter {
                 existingCard.encryptedCVV = encryptedCVV
             }
             
-            AppLogger.log(.info, category: "CardImporter", "Updated existing card '\(name)' instead of creating duplicate")
+            AppLogger.log(.info, category: "CardImporter", "Legacy card import updated existing row")
             return
         }
         

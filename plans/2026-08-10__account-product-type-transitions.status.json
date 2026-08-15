@@ -1,0 +1,17 @@
+{
+  "plan": "plans/2026-08-10__account-product-type-transitions.md",
+  "status": "complete",
+  "completedPhases": [0, 1, 2, 3, 4],
+  "nextPhase": null,
+  "schemaChanged": false,
+  "lastUpdated": "2026-08-11",
+  "decision": "No universal in-place type setter; classify every pair as correction, replacement conversion, or blocked",
+  "evidence": [
+    "Exhaustive AccountProductType pair matrix covered by focused tests",
+    "Atomic correction and replacement coordinators use disposable contexts and persisted stable operation markers",
+    "Retry, save rollback, archive/source identity, group and no-overlap balance handoff tests passed",
+    "Localized correction, destructive conversion confirmation and typed blocked-reason UI connected after persistence gate",
+    "Device-feedback follow-up: transition UI lives under Edit, excludes current/legacy targets, and dismisses stale detail state after commit",
+    "Schema unchanged"
+  ]
+}

@@ -54,9 +54,28 @@ struct LegacyAccountConverterTests {
         kind: AccountKind = .debitCard,
         opening: Decimal
     ) -> LegacyAccountConverter.Input {
-        LegacyAccountConverter.Input(
-            legacyUniqueID: id, name: "ОГ", currency: currency, kind: kind,
-            openingBalance: opening, group: nil, cardMeta: nil, loanMeta: nil, manualAssetMeta: nil
+        let productType: AccountProductType
+        let metadata: AccountProductMetadata
+        switch kind {
+        case .loan:
+            productType = .loan
+            metadata = .init(loan: LoanMeta(
+                principal: opening, rate: 0, monthlyPayment: nil, paymentDay: nil,
+                termEnd: nil, scheduleType: .annuity, insurance: nil
+            ))
+        case .manualAsset:
+            productType = .otherManualAsset
+            metadata = .init(manualAsset: ManualAssetMeta(
+                revalReminderMonths: nil, depreciationRatePerYear: nil, linkedLoanID: nil
+            ))
+        default:
+            productType = .debitCard
+            metadata = .init()
+        }
+        return LegacyAccountConverter.Input(
+            legacyUniqueID: id, name: "ОГ", currency: currency, productType: productType,
+            openingBalance: opening, group: nil, metadata: metadata,
+            initialMarketPurchase: nil, includeInTotal: true
         )
     }
 
@@ -168,6 +187,47 @@ struct LegacyAccountConverterTests {
         #expect(await s.totals.totalAt(Date(), in: "RUB") == 0)
     }
 
+    @Test
+    func dirtyCallerContextIsRejectedWithoutDestroyingUnrelatedInsert() throws {
+        let s = try makeStack()
+        let unrelated = AccountGroup(name: "Pending")
+        s.ctx.insert(unrelated)
+
+        #expect(throws: LegacyAccountConverter.ConversionError.dirtyContext) {
+            try s.converter.convert(input(opening: 150_000)) {}
+        }
+
+        #expect(s.ctx.hasChanges)
+        try s.ctx.save()
+        #expect(try s.ctx.fetchCount(FetchDescriptor<AccountGroup>()) == 1)
+        #expect(try s.ctx.fetchCount(FetchDescriptor<Account>()) == 0)
+    }
+
+    @Test
+    func saveFailureCleansConversionGraphBeforeUnrelatedSave() throws {
+        struct SaveFailure: Error {}
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let context = container.mainContext
+        let defaults = UserDefaults(suiteName: "conv-save-failure-\(UUID().uuidString)")!
+        let registry = LegacyConversionRegistry(defaults: defaults)
+        let converter = LegacyAccountConverter(
+            modelContext: context,
+            registry: registry,
+            saveOperation: { _ in throw SaveFailure() }
+        )
+
+        #expect(throws: SaveFailure.self) {
+            try converter.convert(input(opening: 150_000)) {}
+        }
+        #expect(!context.hasChanges)
+        #expect(!registry.isConverted(legacyUniqueID: "legacy-1"))
+
+        context.insert(AccountGroup(name: "Unrelated"))
+        try context.save()
+        #expect(try context.fetchCount(FetchDescriptor<Account>()) == 0)
+        #expect(try context.fetchCount(FetchDescriptor<AccountEvent>()) == 0)
+    }
+
     // MARK: - Реестр: запись/чтение/удаление
 
     @Test
@@ -182,5 +242,44 @@ struct LegacyAccountConverterTests {
         #expect(registry.coreAccountID(forLegacyUniqueID: "x") == id)
         registry.remove(legacyUniqueID: "x")
         #expect(!registry.isConverted(legacyUniqueID: "x"))
+    }
+
+    /// Phase 0 restore characterization: registry is device-local `UserDefaults`, therefore a
+    /// restored store on a fresh installation cannot prove the legacy→core link from domain data.
+    /// The desired preservation assertion is deliberately a known issue, not a green assertion of loss.
+    @Test("Phase 0 known issue: legacy→core registry link does not survive fresh-device restore")
+    func registryLinkIsMissingFromFreshRestoreDomain() {
+        let sourceSuite = "reg-source-\(UUID().uuidString)"
+        let restoredSuite = "reg-restored-\(UUID().uuidString)"
+        let sourceDefaults = UserDefaults(suiteName: sourceSuite)!
+        let restoredDefaults = UserDefaults(suiteName: restoredSuite)!
+        defer {
+            sourceDefaults.removePersistentDomain(forName: sourceSuite)
+            restoredDefaults.removePersistentDomain(forName: restoredSuite)
+        }
+
+        let sourceRegistry = LegacyConversionRegistry(defaults: sourceDefaults)
+        let restoredRegistry = LegacyConversionRegistry(defaults: restoredDefaults)
+        let coreID = UUID()
+        sourceRegistry.record(legacyUniqueID: "legacy-stock", coreAccountID: coreID)
+
+        #expect(sourceRegistry.coreAccountID(forLegacyUniqueID: "legacy-stock") == coreID)
+        withKnownIssue("LegacyConversionRegistry is not part of backup/restore evidence.") {
+            #expect(restoredRegistry.coreAccountID(forLegacyUniqueID: "legacy-stock") == coreID)
+        }
+        #expect(restoredRegistry.coreAccountID(forLegacyUniqueID: "legacy-stock") == nil)
+    }
+
+    /// Phase 0 subtype characterization: structured legacy category `.stocks` is available before
+    /// conversion, but the MVP plan collapses it to `.manualAsset`. This test keeps the desired subtype
+    /// expectation red/known until conversion routes through the product catalog.
+    @Test("Structured stock subtype is preserved and invalid evidence remains market intent")
+    func stockInvestmentSubtypeIsPreservedByLegacyConversionPlan() {
+        let investment = Investment(
+            name: "AAPL", investmentType: .positive, category: .stocks, amount: 45_000
+        )
+        let plan = LegacyAccountConversion.plan(for: investment, currency: "USD")
+
+        #expect(plan.productType == .marketStock)
     }
 }

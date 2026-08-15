@@ -129,6 +129,11 @@ enum ScopeMergeDedup {
                                   kind: AccountKind(rawValue: dto.kindRaw) ?? .cash,
                                   currency: dto.currency, createdAt: dto.createdAt,
                                   includeInTotal: dto.includeInTotal, order: dto.order)
+            // Preserve the exact raw discriminator. Invalid input is quarantined by the product
+            // migrator below; it must never be silently rewritten to cash.
+            account.kindRaw = dto.kindRaw
+            account.productTypeRaw = dto.productTypeRaw
+            account.productMigrationReason = dto.productMigrationReason
             account.archivedAt = dto.archivedAt
             account.deletedAt = dto.deletedAt
             account.note = dto.note
@@ -138,6 +143,11 @@ enum ScopeMergeDedup {
             account.debtMeta = dto.debtMeta
             account.marketMeta = dto.marketMeta
             account.manualAssetMeta = dto.manualAssetMeta
+            let productChanged = AccountProductIdentityMigrator.migrate(account)
+            HistoricalValuationRevisionTracker.bump([.accountSet], on: account)
+            if !productChanged {
+                HistoricalValuationRevisionTracker.bump([.financial], on: account)
+            }
             if let groupID = dto.groupID { account.group = resolvedGroup[groupID] ?? groupByID[groupID] }
             context.insert(account)
             accountByID[dto.id] = account
@@ -162,6 +172,9 @@ enum ScopeMergeDedup {
             // сохранённый на guest ключ, иначе смена TZ задним числом переносит операцию в другой день (Т5).
             event.dayKey = dto.dayKey
             context.insert(event)
+            if let account = event.account {
+                HistoricalValuationRevisionTracker.bump([.events], on: account)
+            }
             eventIDs.insert(dto.id)
             eventsAdded += 1
         }

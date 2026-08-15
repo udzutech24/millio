@@ -1,0 +1,20 @@
+{
+  "plan": "plans/2026-08-11__debit-card-product-vertical.md",
+  "status": "complete",
+  "completedPhases": [0, 1, "1Q", 2, 3, 4, 5, 6, 7, 8, 9],
+  "nextPhase": null,
+  "schemaChanged": false,
+  "legacyCardRetained": true,
+  "lastUpdated": "2026-08-11",
+  "evidence": [
+    "CashflowViewModelTests passed 89/89 in Test-millio-2026.08.11_20-34-38-+0300.xcresult",
+    "Focused debit UI/contract/coordinator/factory/catalog/bridge/backup/localization suite passed 47 tests in Test-millio-2026.08.11_20-38-06-+0300.xcresult",
+    "Combined debit/property/AccountsCore/Cashflow/Finance/backup/localization release regression passed in Test-millio-2026.08.11_20-51-28-+0300.xcresult",
+    "Legacy credit total normalization regression passed unchanged in Test-millio-2026.08.11_20-50-23-+0300.xcresult",
+    "UI bootstrap passed on 375 and 390 simulators; 32-state render artifacts cover eight states, two sizes and two themes",
+    "Debug and Release simulator builds succeeded",
+    "Schema unchanged; refund linkage uses backed-up CashflowTransaction.operationGroupID",
+    "Legacy Card and persisted PAN/CVV fields retained without new debit writes or logs",
+    "Static writer/sensitive-log scans, localization JSON validation and git diff --check passed"
+  ]
+}

@@ -90,6 +90,74 @@ struct AccountsCoreUpdateAccountTests {
         #expect(account.group == nil, "group: nil = «Без группы» (канон Ungrouped ядра)")
     }
 
+    @Test("updateAccount changes total membership and bumps account-set revision")
+    func updateAccountCanChangeTotalMembership() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(
+            name: "Квартира", kind: .manualAsset, currency: "RUB", openingBalance: 10_000_000
+        )
+        let revisionBefore = account.valuationMembershipRevision
+
+        try service.updateAccount(
+            account,
+            name: account.name,
+            group: nil,
+            includeInTotal: false
+        )
+
+        #expect(account.includeInTotal == false)
+        #expect(account.participates(on: Date()) == false)
+        #expect(account.valuationMembershipRevision != revisionBefore)
+        #expect(try ctx.fetch(FetchDescriptor<AccountEvent>()).count == 1)
+    }
+
+    @Test("Failed update is typed, rolled back, and cannot be resurrected by a later save")
+    func updateAccountSaveFailureRollsBackCompletely() throws {
+        struct SaveFailure: Error {}
+        let (container, ctx) = try makeContext()
+        _ = container
+        let setupService = AccountsCoreService(modelContext: ctx)
+        let account = try setupService.createAccount(
+            name: "Original", kind: .bankAccount, currency: "RUB", openingBalance: 1_000
+        )
+        let financialRevisionBefore = account.valuationFinancialRevision
+        let membershipRevisionBefore = account.valuationMembershipRevision
+        let failingService = AccountsCoreService(modelContext: ctx) { _ in throw SaveFailure() }
+
+        do {
+            _ = try failingService.updateAccount(
+                account,
+                name: "Must not persist",
+                group: nil,
+                note: "Must not persist",
+                includeInTotal: false
+            )
+            Issue.record("Expected a typed persistence failure")
+        } catch let AccountsCorePersistenceError.saveFailed(operation, underlying) {
+            #expect(operation == .updateAccount)
+            #expect(underlying is SaveFailure)
+        } catch {
+            Issue.record("Unexpected error: \(type(of: error))")
+        }
+
+        let rolledBack = try #require(ctx.fetch(FetchDescriptor<Account>()).first)
+        #expect(rolledBack.name == "Original")
+        #expect(rolledBack.note == nil)
+        #expect(rolledBack.includeInTotal)
+        #expect(rolledBack.valuationFinancialRevision == financialRevisionBefore)
+        #expect(rolledBack.valuationMembershipRevision == membershipRevisionBefore)
+        #expect(!ctx.hasChanges)
+
+        ctx.insert(AccountGroup(name: "Unrelated"))
+        try ctx.save()
+        let persisted = try #require(ctx.fetch(FetchDescriptor<Account>()).first)
+        #expect(persisted.name == "Original")
+        #expect(persisted.note == nil)
+        #expect(persisted.includeInTotal)
+    }
+
     // MARK: - Гейт 2: backup roundtrip (инвариант 7)
 
     @Test("Round-trip: правка через updateAccount переживает export→clear→import без потери полей")

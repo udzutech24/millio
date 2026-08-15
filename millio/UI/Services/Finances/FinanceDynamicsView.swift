@@ -592,14 +592,16 @@ private struct FinanceDynamicsContentView: View {
         guard EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) else { return }
         isOverviewChartLoading = true
 
-        async let weekEntries = viewModel.buildOverviewEntries(granularity: .week)
-        async let monthEntries = viewModel.buildOverviewEntries(granularity: .month)
-        async let yearEntries = viewModel.buildOverviewEntries(granularity: .year)
-
+        // The structured external-coverage adapter owns query-scoped evidence while the producer
+        // awaits FX/market resolution. Keep these reads sequential so three overview queries cannot
+        // overwrite each other's prepared legacy boundary state.
+        let weekEntries = await viewModel.buildOverviewEntries(granularity: .week)
+        let monthEntries = await viewModel.buildOverviewEntries(granularity: .month)
+        let yearEntries = await viewModel.buildOverviewEntries(granularity: .year)
         overviewEntriesByGranularity = [
-            .week: await weekEntries,
-            .month: await monthEntries,
-            .year: await yearEntries
+            .week: weekEntries,
+            .month: monthEntries,
+            .year: yearEntries
         ]
         isOverviewChartLoading = false
     }
@@ -1123,9 +1125,10 @@ private struct FinanceDynamicsContentView: View {
                     HStack(spacing: 6) {
                         Text(formatDelta(delta.absolute))
                             .font(.caption.weight(.semibold))
-                        // Near-zero база → процент не определён: лейбл не рендерим совсем (решение владельца).
-                        if !FinanceAmountText.isPercentUndefined(value: delta.percent, isHidden: isAmountHidden) {
-                            Text(formatPercent(delta.percent))
+                        // A zero financial baseline has no truthful percentage; keep only the
+                        // absolute delta. Privacy mode does not invent a percentage either.
+                        if let percent = delta.percent {
+                            Text(formatPercent(percent))
                                 .font(.caption.weight(.semibold))
                         }
                     }
@@ -2460,9 +2463,9 @@ private struct FinanceDynamicsContentView: View {
                         let badgeColor = deltaColor(for: item)
                         let badgeBg = deltaBackground(for: item)
                         // Near-zero база → процент не определён: показываем только дельту, без «•» и процента.
-                        let badgeText = FinanceAmountText.isPercentUndefined(value: item.deltaPercent, isHidden: isAmountHidden)
-                            ? formatDelta(item.delta)
-                            : "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
+                        let badgeText = item.deltaPercent.map {
+                            "\(formatDelta(item.delta))  •  \(formatPercent($0))"
+                        } ?? formatDelta(item.delta)
                         Text(badgeText)
                             .font(.caption.weight(.semibold).monospacedDigit())
                             .padding(.horizontal, 8)
@@ -2507,9 +2510,9 @@ private struct FinanceDynamicsContentView: View {
                         let badgeColor = deltaColor(for: item)
                         let badgeBg = deltaBackground(for: item)
                         // Near-zero база → процент не определён: показываем только дельту, без «•» и процента.
-                        let badgeText = FinanceAmountText.isPercentUndefined(value: item.deltaPercent, isHidden: isAmountHidden)
-                            ? formatDelta(item.delta)
-                            : "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
+                        let badgeText = item.deltaPercent.map {
+                            "\(formatDelta(item.delta))  •  \(formatPercent($0))"
+                        } ?? formatDelta(item.delta)
                         Text(badgeText)
                             .font(.caption.weight(.semibold).monospacedDigit())
                             .padding(.horizontal, 8)

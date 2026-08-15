@@ -59,6 +59,19 @@ final class ScreenshotTests: XCTestCase {
         snapshot("03-cashflow")
     }
 
+    @MainActor
+    func testScreenshot08CashflowMonth() {
+        let app = makeApp()
+        setupSnapshot(app)
+        app.launch()
+
+        waitForMainUI(app)
+        tap(app, id: "tab.cashflow")
+        tap(app, id: "cashflow.action.month")
+        sleep(2)
+        snapshot("08-cashflow-month")
+    }
+
     // MARK: - 4. Rates (Courses)
 
     @MainActor

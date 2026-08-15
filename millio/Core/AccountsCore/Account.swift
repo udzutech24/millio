@@ -12,6 +12,13 @@ final class Account: Persistable {
 
     var name: String = ""
     var kindRaw: String = AccountKind.cash.rawValue
+    /// Канонический финансовый продукт. `nil` допустим только для ещё не
+    /// классифицированных legacy-строк. Новые writer-пути обязаны сохранять
+    /// non-unknown identity после проверки `ProductDefinitionCatalog`.
+    var productTypeRaw: String?
+    /// Диагностика только для `unknownLegacy`. Это стабильный raw-value, а не
+    /// локализованный UI-текст.
+    var productMigrationReason: String?
     var currency: String = "RUB"
     var createdAt: Date = Date()
     /// Дата закрытия/архивации. nil = активный счёт. Двухступенчатая семантика — см. спеку §«Архив».
@@ -24,6 +31,13 @@ final class Account: Persistable {
     var includeInTotal: Bool = true
     var note: String?
     var order: Int = 0
+
+    /// Persisted monotonic hints for valuation invalidation. They are optional so a genuine V6
+    /// row migrates additively to V7 without rewriting source data. The canonical input revision
+    /// still includes source values, so a saturated counter cannot hide a later correction.
+    var valuationMembershipRevision: Int64?
+    var valuationFinancialRevision: Int64?
+    var valuationEventRevision: Int64?
 
     // MARK: - Метаданные по типу (заполняется только соответствующая kind)
     var cardMeta: CardMeta?
@@ -46,10 +60,21 @@ final class Account: Persistable {
         set { kindRaw = newValue.rawValue }
     }
 
+    var productType: AccountProductType? {
+        get { productTypeRaw.flatMap(AccountProductType.init(rawValue:)) }
+        set {
+            productTypeRaw = newValue?.rawValue
+            if newValue != .unknownLegacy {
+                productMigrationReason = nil
+            }
+        }
+    }
+
     init(
         id: UUID = UUID(),
         name: String,
         kind: AccountKind,
+        productType: AccountProductType? = nil,
         currency: String = "RUB",
         createdAt: Date = Date(),
         includeInTotal: Bool = true,
@@ -58,6 +83,7 @@ final class Account: Persistable {
         self.id = id
         self.name = name
         self.kindRaw = kind.rawValue
+        self.productTypeRaw = productType?.rawValue
         self.currency = currency
         self.createdAt = createdAt
         self.includeInTotal = includeInTotal
@@ -70,6 +96,13 @@ final class Account: Persistable {
     /// в текущем UI удаление доступно только для уже архивных, т.е. обычно archivedAt ≤ deletedAt).
     func participates(on date: Date) -> Bool {
         guard includeInTotal else { return false }
+        return isVisible(on: date)
+    }
+
+    /// Видимость в активном списке не зависит от `includeInTotal`: исключённый из капитала
+    /// продукт должен оставаться доступным для просмотра и обратного включения.
+    /// Архив/удаление остаются time-aware жёсткой отсечкой.
+    func isVisible(on date: Date) -> Bool {
         guard let cutoff = [archivedAt, deletedAt].compactMap({ $0 }).min() else { return true }
         return date < cutoff
     }
@@ -87,6 +120,11 @@ final class Account: Persistable {
             "includeInTotal": includeInTotal,
             "order": order
         ]
+        if let productTypeRaw { dict["productTypeRaw"] = productTypeRaw }
+        if let productMigrationReason { dict["productMigrationReason"] = productMigrationReason }
+        if let valuationMembershipRevision { dict["valuationMembershipRevision"] = valuationMembershipRevision }
+        if let valuationFinancialRevision { dict["valuationFinancialRevision"] = valuationFinancialRevision }
+        if let valuationEventRevision { dict["valuationEventRevision"] = valuationEventRevision }
         if let archivedAt { dict["archivedAt"] = archivedAt.timeIntervalSince1970 }
         if let deletedAt { dict["deletedAt"] = deletedAt.timeIntervalSince1970 }
         if let note { dict["note"] = note }

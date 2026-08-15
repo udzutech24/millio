@@ -99,6 +99,8 @@ protocol MarketDataClientProtocol: Sendable {
     func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary?
     /// Пакетная загрузка котировок (до 8 символов за запрос). Результаты кэшируются.
     func fetchQuotes(symbols: [String]) async throws -> [AssetSummary]
+    /// Historical daily candles used to warm the append-only valuation cache.
+    func assetChart(symbol: String, interval: String, outputSize: Int) async throws -> ChartResponse
 }
 
 extension MarketDataClientProtocol {
@@ -108,6 +110,10 @@ extension MarketDataClientProtocol {
 
     func latestPrice(symbol: String, forceRefresh: Bool) async throws -> Double? {
         try await latestQuote(symbol: symbol, forceRefresh: forceRefresh)?.price
+    }
+
+    func assetChart(symbol: String, interval: String, outputSize: Int) async throws -> ChartResponse {
+        throw MarketAPIClientError.unconfigured
     }
 }
 

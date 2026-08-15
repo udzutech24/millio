@@ -30,6 +30,18 @@ struct FinanceGroupServiceAccountsCoreTests {
         )
     }
 
+    private func sourceFile(_ relativePath: String) throws -> String {
+        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        for _ in 0..<12 {
+            let candidate = directory.appendingPathComponent(relativePath)
+            if FileManager.default.fileExists(atPath: candidate.path) {
+                return try String(contentsOf: candidate, encoding: .utf8)
+            }
+            directory.deleteLastPathComponent()
+        }
+        throw CocoaError(.fileNoSuchFile)
+    }
+
     @Test("Удаление core-группы удаляет ПУСТУЮ мирронную легаси-FinanceGroup, счета уходят в Ungrouped (group=nil)")
     func deletingAccountGroupRemovesEmptyMirroredFinanceGroupAndNullifiesAccounts() throws {
         let (container, ctx) = try makeContext()
@@ -109,5 +121,53 @@ struct FinanceGroupServiceAccountsCoreTests {
 
         let remaining = try ctx.fetch(FetchDescriptor<AccountGroup>())
         #expect(remaining.isEmpty)
+    }
+
+    @Test("Group deletion contains no ignored per-account mutation")
+    func groupDeletionDoesNotIgnoreArchiveFailure() throws {
+        let source = try sourceFile("millio/UI/Services/Finances/FinanceGroupService.swift")
+        let start = try #require(source.range(of: "func deleteGroup(_ group: AccountGroup)"))
+        let tail = source[start.lowerBound...]
+        let end = try #require(tail.range(of: "func updateGroup("))
+        let deleteGroupBody = String(tail[..<end.lowerBound])
+
+        #expect(!deleteGroupBody.contains("try? accountsService.archiveAccount"))
+        #expect(deleteGroupBody.contains("modelContext.rollback()"))
+    }
+
+    @Test("Failed group delete rolls back archive, links and deletion before unrelated save")
+    func failedDeleteIsAllOrNothing() throws {
+        struct SaveFailure: Error {}
+        let (_, context) = try makeContext()
+        let group = AccountGroup(name: "Atomic")
+        context.insert(group)
+        let account = Account(name: "Cash", kind: .cash, productType: .cash)
+        account.group = group
+        context.insert(account)
+        context.insert(AccountEvent(account: account, date: Date(), type: .openingBalance, amount: 10))
+        try context.save()
+
+        let service = FinanceGroupService(
+            modelContext: context,
+            saveChanges: { _ in throw SaveFailure() },
+            groupsProvider: { [group] },
+            onLoadGroups: {},
+            onLoadAccounts: {},
+            onCalculateTotal: {},
+            onScheduleGroupTotalRefresh: { _, _ in },
+            onDismissGroupEditor: {}
+        )
+        service.deleteGroup(group)
+
+        let restoredAccount = try #require(context.fetch(FetchDescriptor<Account>()).first)
+        #expect(restoredAccount.archivedAt == nil)
+        #expect(restoredAccount.group?.id == group.id)
+        #expect(try context.fetchCount(FetchDescriptor<AccountGroup>()) == 1)
+        #expect(!context.hasChanges)
+
+        context.insert(AccountGroup(name: "Unrelated"))
+        try context.save()
+        #expect(try context.fetchCount(FetchDescriptor<AccountGroup>()) == 2)
+        #expect(try context.fetchCount(FetchDescriptor<Account>()) == 1)
     }
 }

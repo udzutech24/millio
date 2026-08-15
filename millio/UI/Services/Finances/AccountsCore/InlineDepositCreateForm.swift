@@ -20,6 +20,7 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
     @State private var remindEnd: Bool = true
     @State private var autoRollover: Bool = false
     @State private var comment: String = ""
+    @FocusState private var inputFocused: Bool
 
     init(
         name: Binding<String>,
@@ -45,8 +46,9 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
 
     private func currentData() -> DepositFormData? {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let amount = parsedAmount, amount > 0,
-              let rate = parsedRate, rate >= 0 else { return nil }
+              creationPreview.isValid,
+              let amount = parsedAmount,
+              let rate = parsedRate else { return nil }
         return DepositFormData(
             amount: amount,
             currency: selectedCurrency,
@@ -68,6 +70,7 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
             rateSection
             termSection
             optionsSection
+            previewSection
             groupSection
             commentSection
         }
@@ -85,6 +88,26 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
         .onChange(of: autoRollover) { _, _ in emitChange() }
         .onChange(of: comment) { _, _ in emitChange() }
         .onAppear { emitChange() }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(L("common.done")) { inputFocused = false }
+            }
+        }
+    }
+
+    private var creationPreview: DepositCreationPreview {
+        DepositCreationPreview.make(
+            amount: parsedAmount.map { Decimal($0) },
+            rate: parsedRate.map { Decimal($0) },
+            openingDate: Date(),
+            termEnd: hasTerm ? termEnd : nil,
+            hasTerm: hasTerm,
+            earlyClosePenaltyPercent: parseNumber(earlyClosePenaltyPercentText).map { Decimal($0) },
+            allowsEarlyClose: allowsEarlyClose,
+            remindEnd: remindEnd && hasTerm,
+            autoRollover: autoRollover && hasTerm
+        )
     }
 
     private func emitChange() {
@@ -102,6 +125,7 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
                         placeholder: L("accounts_core.detail.sheet.amount_placeholder"),
                         value: $amountText
                     )
+                    .focused($inputFocused)
                     .font(.millioBody)
                     Picker("", selection: $selectedCurrency) {
                         ForEach(["RUB", "USD", "EUR"], id: \.self) { code in
@@ -123,6 +147,7 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
                         placeholder: L("accounts_core.deposit_form.rate_placeholder"),
                         value: $rateText
                     )
+                    .focused($inputFocused)
                     .font(.millioBody)
                     Picker(L("accounts_core.deposit_form.capitalization_label"), selection: $capitalization) {
                         Text(L("accounts_core.deposit_form.capitalization.none")).tag(AccountDepositCapitalization.none)
@@ -144,7 +169,8 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
                     if hasTerm {
                         DatePicker(L("accounts_core.deposit_form.term_end"), selection: $termEnd, displayedComponents: .date)
                         Toggle(L("accounts_core.deposit_form.remind_end"), isOn: $remindEnd)
-                        Toggle(L("accounts_core.deposit_form.auto_rollover"), isOn: $autoRollover)
+                        // Auto-rollover remains a persisted compatibility field, but there is no
+                        // background execution engine. Do not present a decorative promise.
                     } else {
                         Text(L("accounts_core.deposit_form.savings_hint"))
                             .font(.millioCaptionRegular)
@@ -172,6 +198,7 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
                                 placeholder: "%",
                                 value: $earlyClosePenaltyPercentText
                             )
+                            .focused($inputFocused)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 60)
                         }
@@ -188,6 +215,27 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
                 TextField(L("accounts_core.deposit_form.comment_placeholder"), text: $comment)
                     .font(.millioBody)
                     .foregroundStyle(AppColors.textPrimary)
+            }
+        }
+    }
+
+    private var previewSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.s) {
+            FinancesSectionHeader(title: L("accounts_core.deposit.creation.preview"))
+            FinancesGlassCard(contentPadding: EdgeInsets(top: AppSpacing.m, leading: AppSpacing.m, bottom: AppSpacing.m, trailing: AppSpacing.m)) {
+                if !creationPreview.errors.isEmpty {
+                    Label(L("accounts_core.deposit.creation.invalid"), systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(AppColors.warning)
+                } else if let interest = creationPreview.interest, let maturity = creationPreview.maturityAmount {
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                        Text(String(format: L("accounts_core.deposit.creation.interest_format"), NSDecimalNumber(decimal: interest).stringValue, selectedCurrency))
+                        Text(String(format: L("accounts_core.deposit.creation.maturity_format"), NSDecimalNumber(decimal: maturity).stringValue, selectedCurrency))
+                            .font(.millioBodySemibold)
+                    }
+                } else {
+                    Text(L("accounts_core.deposit.creation.savings_preview"))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
             }
         }
     }

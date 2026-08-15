@@ -123,4 +123,24 @@ struct FinanceDynamicsPresentationTests {
         #expect(total?.delta == 250)
         #expect(total?.deltaPercent == 62.5)
     }
+
+    @Test("Non-zero delta from a zero baseline has an undefined percentage")
+    func totalRowUsesUndefinedPercentageForZeroBaseline() {
+        let item = DynamicsBreakdownItem(
+            id: "new",
+            name: "New account",
+            startValue: 0,
+            endValue: 100,
+            delta: 100,
+            deltaPercent: nil,
+            icon: nil,
+            accountType: nil,
+            isCreditCard: false,
+            isArchived: false
+        )
+
+        let total = FinanceDynamicsPresentation.totalRow(from: [item], viewMode: .accounts)
+
+        #expect(total?.deltaPercent == nil)
+    }
 }

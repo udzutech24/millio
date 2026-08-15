@@ -31,6 +31,54 @@ struct FinanceAccountsSectionsIntegrationTests {
         return condition()
     }
 
+    @Test("Cold initial load: валютная группа публикует native- и primary-тоталы")
+    func coldInitialLoadPublishesPrimaryCurrencyGroupTotal() async throws {
+        let defaults = UserDefaults.standard
+        let previousPrimaryCurrency = defaults.string(forKey: "primaryCurrencyCode")
+        defaults.set("RUB", forKey: "primaryCurrencyCode")
+        defer {
+            if let previousPrimaryCurrency {
+                defaults.set(previousPrimaryCurrency, forKey: "primaryCurrencyCode")
+            } else {
+                defaults.removeObject(forKey: "primaryCurrencyCode")
+            }
+        }
+
+        let ctx = try makeContext()
+        let group = AccountGroup(name: "Foreign accounts", displayCurrency: "USD")
+        ctx.insert(group)
+
+        let accountsService = AccountsCoreService(modelContext: ctx)
+        _ = try accountsService.createAccount(
+            name: "USD cash",
+            kind: .cash,
+            currency: "USD",
+            openingBalance: 100,
+            group: group,
+            date: Date().addingTimeInterval(-86_400)
+        )
+        try ctx.save()
+
+        let rates = MockCurrencyRateService()
+        rates.setRate(from: "USD", to: "RUB", rate: 90)
+        let viewModel = FinanceViewModel(
+            modelContext: ctx,
+            currencyService: rates,
+            skipInitialLoad: false
+        )
+
+        let propagated = await waitForAsyncStatePropagation {
+            viewModel.state.groupTotals[group.groupUniqueID] != nil
+                && viewModel.state.groupTotalsPrimaryCurrency[group.groupUniqueID] != nil
+        }
+        #expect(
+            propagated,
+            "Initial load обязан публиковать primary-тотал без ожидания row task, refresh или FinanceEvent"
+        )
+        #expect(abs((viewModel.state.groupTotals[group.groupUniqueID] ?? 0) - 100) < 0.01)
+        #expect(abs((viewModel.state.groupTotalsPrimaryCurrency[group.groupUniqueID] ?? 0) - 9_000) < 0.01)
+    }
+
     @Test("Core-store: подытоги секций сходятся с тотал шапки на активе+обязательстве+Ungrouped")
     func sectionSubtotalsMatchHeaderTotal() async throws {
         let ctx = try makeContext()

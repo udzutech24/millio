@@ -72,6 +72,10 @@ struct CashflowUpcomingCard: View {
                     .font(.millioBodySemibold)
                     .foregroundStyle(primaryText)
                     .lineLimit(1)
+                Text(CashflowUpcomingLocalization.subtitle(for: item))
+                    .font(.millioCaption2)
+                    .foregroundStyle(secondaryText)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: AppSpacing.s)

@@ -1,0 +1,32 @@
+{
+  "plan": "plans/2026-08-10__deposit-product-vertical.md",
+  "status": "complete",
+  "completedPhases": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  "nextPhase": null,
+  "schemaChanged": false,
+  "lastUpdated": "2026-08-11",
+  "evidence": [
+    "Read-only end-to-end trace completed across AccountsCore, Cashflow, UI, tax, refresh and backup",
+    "Calendar probe confirmed Gregorian month-end clamping and a 366-day leap interval",
+    "Focused deposit/account XCTest gate succeeded in 30.554 seconds on the current dirty baseline",
+    "Phase 1 focused gate succeeded in 28.506 seconds with new characterization and serial multi-context fixtures",
+    "Phase 2 final focused contract, characterization, scheduler and replay gate passed 48/48 tests in 24.626 seconds",
+    "Phase 3 expanded coordinator, factory, financial contract, characterization, scheduler, service and backup gate passed 71/71 tests",
+    "Phase 4 expanded projection, coordinator, bridge, Finance/Cashflow integration, service and backup gate passed 97/97 tests",
+    "Phase 5 focused presentation, financial contract, coordinator and archive gate passed 37/37 tests",
+    "Final Phase 5 presentation regression gate passed 5/5 tests in an isolated DerivedData directory",
+    "Deposit creation now exposes a live typed estimate and rejects invalid terms/options before save",
+    "Deposit detail uses the typed snapshot, distinguishes forecasts, and exposes coordinator-only capability actions",
+    "Archived and incomplete deposits are read-only; matured deposits expose only typed maturity withdrawal",
+    "Confirmed interest and its non-balance-affecting Cashflow row now share one disposable-context outer commit",
+    "Generated scheduler estimates never materialize as historical income by date alone",
+    "One depositOperationCommitted refresh is published after successful commits only and consumed by Finance, Cashflow and Dynamics",
+    "Atomic typed commands cover top-up, interest confirmation, terms edit, maturity, rollover and early close with stable retry IDs and per-stage rollback",
+    "Partial withdrawal remains explicitly unsupported because no persisted withdrawal policy exists",
+    "Typed snapshot separates confirmed and estimated values; same-period confirmation suppresses its generated estimate",
+    "Creation atomicity, serial schedule/Cashflow idempotency and backup paths are covered by existing focused suites",
+    "Phases 6-9: AccountsCore reminder lifecycle, owner-wide historical-FX tax completeness, backup gate and accessibility render audit completed",
+    "Final gates: 96 unique broad regression tests plus 12/12 notification and 6/6 render tests passed; Debug and Release simulator builds succeeded",
+    "Schema unchanged by explicit Phase 1 decision: the proven gaps belong to read policy and atomic writer boundaries"
+  ]
+}

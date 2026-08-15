@@ -344,57 +344,114 @@ extension CashflowViewModel {
     }
 
     func resolveAssetsSnapshotFromFinance(startDate: Date, endDate: Date) async -> (start: Double, end: Double)? {
-        do {
-            _ = try modelContext.fetch(FetchDescriptor<FinanceGroup>())
-        } catch {
-            return nil
+        let calendar = Calendar.current
+        let normalizedStartDate = calendar.startOfDay(for: min(startDate, endDate))
+        let normalizedEndDate = Self.endOfDay(for: max(startDate, endDate), calendar: calendar)
+        let query = HistoricalPortfolioSeriesQuery(
+            period: DateInterval(start: normalizedStartDate, end: normalizedEndDate),
+            timeZoneID: calendar.timeZone.identifier,
+            displayCurrency: state.displayCurrency,
+            samplingPolicy: .exact([normalizedStartDate, normalizedEndDate]),
+            unresolvedExternalAccountIDs: unresolvedCashflowLegacyAccountIDs()
+        )
+        let legacyValuator = LegacyHistoricalValuator(modelContext: modelContext)
+        let structured = await HistoricalPortfolioSeriesProducer(
+            valuator: historicalAccountsTotalsService,
+            scopeID: historicalValuationScopeID,
+            closeStore: HistoricalValuationCloseStore(modelContainer: modelContext.container),
+            externalCoverage: legacyValuator
+        ).series(for: query)
+        historicalAssetsSeries = structured
+
+        let structuredSnapshot = completeAssetsSnapshot(from: structured)
+        if structuredSnapshot == nil, !query.unresolvedExternalAccountIDs.isEmpty {
+            // A partial structured series must not blank an otherwise fully valuated legacy
+            // portfolio. Keep the fallback explicit and limited to predecessor accounts.
+            return await resolveCompatibilityAssetsSnapshot(
+                startDate: normalizedStartDate,
+                endDate: normalizedEndDate,
+                legacyValuator: legacyValuator
+            )
+        }
+        guard historicalReaderMode == .shadow else {
+            historicalAssetsShadowDeltaBucket = nil
+            return structuredSnapshot
         }
 
-        let financeViewModel = FinanceViewModel(modelContext: modelContext, skipInitialLoad: true)
-        financeViewModel.handle(.loadGroups)
-        financeViewModel.handle(.loadAccounts)
-
-        let dynamicsViewModel = FinanceDynamicsViewModel(
-            modelContext: modelContext,
-            financeViewModel: financeViewModel
-        )
-        dynamicsViewModel.state.displayCurrency = state.displayCurrency
-        dynamicsViewModel.loadData()
-
-        let accounts = dynamicsViewModel.getAccountsForCalculation()
-        let accountCardIDs = Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil })
-        let calendar = Calendar.current
-        let normalizedStartDate = calendar.startOfDay(for: startDate)
-        let normalizedEndDate = Self.endOfDay(for: endDate, calendar: calendar)
-
-        let start = await dynamicsViewModel.calculateBalanceAtDate(
-            accounts: accounts,
-            date: normalizedStartDate,
-            accountCardIDs: accountCardIDs,
-            debtAsNegative: true,
-            includeInitialBeforeCreation: false
-        )
-        let end = await dynamicsViewModel.calculateBalanceAtDate(
-            accounts: accounts,
-            date: normalizedEndDate,
-            accountCardIDs: accountCardIDs,
-            debtAsNegative: true,
-            includeInitialBeforeCreation: false
-        )
-
-        // 6b: легаси FinanceGroup/FinanceAccount пусты после миграции в AccountsCore, поэтому
-        // start/end выше = 0. Активы на дату теперь живут в ядре — добавляем core-вклад ТЕМ ЖЕ
-        // per-account движком, что и вкладка «Динамика» (coreAccountDynamicsItems), а не агрегатным
-        // totalAt. Иначе для счёта, мигрировавшего из легаси в core, Start = 0 на датах ДО первого
-        // core-снапшота: агрегатный totalAt теряет легаси-историю конвертации, а per-account путь
-        // реконструирует её через legacyPredecessorContribution. Так Cashflow Start == Dynamics Start.
-        // Оба пути берут одинаковый набор счетов (getAccountsForCalculation(scope: .currentVisible)),
-        // поэтому расхождение было только в core-вкладе, не в фильтре счетов.
-        let core = await dynamicsViewModel.coreContributionWithLegacyPredecessor(
+        let compatibility = await resolveCompatibilityAssetsSnapshot(
             startDate: normalizedStartDate,
-            endDate: normalizedEndDate
+            endDate: normalizedEndDate,
+            legacyValuator: legacyValuator
         )
-        return (start + core.start, end + core.end)
+        historicalAssetsShadowDeltaBucket = .classify(
+            structured: structuredSnapshot.map { Decimal($0.end) },
+            compatibility: compatibility.map { Decimal($0.end) }
+        )
+        if let structuredResult = structured.points.last?.valuation {
+            HistoricalPortfolioShadowEvidenceStore().append(.init(
+                observation: .classify(
+                    structured: structuredResult,
+                    compatibilityTotal: compatibility.map { Decimal($0.end) },
+                    compatibilityContributionCount: nil,
+                    hasExpectedResolverCorrection: false
+                ),
+                dayKey: structuredResult.key.dayKey
+            ))
+        }
+        return compatibility
+    }
+
+    /// Only shadow mode may execute this compatibility baseline. Structured and rollback-compatible modes
+    /// fail closed through `HistoricalPortfolioSeriesProducer` and never revive silent-drop totals.
+    private func resolveCompatibilityAssetsSnapshot(
+        startDate: Date,
+        endDate: Date,
+        legacyValuator: LegacyHistoricalValuator
+    ) async -> (start: Double, end: Double)? {
+        let accounts = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
+        let legacyStart = await legacyValuator.balance(
+            accounts: accounts,
+            at: startDate,
+            displayCurrency: state.displayCurrency,
+            debtAsNegative: true,
+            includeInitialBeforeCreation: false
+        )
+        let legacyEnd = await legacyValuator.balance(
+            accounts: accounts,
+            at: endDate,
+            displayCurrency: state.displayCurrency,
+            debtAsNegative: true,
+            includeInitialBeforeCreation: false
+        )
+        // Explicit shadow only: this quarantined bare-core baseline intentionally preserves the old
+        // failure semantics for observation. Structured mode never consumes either number.
+        let coreStart = await historicalAccountsTotalsService.totalAt(startDate, in: state.displayCurrency)
+        let coreEnd = await historicalAccountsTotalsService.totalAt(endDate, in: state.displayCurrency)
+        return (
+            legacyStart + NSDecimalNumber(decimal: coreStart).doubleValue,
+            legacyEnd + NSDecimalNumber(decimal: coreEnd).doubleValue
+        )
+    }
+
+    private func completeAssetsSnapshot(
+        from series: HistoricalPortfolioSeriesResult
+    ) -> (start: Double, end: Double)? {
+        guard let first = series.points.first?.valuation.total,
+              let last = series.points.last?.valuation.total else {
+            return nil
+        }
+        return (
+            NSDecimalNumber(decimal: first).doubleValue,
+            NSDecimalNumber(decimal: last).doubleValue
+        )
+    }
+
+    private func unresolvedCashflowLegacyAccountIDs() -> Set<String> {
+        let rows = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
+        // Even a registry-mapped twin remains unresolved here: the core producer does not yet own
+        // the predecessor window before conversion. Treating that window as zero would be the same
+        // silent historical loss this cutover exists to eliminate.
+        return Set(rows.map(\.accountUniqueID))
     }
 
     func cardBalanceSnapshot(for cardID: String) -> CashflowCardBalanceSnapshot? {

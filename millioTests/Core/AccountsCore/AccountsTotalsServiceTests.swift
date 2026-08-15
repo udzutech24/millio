@@ -9,6 +9,7 @@ import Testing
 final class DateAwareMockRateService: CurrencyRateServiceProtocol {
     var todayRate: Double = 110
     var historicalRatesByDayKey: [String: Double] = [:]
+    private(set) var historicalCallCount = 0
 
     func getRate(from: String, to: String) async -> Double? {
         if from.uppercased() == to.uppercased() { return 1 }
@@ -16,6 +17,7 @@ final class DateAwareMockRateService: CurrencyRateServiceProtocol {
     }
 
     func getHistoricalRate(on date: Date, from: String, to: String) async -> Double? {
+        historicalCallCount += 1
         if from.uppercased() == to.uppercased() { return 1 }
         return historicalRatesByDayKey[AccountEvent.dayKey(for: date)]
     }
@@ -76,6 +78,218 @@ struct AccountsTotalsServiceTests {
         let totals = AccountsTotalsService(modelContext: ctx, rebuilder: rebuilder, rateService: rateService)
         let total = await totals.totalAt(Date(), in: "RUB")
         #expect(total == 6000) // 5000 + 10×100
+    }
+
+    @Test @MainActor
+    func membershipEditRemovesAccountFromCurrentAndHistoricalTotals() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let core = AccountsCoreService(modelContext: ctx)
+        let openedAt = day(-2)
+        let account = try core.createAccount(
+            name: "Квартира",
+            kind: .manualAsset,
+            currency: "RUB",
+            openingBalance: 54_000_000,
+            date: openedAt
+        )
+        let totals = AccountsTotalsService(
+            modelContext: ctx,
+            rebuilder: AccountSnapshotRebuilder(modelContainer: container),
+            rateService: DateAwareMockRateService()
+        )
+        #expect(await totals.totalAt(Date(), in: "RUB") == 54_000_000)
+
+        try core.updateAccount(
+            account,
+            name: account.name,
+            group: nil,
+            includeInTotal: false
+        )
+
+        #expect(await totals.totalAt(Date(), in: "RUB") == 0)
+        #expect(await totals.totalAt(day(-1), in: "RUB") == 0)
+    }
+
+    @Test @MainActor
+    func coreHistoricalTotalUsesPersistedRateBeforeProvider() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+        let date = Calendar.current.startOfDay(
+            for: Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+        )
+        rateService.historicalRatesByDayKey[AccountEvent.dayKey(for: date)] = 95
+
+        _ = try service.createAccount(
+            name: "Core USD", kind: .bankAccount, currency: "USD",
+            openingBalance: 100, date: date.addingTimeInterval(-86_400)
+        )
+        ctx.insert(HistoricalRate(
+            baseCurrency: "USD", quoteCurrency: "RUB", rate: 90,
+            rateDate: date, source: "historical|tz=\(TimeZone.current.identifier)"
+        ))
+        try ctx.save()
+
+        let totals = AccountsTotalsService(
+            modelContext: ctx, rebuilder: rebuilder, rateService: rateService
+        )
+        let total = await totals.totalAt(date.addingTimeInterval(12 * 3_600), in: "RUB")
+
+        #expect(total == 9_000)
+        #expect(rateService.historicalCallCount == 0)
+    }
+
+    /// Phase 0 / AC-A1: точная синтетическая фикстура фиксирует текущую ошибку:
+    /// при переходе той же модели данных из open-day в historical branch валютный
+    /// вклад 22 507 974 молча исчезает. Это characterization; Phase 4 должна заменить
+    /// голый Decimal на structured incomplete/closed result.
+    @Test @MainActor
+    func missingHistoricalFXReproducesExactNightJumpFixture() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+        rateService.todayRate = 1
+
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+        let openedAt = Calendar.current.date(byAdding: .day, value: -2, to: Date())!
+        _ = try service.createAccount(
+            name: "Resolved base", kind: .bankAccount, currency: "RUB",
+            openingBalance: 77_125_067, date: openedAt
+        )
+        _ = try service.createAccount(
+            name: "Foreign contribution", kind: .bankAccount, currency: "USD",
+            openingBalance: 22_507_974, date: openedAt
+        )
+
+        let totals = AccountsTotalsService(
+            modelContext: ctx, rebuilder: rebuilder, rateService: rateService
+        )
+        let openDayTotal = await totals.totalAt(Date(), in: "RUB")
+        let historicalTotal = await totals.totalAt(yesterday, in: "RUB")
+
+        #expect(openDayTotal == 99_633_041)
+        #expect(historicalTotal == 77_125_067)
+        #expect(openDayTotal - historicalTotal == 22_507_974)
+    }
+
+    /// Phase 1V / AC-D2: day-only checkpoint не может описать effective timestamp,
+    /// поэтом earlier-same-day запрос обязан совпадать с direct replay.
+    @Test @MainActor
+    func snapshotBackedEarlierSameDayQueryEqualsDirectReplay() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let dayStart = Date(timeIntervalSince1970: 1_704_067_200) // 2024-01-01 00:00 UTC
+        let openingAt = calendar.date(byAdding: .hour, value: 9, to: dayStart)!
+        let incomeAt = calendar.date(byAdding: .hour, value: 18, to: dayStart)!
+        let noon = calendar.date(byAdding: .hour, value: 12, to: dayStart)!
+
+        let account = try service.createAccount(
+            name: "Same-day checkpoint", kind: .cash, currency: "RUB",
+            openingBalance: 100, date: openingAt
+        )
+        try service.recordEvent(account: account, type: .income, amount: 50, date: incomeAt)
+        try await rebuilder.rebuildAll(accountID: account.persistentModelID)
+
+        let direct = AccountBalanceEngine.balanceAt(
+            events: account.events ?? [], kind: account.kind, on: noon
+        )
+        let totals = AccountsTotalsService(
+            modelContext: ctx, rebuilder: rebuilder, rateService: rateService
+        )
+        let snapshotBacked = await totals.totalAt(noon, in: "RUB")
+
+        #expect(direct == 100)
+        #expect(snapshotBacked == direct)
+    }
+
+    /// Phase 1V / AC-D2: persisted dayKey belongs to the timezone in which the event was created.
+    /// A lexical "previous day" comparison in the current device timezone cannot prove that a
+    /// checkpoint precedes the requested instant, so the compatibility reader must replay timestamps.
+    @Test @MainActor
+    func legacyTotalAtIgnoresCrossTimezoneLexicalSnapshot() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+        let istanbul = try #require(HistoricalValuationTimeContext(ianaTimeZoneID: "Europe/Istanbul"))
+        let losAngeles = try #require(HistoricalValuationTimeContext(ianaTimeZoneID: "America/Los_Angeles"))
+        let instant = Date(timeIntervalSince1970: 1_704_157_200) // 2024-01-02 01:00 UTC
+        let eventDate = instant.addingTimeInterval(-1_800)
+        let query = instant.addingTimeInterval(1_800)
+        #expect(istanbul.dayKey(for: query) == "2024-01-02")
+        #expect(losAngeles.dayKey(for: query) == "2024-01-01")
+
+        let account = Account(name: "Cross TZ", kind: .cash, currency: "RUB", createdAt: eventDate)
+        let event = AccountEvent(account: account, date: eventDate, type: .openingBalance, amount: 100)
+        event.dayKey = "2024-01-01" // frozen Los Angeles day from persisted source data
+        let incompatible = AccountDailySnapshot(
+            account: account, dayKey: "2024-01-01", balance: 999, isClosed: false
+        )
+        ctx.insert(account)
+        ctx.insert(event)
+        ctx.insert(incompatible)
+        try ctx.save()
+
+        let totals = AccountsTotalsService(
+            modelContext: ctx, rebuilder: rebuilder, rateService: rateService
+        )
+        let result = await totals.totalAt(query, in: "RUB")
+
+        #expect(result == 100)
+    }
+
+    /// A native-balance snapshot for day 1 embeds day-1 market evidence. Reusing it on day 3
+    /// freezes the wrong price even when the day-3 price exists, so legacy totalAt also replays.
+    @Test @MainActor
+    func legacyTotalAtReplaysMarketAccountAtLaterDayPrice() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+        let day1 = Date(timeIntervalSince1970: 1_704_067_200) // 2024-01-01 00:00 UTC
+        let day3 = day1.addingTimeInterval(2 * 86_400)
+
+        let account = try service.createAccount(
+            name: "TEST", kind: .marketInvestment, currency: "USD", openingBalance: 0,
+            marketMeta: MarketMeta(symbol: "TEST", assetClass: .stock), date: day1
+        )
+        try service.buy(account: account, quantity: 10, unitPrice: 50, date: day1)
+        ctx.insert(AccountDailySnapshot(
+            account: account,
+            dayKey: AccountEvent.dayKey(for: day1),
+            balance: 1_000,
+            isClosed: false
+        ))
+        ctx.insert(HistoricalAssetPrice(
+            symbol: "TEST", assetClass: .stock,
+            dayKey: AccountEvent.dayKey(for: day1), price: 100, source: "test"
+        ))
+        ctx.insert(HistoricalAssetPrice(
+            symbol: "TEST", assetClass: .stock,
+            dayKey: AccountEvent.dayKey(for: day3), price: 300, source: "test"
+        ))
+        try ctx.save()
+
+        let totals = AccountsTotalsService(
+            modelContext: ctx,
+            rebuilder: rebuilder,
+            rateService: rateService,
+            marketPriceService: AccountMarketPriceService(modelContext: ctx)
+        )
+        let result = await totals.totalAt(day3, in: "USD")
+
+        #expect(result == 3_000)
     }
 
     /// Архивированный счёт не участвует в тотале «сегодня», но участвует в точке ДО архивации (AC6).
@@ -203,10 +417,10 @@ struct AccountsTotalsServiceTests {
         #expect(afterArchival == 0)      // «сегодня» (после архивации) — не участвует, минус не утекает
     }
 
-    // MARK: - Т2: бенчмарк — 5 счетов × 3 года × 5к событий, тёплый кэш, totalAt(today) < 300мс
+    // MARK: - Т2: compatibility performance smoke for same-day direct replay
 
     @Test @MainActor
-    func totalAtIsFastOnWarmCacheForLargeHistory() async throws {
+    func totalAtSameDayReplayCompletesWithinCompatibilityBudget() async throws {
         let container = try makeContainer()
         let ctx = container.mainContext
         let service = AccountsCoreService(modelContext: ctx)
@@ -228,7 +442,9 @@ struct AccountsTotalsServiceTests {
         }
         try ctx.save()
 
-        // Прогреваем кэш ДО замера — тест меряет именно чтение тёплого кэша, не пересборку.
+        // Rebuild remains part of the compatibility path, but a day-only checkpoint cannot answer
+        // an arbitrary timestamp inside its own day. The measured call therefore includes direct
+        // replay and this is deliberately a coarse regression budget, not an O(1) cache claim.
         let lastDay = day(eventsPerAccount - 1)
         for account in accounts {
             try await rebuilder.rebuildAll(accountID: account.persistentModelID)
@@ -239,10 +455,7 @@ struct AccountsTotalsServiceTests {
         _ = await totals.totalAt(lastDay, in: "RUB")
         let elapsed = started.duration(to: .now)
 
-        // Порог 2с (не 300мс из брифа): под полным прогоном millioTests параллельно с десятками
-        // других сьютов (общий CPU simulator-хоста) даже O(1)-чтение тёплого кэша может подрасти
-        // на порядок из-за внешней нагрузки — это НЕ регрессия производительности самого кода
-        // (изолированно на пустом хосте укладывается в единицы мс), см. progress-заметку по Т2.
+        // The 2s threshold absorbs simulator contention. It does not promise constant-time replay.
         #expect(elapsed < .seconds(2), "totalAt(today) на тёплом кэше занял \(elapsed) — ожидали < 2с")
     }
 

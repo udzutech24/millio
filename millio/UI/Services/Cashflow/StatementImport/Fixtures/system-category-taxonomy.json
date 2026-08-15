@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "income": [
+    "salary", "freelance", "business", "bonus", "interest", "dividends",
+    "rental", "sale", "refunds", "gift", "other"
+  ],
+  "expense": [
+    "groceries", "dining", "transport", "taxi", "fuel", "car_service",
+    "housing", "utilities", "telecom", "health", "pharmacy", "shopping",
+    "clothing", "electronics", "home_goods", "education", "entertainment",
+    "travel", "subscriptions", "pets", "gifts", "beauty", "insurance",
+    "sports", "taxes_fees", "transfers", "other"
+  ]
+}

@@ -20,6 +20,7 @@ struct CashflowFeatureRegistration {
         )
         ModelTypeRegistry.shared.register(BudgetPlan.self, typeName: "BudgetPlan")
         ModelTypeRegistry.shared.register(BudgetCategoryLimit.self, typeName: "BudgetCategoryLimit")
+        ModelTypeRegistry.shared.register(CashflowMonthClosureEvent.self, typeName: "CashflowMonthClosureEvent")
         
         // Регистрируем импортеры
         ModelTypeRegistry.shared.registerImporter(CashflowTransactionImporter.self)
@@ -27,6 +28,31 @@ struct CashflowFeatureRegistration {
         ModelTypeRegistry.shared.registerImporter(CashflowSystemCategoryOverrideImporter.self)
         ModelTypeRegistry.shared.registerImporter(BudgetPlanImporter.self)
         ModelTypeRegistry.shared.registerImporter(BudgetCategoryLimitImporter.self)
+        ModelTypeRegistry.shared.registerImporter(CashflowMonthClosureEventImporter.self)
+    }
+}
+
+struct CashflowMonthClosureEventImporter: ModelImporter {
+    static func importType() -> String { "CashflowMonthClosureEvent" }
+    static var importPriority: Int { 24 }
+
+    static func `import`(from data: [String: Any], context: ModelContext) throws {
+        guard let eventID = data["eventID"] as? String,
+              let monthStart = data["monthStart"] as? TimeInterval,
+              let kindRaw = data["kindRaw"] as? String,
+              let kind = CashflowMonthClosureEventKind(rawValue: kindRaw),
+              let occurredAt = data["occurredAt"] as? TimeInterval else {
+            throw AppError.backupCorrupted
+        }
+        let descriptor = FetchDescriptor<CashflowMonthClosureEvent>(predicate: #Predicate { $0.eventID == eventID })
+        guard try context.fetch(descriptor).isEmpty else { return }
+        context.insert(CashflowMonthClosureEvent(
+            eventID: eventID,
+            monthStart: Date(timeIntervalSince1970: monthStart),
+            kind: kind,
+            occurredAt: Date(timeIntervalSince1970: occurredAt),
+            evidenceJSON: data["evidenceJSON"] as? String
+        ))
     }
 }
 

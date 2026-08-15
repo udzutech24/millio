@@ -45,6 +45,15 @@ enum AccountBalanceEngine {
         }
     }
 
+    /// Quantity is the native replay output required by the unified historical market resolver.
+    /// Keeping it here prevents portfolio valuation from growing a second market replay engine.
+    static func marketQuantityAt(events: [AccountEvent], on date: Date) -> Decimal {
+        let relevant = events
+            .filter { $0.date <= date }
+            .sorted(by: strictOrder)
+        return marketQuantityFromTransformedEvents(applyRedenomination(to: relevant))
+    }
+
     // MARK: - Сортировка (S5: детерминизм реплея)
 
     private static func strictOrder(_ lhs: AccountEvent, _ rhs: AccountEvent) -> Bool {
@@ -100,9 +109,10 @@ enum AccountBalanceEngine {
     /// adjustment — дельта как есть (знак хранит создатель события).
     private static func cashLikeSignMap(_ type: AccountEventType) -> Decimal {
         switch type {
-        case .openingBalance, .income, .transferIn, .interest, .dividend, .extraPayment, .adjustment:
+        case .openingBalance, .income, .transferIn, .interest, .dividend, .extraPayment, .adjustment,
+             .creditCardRefund, .creditCardRepayment:
             return 1
-        case .expense, .transferOut, .fee:
+        case .expense, .transferOut, .fee, .creditCardPurchase, .creditCardFee, .creditCardInterest:
             return -1
         case .buy, .sell, .rollover, .revaluation, .redenomination:
             return 0
@@ -119,7 +129,9 @@ enum AccountBalanceEngine {
             return 1
         case .transferOut:
             return -1
-        case .dividend, .buy, .sell, .rollover, .revaluation, .redenomination:
+        case .dividend, .buy, .sell, .rollover, .revaluation, .redenomination,
+             .creditCardPurchase, .creditCardRefund, .creditCardRepayment,
+             .creditCardFee, .creditCardInterest:
             return 0
         }
     }
@@ -132,13 +144,7 @@ enum AccountBalanceEngine {
         priceProvider: MarketPriceProviding?,
         marketMeta: MarketMeta?
     ) -> Decimal {
-        let quantity = events.reduce(Decimal(0)) { acc, event in
-            switch event.type {
-            case .buy: return acc + (event.quantity ?? 0)
-            case .sell: return acc - (event.quantity ?? 0)
-            default: return acc
-            }
-        }
+        let quantity = marketQuantityFromTransformedEvents(events)
 
         guard quantity != 0 else { return 0 }
 
@@ -150,13 +156,24 @@ enum AccountBalanceEngine {
 
         let lastKnownPrice = events.reversed().first { event in
             switch event.type {
-            case .buy, .sell, .revaluation: return event.unitPrice != nil
+            case .buy, .sell, .revaluation, .adjustment: return event.unitPrice != nil
             default: return false
             }
         }?.unitPrice
 
         let price = providedPrice ?? lastKnownPrice ?? 0
         return quantity * price
+    }
+
+    private static func marketQuantityFromTransformedEvents(_ events: [TransformedEvent]) -> Decimal {
+        events.reduce(Decimal(0)) { acc, event in
+            switch event.type {
+            case .buy: return acc + (event.quantity ?? 0)
+            case .sell: return acc - (event.quantity ?? 0)
+            case .adjustment where event.quantity != nil: return event.quantity ?? acc
+            default: return acc
+            }
+        }
     }
 
     // MARK: - F: ручной актив

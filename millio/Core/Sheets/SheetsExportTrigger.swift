@@ -1,23 +1,36 @@
 import Foundation
 
+/// Временный product kill switch: Google Sheets скрыт и не синхронизируется,
+/// пока backend integration не доведена до production-ready состояния.
+enum SheetsExportAvailability {
+    // TODO(temp): Включать только после завершения encryption и Sheets workflow hardening.
+    static let isEnabled = false
+}
+
 /// Fire-and-forget триггер инкрементальной синхронизации.
 /// Вызывается после сохранения транзакции — не блокирует UI.
 /// Данные для синхронизации передаются снаружи (CashflowViewModel знает о SwiftData).
 actor SheetsExportTrigger {
 
     private let exportService: any SheetsExportServiceProtocol
+    private let isEnabled: @Sendable () -> Bool
 
     // Дебаунс: повторные вызовы в пределах окна схлопываются в один запрос.
     // Защищает от шторма при пакетном импорте транзакций.
     private static let debounceInterval: TimeInterval = 5
     private var pendingTask: Task<Void, Never>?
 
-    init(exportService: any SheetsExportServiceProtocol) {
+    init(
+        exportService: any SheetsExportServiceProtocol,
+        isEnabled: @escaping @Sendable () -> Bool = { SheetsExportAvailability.isEnabled }
+    ) {
         self.exportService = exportService
+        self.isEnabled = isEnabled
     }
 
     /// Немедленный sync без дебаунса — для ручного trigger'а из UI.
     func syncImmediately(with exportData: MillioExportData) async {
+        guard isEnabled() else { return }
         guard await exportService.getStatus().isConnected else { return }
         pendingTask?.cancel()
         do {
@@ -29,6 +42,7 @@ actor SheetsExportTrigger {
     }
 
     func notifyTransactionAdded(with exportData: MillioExportData) async {
+        guard isEnabled() else { return }
         // Не запускаем sync если аккаунт не подключён — избегаем 401 каждые 5 сек
         guard await exportService.getStatus().isConnected else { return }
 

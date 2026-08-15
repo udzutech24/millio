@@ -68,8 +68,9 @@ struct FinanceState {
     /// Время последнего успешного принудительного обновления
     var lastRefreshedAt: Date? = nil
 
-    /// Счета нового ядра, участвующие сегодня ([Ф5c.7 contract] — флип из `coreAccounts`).
-    /// ПЕРВИЧНЫЙ источник рендера списка/группы. Архивные скрыты — как у `newCoreAccounts`.
+    /// Видимые счета нового ядра ([Ф5c.7 contract] — флип из `coreAccounts`).
+    /// ПЕРВИЧНЫЙ источник рендера списка/группы. Архивные скрыты, но `includeInTotal == false`
+    /// не скрывает продукт: membership влияет на суммы, а не на навигацию.
     var accounts: [Account] = []
 
     // MARK: - Легаси-fallback (invariant 5/9 §2.1 плана 5c.7) — ОСТАЁТСЯ активной для НЕМИГРИРОВАННОГО
@@ -232,8 +233,10 @@ enum FinanceAction {
 @MainActor
 final class FinanceViewModel: ViewModelProtocol {
     @Published var state = FinanceState()
+    private(set) var dashboardHistoricalSeries: HistoricalPortfolioSeriesResult?
     
     let modelContext: ModelContext
+    let historicalValuationScopeID: String
 
     /// Сервис курсов валют (внедряется для тестируемости)
     let currencyService: CurrencyRateServiceProtocol
@@ -282,13 +285,22 @@ final class FinanceViewModel: ViewModelProtocol {
     /// Тотал/график нового ядра event-sourcing (Фаза 1a-ui, AC2) — единая точка для Accounts- и
     /// Analytics-тотала (см. `newCoreTotalProvider` в `totalsService` и `FinanceDynamicsViewModel`).
     private(set) lazy var accountsTotalsService: AccountsTotalsService = {
-        AccountsTotalsService(
+        let scopeID = self.historicalValuationScopeID
+        return AccountsTotalsService(
             modelContext: self.modelContext,
             rebuilder: AccountSnapshotRebuilder(modelContainer: self.modelContext.container),
             rateService: self.currencyService,
-            marketPriceService: self.accountMarketPriceService
+            marketPriceService: self.accountMarketPriceService,
+            scopeReadiness: {
+                HistoricalValuationReadinessCoordinator.shared.readiness(scopeID: scopeID)
+            }
         )
     }()
+
+    private lazy var legacyHistoricalValuator = LegacyHistoricalValuator(
+        modelContext: modelContext,
+        currencyService: currencyService
+    )
 
     // MARK: - Services
     // totalsService использует lazy из-за замыканий на self. [Ф5c.7 contract] Остаётся легаси-
@@ -441,10 +453,14 @@ final class FinanceViewModel: ViewModelProtocol {
         modelContext: ModelContext,
         currencyService: CurrencyRateServiceProtocol? = nil,
         marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared,
+        historicalValuationScopeID: String? = nil,
         now: @escaping () -> Date = Date.init,
         skipInitialLoad: Bool = false
     ) {
         self.modelContext = modelContext
+        self.historicalValuationScopeID = historicalValuationScopeID
+            ?? modelContext.container.configurations.first?.name
+            ?? "unresolved-scope"
         self.currencyService = currencyService ?? CurrencyRateService.shared
         self.marketDataClient = marketDataClient
 
@@ -478,6 +494,14 @@ final class FinanceViewModel: ViewModelProtocol {
             FinanceSystemGroups.normalizeUngroupedGroupName(in: modelContext)
             loadGroups()
             loadAccounts()
+            // Cold-start обязан публиковать оба групповых представления одним атомарным проходом:
+            // native (`groupTotals`) и в валюте шапки (`groupTotalsPrimaryCurrency`). Row `.task`
+            // считает только native-сумму и не может быть источником primary subtitle/секций.
+            // Без этого до первого FinanceEvent или pull-to-refresh валютная группа показывала
+            // корректные `$`, но ложное `≈ 0 ₽` из-за отсутствующего primary-ключа.
+            scheduleBackgroundTask { viewModel in
+                await viewModel.refreshGroupTotalsAndAmounts()
+            }
         }
         scheduleBackgroundTask { viewModel in
             await viewModel.convertSavingsGoalAmountIfNeeded(from: storedGoalCurrency, to: viewModel.state.displayCurrency)
@@ -743,7 +767,7 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     /// [Ф5c.7 contract] Populate `state.groups`/`state.accounts` из ядра — единственный первичный
-    /// источник рендера списка/группы. Участвующие сегодня, сортировка order→createdAt (тот же
+    /// источник рендера списка/группы. Видимые сегодня, сортировка order→createdAt (тот же
     /// паттерн, что был у `newCoreAccounts(matching:)`, не второй путь агрегации — инвариант 2 §2.1).
     /// Канон Ungrouped = `account.group == nil`: `state.groups` исключает любую `AccountGroup` с
     /// известным Ungrouped-именем (защита от сущности-дубля).
@@ -752,7 +776,7 @@ final class FinanceViewModel: ViewModelProtocol {
 
         let accounts = (try? modelContext.fetch(FetchDescriptor<Account>())) ?? []
         state.accounts = accounts
-            .filter { $0.participates(on: today) }
+            .filter { $0.isVisible(on: today) }
             .sorted { $0.order != $1.order ? $0.order < $1.order : $0.createdAt < $1.createdAt }
 
         let ungroupedNames = FinanceSystemGroups.allKnownUngroupedNames
@@ -772,7 +796,8 @@ final class FinanceViewModel: ViewModelProtocol {
             switch event {
             case FinanceEvent.creditsUpdated:
                 self.handleCreditsUpdated()
-            case FinanceEvent.cardsUpdated, FinanceEvent.investmentsUpdated:
+            case FinanceEvent.cardsUpdated, FinanceEvent.investmentsUpdated,
+                 FinanceEvent.depositOperationCommitted:
                 self.loadAccounts()
                 // [Ф5c.7 expand-contract, root-фикс] Общая точка рефреша `state.coreAccounts`/`coreGroups`
                 // для ВСЕХ core-мутаций, публикующих этот канал: archiveAccount/performEdit
@@ -898,69 +923,41 @@ final class FinanceViewModel: ViewModelProtocol {
         await computeDashboardSparkline()
     }
 
-    /// Вычисляет 7-дневный спарклайн и дельту для виджета дашборда.
-    /// Форма кривой — из DashboardBalanceHistoryStore (снапшоты).
-    /// Дельта — через FinanceDynamicsViewModel (replay транзакций, текущие курсы),
-    /// аналогично экрану Аналитики, чтобы знаки всегда совпадали.
+    /// Вычисляет спарклайн и дельту из одного persisted historical bundle.
+    /// Incomplete points образуют разрыв: diagnostic subtotal не публикуется как ноль.
     func computeDashboardSparkline() async {
         let displayCurrency = state.displayCurrency
-        let currentTotal = state.totalAmount
         let daysCount = max(1, SettingsManager.shared.dashboardDeltaPeriodDays)
-
-        DashboardBalanceHistoryStore.save(currentTotal, currency: displayCurrency)
-
-        let rawPoints = DashboardBalanceHistoryStore.dailyAmounts(
-            currency: displayCurrency,
-            daysCount: daysCount
-        )
-
-        let validPoints = rawPoints.compactMap { $0 }
-        let validCount = validPoints.count
-
-        // Если истории меньше 2 точек — кривую не рисуем, но дельту всё равно считаем
-        guard validCount >= 2 else {
+        let series = await dashboardHistoricalPortfolioSeries(daysCount: daysCount, currency: displayCurrency)
+        dashboardHistoricalSeries = series
+        let values = series.points.compactMap { point in
+            point.valuation.total.map { NSDecimalNumber(decimal: $0).doubleValue }
+        }
+        state.dashboardSparklineDaysCount = daysCount
+        guard values.count == series.points.count, values.count >= 2,
+              let first = values.first, let last = values.last else {
             state.dashboardSparkline = []
-            state.dashboardSparklineDaysCount = daysCount
-            let (delta, pct) = await computeDashboardDeltaViaAnalytics(startDaysAgo: daysCount, currentTotal: currentTotal)
-            state.dashboardWeekDelta = (absolute: delta, percent: pct)
+            state.dashboardWeekDelta = (0, 0)
             return
         }
 
-        // Заполняем пропуски: вперёд от первого известного значения
-        var filled = [Double](repeating: currentTotal, count: daysCount)
-        var lastKnown: Double = validPoints.first ?? currentTotal
-        for i in filled.indices {
-            if let v = rawPoints[i] {
-                lastKnown = v
-                filled[i] = v
-            } else {
-                filled[i] = lastKnown
-            }
-        }
-
-        let minVal = filled.min() ?? 0.0
-        let maxVal = filled.max() ?? 1.0
+        let minVal = values.min() ?? 0.0
+        let maxVal = values.max() ?? 1.0
         let range = maxVal - minVal
         let normalized: [Double]
         if range < 0.01 {
-            normalized = filled.map { _ in 0.5 }
+            normalized = values.map { _ in 0.5 }
         } else {
             // Visual floor: минимальный диапазон = 2% от максимума.
             // Предотвращает визуальный "обрыв" при малых колебаниях.
             let visualRange = max(range, maxVal * 0.02)
             let mid = (minVal + maxVal) / 2.0
             let lo = mid - visualRange / 2.0
-            normalized = filled.map { min(1.0, max(0.0, ($0 - lo) / visualRange)) }
+            normalized = values.map { min(1.0, max(0.0, ($0 - lo) / visualRange)) }
         }
-
         state.dashboardSparkline = normalized
-
-        // Лейбл и дельта — всегда по выбранному периоду, а не по наличию данных в store.
-        // Store используется только для формы кривой (sparkline shape).
-        state.dashboardSparklineDaysCount = daysCount
-
-        // Дельта через replay транзакций — согласованно с Аналитикой
-        let (delta, pct) = await computeDashboardDeltaViaAnalytics(startDaysAgo: daysCount, currentTotal: currentTotal)
+        let delta = last - first
+        let pct = abs(first) < 0.01 ? 0 : delta / abs(first) * 100
         state.dashboardWeekDelta = (absolute: delta, percent: pct)
 
         // Снапшоты счетов — в фоне, не блокируем критический путь UI
@@ -969,34 +966,34 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
 
-    /// Вычисляет дельту баланса за период startDaysAgo→сегодня через FinanceDynamicsViewModel.
-    /// Использует те же текущие курсы и replay транзакций, что и экран Аналитики.
-    private func computeDashboardDeltaViaAnalytics(startDaysAgo: Int, currentTotal: Double) async -> (Double, Double) {
-        guard startDaysAgo > 0 else { return (0.0, 0.0) }
-
+    /// Вычисляет дельту по тому же structured portfolio producer, что и Динамика.
+    /// Incomplete coverage fails closed; dashboard never publishes a partial subtotal.
+    private func dashboardHistoricalPortfolioSeries(
+        daysCount: Int,
+        currency: String
+    ) async -> HistoricalPortfolioSeriesResult {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        guard let startDayBegin = calendar.date(byAdding: .day, value: -startDaysAgo, to: today),
-              let startDayEnd = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: startDayBegin)
-        else { return (0.0, 0.0) }
+        let start = calendar.date(byAdding: .day, value: -(max(1, daysCount) - 1), to: today) ?? today
+        let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: today) ?? today
 
-        let dynamicsVM = FinanceDynamicsViewModel(modelContext: modelContext, financeViewModel: self)
-        dynamicsVM.loadData()
-
-        let accounts = dynamicsVM.getAccountsForCalculation()
-        let cardIDs = Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil })
-
-        let startBalance = await dynamicsVM.calculateBalanceAtDate(
-            accounts: accounts,
-            date: startDayEnd,
-            accountCardIDs: cardIDs,
-            debtAsNegative: true,
-            includeInitialBeforeCreation: false
+        legacyHistoricalValuator.reload()
+        let query = HistoricalPortfolioSeriesQuery(
+            period: DateInterval(start: start, end: end),
+            timeZoneID: calendar.timeZone.identifier,
+            displayCurrency: currency,
+            samplingPolicy: .daily,
+            unresolvedExternalAccountIDs: Set(
+                ((try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? [])
+                    .map(\.accountUniqueID)
+            )
         )
-
-        let delta = currentTotal - startBalance
-        let pct = abs(startBalance) < 0.01 ? 0.0 : (delta / abs(startBalance)) * 100.0
-        return (delta, pct)
+        return await HistoricalPortfolioSeriesProducer(
+            valuator: accountsTotalsService,
+            scopeID: historicalValuationScopeID,
+            closeStore: HistoricalValuationCloseStore(modelContainer: modelContext.container),
+            externalCoverage: legacyHistoricalValuator
+        ).series(for: query)
     }
 
     /// Подсчитать сумму группы в указанной валюте — [Ф5c.7 contract] core PRIMARY + легаси FALLBACK
@@ -1127,14 +1124,14 @@ final class FinanceViewModel: ViewModelProtocol {
     /// (Account уже несёт имя/сумму инлайн).
     func orderedAccounts(for group: AccountGroup) -> [Account] {
         let today = nowProvider()
-        let accounts = (group.accounts ?? []).filter { $0.participates(on: today) }
+        let accounts = (group.accounts ?? []).filter { $0.isVisible(on: today) }
         return sortedAccounts(accounts, group: group)
     }
 
     /// Core-счета БЕЗ группы (канон Ungrouped — `account.group == nil`, не сущность).
     func ungroupedAccounts() -> [Account] {
         let today = nowProvider()
-        let accounts = state.accounts.filter { $0.group == nil && $0.participates(on: today) }
+        let accounts = state.accounts.filter { $0.group == nil && $0.isVisible(on: today) }
         return sortedAccounts(accounts, group: nil)
     }
 
@@ -1176,7 +1173,7 @@ final class FinanceViewModel: ViewModelProtocol {
 
         let today = nowProvider()
         return accounts
-            .filter { $0.participates(on: today) }
+            .filter { $0.isVisible(on: today) }
             .sorted { lhs, rhs in
                 lhs.order != rhs.order ? lhs.order < rhs.order : lhs.createdAt < rhs.createdAt
             }
@@ -1204,7 +1201,7 @@ final class FinanceViewModel: ViewModelProtocol {
 
         let today = nowProvider()
         return accounts
-            .filter { $0.participates(on: today) }
+            .filter { $0.isVisible(on: today) }
             .sorted { lhs, rhs in
                 lhs.order != rhs.order ? lhs.order < rhs.order : lhs.createdAt < rhs.createdAt
             }
@@ -1740,19 +1737,18 @@ final class FinanceViewModel: ViewModelProtocol {
             legacyUniqueID: plan.legacyUniqueID,
             name: plan.name,
             currency: plan.currency,
-            kind: plan.kind,
+            productType: plan.productType,
             openingBalance: plan.openingBalance,
             group: coreGroup,
-            cardMeta: plan.cardMeta,
-            loanMeta: plan.loanMeta,
-            manualAssetMeta: plan.manualAssetMeta
+            metadata: plan.metadata,
+            initialMarketPurchase: plan.initialMarketPurchase,
+            includeInTotal: plan.includeInTotal
         )
         do {
             try legacyAccountConverter.convert(input) { [weak self] in
                 guard let self else { return }
                 // Скрываем легаси В ТОМ ЖЕ акте: archivedAt + save (junction не удаляем — un-convert снимет archivedAt).
                 self.accountService.updateUnderlyingArchiveState(for: account, archivedAt: Date())
-                try self.modelContext.save()
             }
         } catch {
             AppLogger.log(.error, category: "Finance", "Convert to core failed: \(error.localizedDescription)")
@@ -1773,7 +1769,6 @@ final class FinanceViewModel: ViewModelProtocol {
             try legacyAccountConverter.unconvert(legacyUniqueID: accountID) { [weak self] in
                 guard let self else { return }
                 self.accountService.updateUnderlyingArchiveState(accountType: accountType, accountID: accountID, archivedAt: nil)
-                try self.modelContext.save()
             }
         } catch {
             AppLogger.log(.error, category: "Finance", "Un-convert failed: \(error.localizedDescription)")
@@ -2259,18 +2254,26 @@ final class FinanceViewModel: ViewModelProtocol {
     /// через `adjustBalance` в net-worth конвенции (см. коммент `updateAccountAmount` выше). Работает
     /// только для `.debitCard` — единственный core kind с `cardMeta` (кредитки — тот же kind + лимит).
     private func updateCreditCardQuickFields(account: Account, creditLimit: Double, debt: Double) {
-        guard account.kind == .debitCard else { return }
+        // `AccountKind` alone is insufficient: debit and credit cards share the replay kind.
+        // Requiring persisted identity prevents an in-place debit→credit semantic conversion.
+        guard account.kind == .debitCard, account.productType == .creditCard else { return }
 
         let normalizedLimit = max(0, creditLimit)
+        guard normalizedLimit > 0 else { return }
         let normalizedDebt = min(max(0, debt), normalizedLimit)
 
         var meta = account.cardMeta ?? CardMeta()
         meta.creditLimit = Decimal(normalizedLimit)
-        account.cardMeta = meta
 
         let service = AccountsCoreService(modelContext: modelContext)
         do {
-            try modelContext.save()
+            _ = try service.updateAccount(
+                account,
+                name: account.name,
+                group: account.group,
+                note: account.note,
+                cardMeta: meta
+            )
             _ = try service.adjustBalance(account: account, to: Decimal(-normalizedDebt))
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to update credit card quick fields: \(error.localizedDescription)")

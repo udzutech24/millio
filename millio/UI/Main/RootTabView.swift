@@ -55,7 +55,21 @@ struct RootTabView: View {
         }
     }
 
-    var body: some View {
+    @ViewBuilder var body: some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["MILLIO_DEBIT_CARD_QA"] == "1" {
+            DebitCardQAHarness(modelContext: modelContext)
+        } else if ProcessInfo.processInfo.environment["MILLIO_REAL_ESTATE_HOTFIX_QA"] == "1" {
+            RealEstateEditQAHarness(modelContext: modelContext)
+        } else {
+            productionBody
+        }
+        #else
+        productionBody
+        #endif
+    }
+
+    private var productionBody: some View {
         ZStack(alignment: .bottom) {
             // Контент таба
             tabContent
@@ -341,7 +355,9 @@ struct RootTabView: View {
         if cashflowViewModel == nil {
             let vm = CashflowViewModel(
                 modelContext: modelContext,
-                sheetsExportTrigger: diContainer?.sheetsExportTrigger
+                sheetsExportTrigger: SheetsExportAvailability.isEnabled
+                    ? diContainer?.sheetsExportTrigger
+                    : nil
             )
             vm.handle(.syncDisplayCurrencyWithPrimary(appState.primaryCurrencyCode))
             vm.handle(.loadCards)

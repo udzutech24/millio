@@ -277,7 +277,7 @@ struct AccountsCoreServiceTests {
     }
 
     @Test
-    func sellReducesQuantityAndAllowsExceedingCurrentHolding() throws {
+    func sellRejectsQuantityExceedingHoldingWithoutPersistingEvent() throws {
         let (container, ctx) = try makeContext()
         _ = container
         let service = AccountsCoreService(modelContext: ctx)
@@ -287,11 +287,42 @@ struct AccountsCoreServiceTests {
             marketMeta: MarketMeta(symbol: "AAPL", assetClass: .stock)
         )
         try service.buy(account: account, quantity: 5, unitPrice: 100)
-        // Продажа БОЛЬШЕ остатка — не жёсткий запрет (брифинг Фазы 4, задача 4): сервис не бросает ошибку.
-        try service.sell(account: account, quantity: 8, unitPrice: 120)
+        #expect(throws: StockLotEngineError.oversell(requested: 8, available: 5)) {
+            try service.sell(account: account, quantity: 8, unitPrice: 120)
+        }
 
         let balance = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .marketInvestment, on: Date(), marketMeta: account.marketMeta)
-        #expect(balance == -360) // quantity = -3 × 120
+        #expect(balance == 500)
+        #expect((account.events ?? []).filter { $0.type == .sell }.isEmpty)
+    }
+
+    @Test
+    func stockCorrectionAtomicallyUpdatesMetadataAndAbsolutePosition() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(
+            name: "QQQ", kind: .marketInvestment, currency: "USD", openingBalance: 0,
+            marketMeta: MarketMeta(symbol: "QQQ", assetClass: .stock)
+        )
+        try service.buy(account: account, quantity: 10, unitPrice: 100)
+
+        try service.correctStockPosition(
+            account: account,
+            name: "NASDAQ 100",
+            group: nil,
+            note: "Broker correction",
+            includeInTotal: false,
+            targetQuantity: 7.5,
+            targetAverageCost: 123.4567
+        )
+
+        let snapshot = try StockLotEngine.replay(events: account.events ?? [])
+        #expect(account.name == "NASDAQ 100")
+        #expect(account.includeInTotal == false)
+        #expect(snapshot.quantity == 7.5)
+        #expect(snapshot.averageUnitCost == 123.4567)
+        #expect((account.events ?? []).filter { $0.type == .adjustment && $0.quantity != nil }.count == 1)
     }
 
     @Test

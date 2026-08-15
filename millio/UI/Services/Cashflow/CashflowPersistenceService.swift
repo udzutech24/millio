@@ -27,6 +27,9 @@ final class CashflowPersistenceService {
     // Мост в новое ядро счетов (event-sourcing, Фаза 1b) — обрабатывает ТОЛЬКО транзакции,
     // целящиеся в Account нового мира; легаси Card/Investment ниже этот мост не задевает.
     private let accountsCoreCashflowBridge: AccountsCoreCashflowBridge
+    private var monthMutationPolicy: CashflowMonthMutationPolicy {
+        CashflowMonthMutationPolicy(modelContext: modelContext)
+    }
 
     // Провайдеры данных
     private let cardProvider: (String) -> Card?
@@ -110,7 +113,17 @@ final class CashflowPersistenceService {
     // MARK: - Public: Удаление транзакции
 
     func deleteTransactionAsync(_ transaction: CashflowTransaction, recalculate: Bool) async {
+        guard (try? monthMutationPolicy.validate(.delete, date: transaction.transactionDate)) != nil else {
+            onSetDeleteErrorMessage("cashflow_month_closed")
+            return
+        }
         let transactionsToDelete = linkedTransactionsForDelete(containing: transaction)
+        guard transactionsToDelete.allSatisfy({
+            (try? monthMutationPolicy.validate(.delete, date: $0.transactionDate)) != nil
+        }) else {
+            onSetDeleteErrorMessage("cashflow_month_closed")
+            return
+        }
         let affectedEvents = recalculate
             ? affectedAccountEventsForDelete(transactionsToDelete)
             : []
@@ -129,16 +142,29 @@ final class CashflowPersistenceService {
         for transactionToDelete in transactionsToDelete {
             // Для новых счетов «удаление без пересчёта» не существует — событие ядра удаляется
             // всегда, независимо от флага `recalculate` (риск №7, легаси-поведение карт не меняем).
-            do {
-                try accountsCoreCashflowBridge.deleteEvents(for: transactionToDelete)
-            } catch {
-                AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge delete failed: \(error.localizedDescription)")
+            if accountsCoreCashflowBridge.touchesDebitAccount(transactionToDelete) {
+                do {
+                    try DebitCardOperationCoordinator(modelContext: modelContext).deleteCashflowGraph(transactionToDelete)
+                } catch {
+                    modelContext.rollback()
+                    AppLogger.log(.error, category: "Cashflow", "Debit operation failed: delete_graph")
+                    onSetDeleteErrorMessage("cashflow_delete_failed")
+                    return
+                }
+            } else {
+                do {
+                    try accountsCoreCashflowBridge.deleteEvents(for: transactionToDelete)
+                } catch {
+                    AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge delete failed")
+                }
+                modelContext.delete(transactionToDelete)
             }
-            modelContext.delete(transactionToDelete)
         }
 
         do {
-            try modelContext.save()
+            if modelContext.hasChanges {
+                try modelContext.save()
+            }
             publishTransactionsUpdated()
             if recalculate {
                 onCardsUpdated()
@@ -152,16 +178,33 @@ final class CashflowPersistenceService {
     }
 
     func deleteTransactionWithoutRecalculation(_ transaction: CashflowTransaction) {
-        let preservedBalances = preservedAccountBalances(for: transaction)
-        do {
-            try accountsCoreCashflowBridge.deleteEvents(for: transaction)
-        } catch {
-            AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge delete failed: \(error.localizedDescription)")
+        guard (try? monthMutationPolicy.validate(.delete, date: transaction.transactionDate)) != nil else {
+            onSetDeleteErrorMessage("cashflow_month_closed")
+            return
         }
-        modelContext.delete(transaction)
+        let preservedBalances = preservedAccountBalances(for: transaction)
+        if accountsCoreCashflowBridge.touchesDebitAccount(transaction) {
+            do {
+                try DebitCardOperationCoordinator(modelContext: modelContext).deleteCashflowGraph(transaction)
+            } catch {
+                modelContext.rollback()
+                AppLogger.log(.error, category: "Cashflow", "Debit operation failed: delete_graph")
+                onSetDeleteErrorMessage("cashflow_delete_failed")
+                return
+            }
+        } else {
+            do {
+                try accountsCoreCashflowBridge.deleteEvents(for: transaction)
+            } catch {
+                AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge delete failed")
+            }
+            modelContext.delete(transaction)
+        }
 
         do {
-            try modelContext.save()
+            if modelContext.hasChanges {
+                try modelContext.save()
+            }
             restorePreservedAccountBalancesIfNeeded(preservedBalances)
             publishTransactionsUpdated()
             onTransactionsSnapshotMutated()
@@ -209,6 +252,19 @@ final class CashflowPersistenceService {
         dismissEditorOnSuccess: Bool = true
     ) async -> Bool {
         let existingTransaction = explicitExistingTransaction ?? editingTransactionProvider()
+        do {
+            try monthMutationPolicy.validate(existingTransaction == nil ? .create : .edit, date: transaction.transactionDate)
+            if let existingTransaction, !Calendar.autoupdatingCurrent.isDate(
+                existingTransaction.transactionDate,
+                equalTo: transaction.transactionDate,
+                toGranularity: .month
+            ) {
+                try monthMutationPolicy.validate(.edit, date: existingTransaction.transactionDate)
+            }
+        } catch {
+            onSetDeleteErrorMessage("cashflow_month_closed")
+            return false
+        }
         let affectedEvents = affectedAccountEvents(for: transaction).union(
             existingTransaction.map { affectedAccountEvents(for: $0) } ?? []
         )
@@ -328,13 +384,22 @@ final class CashflowPersistenceService {
         do {
             try await accountsCoreCashflowBridge.sync(for: persistedTransaction)
         } catch {
+            if accountsCoreCashflowBridge.touchesDebitAccount(persistedTransaction) {
+                modelContext.rollback()
+                AppLogger.log(.error, category: "Cashflow", "Debit operation failed: sync_graph")
+                return false
+            }
             // Не блокируем сохранение легаси-транзакции (источник истины ленты/бюджетов) —
             // событие нового ядра можно досинхронизировать следующей правкой (риск №8: offline).
-            AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge sync failed: \(error.localizedDescription)")
+            AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge sync failed")
         }
 
         do {
-            try modelContext.save()
+            // Debit graphs are committed by DebitCardOperationCoordinator. Legacy writers still
+            // arrive here dirty and retain their existing outer save boundary.
+            if modelContext.hasChanges {
+                try modelContext.save()
+            }
             publishAffectedAccountEvents(affectedEvents)
             publishTransactionsUpdated()
             onTransactionsMutated()

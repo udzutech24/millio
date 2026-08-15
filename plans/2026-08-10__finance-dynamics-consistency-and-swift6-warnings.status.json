@@ -1,0 +1,130 @@
+{
+  "_generated": true,
+  "planFile": "2026-08-10__finance-dynamics-consistency-and-swift6-warnings.md",
+  "title": "Finance Dynamics consistency and Swift 6 warnings",
+  "updated": "2026-08-10T05:03:04.433Z",
+  "phases": [
+    {
+      "name": "Chart, hero balance, absolute delta, percentage and breakdown are committed from the same revision …",
+      "status": "done"
+    },
+    {
+      "name": "A stale async request cannot mutate any visible series-derived state.",
+      "status": "done"
+    },
+    {
+      "name": "For an account absent at one endpoint, breakdown uses the financial zero contribution at that endpo…",
+      "status": "done"
+    },
+    {
+      "name": "Core-only accounts appear under their real AccountGroup; accounts without a group appear once under…",
+      "status": "done"
+    },
+    {
+      "name": "Groups and Accounts totals reconstruct the same selected endpoint.",
+      "status": "done"
+    },
+    {
+      "name": "Percentage is finite and truthful; zero baseline with a non-zero delta has an explicit presentation…",
+      "status": "done"
+    },
+    {
+      "name": "The four Swift 6 concurrency warnings are eliminated without @unchecked Sendable on mutable objects…",
+      "status": "done"
+    },
+    {
+      "name": "Relevant unit tests and a warning-filtered iOS build pass.",
+      "status": "pending"
+    },
+    {
+      "name": "Invalid historical close records in the active scope are deleted without touching valid closes, oth…",
+      "status": "done"
+    },
+    {
+      "name": "Any cleanup enqueues a durable full-scope rebuild and stale completed checkpoints are force-replaye…",
+      "status": "done"
+    },
+    {
+      "name": "Hero, delta, groups and accounts use the first and last renderable chart points rather than incompl…",
+      "status": "done"
+    },
+    {
+      "name": "Make historical producer helpers return the structured bundle alongside projected chart points with…",
+      "status": "done"
+    },
+    {
+      "name": "After the existing revision guard, atomically commit bundle, chart points, hero values and breakdow…",
+      "status": "done"
+    },
+    {
+      "name": "Add a deterministic delayed-producer/revision regression test proving stale completion cannot overw…",
+      "status": "done"
+    },
+    {
+      "name": "Build breakdown over the union of endpoint contribution IDs and use zero for an absent endpoint.",
+      "status": "done"
+    },
+    {
+      "name": "Introduce presentation group identity that supports both core AccountGroup.id and legacy FinanceGro…",
+      "status": "done"
+    },
+    {
+      "name": "Add core-only, account-created-mid-period, ungrouped, and Groups==Accounts invariant tests.",
+      "status": "done"
+    },
+    {
+      "name": "Replace the 999999 percent sentinel with an explicit optional/undefined percentage presentation con…",
+      "status": "done"
+    },
+    {
+      "name": "Capture a sendable checkpoint/rebuild storage adapter rather than UserDefaults in @Sendable closure…",
+      "status": "done"
+    },
+    {
+      "name": "Align DataRepositoryProtocol isolation with its SwiftData implementation using a MainActor-isolated…",
+      "status": "done"
+    },
+    {
+      "name": "Move singleton default resolution into the main-actor initializer body for LegacyHistoricalValuator.",
+      "status": "done"
+    },
+    {
+      "name": "Compile the affected test suites and run the warning-filtered build. Test execution remains blocked…",
+      "status": "done"
+    },
+    {
+      "name": "Add a repository repair operation that validates every close in the active scope with decodedResult…",
+      "status": "done"
+    },
+    {
+      "name": "Run repair before ordinary historical maintenance; when rows were deleted, enqueue a durable rebuil…",
+      "status": "done"
+    },
+    {
+      "name": "Preserve valid/quarantined duplicate evidence, other scopes, accounts and events.",
+      "status": "done"
+    },
+    {
+      "name": "Add unit coverage for scope isolation, valid-row preservation and idempotency; existing runner test…",
+      "status": "done"
+    },
+    {
+      "name": "Define one ordered set of structured points whose valuation total is renderable.",
+      "status": "done"
+    },
+    {
+      "name": "Derive hero balance/delta and group/account breakdown from the first and last points in that set.",
+      "status": "done"
+    },
+    {
+      "name": "During chart scrubbing, select the nearest renderable point rather than an incomplete requested poi…",
+      "status": "done"
+    },
+    {
+      "name": "Add a regression test with incomplete outer dates and valid inner chart points. The test source com…",
+      "status": "done"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

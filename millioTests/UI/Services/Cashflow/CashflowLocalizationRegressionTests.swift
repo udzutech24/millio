@@ -501,10 +501,17 @@ struct CashflowLocalizationRegressionTests {
         let transactionSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowTransaction.swift"), encoding: .utf8)
         let operationSheetsSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowOperationSheets.swift"), encoding: .utf8)
         let scheduledTransactionsSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowScheduledTransactionsView.swift"), encoding: .utf8)
+        let categorySettingsSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowCategorySettingsSheet.swift"), encoding: .utf8)
 
         #expect(!viewSource.contains("Text(\"cashflow."))
         #expect(!viewSource.contains(".navigationTitle(\"cashflow."))
         #expect(!viewSource.contains(".accessibilityLabel(Text(\"cashflow."))
+        // Regression 2026-08-14: `assetBreakdownSection`'s income row used raw
+        // `String(localized: "cashflow.stats.income", defaultValue: "Доходы", ...)`, which
+        // bypasses `LanguageManager.shared.currentBundle` and always rendered the Russian
+        // defaultValue regardless of the selected app language (confirmed on-device with
+        // system language = English). Every stats/asset-change label must go through `L(...)`.
+        #expect(!viewSource.contains("localized: \"cashflow."))
 
         #expect(!editorSource.contains("Text(\"cashflow."))
         #expect(!editorSource.contains(".navigationTitle(\"cashflow."))
@@ -524,6 +531,17 @@ struct CashflowLocalizationRegressionTests {
         #expect(!operationSheetsSource.contains("\"Unpin category\""))
         #expect(!operationSheetsSource.contains("\"Pinned category\""))
         #expect(!scheduledTransactionsSource.contains("Text(\"cashflow."))
+        // Regression 2026-08-14: several "Payment planner" sheet labels (empty state, recurring
+        // total header, day agenda header) used raw `String(localized:defaultValue:)`, and the
+        // calendar month title used `.autoupdatingCurrent` instead of `AppLocalization.currentAppLocale`
+        // — confirmed on-device (system language English) rendering Russian month/weekday names
+        // while sibling labels correctly showed English.
+        #expect(!scheduledTransactionsSource.contains("localized: \"cashflow."))
+        #expect(!scheduledTransactionsSource.contains(".locale = .autoupdatingCurrent"))
+        // Regression 2026-08-14: "Category settings" sheet (title, search placeholder, archive
+        // action) used raw `String(localized:defaultValue:)` and always rendered Russian text
+        // regardless of the selected app language.
+        #expect(!categorySettingsSource.contains("localized: \"cashflow."))
     }
 
     private func sourceURL(_ relativePath: String) throws -> URL {

@@ -1,0 +1,21 @@
+{
+  "updatedAt": "2026-08-09",
+  "status": "active",
+  "phases": [
+    {
+      "id": "phase-1",
+      "status": "completed",
+      "evidence": "Typed save boundary adopted by updateAccount and AccountProductFactory; focused tests and release simulator build passed before a concurrent unrelated real-estate compile failure appeared. Final rerun is externally blocked."
+    },
+    {
+      "id": "phase-2",
+      "status": "pending",
+      "note": "Add sanitized UI presentation and suppress success effects on failed account mutations."
+    },
+    {
+      "id": "phase-3",
+      "status": "blocked",
+      "note": "Account cutover cannot advance until the unrelated current compile failure is resolved and account-history observation, offline transition, rollback drill, and publication criteria are closed."
+    }
+  ]
+}

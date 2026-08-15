@@ -23,12 +23,91 @@ struct AccountsCoreFeatureRegistration {
         ModelTypeRegistry.shared.register(AccountEvent.self, typeName: "AccountEvent")
         ModelTypeRegistry.shared.register(AccountDailySnapshot.self, typeName: "AccountDailySnapshot")
         ModelTypeRegistry.shared.register(HistoricalAssetPrice.self, typeName: "HistoricalAssetPrice")
+        ModelTypeRegistry.shared.register(
+            HistoricalPortfolioValuation.self,
+            typeName: "HistoricalPortfolioValuation"
+        )
+        ModelTypeRegistry.shared.register(RealEstateProfile.self, typeName: "RealEstateProfile")
+        ModelTypeRegistry.shared.register(AccountAttachment.self, typeName: "AccountAttachment")
+        ModelTypeRegistry.shared.registerBackupExporter(
+            "HistoricalPortfolioValuation",
+            exporter: HistoricalPortfolioValuationBackupExporter.export
+        )
 
         ModelTypeRegistry.shared.registerImporter(AccountGroupImporter.self)
         ModelTypeRegistry.shared.registerImporter(AccountImporter.self)
         ModelTypeRegistry.shared.registerImporter(AccountEventImporter.self)
         ModelTypeRegistry.shared.registerImporter(AccountDailySnapshotImporter.self)
         ModelTypeRegistry.shared.registerImporter(HistoricalAssetPriceImporter.self)
+        ModelTypeRegistry.shared.registerImporter(HistoricalPortfolioValuationImporter.self)
+        ModelTypeRegistry.shared.registerImporter(RealEstateProfileImporter.self)
+        ModelTypeRegistry.shared.registerImporter(AccountAttachmentImporter.self)
+    }
+}
+
+// MARK: - Real-estate V8 importers
+
+struct RealEstateProfileImporter: ModelImporter {
+    static func importType() -> String { "RealEstateProfile" }
+    static var importPriority: Int { 33 }
+
+    static func `import`(from data: [String: Any], context: ModelContext) throws {
+        guard let idRaw = data["id"] as? String, let id = UUID(uuidString: idRaw),
+              let accountRaw = data["accountID"] as? String, let accountID = UUID(uuidString: accountRaw),
+              let typeRaw = data["propertyTypeRaw"] as? String,
+              let propertyType = RealEstatePropertyType(rawValue: typeRaw) else {
+            throw AppError.backupCorrupted
+        }
+        let accountDescriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.id == accountID })
+        guard let account = try context.fetch(accountDescriptor).first,
+              account.productType == .realEstate else { throw AppError.backupCorrupted }
+        let descriptor = FetchDescriptor<RealEstateProfile>(predicate: #Predicate { $0.id == id })
+        if let existing = try context.fetch(descriptor).first {
+            existing.accountID = accountID
+            existing.propertyType = propertyType
+        } else {
+            context.insert(RealEstateProfile(id: id, accountID: accountID, propertyType: propertyType))
+        }
+    }
+}
+
+struct AccountAttachmentImporter: ModelImporter {
+    static func importType() -> String { "AccountAttachment" }
+    static var importPriority: Int { 34 }
+
+    static func `import`(from data: [String: Any], context: ModelContext) throws {
+        guard let idRaw = data["id"] as? String, let id = UUID(uuidString: idRaw),
+              let accountRaw = data["accountID"] as? String, let accountID = UUID(uuidString: accountRaw),
+              let kindRaw = data["kindRaw"] as? String, let kind = AccountAttachmentKind(rawValue: kindRaw),
+              let order = data["order"] as? Int, (0..<AccountAttachmentPolicy.maximumPhotos).contains(order),
+              let isCover = data["isCover"] as? Bool,
+              let createdAtRaw = data["createdAt"] as? TimeInterval,
+              let mediaRaw = data["mediaData"] as? String, let mediaData = Data(base64Encoded: mediaRaw),
+              !mediaData.isEmpty, mediaData.count <= AccountPhotoProcessor.maximumEncodedBytes else {
+            throw AppError.backupCorrupted
+        }
+        let accountDescriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.id == accountID })
+        guard let account = try context.fetch(accountDescriptor).first,
+              account.productType == .realEstate else { throw AppError.backupCorrupted }
+        let descriptor = FetchDescriptor<AccountAttachment>(predicate: #Predicate { $0.id == id })
+        guard try context.fetch(descriptor).isEmpty else { return }
+        let accountAttachments = try context.fetch(FetchDescriptor<AccountAttachment>(
+            predicate: #Predicate { $0.accountID == accountID }
+        ))
+        guard accountAttachments.count < AccountAttachmentPolicy.maximumPhotos,
+              !accountAttachments.contains(where: { $0.order == order }),
+              !(isCover && accountAttachments.contains(where: \.isCover)) else {
+            throw AppError.backupCorrupted
+        }
+        context.insert(AccountAttachment(
+            id: id,
+            accountID: accountID,
+            kind: kind,
+            order: order,
+            isCover: isCover,
+            createdAt: Date(timeIntervalSince1970: createdAtRaw),
+            mediaData: mediaData
+        ))
     }
 }
 
@@ -102,24 +181,88 @@ struct AccountImporter: ModelImporter {
         let includeInTotal = data["includeInTotal"] as? Bool ?? true
         let order = data["order"] as? Int ?? 0
 
+        // Decode and validate the complete product/kind/meta tuple before mutating an existing
+        // row. Old backups have no product columns and stay migration-compatible; once identity is
+        // present, a contradictory tuple is rejected instead of silently becoming `.cash`.
+        let cardMeta = (data["cardMeta"] as? [String: Any]).map(CardMeta.init(exportDict:))
+        let depositMeta = (data["depositMeta"] as? [String: Any]).flatMap(DepositMeta.init(exportDict:))
+        let loanMeta = (data["loanMeta"] as? [String: Any]).flatMap(LoanMeta.init(exportDict:))
+        let debtMeta = (data["debtMeta"] as? [String: Any]).flatMap(DebtMeta.init(exportDict:))
+        let marketMeta = (data["marketMeta"] as? [String: Any]).flatMap(MarketMeta.init(exportDict:))
+        let manualAssetMeta = (data["manualAssetMeta"] as? [String: Any]).map(ManualAssetMeta.init(exportDict:))
+        let productTypeRaw = data["productTypeRaw"] as? String
+        let productMigrationReason = data["productMigrationReason"] as? String
+        let valuationMembershipRevision = (data["valuationMembershipRevision"] as? NSNumber)?.int64Value
+        let valuationFinancialRevision = (data["valuationFinancialRevision"] as? NSNumber)?.int64Value
+        let valuationEventRevision = (data["valuationEventRevision"] as? NSNumber)?.int64Value
+
+        if let productTypeRaw {
+            guard let productType = AccountProductType(rawValue: productTypeRaw) else {
+                throw AppError.backupCorrupted
+            }
+            do {
+                try ProductDefinitionCatalog.validateStoredIdentity(
+                    productType,
+                    kindRaw: kindRaw,
+                    metadata: AccountProductMetadata(
+                        card: cardMeta,
+                        deposit: depositMeta,
+                        loan: loanMeta,
+                        debt: debtMeta,
+                        market: marketMeta,
+                        manualAsset: manualAssetMeta
+                    ),
+                    migrationReason: productMigrationReason
+                )
+            } catch {
+                throw AppError.backupCorrupted
+            }
+        } else if productMigrationReason != nil {
+            throw AppError.backupCorrupted
+        }
+
         let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.id == id })
         let account: Account
+        let isExisting: Bool
         if let existing = try? context.fetch(descriptor).first {
             account = existing
+            isExisting = true
         } else {
             account = Account(
                 id: id, name: name, kind: AccountKind(rawValue: kindRaw) ?? .cash,
                 currency: currency, createdAt: createdAt, includeInTotal: includeInTotal, order: order
             )
             context.insert(account)
+            isExisting = false
         }
 
+        let preservesNewerProductTuple = isExisting
+            && productTypeRaw == nil
+            && account.productTypeRaw != nil
+
         account.name = name
-        account.kindRaw = kindRaw
+        if !preservesNewerProductTuple {
+            account.kindRaw = kindRaw
+        }
+        // An older backup must not erase a newer, already persisted identity during an upsert.
+        // A genuinely new old-format row is classified below instead of remaining silent nil.
+        if !preservesNewerProductTuple {
+            account.productTypeRaw = productTypeRaw
+            account.productMigrationReason = productMigrationReason
+        }
         account.currency = currency
         account.createdAt = createdAt
         account.includeInTotal = includeInTotal
         account.order = order
+        if let valuationMembershipRevision {
+            account.valuationMembershipRevision = valuationMembershipRevision
+        }
+        if let valuationFinancialRevision {
+            account.valuationFinancialRevision = valuationFinancialRevision
+        }
+        if let valuationEventRevision {
+            account.valuationEventRevision = valuationEventRevision
+        }
         account.note = data["note"] as? String
         account.archivedAt = (data["archivedAt"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
         account.deletedAt = (data["deletedAt"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
@@ -131,12 +274,34 @@ struct AccountImporter: ModelImporter {
             account.group = nil
         }
 
-        account.cardMeta = (data["cardMeta"] as? [String: Any]).map(CardMeta.init(exportDict:))
-        account.depositMeta = (data["depositMeta"] as? [String: Any]).flatMap(DepositMeta.init(exportDict:))
-        account.loanMeta = (data["loanMeta"] as? [String: Any]).flatMap(LoanMeta.init(exportDict:))
-        account.debtMeta = (data["debtMeta"] as? [String: Any]).flatMap(DebtMeta.init(exportDict:))
-        account.marketMeta = (data["marketMeta"] as? [String: Any]).flatMap(MarketMeta.init(exportDict:))
-        account.manualAssetMeta = (data["manualAssetMeta"] as? [String: Any]).map(ManualAssetMeta.init(exportDict:))
+        if !preservesNewerProductTuple {
+            account.cardMeta = cardMeta
+            account.depositMeta = depositMeta
+            account.loanMeta = loanMeta
+            account.debtMeta = debtMeta
+            account.marketMeta = marketMeta
+            account.manualAssetMeta = manualAssetMeta
+        }
+
+        let hasValidStoredIdentity: Bool
+        if let productType = account.productType {
+            hasValidStoredIdentity = (try? ProductDefinitionCatalog.validateStoredIdentity(
+                productType,
+                kindRaw: account.kindRaw,
+                metadata: AccountProductMetadata(account: account),
+                migrationReason: account.productMigrationReason
+            )) != nil
+        } else {
+            hasValidStoredIdentity = false
+        }
+        if !hasValidStoredIdentity {
+            AccountProductIdentityMigrator.migrate(account)
+        }
+        var importedRevisionDimensions: Set<HistoricalValuationRevisionDimension> = []
+        if account.valuationMembershipRevision == nil { importedRevisionDimensions.insert(.accountSet) }
+        if account.valuationFinancialRevision == nil { importedRevisionDimensions.insert(.financial) }
+        if account.valuationEventRevision == nil { importedRevisionDimensions.insert(.events) }
+        HistoricalValuationRevisionTracker.bump(importedRevisionDimensions, on: account)
     }
 }
 
@@ -190,6 +355,9 @@ struct AccountEventImporter: ModelImporter {
         // операцию в другой календарный день.
         event.dayKey = dayKey
         context.insert(event)
+        // AccountImporter runs first and either restores the exact source counters or initializes
+        // every missing legacy counter once. Per-event bumps here would turn N into N+eventCount
+        // during restore, so an unchanged graph would no longer address its persisted close.
     }
 }
 

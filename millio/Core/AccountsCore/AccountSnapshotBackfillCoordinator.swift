@@ -26,6 +26,8 @@ final class AccountSnapshotBackfillCoordinator {
     private let modelContainer: ModelContainer
     private let defaults: UserDefaults
     private let nowProvider: () -> Date
+    private var preparedScopes: Set<String> = []
+    private var inFlight: [String: (id: UUID, task: Task<Int, Never>)] = [:]
 
     init(
         modelContainer: ModelContainer,
@@ -41,14 +43,61 @@ final class AccountSnapshotBackfillCoordinator {
     /// обработанных счетов (0, если бэкфилл уже отмечен выполненным или счетов ядра ещё нет).
     @discardableResult
     func backfillIfNeeded(scopeIdentifier: String) async -> Int {
+        if let current = inFlight[scopeIdentifier] {
+            return await current.task.value
+        }
+        guard prepareIfNeeded(scopeIdentifier: scopeIdentifier) else { return 0 }
+
+        let taskID = UUID()
+        let task = Task { @MainActor [self] in
+            await performBackfill(scopeIdentifier: scopeIdentifier)
+        }
+        inFlight[scopeIdentifier] = (taskID, task)
+        let result = await task.value
+        if inFlight[scopeIdentifier]?.id == taskID {
+            inFlight.removeValue(forKey: scopeIdentifier)
+        }
+        preparedScopes.remove(scopeIdentifier)
+        return result
+    }
+
+    /// Enters the durable readiness gate before a fire-and-forget task is scheduled. This closes
+    /// the lifecycle window where the UI could publish a close after `.ready` but before the async
+    /// backfill task got its first executor turn.
+    @discardableResult
+    func prepareIfNeeded(scopeIdentifier: String) -> Bool {
         let flagKey = Self.flagKeyPrefix + scopeIdentifier
-        guard !defaults.bool(forKey: flagKey) else { return 0 }
+        guard !defaults.bool(forKey: flagKey) else { return false }
+        guard preparedScopes.insert(scopeIdentifier).inserted else { return true }
+
+        HistoricalValuationReadinessCoordinator.shared.begin(
+            scopeID: scopeIdentifier,
+            operation: .backfill
+        )
+        return true
+    }
+
+    private func performBackfill(scopeIdentifier: String) async -> Int {
+        let flagKey = Self.flagKeyPrefix + scopeIdentifier
+        let readiness = HistoricalValuationReadinessCoordinator.shared
 
         let mainContext = modelContainer.mainContext
-        guard let accounts = try? mainContext.fetch(FetchDescriptor<Account>()), !accounts.isEmpty else {
+        let accounts: [Account]
+        do {
+            accounts = try mainContext.fetch(FetchDescriptor<Account>())
+        } catch {
+            readiness.fail(
+                scopeID: scopeIdentifier,
+                operation: .backfill,
+                reasonCode: "backfill_account_fetch_failed"
+            )
+            return 0
+        }
+        guard !accounts.isEmpty else {
             // Счетов ядра ещё нет (старый мир до Legacy-конвертации/новый пользователь без счетов) —
             // отмечаем выполненным: как только появится первый счёт, ему всё равно не нужен «глубокий»
             // бэкфилл (создан только что), инкрементальный путь справится сам.
+            readiness.complete(scopeID: scopeIdentifier, operation: .backfill)
             defaults.set(true, forKey: flagKey)
             return 0
         }
@@ -65,10 +114,19 @@ final class AccountSnapshotBackfillCoordinator {
             }
         }
 
-        // Флаг ставим даже при частичных ошибках — единичный сбой счёта не должен гонять
-        // полный бэкфилл ВСЕХ счетов на каждом следующем холодном старте. Недостроенная история
-        // такого счёта всё равно достраивается лениво через AccountsTotalsService при обращении.
-        defaults.set(true, forKey: flagKey)
+        if failures == 0 {
+            // Terminal success is durable. Partial work is deliberately retried on the next launch;
+            // otherwise an in-memory failure would disappear while the old boolean falsely claims
+            // historical readiness.
+            readiness.complete(scopeID: scopeIdentifier, operation: .backfill)
+            defaults.set(true, forKey: flagKey)
+        } else {
+            readiness.fail(
+                scopeID: scopeIdentifier,
+                operation: .backfill,
+                reasonCode: "backfill_partial_failure"
+            )
+        }
         AppLogger.log(.info, category: "AccountsCore", "Snapshot backfill [\(scopeIdentifier)] завершён: \(accounts.count) счетов, \(failures) ошибок")
         return accounts.count
     }

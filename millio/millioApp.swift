@@ -57,6 +57,7 @@ struct millioApp: App {
         let financeWarmupUseCase: FinanceStartupWarmupUseCase
         let portfolioSymbolsSyncService: PortfolioSymbolsSyncService
         let accountSnapshotBackfillCoordinator: AccountSnapshotBackfillCoordinator
+        let historicalValuationMaintenance: HistoricalValuationProductionMaintenance
     }
 
     @UIApplicationDelegateAdaptor(FirebaseAppDelegate.self) private var firebaseDelegate
@@ -66,6 +67,7 @@ struct millioApp: App {
     @State private var financeStartupWarmupUseCase: FinanceStartupWarmupUseCase?
     @State private var portfolioSymbolsSyncService: PortfolioSymbolsSyncService?
     @State private var accountSnapshotBackfillCoordinator: AccountSnapshotBackfillCoordinator?
+    @State private var historicalValuationMaintenance: HistoricalValuationProductionMaintenance?
     @State private var authManager = AuthManager()
     @State private var toastCenter = ToastCenter()
     @State private var isBiometricUnlockInProgress = false
@@ -197,6 +199,7 @@ struct millioApp: App {
                         )
 
                         await financeStartupWarmupUseCase?.warmupIfNeeded()
+                        await runHistoricalMaintenancePipeline()
                     }
                 }
                 .onOpenURL { url in
@@ -259,7 +262,7 @@ struct millioApp: App {
             // показывает «баланс ≈ 0» (ни мигратор, ни конвертер не публикуют FinanceEvent — авто-
             // пересчёта нет, transient держится до случайного триггера или рестарта). Здесь — на
             // финальном (пост-swap) контейнере, гарантированно до конструирования RootTabView/VM.
-            await self.runLegacyAccountsMigrationIfNeeded()
+            guard await self.runLegacyAccountsMigrationIfNeeded() else { return }
             await useCase.initialize()
         }
         AppLogger.log(.info, category: "App", "Active scope after sync: \(activeDataScope.storeConfigurationName), storeExisted=\(activeScopeStoreExistedBeforeBinding)")
@@ -307,13 +310,18 @@ struct millioApp: App {
         let accountSnapshotBackfillCoordinator = AccountSnapshotBackfillCoordinator(
             modelContainer: modelContainer
         )
+        let historicalValuationMaintenance = HistoricalValuationProductionMaintenance(
+            modelContainer: modelContainer,
+            scopeID: scopeIdentifier
+        )
 
         logger.info("DIContainer.create finished in \(Double(DispatchTime.now().uptimeNanoseconds - diStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         return AppDependencyBinding(
             container: container,
             financeWarmupUseCase: financeWarmupUseCase,
             portfolioSymbolsSyncService: portfolioSymbolsSyncService,
-            accountSnapshotBackfillCoordinator: accountSnapshotBackfillCoordinator
+            accountSnapshotBackfillCoordinator: accountSnapshotBackfillCoordinator,
+            historicalValuationMaintenance: historicalValuationMaintenance
         )
     }
 
@@ -327,6 +335,7 @@ struct millioApp: App {
         financeStartupWarmupUseCase = binding.financeWarmupUseCase
         portfolioSymbolsSyncService = binding.portfolioSymbolsSyncService
         accountSnapshotBackfillCoordinator = binding.accountSnapshotBackfillCoordinator
+        historicalValuationMaintenance = binding.historicalValuationMaintenance
         portfolioSymbolsSyncService?.start()
         authManager.configure(service: binding.container.authService)
         authManager.configure(toastCenter: toastCenter)
@@ -528,14 +537,7 @@ struct millioApp: App {
 
         activeDataScope = targetScope
         activeModelContainer = targetContainer
-        // Если стор был пересоздан из-за смены схемы (есть .bak-файл), считаем что
-        // "старого стора не было" — это позволяет автоматически предложить restore из iCloud.
-        #if DEBUG
-        let storeWasRebuilt = Self.bakStoreExists(for: targetScope)
-        activeScopeStoreExistedBeforeBinding = didTargetStoreExistBeforeBinding && !storeWasRebuilt
-        #else
         activeScopeStoreExistedBeforeBinding = didTargetStoreExistBeforeBinding
-        #endif
 
         if let backendRuntime, let binding {
             applyDependencyBinding(binding, backendRuntime: backendRuntime)
@@ -549,7 +551,10 @@ struct millioApp: App {
             // миграция читает diContainer.modelContainer, который тот только что переключил на новый scope
             // (до :541 ушло бы в старый контейнер). Повторный вызов в том же процессе (cold-start уже
             // мигрировал этот scope) — дешёвый no-op: один fetchCount(Account) + флаг-short-circuit.
-            await runLegacyAccountsMigrationIfNeeded()
+            guard await runLegacyAccountsMigrationIfNeeded() else {
+                if isRuntimeSwap { isSwitchingScope = false }
+                return false
+            }
         }
 
         // Бамп ПОСЛЕ свопа контейнера и применения зависимостей: .id меняется →
@@ -588,19 +593,28 @@ struct millioApp: App {
         )
 
         await financeStartupWarmupUseCase?.warmupIfNeeded()
+        await runHistoricalMaintenancePipeline()
 
         // 6b Фаза 2 (фикс ревью 2026-07-10): легаси→core миграция ПЕРЕНЕСЕНА отсюда — теперь
         // вызывается раньше, ДО lifecycle == .ready (см. runLegacyAccountsMigrationIfNeeded и
         // initializeColdStart). Здесь (после .ready, после монтирования RootTabView) было слишком
         // поздно: FinanceViewModel уже успевал посчитать core-only агрегат тотала на пустом ядре.
 
-        // Fire-and-forget: бэкфилл снапшотов — фоновая пересборка потенциально длинной истории
-        // (годы событий на счёт), не должна задерживать остальные пост-старт шаги. Партиальный
-        // прогресс безопасен (см. batched save в AccountSnapshotRebuilder), поэтому не ждём завершения.
-        if let coordinator = accountSnapshotBackfillCoordinator {
-            let scopeIdentifier = activeDataScope.storeConfigurationName
-            Task { await coordinator.backfillIfNeeded(scopeIdentifier: scopeIdentifier) }
-        }
+    }
+
+    @MainActor
+    private func runHistoricalMaintenancePipeline() async {
+        let scopeIdentifier = activeDataScope.storeConfigurationName
+        await HistoricalValuationActivationPipeline.run(
+            snapshotBackfill: {
+                _ = await accountSnapshotBackfillCoordinator?.backfillIfNeeded(
+                    scopeIdentifier: scopeIdentifier
+                )
+            },
+            historicalMaintenance: {
+                await historicalValuationMaintenance?.resumeMissedDays()
+            }
+        )
     }
 
     /// 6b Фаза 2 (фикс адверсариального ревью 2026-07-10): одноразовая opening-balance-миграция
@@ -612,15 +626,51 @@ struct millioApp: App {
     /// первом кадре (агрегат тотала core-only с Фазы 2, а FinanceViewModel не пересчитывает сам
     /// себя после миграции — ни мигратор, ни конвертер не публикуют FinanceEvent).
     @MainActor
-    private func runLegacyAccountsMigrationIfNeeded() async {
-        guard let modelContainer = diContainer?.modelContainer else { return }
+    private func runLegacyAccountsMigrationIfNeeded() async -> Bool {
+        guard let modelContainer = diContainer?.modelContainer else {
+            appState.lifecycle = .error(.incompatibleSchemaVersion)
+            return false
+        }
         let scopeIdentifier = activeDataScope.storeConfigurationName
+        let readiness = HistoricalValuationReadinessCoordinator.shared
+        readiness.begin(scopeID: scopeIdentifier, operation: .revisionMigration)
+
+        do {
+            let evidence = LegacyProductEvidenceCollector.collect(in: modelContainer.mainContext)
+            let classified = try AccountProductIdentityMigrator.migratePersistedAccounts(
+                in: modelContainer,
+                verifiedEvidenceByCoreAccountID: evidence
+            )
+            if classified > 0 {
+                AppLogger.log(.info, category: "AccountsCore", "Product identity [\(scopeIdentifier)]: \(classified) classified")
+            }
+        } catch {
+            // A writable scope with unclassified product rows is not ready: continuing would let
+            // edit/import writers operate on a tuple that the catalog has not validated.
+            AppLogger.log(.error, category: "AccountsCore", "Product identity migration failed: \(error.localizedDescription)")
+            readiness.fail(
+                scopeID: scopeIdentifier,
+                operation: .revisionMigration,
+                reasonCode: "product_classification_failed"
+            )
+            appState.lifecycle = .error(.incompatibleSchemaVersion)
+            return false
+        }
 
         let migrator = LegacyAccountsMigrator(modelContext: modelContainer.mainContext)
         let summary = migrator.migrateIfNeeded(scopeIdentifier: scopeIdentifier)
         if summary.migrated > 0 || summary.failures > 0 {
             AppLogger.log(.info, category: "AccountsCore",
                           "Legacy migration [\(scopeIdentifier)]: \(summary.migrated) мигрировано, \(summary.skippedAlreadyConverted) уже, \(summary.failures) ошибок")
+        }
+        guard summary.failures == 0 else {
+            readiness.fail(
+                scopeID: scopeIdentifier,
+                operation: .revisionMigration,
+                reasonCode: "legacy_product_migration_failed"
+            )
+            appState.lifecycle = .error(.incompatibleSchemaVersion)
+            return false
         }
 
         // 6b Фаза 1.5: перенос полей легаси-групп (isFavorite/priority/ordering/color/currency/order)
@@ -633,6 +683,8 @@ struct millioApp: App {
             AppLogger.log(.info, category: "AccountsCore",
                           "Groups merge [\(scopeIdentifier)]: \(groupsSummary.migrated) групп перенесено")
         }
+        readiness.complete(scopeID: scopeIdentifier, operation: .revisionMigration)
+        return true
     }
 
     @MainActor
@@ -686,8 +738,8 @@ struct millioApp: App {
             return nil
         }
 
-        // schema не передаём в конфиг — AppMigrationPlan предоставляет актуальную схему.
-        // SwiftData мигрирует существующие сторы (включая unversioned → V1 → V2) без потери данных.
+        // Schema централизованно подставляет `AppMigrationPlan.makeContainer`: это
+        // гарантирует current version identifier даже для schema-less production config.
         let modelConfiguration = ModelConfiguration(
             scope.storeConfigurationName,
             url: storeURL,
@@ -705,69 +757,14 @@ struct millioApp: App {
             // schema mismatch обрабатывается AppMigrationPlan; сюда попадаем при реальной коррупции.
             AppLogger.log(.error, category: "App", "Failed to open ModelContainer at \(storeURL.lastPathComponent): \(error)")
 
+            // Fail closed for both existing and first-launch stores. In particular, an unknown or
+            // unmigratable existing schema must remain byte-for-byte untouched for explicit recovery;
+            // no no-plan open, rename, deletion or automatic fresh-store creation is safe here.
             if storeAlreadyExists {
-                #if DEBUG
-                let schema = AppSchema.create()
-                // Track B (митигация B1b №6): стор пересоздан → reconciliation не фиксирует done.
                 ScopeStoreOpenTracker.shared.markFallback(scope.storeConfigurationName)
-                return Self.rebuildStorePreservingData(at: storeURL, schema: schema, scope: scope)
-                #else
-                // Migration plan failed on an existing store (e.g. schema version mismatch after
-                // AppSchemaV2 was redefined). As a last resort, try opening without a migration plan
-                // — SwiftData may still be able to open the store if the on-disk layout matches the
-                // current schema close enough. If this also fails, we destroy the store and create
-                // fresh so the user can restore from backup rather than being stuck forever.
-                AppLogger.log(.error, category: "App", "Migration plan failed on existing store — attempting no-plan fallback")
-                let fallbackConfig = ModelConfiguration(
-                    scope.storeConfigurationName,
-                    schema: AppSchema.create(),
-                    url: storeURL,
-                    cloudKitDatabase: .none
-                )
-                if let fallback = try? ModelContainer(for: AppSchema.create(), configurations: [fallbackConfig]) {
-                    AppLogger.log(.warning, category: "App", "Opened store without migration plan — data may be partially readable")
-                    // Track B (митигация B1b №6): partially readable → reconciliation не фиксирует done.
-                    ScopeStoreOpenTracker.shared.markFallback(scope.storeConfigurationName)
-                    return fallback
-                }
-                // Store is unrecoverable: rename to .corrupt and create fresh so the user can at
-                // least launch and trigger a restore from iCloud backup.
-                AppLogger.log(.error, category: "App", "Store unrecoverable — renaming to .corrupt and creating fresh store")
-                let corruptURL = storeURL.deletingPathExtension().appendingPathExtension("corrupt.store")
-                try? FileManager.default.removeItem(at: corruptURL)
-                try? FileManager.default.moveItem(at: storeURL, to: corruptURL)
-                let freshConfig = ModelConfiguration(
-                    scope.storeConfigurationName,
-                    schema: AppSchema.create(),
-                    url: storeURL,
-                    cloudKitDatabase: .none
-                )
-                if let fresh = try? ModelContainer(for: AppSchema.create(), configurations: [freshConfig]) {
-                    AppLogger.log(.warning, category: "App", "Fresh store created after corruption — user should restore from backup")
-                    return fresh
-                }
-                AppLogger.log(.error, category: "App", "Failed to create fresh store after corruption — showing error screen")
-                return nil
-                #endif
             }
-
-            // Стор не существовал — новый пользователь или первый запуск.
-            // Никогда не используем in-memory: данные должны жить на диске.
-            // Пробуем создать чистый стор без плана миграции (нечего мигрировать).
-            let freshConfig = ModelConfiguration(
-                scope.storeConfigurationName,
-                schema: AppSchema.create(),
-                url: storeURL,
-                cloudKitDatabase: .none
-            )
-            do {
-                let fresh = try ModelContainer(for: AppSchema.create(), configurations: [freshConfig])
-                AppLogger.log(.info, category: "App", "Created fresh on-disk store at \(storeURL.lastPathComponent)")
-                return fresh
-            } catch {
-                AppLogger.log(.error, category: "App", "Failed to create fresh store: \(error) — showing error screen")
-                return nil
-            }
+            AppLogger.log(.error, category: "App", "Persistent store preserved; showing storage recovery error UI")
+            return nil
         }
     }
 
@@ -793,37 +790,6 @@ struct millioApp: App {
         guard let storeURL = storeURL(for: scope) else { return false }
         return FileManager.default.fileExists(atPath: storeURL.path)
     }
-
-    #if DEBUG
-    private static func bakStoreExists(for scope: DataScope) -> Bool {
-        guard let storeURL = storeURL(for: scope) else { return false }
-        let bakURL = storeURL.deletingPathExtension().appendingPathExtension("bak.store")
-        return FileManager.default.fileExists(atPath: bakURL.path)
-    }
-    #endif
-
-    #if DEBUG
-    /// Переименовывает несовместимый стор в .bak и создаёт пустой новый.
-    /// Используется только в DEBUG: при смене схемы данные на девайсе разработчика теряются,
-    /// но приложение запускается корректно. Для восстановления — бэкап в iCloud.
-    private static func rebuildStorePreservingData(at storeURL: URL, schema: Schema, scope: DataScope) -> ModelContainer? {
-        let backupURL = storeURL.deletingPathExtension().appendingPathExtension("bak.store")
-        try? FileManager.default.removeItem(at: backupURL)
-        try? FileManager.default.moveItem(at: storeURL, to: backupURL)
-
-        AppLogger.log(.error, category: "Schema", """
-        ⚠️⚠️⚠️ DATA LOSS: Store rebuilt from scratch!
-        Scope: \(scope.storeConfigurationName)
-        Old store backed up to: \(backupURL.path)
-        To recover: copy .bak.store → rename to .store → relaunch.
-        Root cause: likely a @Model missing from AppSchemaCurrent.models or AppMigrationPlan.
-        Run SchemaConsistencyTests to detect divergence.
-        """)
-
-        let newConfig = ModelConfiguration(scope.storeConfigurationName, schema: schema, url: storeURL, cloudKitDatabase: .none)
-        return try? ModelContainer(for: schema, configurations: [newConfig])
-    }
-    #endif
 
     private static func makeLegacyDefaultModelContainer() -> ModelContainer? {
         let legacyConfiguration = ModelConfiguration(

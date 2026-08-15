@@ -29,6 +29,7 @@ struct FinanceOverviewCardView: View {
     @State private var ledgerPresentation: FinanceOverviewLedgerPresentation?
     @State private var expandedSheetSide: FinanceOverviewLedgerSide?
     @State private var expandedDetailGroupIDs: Set<String> = []
+    @State private var reloadGeneration: Int = 0
 
     init(
         financeViewModel: FinanceViewModel,
@@ -101,11 +102,28 @@ struct FinanceOverviewCardView: View {
 
     private func reload() async {
         guard let dynamicsViewModel else { return }
-        guard EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) else { return }
+        reloadGeneration += 1
+        let generation = reloadGeneration
+
+        guard EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) else {
+            if FinanceOverviewReloadPolicy.shouldPublish(
+                requestGeneration: generation,
+                latestGeneration: reloadGeneration
+            ) {
+                ledgerPresentation = nil
+                isLoading = false
+            }
+            return
+        }
 
         isLoading = true
         dynamicsViewModel.handle(.loadData)
-        ledgerPresentation = await buildLedgerPresentation(with: dynamicsViewModel)
+        let presentation = await buildLedgerPresentation(with: dynamicsViewModel)
+        guard FinanceOverviewReloadPolicy.shouldPublish(
+            requestGeneration: generation,
+            latestGeneration: reloadGeneration
+        ) else { return }
+        ledgerPresentation = presentation
         isLoading = false
     }
 
@@ -159,7 +177,7 @@ struct FinanceOverviewCardView: View {
 
         for group in groups {
             // Core-счета группы — ПЕРВИЧНЫЙ источник (было: легаси-junction + отдельный core-луп).
-            for account in sortedCoreAccounts(group.accounts ?? []) {
+            for account in sortedCoreAccounts(financeViewModel.coreAccountsSnapshot(matching: group)) {
                 if let item = await makeCoreLedgerItem(
                     account: account,
                     groupID: group.groupUniqueID,
@@ -494,7 +512,8 @@ struct FinanceOverviewCardView: View {
     /// [Гейт 5c.7.6.1] Заменяет две независимые карточки Credit/Debit (`compactSideCard`, снесена —
     /// каждая со своей шкалой до `maxSideTotal`, что искажало пропорцию между сторонами) на ОДНУ
     /// полосу: сегменты «активы vs обязательства» суммируются в реальную ширину (пропорция = данным
-    /// тотала, AC), плюс явный net сверху — данные ТОЛЬКО из уже посчитанного `ledgerPresentation`
+    /// тотала, AC). Net не повторяем: общий баланс уже показан в hero сверху. Данные ТОЛЬКО из
+    /// уже посчитанного `ledgerPresentation`
     /// (тот же единственный источник, что раньше питал две карточки, никакого второго расчёта).
     private func assetsLiabilitiesStackedBar(
         presentation: FinanceOverviewLedgerPresentation
@@ -508,19 +527,9 @@ struct FinanceOverviewCardView: View {
                     openExpandedChart(side: .credit)
                 }
 
-                Spacer(minLength: AppSpacing.s)
+                Spacer(minLength: 0)
 
-                VStack(alignment: .trailing, spacing: AppSpacing.xs) {
-                    Text(L("finances.overview.chart.saldo"))
-                        .font(.millioCaption2)
-                        .foregroundStyle(AppColors.textSecondary)
-                        .textCase(.uppercase)
-                    Text(signedAmount(presentation.saldo))
-                        .font(.millioTitle)
-                        .foregroundStyle(saldoColor(for: presentation.saldo))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
-                }
+                FinanceBalanceCompositionDonut(presentation: presentation)
             }
 
             GeometryReader { proxy in
@@ -1115,5 +1124,65 @@ struct FinanceOverviewCardView: View {
 
     private var creditColor: Color {
         AppColors.error
+    }
+}
+
+/// Компактная диаграмма состава общего баланса. Это только presentation consumer: финансовые
+/// суммы приходят из того же `FinanceOverviewLedgerPresentation`, который питает legends и bar.
+struct FinanceBalanceCompositionDonut: View {
+    let presentation: FinanceOverviewLedgerPresentation
+
+    private let lineWidth: CGFloat = 10
+    private let debitColor = AppColors.incomeGradient.first ?? .green
+    private let creditColor = AppColors.expenseGradient.first ?? .red
+
+    private var composition: FinanceOverviewLedgerStyle.BalanceComposition {
+        FinanceOverviewLedgerStyle.balanceComposition(
+            debitTotal: presentation.debit.total,
+            creditTotal: presentation.credit.total
+        )
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.white.opacity(0.10), lineWidth: lineWidth)
+
+            if composition.hasData {
+                Circle()
+                    .trim(from: 0, to: composition.debitFraction)
+                    .stroke(
+                        debitColor,
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                    )
+
+                if composition.creditFraction > 0.000_001 {
+                    Circle()
+                        .trim(from: composition.debitFraction, to: 1)
+                        .stroke(
+                            creditColor,
+                            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                        )
+                }
+            }
+
+            Circle()
+                .fill(Color.black.opacity(0.22))
+                .padding(lineWidth + 2)
+        }
+        .rotationEffect(.degrees(-90))
+        .shadow(color: debitColor.opacity(0.18), radius: 5, x: -1, y: 2)
+        .frame(width: 58, height: 58)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        guard composition.hasData else {
+            return "\(presentation.debit.side.title): 0%. \(presentation.credit.side.title): 0%."
+        }
+        let debitPercent = Int((composition.debitFraction * 100).rounded())
+        let creditPercent = max(0, 100 - debitPercent)
+        return "\(presentation.debit.side.title): \(debitPercent)%. \(presentation.credit.side.title): \(creditPercent)%."
     }
 }

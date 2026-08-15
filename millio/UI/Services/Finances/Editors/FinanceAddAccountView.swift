@@ -5,6 +5,7 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 // MARK: - Finance Add Account View
 
@@ -54,6 +55,11 @@ struct FinanceAddAccountView: View {
     @State private var draftIconName: String? = nil
     @State private var draftIconColor: String? = nil
     @State private var showIconPicker = false
+    @State private var realEstatePropertyType: RealEstatePropertyType = .apartment
+    @State private var realEstatePhotoItems: [PhotosPickerItem] = []
+    @State private var realEstatePhotoData: [Data] = []
+    @State private var isProcessingRealEstatePhotos = false
+    @State private var realEstatePhotoError: String?
 
     private enum HintsPrefs {
         static let hiddenKey = "finance_add_account_hints_hidden"
@@ -610,6 +616,9 @@ struct FinanceAddAccountView: View {
                         validationHintsSection
                     }
                     createFormSections
+                    if selectedProductOption == .house {
+                        realEstateCreationSection
+                    }
                 }
             }
             .padding(.horizontal, 20)
@@ -619,6 +628,67 @@ struct FinanceAddAccountView: View {
         .scrollDismissesKeyboard(.immediately)
         .dismissKeyboardOnTap()
         .scrollIndicators(.hidden)
+    }
+
+    private var realEstateCreationSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: L("real_estate.edit.object"))
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    Picker(L("real_estate.about.type"), selection: $realEstatePropertyType) {
+                        ForEach(RealEstatePropertyType.allCases) { type in
+                            Text(type.localizedTitle).tag(type)
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    FinancesRowDivider(leadingPadding: 16)
+                    PhotosPicker(
+                        selection: $realEstatePhotoItems,
+                        maxSelectionCount: AccountAttachmentPolicy.maximumPhotos,
+                        matching: .images
+                    ) {
+                        HStack {
+                            Label(L("real_estate.photo.add"), systemImage: "photo.badge.plus")
+                            Spacer()
+                            if isProcessingRealEstatePhotos { ProgressView() }
+                            Text("\(realEstatePhotoData.count)/\(AccountAttachmentPolicy.maximumPhotos)")
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 14)
+                    }
+                    .disabled(isProcessingRealEstatePhotos)
+                    if let realEstatePhotoError {
+                        Text(realEstatePhotoError)
+                            .font(.millioCaptionRegular)
+                            .foregroundStyle(AppColors.error)
+                            .padding(.horizontal, 16).padding(.bottom, 12)
+                    }
+                }
+            }
+        }
+        .onChange(of: realEstatePhotoItems) { _, items in
+            Task { await processRealEstateDraftPhotos(items) }
+        }
+    }
+
+    private func processRealEstateDraftPhotos(_ items: [PhotosPickerItem]) async {
+        await MainActor.run { isProcessingRealEstatePhotos = true; realEstatePhotoError = nil }
+        do {
+            var processed: [Data] = []
+            for item in items.prefix(AccountAttachmentPolicy.maximumPhotos) {
+                guard let source = try await item.loadTransferable(type: Data.self) else {
+                    throw AccountPhotoProcessorError.invalidImage
+                }
+                processed.append(try await AccountPhotoProcessor().process(source))
+            }
+            await MainActor.run { realEstatePhotoData = processed; isProcessingRealEstatePhotos = false }
+        } catch {
+            await MainActor.run {
+                realEstatePhotoData = []
+                realEstatePhotoError = error.localizedDescription
+                isProcessingRealEstatePhotos = false
+            }
+        }
     }
     
     @ViewBuilder
@@ -810,10 +880,17 @@ struct FinanceAddAccountView: View {
     
     private var isValid: Bool {
         guard requiredHints.isEmpty else { return false }
+        if selectedProductOption == .house, isProcessingRealEstatePhotos { return false }
 
         switch selectedAccountType {
         case .card:
-            return cardData != nil
+            guard let cardData else { return false }
+            if cardData.cardType == .credit {
+                guard let limit = cardData.creditLimit, limit > 0 else { return false }
+                let last4 = cardData.cardNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+                return last4.isEmpty || (last4.count == 4 && last4.allSatisfy(\.isNumber))
+            }
+            return true
         case .credit:
             return creditData != nil
         case .investment:
@@ -992,7 +1069,7 @@ struct FinanceAddAccountView: View {
         let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
         let group = targetGroup  // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен
-        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+        let factory = AccountProductFactory(modelContext: viewModel.modelContext)
 
         let meta = AccountsCoreAdditionBridge.depositMeta(
             rate: Decimal(depositData.rate),
@@ -1006,20 +1083,24 @@ struct FinanceAddAccountView: View {
         )
 
         do {
-            let account = try service.createAccount(
+            let command = try FinanceProductCreationCommandResolver.resolve(.init(
+                option: .deposit,
                 name: resolvedName,
-                kind: .deposit,
                 currency: depositData.currency,
-                openingBalance: Decimal(depositData.amount),
-                group: group,
+                amount: Decimal(depositData.amount),
+                groupID: group?.id,
                 depositMeta: meta,
                 note: depositData.comment.isEmpty ? nil : depositData.comment
-            )
-            try DepositInterestScheduler.regenerateFutureInterestEvents(
-                for: account,
-                service: service,
-                context: viewModel.modelContext
-            )
+            ))
+            _ = try factory.create(command)
+            if meta.remindEnd, let maturity = meta.termEnd {
+                Task { @MainActor in
+                    _ = await NotificationManager.shared.scheduleAccountDepositMaturityReminder(
+                        accountID: command.accountID, accountName: resolvedName, maturityDate: maturity
+                    )
+                }
+            }
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             dismiss()
         } catch {
             AppLogger.log(.error, category: "AccountsCore", "Не удалось создать вклад нового ядра: \(error)")
@@ -1053,16 +1134,27 @@ struct FinanceAddAccountView: View {
         }
 
         let group = targetGroup  // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен
-        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+        let factory = AccountProductFactory(modelContext: viewModel.modelContext)
         do {
-            try service.createAccount(
+            let command = try FinanceProductCreationCommandResolver.resolve(.init(
+                option: selectedProductOption,
                 name: resolvedName,
-                kind: kind,
                 currency: currency,
-                openingBalance: openingBalance,
-                group: group,
-                cardMeta: cardMeta
-            )
+                amount: openingBalance,
+                includeInTotal: cardData?.includeInTotal ?? investmentData?.includeInTotal ?? true,
+                groupID: group?.id,
+                cardType: cardData?.cardType,
+                bank: cardData?.bank,
+                cardLast4: cardData?.cardNumber,
+                creditLimit: cardMeta?.creditLimit,
+                statementDay: cardData?.statementDay,
+                dueDay: cardData?.dueDay,
+                minPayment: cardData?.minPayment.map { Decimal($0) },
+                graceDays: cardData?.graceDays,
+                note: cardData?.note
+            ))
+            _ = try factory.create(command)
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             dismiss()
         } catch {
             AppLogger.log(.error, category: "AccountsCore", "Не удалось создать денежный счёт нового ядра: \(error)")
@@ -1075,7 +1167,7 @@ struct FinanceAddAccountView: View {
         let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
         let group = targetGroup  // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен
-        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+        let factory = AccountProductFactory(modelContext: viewModel.modelContext)
 
         do {
             switch kind {
@@ -1089,29 +1181,33 @@ struct FinanceAddAccountView: View {
                 )
                 // openingBalance — ТЕКУЩИЙ остаток долга (remainingAmount), не первоначальная сумма
                 // (principal хранится отдельно в loanMeta для отображения) — движок C сам сделает знак минус.
-                try service.createAccount(
+                let command = try FinanceProductCreationCommandResolver.resolve(.init(
+                    option: .credit,
                     name: resolvedName,
-                    kind: .loan,
                     currency: creditData.currency,
-                    openingBalance: Decimal(creditData.remainingAmount),
-                    group: group,
+                    amount: Decimal(creditData.remainingAmount),
+                    includeInTotal: creditData.includeInTotal,
+                    groupID: group?.id,
                     loanMeta: meta
-                )
+                ))
+                _ = try factory.create(command)
             case .debt:
                 guard let investmentData else { return }
                 let direction: DebtDirection = investmentData.investmentType == .positive ? .owedToMe : .owedByMe
-                let signedOpening = direction == .owedToMe ? Decimal(investmentData.amount) : -Decimal(investmentData.amount)
-                try service.createAccount(
+                let command = try FinanceProductCreationCommandResolver.resolve(.init(
+                    option: .debt,
                     name: resolvedName,
-                    kind: .debt,
                     currency: investmentData.currency,
-                    openingBalance: signedOpening,
-                    group: group,
-                    debtMeta: AccountsCoreAdditionBridge.debtMeta(direction: direction)
-                )
+                    amount: Decimal(investmentData.amount),
+                    includeInTotal: investmentData.includeInTotal,
+                    groupID: group?.id,
+                    debtDirection: direction
+                ))
+                _ = try factory.create(command)
             default:
                 return
             }
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             dismiss()
         } catch {
             AppLogger.log(.error, category: "AccountsCore", "Не удалось создать обязательство нового ядра: \(error)")
@@ -1125,7 +1221,7 @@ struct FinanceAddAccountView: View {
         let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
         let group = targetGroup  // [Ф5c.7 contract] targetGroup уже core AccountGroup — bridge-резолв по имени не нужен
-        let service = AccountsCoreService(modelContext: viewModel.modelContext)
+        let factory = AccountProductFactory(modelContext: viewModel.modelContext)
 
         do {
             switch kind {
@@ -1138,28 +1234,52 @@ struct FinanceAddAccountView: View {
                 // последняя известная рыночная цена на момент выбора тикера (брифинг Фазы 4, задача 1).
                 let unitPrice = Decimal(marketData.purchaseUnitPrice ?? marketData.unitPrice ?? 0)
                 let currency = (marketData.currency?.isEmpty == false) ? marketData.currency! : investmentData.currency
-                let meta = AccountsCoreAdditionBridge.marketMeta(symbol: symbol, category: selectedInvestmentCategory)
-                let account = try service.createAccount(
+                let command = try FinanceProductCreationCommandResolver.resolve(.init(
+                    option: selectedProductOption,
                     name: resolvedName,
-                    kind: .marketInvestment,
                     currency: currency,
-                    openingBalance: 0, // движок E игнорирует opening — баланс считает только buy/sell
-                    group: group,
-                    marketMeta: meta
-                )
-                try service.buy(account: account, quantity: Decimal(quantity), unitPrice: unitPrice)
+                    amount: Decimal(investmentData.amount),
+                    includeInTotal: investmentData.includeInTotal,
+                    groupID: group?.id,
+                    marketSymbol: symbol,
+                    marketQuantity: Decimal(quantity),
+                    marketUnitPrice: unitPrice
+                ))
+                _ = try factory.create(command)
             case .manualAsset:
-                try service.createAccount(
+                let command = try FinanceProductCreationCommandResolver.resolve(.init(
+                    option: selectedProductOption,
                     name: resolvedName,
-                    kind: .manualAsset,
                     currency: investmentData.currency,
-                    openingBalance: Decimal(investmentData.amount),
-                    group: group,
-                    manualAssetMeta: AccountsCoreAdditionBridge.manualAssetMeta()
-                )
+                    amount: Decimal(investmentData.amount),
+                    includeInTotal: investmentData.includeInTotal,
+                    groupID: group?.id,
+                    marketSymbol: nil
+                ))
+                if selectedProductOption == .house {
+                    let propertyType = realEstatePropertyType
+                    let photoData = realEstatePhotoData
+                    _ = try factory.create(command, graphEnricher: { graph, transactionContext in
+                        transactionContext.insert(RealEstateProfile(
+                            accountID: graph.account.id,
+                            propertyType: propertyType
+                        ))
+                        for (index, data) in photoData.enumerated() {
+                            transactionContext.insert(AccountAttachment(
+                                accountID: graph.account.id,
+                                order: index,
+                                isCover: index == 0,
+                                mediaData: data
+                            ))
+                        }
+                    })
+                } else {
+                    _ = try factory.create(command)
+                }
             default:
                 return
             }
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             dismiss()
         } catch {
             AppLogger.log(.error, category: "AccountsCore", "Не удалось создать актив нового ядра: \(error)")

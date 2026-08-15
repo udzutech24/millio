@@ -30,10 +30,14 @@ struct AccountDetailView: View {
         case editDetails
         case transfer
         case earlyClose
+        case depositTopUp
+        case depositTerms
+        case depositMaturity
         case buy
         case sell
         case dividend
         case fee
+        case refund
         case revalue
 
         var id: Int { hashValue }
@@ -41,6 +45,10 @@ struct AccountDetailView: View {
 
     private var service: AccountsCoreService {
         AccountsCoreService(modelContext: modelContext)
+    }
+
+    private var isDebitProduct: Bool {
+        DebitCardContract.products.contains(account.productType ?? .unknownLegacy)
     }
 
     /// Провайдер живых цен нового ядра (Фаза 4) — синхронный снэпшот append-only кэша
@@ -63,9 +71,39 @@ struct AccountDetailView: View {
 
     private var sortedEvents: [AccountEvent] {
         _ = refreshToken
-        return (account.events ?? []).sorted { lhs, rhs in
+        return (account.events ?? [])
+            .filter { event in
+                if account.kind == .deposit {
+                    return !DepositDetailPresentation.isGeneratedForecastEvent(event, accountID: account.id)
+                }
+                return !(account.kind == .marketInvestment && event.type == .openingBalance && (event.amount ?? 0) == 0)
+            }
+            .sorted { lhs, rhs in
             lhs.date != rhs.date ? lhs.date > rhs.date : lhs.createdAt > rhs.createdAt
         }
+    }
+
+    private var depositPresentation: DepositDetailPresentation? {
+        guard account.kind == .deposit else { return nil }
+        _ = refreshToken
+        let snapshot = DepositFinancialContract.snapshot(
+            accountID: account.id,
+            currency: account.currency,
+            openingDate: account.createdAt,
+            archivedAt: account.archivedAt,
+            deletedAt: account.deletedAt,
+            meta: account.depositMeta,
+            events: account.events ?? [],
+            asOf: Date(),
+            calendarPolicy: DepositCalendarPolicy(timeZone: .current)
+        )
+        return DepositDetailPresentation.make(snapshot: snapshot)
+    }
+
+    private var debitSnapshot: DebitCardSnapshot? {
+        guard isDebitProduct else { return nil }
+        _ = refreshToken
+        return DebitCardContract.snapshot(account: account, events: account.events ?? [], on: Date())
     }
 
     var body: some View {
@@ -73,10 +111,31 @@ struct AccountDetailView: View {
             GradientBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.xl) {
-                    header
-                    actionsRow
-                    if account.kind == .deposit {
-                        depositForecastSection
+                    if AccountDetailDescriptor.resolve(for: account).kind == .realEstate {
+                        RealEstateDetailSection(
+                            account: account,
+                            modelContext: modelContext,
+                            refreshToken: refreshToken,
+                            onEdit: { sheet = .editDetails }
+                        )
+                    }
+                    if let depositPresentation {
+                        DepositDetailSection(
+                            presentation: depositPresentation,
+                            accountName: account.name,
+                            taxPresentation: depositTaxPresentation,
+                            onAction: handleDepositAction
+                        )
+                    } else if account.productType == .creditCard {
+                        CreditCardDetailSection(account: account, rawBalance: balanceToday)
+                    } else if let snapshot = debitSnapshot {
+                        DebitCardDetailSection(account: account, snapshot: snapshot)
+                    } else if AccountDetailDescriptor.resolve(for: account).showsGenericHeader {
+                        header
+                    }
+                    if account.kind != .deposit && account.archivedAt == nil && account.deletedAt == nil
+                        && (debitSnapshot?.canWrite ?? true) {
+                        actionsRow
                     }
                     if account.kind == .marketInvestment {
                         marketInfoSection
@@ -95,7 +154,7 @@ struct AccountDetailView: View {
             L("accounts_core.detail.delete_confirm.title"),
             isPresented: $showArchiveConfirm
         ) {
-            Button(L("accounts_core.detail.action.delete"), role: .destructive) {
+            Button(archiveActionTitle, role: .destructive) {
                 archiveAccount()
             }
             Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
@@ -149,11 +208,25 @@ struct AccountDetailView: View {
         } message: {
             Text(errorMessage ?? "")
         }
+        .task(id: account.id) {
+            guard account.kind == .marketInvestment else { return }
+            await AccountMarketPriceService(modelContext: modelContext).refreshTodayPrices()
+            refreshToken = UUID()
+        }
     }
 
     // MARK: - Header
 
+    @ViewBuilder
     private var header: some View {
+        if account.kind == .marketInvestment {
+            stockHero
+        } else {
+            standardHeader
+        }
+    }
+
+    private var standardHeader: some View {
         VStack(alignment: .leading, spacing: AppSpacing.s) {
             HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
                 Text(formattedBalance)
@@ -193,7 +266,85 @@ struct AccountDetailView: View {
                     .font(.millioCalloutRegular)
                     .foregroundStyle(AppColors.textTertiary)
             }
+
+            if !account.includeInTotal {
+                Label(
+                    L("accounts_core.detail.total.excluded"),
+                    systemImage: "sum"
+                )
+                .font(.millioCaptionRegular)
+                .foregroundStyle(AppColors.textSecondary)
+                .padding(.horizontal, AppSpacing.s)
+                .padding(.vertical, AppSpacing.xs)
+                .background(
+                    Capsule().fill(AppColors.iconBackground)
+                )
+            }
         }
+    }
+
+    private var stockHero: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.m) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    Text(account.marketMeta?.symbol.uppercased() ?? account.name)
+                        .font(.millioHeadline)
+                        .foregroundStyle(.white)
+                    if account.name.caseInsensitiveCompare(account.marketMeta?.symbol ?? "") != .orderedSame {
+                        Text(account.name)
+                            .font(.millioCalloutRegular)
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+                }
+                Spacer()
+                Label(
+                    isPriceStale ? L("accounts_core.detail.market.price_stale_badge") : L("accounts_core.detail.market.price_today_badge"),
+                    systemImage: isPriceStale ? "clock.badge.exclamationmark" : "bolt.fill"
+                )
+                .font(.millioCaptionRegular)
+                .foregroundStyle(isPriceStale ? AppColors.warning : AppColors.positiveColor)
+                .padding(.horizontal, AppSpacing.s)
+                .padding(.vertical, AppSpacing.xs)
+                .background(Capsule().fill(Color.black.opacity(0.22)))
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
+                Text(formattedBalance)
+                    .font(.millioTitle)
+                    .foregroundStyle(.white)
+                    .minimumScaleFactor(0.65)
+                Text(account.currency)
+                    .font(.millioBody)
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+
+            Label(
+                "\(signedAmountText(unrealizedPL, type: .adjustment)) \(account.currency)",
+                systemImage: unrealizedPL < 0 ? "arrow.down.right" : "arrow.up.right"
+            )
+            .font(.millioBodySemibold)
+            .foregroundStyle(unrealizedPL < 0 ? AppColors.negativeColor : AppColors.positiveColor)
+        }
+        .padding(AppSpacing.l)
+        .background(
+            ZStack {
+                LinearGradient(
+                    colors: [Color(hex: "102A56"), Color(hex: "123F7A"), Color(hex: "0D6B78")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                Circle()
+                    .fill(AppColors.brandPrimary.opacity(0.28))
+                    .frame(width: 180, height: 180)
+                    .offset(x: 130, y: -80)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.xl, style: .continuous))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.xl, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
     }
 
     private var bankLine: String? {
@@ -319,8 +470,8 @@ struct AccountDetailView: View {
     /// Эффективная ставка налога «чистыми» для ЭТОГО вклада за текущий календарный год (спека §2.8):
     /// доля Σ interest всех вкладов владельца, отнесённая налогом на ЭТОТ счёт, делённая на его gross.
     /// Приближение для прогноза (месяц/срок ещё не наступили — используем ставку текущего года).
-    /// TODO Фаза 3+: конвертация процентов валютных вкладов в ₽ курсом даты события (см. докстринг
-    /// `DepositTaxCalculator`) — сейчас берём amount как есть, корректно только для ₽-вкладов.
+    /// Foreign interest is deliberately incomplete here until event-date historical evidence is
+    /// loaded asynchronously. Relabelling its nominal amount as RUB would fabricate a tax value.
     private var depositTaxAllocationForThisAccount: DepositTaxAllocation? {
         guard account.kind == .deposit else { return nil }
         let year = Calendar.current.component(.year, from: Date())
@@ -332,14 +483,40 @@ struct AccountDetailView: View {
         guard let yearStart = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
               let yearEnd = calendar.date(from: DateComponents(year: year + 1, month: 1, day: 1)) else { return nil }
 
-        let inputs: [DepositTaxCalculator.InterestEventInput] = allDeposits.flatMap { deposit -> [DepositTaxCalculator.InterestEventInput] in
-            (deposit.events ?? [])
-                .filter { $0.type == .interest && $0.date >= yearStart && $0.date < yearEnd }
-                .map { DepositTaxCalculator.InterestEventInput(accountID: deposit.id, amountRUB: $0.amount ?? 0) }
+        let yearDeposits = allDeposits.flatMap { deposit in
+            (deposit.events ?? []).filter {
+                $0.type == .interest && $0.date >= yearStart && $0.date < yearEnd && $0.date <= Date()
+                    && !DepositDetailPresentation.isGeneratedForecastEvent($0, accountID: deposit.id)
+            }
+                .map { (deposit, $0) }
+        }
+        guard yearDeposits.allSatisfy({ $0.0.currency.uppercased() == "RUB" }) else { return nil }
+        let inputs: [DepositTaxCalculator.InterestEventInput] = yearDeposits.map { deposit, event in
+            DepositTaxCalculator.InterestEventInput(accountID: deposit.id, amountRUB: event.amount ?? 0)
         }
 
         let result = DepositTaxCalculator.calculate(interestEventsInRUB: inputs, year: year, settings: SettingsManager.shared.depositTaxSettings)
         return result.perAccount.first(where: { $0.accountID == account.id })
+    }
+
+    private var depositTaxPresentation: DepositTaxPresentation? {
+        guard account.kind == .deposit else { return nil }
+        let year = Calendar.current.component(.year, from: Date())
+        let deposits = (try? modelContext.fetch(FetchDescriptor<Account>(
+            predicate: #Predicate<Account> { $0.kindRaw == "deposit" }
+        ))) ?? []
+        let events = deposits.flatMap { deposit in
+            (deposit.events ?? []).compactMap { event -> DepositTaxEvent? in
+                guard event.type == .interest, event.date <= Date(),
+                      !DepositDetailPresentation.isGeneratedForecastEvent(event, accountID: deposit.id),
+                      let amount = event.amount else { return nil }
+                return .init(accountID: deposit.id, date: event.date, currency: deposit.currency, amount: amount)
+            }
+        }
+        return DepositTaxPresentationBuilder.make(
+            events: events, year: year, settings: SettingsManager.shared.depositTaxSettings,
+            historicalFX: [:], calendar: .current
+        )
     }
 
     /// Эффективная ставка налога «чистыми» для ЭТОГО вклада за текущий год — доля, применяемая
@@ -361,43 +538,49 @@ struct AccountDetailView: View {
 
     // MARK: - Рыночный счёт (.marketInvestment) — qty/цена/P&L (Фаза 4)
 
-    /// Текущее количество актива — реплей Σ buy−sell (та же логика, что движок E, но локально:
-    /// нужно и для отображения, и для предупреждения «продажа больше остатка», не жёсткого запрета).
-    private var currentQuantity: Decimal {
+    /// UI consumes the pure FIFO replay; it must not grow a second quantity/cost-basis engine.
+    private var stockSnapshot: StockPositionSnapshot? {
         _ = refreshToken
-        return (account.events ?? []).reduce(Decimal(0)) { acc, event in
-            switch event.type {
-            case .buy: return acc + (event.quantity ?? 0)
-            case .sell: return acc - (event.quantity ?? 0)
-            default: return acc
-            }
-        }
+        return try? StockLotEngine.replay(events: account.events ?? [], on: Date())
     }
 
-    private var totalBuyCost: Decimal {
-        (account.events ?? []).filter { $0.type == .buy }
-            .reduce(Decimal(0)) { $0 + ($1.quantity ?? 0) * ($1.unitPrice ?? 0) }
+    private var currentQuantity: Decimal {
+        stockSnapshot?.quantity ?? 0
     }
 
-    private var totalSellProceeds: Decimal {
-        (account.events ?? []).filter { $0.type == .sell }
-            .reduce(Decimal(0)) { $0 + ($1.quantity ?? 0) * ($1.unitPrice ?? 0) }
+    private var todayQuote: HistoricalAssetPrice? {
+        guard let symbol = account.marketMeta?.symbol.uppercased() else { return nil }
+        let dayKey = AccountEvent.dayKey(for: Date())
+        let descriptor = FetchDescriptor<HistoricalAssetPrice>(
+            predicate: #Predicate { $0.symbol == symbol && $0.dayKey == dayKey }
+        )
+        return try? modelContext.fetch(descriptor).first
     }
 
-    /// P&L нереализованный = рыночная стоимость сейчас − Σ buy + Σ sell (брифинг Фазы 4, задача 4).
-    /// Средняя цена покупки (avg cost basis) НЕ хранится — выводится этим же реплеем при необходимости.
+    private var latestCachedQuote: HistoricalAssetPrice? {
+        guard let symbol = account.marketMeta?.symbol.uppercased() else { return nil }
+        let descriptor = FetchDescriptor<HistoricalAssetPrice>(
+            predicate: #Predicate { $0.symbol == symbol },
+            sortBy: [SortDescriptor(\.dayKey, order: .reverse)]
+        )
+        return try? modelContext.fetch(descriptor).first
+    }
+
+    /// Unrealized P&L excludes realized proceeds and is based only on remaining FIFO lots.
     private var unrealizedPL: Decimal {
-        balanceToday - totalBuyCost + totalSellProceeds
+        stockSnapshot?.unrealizedProfitLoss(at: currentUnitPrice) ?? 0
+    }
+
+    private var stockTotalReturn: Decimal {
+        stockSnapshot?.totalReturn(at: currentUnitPrice) ?? 0
     }
 
     /// Текущая цена за единицу + признак «не сегодняшняя» (пометка «посл. известная»). `nil` цены из
     /// live-кэша (`AccountMarketPriceService`) трактуем как «нет сегодняшних данных» — падаем на
     /// последнюю цену buy/sell/revaluation из событий (офлайн/auth-error, брифинг Фазы 4, задача 2).
     private var currentUnitPrice: Decimal {
-        if let meta = account.marketMeta,
-           let cached = priceProviderForThisAccount?.price(symbol: meta.symbol, assetClass: meta.assetClass, on: Date()) {
-            return cached
-        }
+        if let todayQuote { return todayQuote.price }
+        if let latestCachedQuote { return latestCachedQuote.price }
         return (account.events ?? [])
             .sorted { $0.date < $1.date }
             .last(where: { ($0.type == .buy || $0.type == .sell) && $0.unitPrice != nil })?
@@ -407,8 +590,7 @@ struct AccountDetailView: View {
     /// `true`, если сегодняшней живой цены в кэше нет вовсе — карточка показывает пометку
     /// «посл. известная цена» (упрощение, задокументировано: не различаем «вчера»/«неделю назад»).
     private var isPriceStale: Bool {
-        guard let meta = account.marketMeta else { return true }
-        return priceProviderForThisAccount?.price(symbol: meta.symbol, assetClass: meta.assetClass, on: Date()) == nil
+        todayQuote == nil
     }
 
     private var marketInfoSection: some View {
@@ -417,6 +599,21 @@ struct AccountDetailView: View {
                 .font(.millioCaption)
                 .foregroundStyle(AppColors.textTertiary)
                 .textCase(.uppercase)
+
+            HStack(spacing: AppSpacing.s) {
+                stockHighlightCard(
+                    title: L("stock.detail.market_value"),
+                    value: "\(formattedBalance) \(account.currency)",
+                    icon: "chart.line.uptrend.xyaxis",
+                    tint: AppColors.brandPrimary
+                )
+                stockHighlightCard(
+                    title: L("stock.detail.total_return"),
+                    value: "\(signedAmountText(stockTotalReturn, type: .adjustment)) \(account.currency)",
+                    icon: stockTotalReturn < 0 ? "arrow.down.right" : "arrow.up.right",
+                    tint: stockTotalReturn < 0 ? AppColors.negativeColor : AppColors.positiveColor
+                )
+            }
 
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 HStack {
@@ -444,22 +641,90 @@ struct AccountDetailView: View {
                         }
                     }
                 }
-                HStack {
-                    Text(L("accounts_core.detail.market.pl_label"))
-                        .font(.millioCalloutRegular)
-                        .foregroundStyle(AppColors.textSecondary)
-                    Spacer()
-                    Text("\(signedAmountText(unrealizedPL, type: .adjustment)) \(account.currency)")
-                        .font(.millioBodySemibold)
-                        .foregroundStyle(unrealizedPL < 0 ? AppColors.error : AppColors.textPrimary)
-                }
+                marketMetricRow(
+                    L("accounts_core.detail.market.average_cost_label"),
+                    value: stockSnapshot?.averageUnitCost.map { "\(formattedAmount($0)) \(account.currency)" } ?? "—"
+                )
+                marketMetricRow(
+                    L("accounts_core.detail.market.cost_basis_label"),
+                    value: "\(formattedAmount(stockSnapshot?.openCostBasis ?? 0)) \(account.currency)"
+                )
+                marketMetricRow(
+                    L("accounts_core.detail.market.unrealized_label"),
+                    value: "\(signedAmountText(unrealizedPL, type: .adjustment)) \(account.currency)",
+                    tone: unrealizedPL
+                )
+                marketMetricRow(
+                    L("accounts_core.detail.market.realized_label"),
+                    value: "\(signedAmountText(stockSnapshot?.realizedProfitLoss ?? 0, type: .adjustment)) \(account.currency)",
+                    tone: stockSnapshot?.realizedProfitLoss
+                )
+                marketMetricRow(
+                    L("accounts_core.detail.market.dividends_label"),
+                    value: "\(formattedAmount(stockSnapshot?.dividends ?? 0)) \(account.currency)"
+                )
+                marketMetricRow(
+                    L("accounts_core.detail.market.fees_label"),
+                    value: "\(formattedAmount(stockSnapshot?.totalFees ?? 0)) \(account.currency)"
+                )
             }
             .padding(AppSpacing.m)
             .background(
+                LinearGradient(
+                    colors: [Color(hex: "14233A"), Color(hex: "102D35")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous))
+            )
+            .overlay(
                 RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                    .fill(AppColors.iconBackground)
+                    .stroke(AppColors.brandPrimary.opacity(0.18), lineWidth: 1)
             )
         }
+    }
+
+    private func stockHighlightCard(title: String, value: String, icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.s) {
+            Image(systemName: icon)
+                .font(.millioHeadline)
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.millioCaptionRegular)
+                .foregroundStyle(AppColors.textSecondary)
+            Text(value)
+                .font(.millioBodySemibold)
+                .foregroundStyle(AppColors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.m)
+        .background(
+            RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                .fill(tint.opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                .stroke(tint.opacity(0.25), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    private func marketMetricRow(_ title: String, value: String, tone: Decimal? = nil) -> some View {
+        HStack {
+            Text(title)
+                .font(.millioCalloutRegular)
+                .foregroundStyle(AppColors.textSecondary)
+            Spacer()
+            Text(value)
+                .font(.millioBodySemibold)
+                .foregroundStyle(
+                    tone.map { $0 < 0 ? AppColors.negativeColor : ($0 > 0 ? AppColors.positiveColor : AppColors.textPrimary) }
+                        ?? AppColors.textPrimary
+                )
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private var formattedBalance: String {
@@ -474,23 +739,74 @@ struct AccountDetailView: View {
 
     // MARK: - Actions
 
+    @ViewBuilder
     private var actionsRow: some View {
+        if account.kind == .marketInvestment {
+            marketActions
+        } else {
+            genericActions
+        }
+    }
+
+    private var marketActions: some View {
+        HStack(spacing: AppSpacing.s) {
+            compactMarketAction(L("accounts_core.detail.market.action.buy"), icon: "plus.circle.fill", tint: AppColors.positiveColor, prominent: true) {
+                sheet = .buy
+            }
+            compactMarketAction(L("accounts_core.detail.market.action.sell"), icon: "minus.circle.fill", tint: AppColors.warning) {
+                sheet = .sell
+            }
+            compactMarketAction(L("accounts_core.detail.market.action.dividend"), icon: "banknote.fill", tint: Color(hex: "FFD166")) {
+                sheet = .dividend
+            }
+            Menu {
+                Button(L("accounts_core.detail.market.action.fee"), systemImage: "minus.circle") { sheet = .fee }
+                Button(L("accounts_core.detail.action.edit"), systemImage: "pencil") { sheet = .editDetails }
+                Button(archiveActionTitle, systemImage: "archivebox", role: .destructive) { requestArchiveConfirmation() }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.millioHeadline)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: 48, height: 64)
+                    .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.iconBackground))
+            }
+            .accessibilityLabel(L("accounts_core.detail.action.edit"))
+        }
+    }
+
+    private func compactMarketAction(
+        _ title: String,
+        icon: String,
+        tint: Color,
+        prominent: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: AppSpacing.xs) {
+                Image(systemName: icon).font(.millioHeadline)
+                Text(title)
+                    .font(.millioCaptionRegular)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .foregroundStyle(prominent ? Color.white : tint)
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .background(
+                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                    .fill(prominent ? tint : tint.opacity(0.14))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                    .stroke(tint.opacity(0.28), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var genericActions: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: AppSpacing.s) {
                 switch account.kind {
-                case .marketInvestment:
-                    actionButton(L("accounts_core.detail.market.action.buy"), icon: "plus.circle.fill") {
-                        sheet = .buy
-                    }
-                    actionButton(L("accounts_core.detail.market.action.sell"), icon: "minus.circle.fill") {
-                        sheet = .sell
-                    }
-                    actionButton(L("accounts_core.detail.market.action.dividend"), icon: "banknote.fill") {
-                        sheet = .dividend
-                    }
-                    actionButton(L("accounts_core.detail.market.action.fee"), icon: "minus.circle") {
-                        sheet = .fee
-                    }
                 case .manualAsset:
                     actionButton(L("accounts_core.detail.manual_asset.action.revalue"), icon: "arrow.triangle.2.circlepath") {
                         sheet = .revalue
@@ -502,7 +818,15 @@ struct AccountDetailView: View {
                     actionButton(expenseActionTitle, icon: "minus.circle.fill") {
                         sheet = .expense
                     }
-                    actionButton(L("accounts_core.detail.action.adjust_balance"), icon: "slider.horizontal.3") {
+                    if isDebitProduct {
+                        actionButton(L("debit_card.action.fee"), icon: "banknote") {
+                            sheet = .fee
+                        }
+                        actionButton(L("debit_card.action.refund"), icon: "arrow.uturn.backward.circle") {
+                            sheet = .refund
+                        }
+                    }
+                    actionButton(account.productType == .creditCard ? "Изменить сумму долга" : L("accounts_core.detail.action.adjust_balance"), icon: "slider.horizontal.3") {
                         sheet = .adjustBalance
                     }
                     actionButton(L("accounts_core.detail.action.transfer"), icon: "arrow.left.arrow.right") {
@@ -517,11 +841,17 @@ struct AccountDetailView: View {
                 actionButton(L("accounts_core.detail.action.edit"), icon: "pencil") {
                     sheet = .editDetails
                 }
-                actionButton(L("accounts_core.detail.action.delete"), icon: "archivebox.fill", isDestructive: true) {
+                actionButton(archiveActionTitle, icon: "archivebox.fill", isDestructive: true) {
                     requestArchiveConfirmation()
                 }
             }
         }
+    }
+
+    private var archiveActionTitle: String {
+        account.productType == .realEstate
+            ? L("real_estate.archive.action")
+            : L("accounts_core.detail.action.delete")
     }
 
     /// Ненулевой баланс (S8): сначала показываем выбор «перевести остаток / закрыть как есть»,
@@ -544,20 +874,35 @@ struct AccountDetailView: View {
         }
     }
 
-    private func actionButton(_ title: String, icon: String, isDestructive: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private func actionButton(
+        _ title: String,
+        icon: String,
+        isDestructive: Bool = false,
+        tint: Color? = nil,
+        isProminent: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        let foreground = isDestructive ? AppColors.error : (isProminent ? Color.white : (tint ?? AppColors.textPrimary))
+        let background = isProminent
+            ? (tint ?? AppColors.brandPrimary)
+            : (tint ?? Color.white).opacity(tint == nil ? 0.2 : 0.14)
+        return Button(action: action) {
             VStack(spacing: AppSpacing.xs) {
                 Image(systemName: icon)
                     .font(.millioHeadline)
                 Text(title)
                     .font(.millioCaptionRegular)
             }
-            .foregroundStyle(isDestructive ? AppColors.error : AppColors.textPrimary)
+            .foregroundStyle(foreground)
             .padding(.horizontal, AppSpacing.m)
             .padding(.vertical, AppSpacing.s)
             .background(
                 RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                    .fill(AppColors.iconBackground)
+                    .fill(background)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                    .stroke(isProminent ? Color.white.opacity(0.14) : (tint ?? Color.clear).opacity(0.28), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -661,10 +1006,11 @@ struct AccountDetailView: View {
                 }
             }
             Spacer()
-            if event.type == .buy || event.type == .sell, let quantity = event.quantity, let unitPrice = event.unitPrice {
+            if (event.type == .buy || event.type == .sell || event.type == .adjustment),
+               let quantity = event.quantity {
                 // buy/sell не имеют `amount` (движок E считает по quantity×price, не по денежной сумме) —
                 // показываем позицию явно, а не пустую строку.
-                Text("\(formattedAmount(quantity)) × \(formattedAmount(unitPrice))")
+                Text(event.unitPrice.map { "\(formattedAmount(quantity)) × \(formattedAmount($0))" } ?? formattedAmount(quantity))
                     .font(.millioBodySemibold)
                     .foregroundStyle(AppColors.textPrimary)
             } else if let amount = event.amount {
@@ -697,6 +1043,9 @@ struct AccountDetailView: View {
         case .adjustment: return L("accounts_core.detail.event.adjustment")
         case .interest: return L("accounts_core.detail.event.interest")
         case .fee: return L("accounts_core.detail.event.fee")
+        case .creditCardPurchase: return L("accounts_core.detail.event.expense")
+        case .creditCardRefund, .creditCardRepayment: return L("accounts_core.detail.event.income")
+        case .creditCardFee, .creditCardInterest: return L("accounts_core.detail.event.fee")
         case .extraPayment: return L("accounts_core.detail.event.extra_payment")
         case .buy: return L("accounts_core.detail.event.buy")
         case .sell: return L("accounts_core.detail.event.sell")
@@ -715,7 +1064,16 @@ struct AccountDetailView: View {
             AccountEventEntrySheet(
                 title: incomeActionTitle,
                 onSave: { amount, date, note in
-                    perform { try service.recordEvent(account: account, type: incomeSheetEventType, amount: amount, date: date, note: note) }
+                    perform {
+                        if isDebitProduct {
+                            _ = try DebitCardOperationCoordinator(modelContext: modelContext).record(
+                                account: account,
+                                command: .init(operationID: "debit-detail:\(UUID().uuidString)", kind: .income, amount: amount, date: date, note: note)
+                            )
+                        } else {
+                            try service.recordEvent(account: account, type: incomeSheetEventType, amount: amount, date: date, note: note)
+                        }
+                    }
                 }
             )
         case .expense:
@@ -726,58 +1084,217 @@ struct AccountDetailView: View {
             AccountEventEntrySheet(
                 title: expenseActionTitle,
                 onSave: { amount, date, note in
-                    perform { try service.recordEvent(account: account, type: expenseSheetEventType, amount: amount, date: date, note: note) }
-                }
-            )
-        case .adjustBalance:
-            AccountAdjustBalanceSheet(
-                currentBalance: balanceToday,
-                onSave: { newValue in
-                    perform { try service.adjustBalance(account: account, to: newValue) }
-                }
-            )
-        case .editDetails:
-            AccountEditDetailsSheet(
-                account: account,
-                modelContext: modelContext,
-                onSave: { name, group, note in
-                    performEdit {
-                        try service.updateAccount(account, name: name, group: group, note: note)
+                    perform {
+                        if isDebitProduct {
+                            _ = try DebitCardOperationCoordinator(modelContext: modelContext).record(
+                                account: account,
+                                command: .init(operationID: "debit-detail:\(UUID().uuidString)", kind: .expense, amount: amount, date: date, note: note)
+                            )
+                        } else {
+                            try service.recordEvent(account: account, type: expenseSheetEventType, amount: amount, date: date, note: note)
+                        }
                     }
                 }
             )
+        case .adjustBalance:
+            let isCreditCard = account.productType == .creditCard
+            let creditLimit = account.cardMeta?.creditLimit ?? 0
+            let debt = max(0, creditLimit - balanceToday)
+            AccountAdjustBalanceSheet(
+                currentBalance: isCreditCard ? debt : balanceToday,
+                titleOverride: isCreditCard ? "Изменить сумму долга" : nil,
+                onSave: { newValue in
+                    perform {
+                        if isDebitProduct {
+                            _ = try DebitCardOperationCoordinator(modelContext: modelContext).adjust(
+                                account: account, to: newValue,
+                                operationID: "debit-detail:\(UUID().uuidString)",
+                                reason: "manual_balance_correction"
+                            )
+                        } else {
+                            try service.adjustBalance(
+                                account: account,
+                                to: isCreditCard
+                                    ? CreditCardFinancialContract.rawAvailableBalance(debt: newValue, creditLimit: creditLimit)
+                                    : newValue
+                            )
+                        }
+                    }
+                }
+            )
+        case .editDetails:
+            if account.productType == .creditCard {
+                CreditCardEditSheet(account: account, modelContext: modelContext, onSave: { command, settings in
+                    performEdit {
+                        try CreditCardEditorService(modelContext: modelContext).update(account: account, command: command)
+                        CreditCardPaymentSettingsStore().save(settings, accountID: account.id)
+                        Task { await NotificationManager.shared.scheduleCreditCardPaymentReminder(
+                            accountID: account.id, cardName: account.name,
+                            settings: settings, graceDays: account.cardMeta?.graceDays
+                        ) }
+                    }
+                })
+            } else if account.productType == .realEstate {
+                RealEstateEditSheet(
+                    account: account,
+                    modelContext: modelContext,
+                    onSave: { name, group, note, includeInTotal, propertyType, reminderMonths, linkedLoanID, photos in
+                        performEdit {
+                            try RealEstateEditorService(modelContext: modelContext).update(
+                                account: account,
+                                name: name,
+                                group: group,
+                                note: note,
+                                includeInTotal: includeInTotal,
+                                propertyType: propertyType,
+                                reminderMonths: reminderMonths,
+                                linkedLoanID: linkedLoanID,
+                                photos: photos
+                            )
+                        }
+                    }
+                )
+            } else if account.productType == .marketStock, let stockSnapshot {
+                StockPositionEditSheet(
+                    account: account,
+                    modelContext: modelContext,
+                    snapshot: stockSnapshot,
+                    onSave: { name, group, note, includeInTotal, quantity, averageCost in
+                        performEdit {
+                            try service.correctStockPosition(
+                                account: account,
+                                name: name,
+                                group: group,
+                                note: note,
+                                includeInTotal: includeInTotal,
+                                targetQuantity: quantity,
+                                targetAverageCost: averageCost
+                            )
+                        }
+                    }
+                )
+            } else {
+                AccountEditDetailsSheet(
+                    account: account,
+                    modelContext: modelContext,
+                    onSave: { name, group, note, includeInTotal, _, _, _ in
+                        performEdit {
+                            try service.updateAccount(
+                                account,
+                                name: name,
+                                group: group,
+                                note: note,
+                                includeInTotal: includeInTotal
+                            )
+                        }
+                    },
+                    onProductTransitionCommitted: productTransitionCommitted
+                )
+            }
         case .transfer:
             AccountTransferSheet(
                 source: account,
                 modelContext: modelContext,
                 onSave: { destination, amount in
-                    perform { try service.transfer(from: account, to: destination, amountInSourceCurrency: amount) }
+                    perform {
+                        if isDebitProduct {
+                            _ = try DebitCardOperationCoordinator(modelContext: modelContext).transfer(
+                                from: account, to: destination,
+                                operationID: "debit-detail:\(UUID().uuidString)", amount: amount
+                            )
+                        } else {
+                            try service.transfer(from: account, to: destination, amountInSourceCurrency: amount)
+                        }
+                    }
                 }
             )
         case .earlyClose:
-            AccountEarlyCloseSheet(
-                source: account,
-                modelContext: modelContext,
-                onSave: { destination in
-                    performEarlyClose(transferTo: destination)
+            if let snapshot = depositPresentation?.snapshot {
+                DepositCloseSheet(
+                    source: account,
+                    modelContext: modelContext,
+                    preview: DepositDetailPresentation.earlyClosePreview(
+                        snapshot: snapshot,
+                        penaltyShare: account.depositMeta?.earlyClosePenalty
+                    ),
+                    isMaturity: false,
+                    onSave: { destination in
+                        performDepositAndDismiss {
+                            let result = try DepositOperationCoordinator(modelContext: modelContext).earlyClose(
+                                depositID: account.id,
+                                command: DepositTransferCommand(
+                                    operationID: "deposit-early-close:\(UUID().uuidString)",
+                                    destinationAccountID: destination.id
+                                )
+                            )
+                            NotificationManager.shared.cancelAccountDepositMaturityReminder(accountID: account.id)
+                            return result
+                        }
+                    }
+                )
+            }
+        case .depositTopUp:
+            DepositTopUpSheet(deposit: account, modelContext: modelContext) { source, amount in
+                performDeposit {
+                    try DepositOperationCoordinator(modelContext: modelContext).topUp(
+                        depositID: account.id,
+                        command: DepositTopUpCommand(
+                            operationID: "deposit-top-up:\(UUID().uuidString)",
+                            sourceAccountID: source.id,
+                            amount: amount
+                        )
+                    )
                 }
-            )
+            }
+        case .depositTerms:
+            if let meta = account.depositMeta, let snapshot = depositPresentation?.snapshot {
+                DepositTermsEditSheet(meta: meta, snapshot: snapshot, openingDate: account.createdAt) { updatedMeta in
+                    performDeposit {
+                        let result = try DepositOperationCoordinator(modelContext: modelContext).editTerms(
+                            depositID: account.id,
+                            command: DepositTermsEditCommand(meta: updatedMeta)
+                        )
+                        synchronizeDepositReminder(meta: updatedMeta)
+                        return result
+                    }
+                }
+            }
+        case .depositMaturity:
+            if depositPresentation?.snapshot != nil {
+                DepositCloseSheet(source: account, modelContext: modelContext, preview: nil, isMaturity: true) { destination in
+                    performDepositAndDismiss {
+                        let result = try DepositOperationCoordinator(modelContext: modelContext).mature(
+                            depositID: account.id,
+                            command: DepositTransferCommand(
+                                operationID: "deposit-maturity:\(UUID().uuidString)",
+                                destinationAccountID: destination.id
+                            )
+                        )
+                        NotificationManager.shared.cancelAccountDepositMaturityReminder(accountID: account.id)
+                        return result
+                    }
+                }
+            }
         case .buy:
             AccountBuySellSheet(
                 title: L("accounts_core.detail.market.action.buy"),
                 currentQuantity: currentQuantity,
+                initialUnitPrice: currentUnitPrice > 0 ? currentUnitPrice : nil,
+                currency: account.currency,
                 showsSellWarning: false,
-                onSave: { quantity, unitPrice, date, note in
-                    perform { try service.buy(account: account, quantity: quantity, unitPrice: unitPrice, date: date, note: note) }
+                onSave: { quantity, unitPrice, fee, date, note in
+                    perform { try service.buy(account: account, quantity: quantity, unitPrice: unitPrice, fee: fee, date: date, note: note) }
                 }
             )
         case .sell:
             AccountBuySellSheet(
                 title: L("accounts_core.detail.market.action.sell"),
                 currentQuantity: currentQuantity,
+                initialUnitPrice: currentUnitPrice > 0 ? currentUnitPrice : nil,
+                currency: account.currency,
                 showsSellWarning: true,
-                onSave: { quantity, unitPrice, date, note in
-                    perform { try service.sell(account: account, quantity: quantity, unitPrice: unitPrice, date: date, note: note) }
+                onSave: { quantity, unitPrice, fee, date, note in
+                    perform { try service.sell(account: account, quantity: quantity, unitPrice: unitPrice, fee: fee, date: date, note: note) }
                 }
             )
         case .dividend:
@@ -789,11 +1306,36 @@ struct AccountDetailView: View {
             )
         case .fee:
             AccountEventEntrySheet(
-                title: L("accounts_core.detail.market.action.fee"),
+                title: isDebitProduct ? L("debit_card.action.fee") : L("accounts_core.detail.market.action.fee"),
                 onSave: { amount, date, note in
-                    perform { try service.recordMarketCashEvent(account: account, type: .fee, amount: amount, date: date, note: note) }
+                    perform {
+                        if isDebitProduct {
+                            _ = try DebitCardOperationCoordinator(modelContext: modelContext).record(
+                                account: account,
+                                command: .init(operationID: "debit-detail:\(UUID().uuidString)", kind: .fee, amount: amount, date: date, note: note)
+                            )
+                        } else {
+                            try service.recordMarketCashEvent(account: account, type: .fee, amount: amount, date: date, note: note)
+                        }
+                    }
                 }
             )
+        case .refund:
+            DebitCardRefundSheet(
+                expenses: sortedEvents.filter { $0.type == .expense && $0.sourceTransactionID != nil },
+                currency: account.currency
+            ) { originalOperationID, amount, date, note in
+                perform {
+                    _ = try DebitCardOperationCoordinator(modelContext: modelContext).record(
+                        account: account,
+                        command: .init(
+                            operationID: "debit-detail:\(UUID().uuidString)",
+                            kind: .refund(originalOperationID: originalOperationID),
+                            amount: amount, date: date, note: note
+                        )
+                    )
+                }
+            }
         case .revalue:
             AccountAdjustBalanceSheet(
                 currentBalance: balanceToday,
@@ -817,9 +1359,40 @@ struct AccountDetailView: View {
         }
     }
 
+    private func handleDepositAction(_ action: DepositDetailAction) {
+        switch action {
+        case .topUp: sheet = .depositTopUp
+        case .editTerms: sheet = .depositTerms
+        case .earlyClose: sheet = .earlyClose
+        case .withdrawAtMaturity: sheet = .depositMaturity
+        case .archive: showArchiveConfirm = true
+        }
+    }
+
+    private func performDeposit(_ operation: () throws -> DepositOperationResult) {
+        do {
+            _ = try operation()
+            refreshToken = UUID()
+            sheet = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func performDepositAndDismiss(_ operation: () throws -> DepositOperationResult) {
+        do {
+            _ = try operation()
+            sheet = nil
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func perform(_ operation: () throws -> Void) {
         do {
             try operation()
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             refreshToken = UUID()
             sheet = nil
         } catch {
@@ -841,9 +1414,24 @@ struct AccountDetailView: View {
         }
     }
 
+    /// Product transitions commit in an isolated context. Closing this stale detail instance makes
+    /// the accounts list refetch the committed product (and is also required for replacement flows).
+    private func productTransitionCommitted() {
+        EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+        sheet = nil
+        dismiss()
+    }
+
     private func archiveAccount() {
         do {
-            try service.archiveAccount(account)
+            if isDebitProduct {
+                try DebitCardOperationCoordinator(modelContext: modelContext).archive(account)
+            } else {
+                try service.archiveAccount(account)
+            }
+            if account.kind == .deposit {
+                NotificationManager.shared.cancelAccountDepositMaturityReminder(accountID: account.id)
+            }
             // Track D1: этот экран не хранит ссылку на FinanceViewModel — без события список
             // счетов и «Общий баланс» на экране Счетов не пересчитываются до перезапуска приложения
             // (FinanceViewModel.state.totalAmount обновляется только явным calculateTotalAmount(),
@@ -853,6 +1441,18 @@ struct AccountDetailView: View {
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func synchronizeDepositReminder(meta: DepositMeta) {
+        guard meta.remindEnd, let maturity = meta.termEnd else {
+            NotificationManager.shared.cancelAccountDepositMaturityReminder(accountID: account.id)
+            return
+        }
+        Task { @MainActor in
+            _ = await NotificationManager.shared.scheduleAccountDepositMaturityReminder(
+                accountID: account.id, accountName: account.name, maturityDate: maturity
+            )
         }
     }
 }

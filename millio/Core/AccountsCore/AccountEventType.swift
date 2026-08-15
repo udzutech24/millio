@@ -22,6 +22,16 @@ enum AccountEventType: String, Codable {
     case dividend
     /// Комиссия/удержание.
     case fee
+    /// Покупка по кредитной карте. Уменьшает доступный остаток и signed net position.
+    case creditCardPurchase
+    /// Возврат покупки по кредитной карте. Увеличивает доступный остаток и signed net position.
+    case creditCardRefund
+    /// Погашение кредитной карты. Не является повторным расходом Cashflow.
+    case creditCardRepayment
+    /// Комиссия кредитной карты — самостоятельный расход, не generic fee другого продукта.
+    case creditCardFee
+    /// Начисленные банком проценты — самостоятельный расход кредитной карты.
+    case creditCardInterest
     /// Досрочное/дополнительное погашение (кредит/долг).
     case extraPayment
     /// Пролонгация вклада на новый срок (не меняет баланс сама по себе).

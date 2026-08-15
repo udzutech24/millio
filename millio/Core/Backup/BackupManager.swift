@@ -38,6 +38,8 @@ actor BackupManager: BackupManagerProtocol {
     /// (RestoreView лишь ставит lifecycle=.ready и dismiss). Транспорт (этот actor) не знает о ядре —
     /// реальный прогон живёт в app-слое (DIContainer). См. plans/2026-07-12__legacy-migration-self-heal.md.
     private let onDidReplaceStore: (@MainActor () async -> Void)?
+    private let historicalValuationScopeID: String?
+    private let historicalValuationReadiness: HistoricalValuationReadinessCoordinator
 
     private enum RestoreCandidateDecision {
         case ready(score: Int, reason: RestoreCandidateReason, detail: String?)
@@ -59,23 +61,31 @@ actor BackupManager: BackupManagerProtocol {
         cloudStore: CloudBackupStoreProtocol,
         dataRepository: DataRepositoryProtocol,
         encryption: BackupEncryptionProtocol? = nil,
+        historicalValuationScopeID: String? = nil,
+        historicalValuationReadiness: HistoricalValuationReadinessCoordinator = .shared,
         onDidReplaceStore: (@MainActor () async -> Void)? = nil
     ) {
         self.cloudStore = cloudStore
         self.dataRepository = dataRepository
         self.staticEncryption = encryption
         self.usesSettingsEncryption = false
+        self.historicalValuationScopeID = historicalValuationScopeID
+        self.historicalValuationReadiness = historicalValuationReadiness
         self.onDidReplaceStore = onDidReplaceStore
     }
 
     init(
         dataRepository: DataRepositoryProtocol,
+        historicalValuationScopeID: String? = nil,
+        historicalValuationReadiness: HistoricalValuationReadinessCoordinator = .shared,
         onDidReplaceStore: (@MainActor () async -> Void)? = nil
     ) {
         self.cloudStore = CloudBackupStore()
         self.dataRepository = dataRepository
         self.staticEncryption = nil
         self.usesSettingsEncryption = true
+        self.historicalValuationScopeID = historicalValuationScopeID
+        self.historicalValuationReadiness = historicalValuationReadiness
         self.onDidReplaceStore = onDidReplaceStore
     }
     
@@ -223,6 +233,12 @@ actor BackupManager: BackupManagerProtocol {
     
     func restoreLatest(passphrase: String?) async throws {
         logger.info("Starting restore...")
+        if let historicalValuationScopeID {
+            historicalValuationReadiness.begin(
+                scopeID: historicalValuationScopeID,
+                operation: .restore
+            )
+        }
         
         await MainActor.run {
             EventBus.shared.publish(BackupEvent.restoreStarted)
@@ -266,11 +282,24 @@ actor BackupManager: BackupManagerProtocol {
             }
         
             logger.info("Restore completed successfully")
+            if let historicalValuationScopeID {
+                historicalValuationReadiness.complete(
+                    scopeID: historicalValuationScopeID,
+                    operation: .restore
+                )
+            }
             
             await MainActor.run {
                 EventBus.shared.publish(BackupEvent.restoreCompleted)
             }
         } catch {
+            if let historicalValuationScopeID {
+                historicalValuationReadiness.fail(
+                    scopeID: historicalValuationScopeID,
+                    operation: .restore,
+                    reasonCode: "restore_failed"
+                )
+            }
             let appError = (error as? AppError) ?? .unknown(error)
             await MainActor.run {
                 EventBus.shared.publish(BackupEvent.restoreFailed(appError))
@@ -283,6 +312,12 @@ actor BackupManager: BackupManagerProtocol {
 
     func restoreVersion(recordName: String, passphrase: String?) async throws {
         logger.info("Starting restore from selected version...")
+        if let historicalValuationScopeID {
+            historicalValuationReadiness.begin(
+                scopeID: historicalValuationScopeID,
+                operation: .restore
+            )
+        }
 
         await MainActor.run {
             EventBus.shared.publish(BackupEvent.restoreStarted)
@@ -304,10 +339,23 @@ actor BackupManager: BackupManagerProtocol {
                 dataRepository: dataRepository,
                 cloudStore: cloudStore
             )
+            if let historicalValuationScopeID {
+                historicalValuationReadiness.complete(
+                    scopeID: historicalValuationScopeID,
+                    operation: .restore
+                )
+            }
             await MainActor.run {
                 EventBus.shared.publish(BackupEvent.restoreCompleted)
             }
         } catch {
+            if let historicalValuationScopeID {
+                historicalValuationReadiness.fail(
+                    scopeID: historicalValuationScopeID,
+                    operation: .restore,
+                    reasonCode: "restore_failed"
+                )
+            }
             let appError = (error as? AppError) ?? .unknown(error)
             await MainActor.run {
                 EventBus.shared.publish(BackupEvent.restoreFailed(appError))

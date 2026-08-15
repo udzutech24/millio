@@ -4,8 +4,8 @@
 //
 //  Мост АccountsCore → Cashflow (Фаза 0 плана `2026-07-05__cashflow-add-transaction-redesign.md`,
 //  §1.8/§4). Направление ПРОТИВОПОЛОЖНОЕ `AccountsCoreCashflowBridge` (тот пишет Cashflow → ядро):
-//  здесь мы читаем уже сгенерированные `AccountEvent(.interest)` вклада (см. `DepositInterestScheduler`)
-//  и делаем ставшие due (`date <= today`) события ВИДИМЫМИ доходными записями в ленте Cashflow —
+//  здесь мы читаем `AccountEvent(.interest)` вклада и делаем видимыми в Cashflow
+//  только confirmed due события. Scheduler estimates остаются прогнозами даже после даты —
 //  без этого начисление процентов по вкладам, созданным через новое ядро счетов, происходит
 //  «в фоне», а пользователь не видит дохода в табе Cashflow (подтверждённая находка §1.8.B).
 //
@@ -23,14 +23,14 @@
 import Foundation
 import SwiftData
 
-/// Делает due-проценты вкладов нового ядра счетов видимыми в Cashflow (см. докстринг файла).
+/// Делает confirmed due-проценты вкладов видимыми в Cashflow (см. докстринг файла).
 @MainActor
 final class AccountsCoreDepositCashflowBridge {
 
     /// Значение `importSourceRaw` для материализованных строк — свой namespace, не пересекается
     /// с `CashflowBulkExpenseImportTransactionSource` (та сравнивается строковым равенством, а не
     /// декодированием enum, поэтому новое значение здесь безопасно и не ломает bulk-import дедуп).
-    static let interestImportSource = "accountsCoreDepositInterest"
+    static let interestImportSource = DepositCashflowProjector.importSource
 
     private let modelContext: ModelContext
     private let now: () -> Date
@@ -40,15 +40,20 @@ final class AccountsCoreDepositCashflowBridge {
     /// на самой границе `date <= today` то пропадают, то дублируются в зависимости от TZ машины.
     private let calendar: Calendar
     private var isSyncInProgress = false
+    private let publishCommitted: () -> Void
 
     init(
         modelContext: ModelContext,
         now: @escaping () -> Date = Date.init,
-        calendar: Calendar = Calendar(identifier: .gregorian)
+        calendar: Calendar = Calendar(identifier: .gregorian),
+        publishCommitted: (() -> Void)? = nil
     ) {
         self.modelContext = modelContext
         self.now = now
         self.calendar = calendar
+        self.publishCommitted = publishCommitted ?? {
+            EventBus.shared.publish(FinanceEvent.depositOperationCommitted)
+        }
     }
 
     /// Фоновый запуск с guard от дублирования — по образцу `CashflowScheduledService
@@ -114,58 +119,27 @@ final class AccountsCoreDepositCashflowBridge {
             .map { $0 }
     }
 
-    /// Материализует в Cashflow все due (`date <= today`) interest-события вкладов, у которых ещё
+    /// Материализует только confirmed due interest. Generated scheduler estimates
+    /// never become historical income merely because their date passed.
     /// нет соответствующей строки. Идемпотентно: ключ дедупа — `importReferenceKey` == `AccountEvent
     /// .sourceTransactionID` (тот уже уникален на период по конвенции `DepositInterestScheduler`).
     /// Повторный вызов (при каждой загрузке таба Cashflow) не создаёт дублей.
     @discardableResult
     func materializeDueInterestIncome() -> Bool {
         let today = calendar.startOfDay(for: now())
-        let sourceTag = Self.interestImportSource
-
         // Фетч БЕЗ compound-предиката с traversal через relationship + сравнением дат: сочетание
         // `account?.kindRaw == X && date <= Y` в одном #Predicate на этой SwiftData-версии не находит
         // совпадений (проверено эмпирически — 0 результатов при заведомо существующих событиях).
         // Фетчим широко и фильтруем в Swift — тот же приём, что уже использует
         // `CashflowScheduledService` (fetch всех транзакций, фильтрация `.filter` в памяти).
         let allEvents = (try? modelContext.fetch(FetchDescriptor<AccountEvent>())) ?? []
-        let dueEvents = allEvents
-            .filter { $0.type == .interest && $0.date <= today && $0.account?.kind == .deposit }
-            .sorted { $0.date < $1.date }
-        guard !dueEvents.isEmpty else { return false }
-
-        let allTransactions = (try? modelContext.fetch(FetchDescriptor<CashflowTransaction>())) ?? []
-        let existingKeys = Set(
-            allTransactions
-                .filter { $0.importSourceRaw == sourceTag }
-                .compactMap(\.importReferenceKey)
-        )
-
-        var didInsert = false
-        for event in dueEvents {
-            guard let key = event.sourceTransactionID, !existingKeys.contains(key) else { continue }
-            guard let account = event.account, let amount = event.amount, amount > 0 else { continue }
-
-            let transaction = CashflowTransaction(
-                transactionType: .income,
-                amount: NSDecimalNumber(decimal: amount).doubleValue,
-                currency: account.currency,
-                transactionDate: event.date,
-                incomeCategory: .interest,
-                // Имя счёта — данные пользователя (он сам его так назвал при создании вклада),
-                // не UI-строка приложения, поэтому localization-правило про raw RU-литералы не применимо.
-                note: account.name.isEmpty ? nil : account.name,
-                importSourceRaw: sourceTag,
-                importReferenceKey: key,
-                affectsCardBalance: false
-            )
-            modelContext.insert(transaction)
-            didInsert = true
-        }
-
-        guard didInsert else { return false }
         do {
+            let report = try DepositCashflowProjector.project(
+                events: allEvents, through: today, context: modelContext
+            )
+            guard report.insertedCount > 0 else { return false }
             try modelContext.save()
+            publishCommitted()
             return true
         } catch {
             AppLogger.log(.error, category: "AccountsCore", "Не удалось материализовать доход по вкладу в Cashflow: \(error)")

@@ -1,12 +1,31 @@
 import Foundation
 import SwiftData
 
+private enum ScopeReconciliationError: Error {
+    case rebuildMarkerNotDurable
+}
+
 /// Оркестратор reconciliation guest→user (Track B, B2c). Связывает чистое ядро (детектор/lineage/
 /// multiset) с SwiftData-worker'ами и safety-механизмами. Идемпотентен на каждом переходе в user-скоуп
 /// (митигация B1b №7): дёшево при отсутствии расхождения (детектор-скрининг первым).
 /// Класс без @MainActor (создаётся в nonisolated `App.init` как @State), но `reconcile` — @MainActor:
 /// координирует UI-оверлей и @ModelActor-worker'ы с главного потока, тяжёлую работу отдаёт off-main.
 final class ScopeReconciliationService {
+    typealias EnqueueRebuild = (_ scopeID: String, _ reasonCode: String) throws -> Void
+
+    private let enqueueRebuild: EnqueueRebuild
+
+    init(enqueueRebuild: @escaping EnqueueRebuild = { scopeID, reasonCode in
+        let request = try HistoricalValuationRebuildQueue.enqueue(
+            scopeID: scopeID,
+            reasonCode: reasonCode
+        )
+        guard try HistoricalValuationRebuildQueue.pending(scopeID: scopeID)?.id == request.id else {
+            throw ScopeReconciliationError.rebuildMarkerNotDurable
+        }
+    }) {
+        self.enqueueRebuild = enqueueRebuild
+    }
 
     /// - onWillMerge: вызывается ТОЛЬКО когда действительно начинается merge (после детектора+lineage) —
     ///   для показа progress-overlay. При отсутствии расхождения не вызывается (overlay не мигает).
@@ -23,7 +42,15 @@ final class ScopeReconciliationService {
         onWillMerge: @MainActor () -> Void
     ) async -> ScopeMergeOutcome {
         let key = userScope.storeConfigurationName
-        if ScopeMergeMarker.isDone(userScopeKey: key) { return .alreadyDone }
+        let readiness = HistoricalValuationReadinessCoordinator.shared
+        if ScopeMergeMarker.isDone(userScopeKey: key) {
+            // Heal a crash between durable `done` and the in-memory readiness transition from an
+            // older build. `begin` clears a stale failure reason; `complete` clears active state.
+            readiness.begin(scopeID: key, operation: .reconciliation)
+            readiness.complete(scopeID: key, operation: .reconciliation)
+            return .alreadyDone
+        }
+        readiness.begin(scopeID: key, operation: .reconciliation)
 
         do {
             let reader = ScopeGuestReader(modelContainer: guestContainer)
@@ -31,9 +58,14 @@ final class ScopeReconciliationService {
             let guestInput = try await reader.read()
             let userSnapshot = try await worker.snapshot()
 
+            if guestInput.hasHistoricalCloses {
+                try enqueueRebuild(key, "guest_close_scope_rebuild")
+            }
+
             // 1. Детектор-скрининг (дёшево — только counts/watermarks).
             let signals = Self.buildSignals(guest: guestInput.snapshot, user: userSnapshot)
             guard DivergenceDetector.hasDivergence(signals) else {
+                readiness.complete(scopeID: key, operation: .reconciliation)
                 ScopeMergeMarker.markDone(userScopeKey: key, report: ScopeMergeReport())
                 return .noDivergence
             }
@@ -47,15 +79,22 @@ final class ScopeReconciliationService {
             )
             switch decision {
             case .noGuestData, .userEmpty:
+                readiness.complete(scopeID: key, operation: .reconciliation)
                 return .skipped
             case .foreignGuest:
                 ScopeMergeMarker.markNeedsConfirmation(userScopeKey: key)
                 AppLogger.log(.warning, category: "Reconciliation",
                               "Foreign guest for \(key) — merge отложен до подтверждения")
+                readiness.complete(scopeID: key, operation: .reconciliation)
                 return .deferredForeignGuest
             case .proceed:
                 break
             }
+
+            // Persist the rebuild obligation before mutating the user graph. A false-positive
+            // marker after a later merge failure is safe; a committed graph without a marker is
+            // not, because retry may take the `noDivergence` fast path.
+            try enqueueRebuild(key, "guest_reconciliation")
 
             // 3. Merge. С этого момента — progress-overlay + блокировка бэкапа.
             onWillMerge()
@@ -75,15 +114,19 @@ final class ScopeReconciliationService {
             )
             let result = try await worker.apply(input: guestInput, transactionTargets: targets)
 
-            // 3c. Снапшоты не мержим — пересобираем из событий (спека §2).
-            let rebuilder = AccountSnapshotRebuilder(modelContainer: userContainer)
-            _ = try? await rebuilder.rebuildAllAccounts()
-
             let report = ScopeMergeReport(
                 accountsAdded: result.accountsAdded,
                 transactionsAdded: result.transactionsAdded,
                 partiallyReadable: usedFallbackOpen
             )
+            // 3c. Снапшоты не мержим — пересобираем из событий (спека §2).
+            let rebuilder = AccountSnapshotRebuilder(modelContainer: userContainer)
+            _ = try? await rebuilder.rebuildAllAccounts()
+
+            // Clear process-local blocking before writing `done`. If the process crashes between
+            // these two lines, retrying reconciliation is idempotent and safe; the inverse order
+            // could strand a stale failed readiness behind the `.alreadyDone` fast path.
+            readiness.complete(scopeID: key, operation: .reconciliation)
             if usedFallbackOpen {
                 ScopeMergeMarker.storeReport(userScopeKey: key, report: report) // без done (митигация B1b №6)
             } else {
@@ -95,11 +138,21 @@ final class ScopeReconciliationService {
         } catch let error as ScopeMergeError {
             // Sanity-abort: контекст не сохранён, на диске ничего не изменилось; done НЕ ставим.
             AppLogger.log(.error, category: "Reconciliation", "Sanity-abort merge \(key): \(error)")
+            readiness.fail(
+                scopeID: key,
+                operation: .reconciliation,
+                reasonCode: "reconciliation_failed"
+            )
             return .abortedSanity
         } catch {
             // Прочие ошибки — не фиксируем done, повторим при следующем переходе (идемпотентно).
             AppLogger.log(.error, category: "Reconciliation",
                           "Merge \(key) не удался (повтор при следующем логине): \(error.localizedDescription)")
+            readiness.fail(
+                scopeID: key,
+                operation: .reconciliation,
+                reasonCode: "reconciliation_failed"
+            )
             return .skipped
         }
     }

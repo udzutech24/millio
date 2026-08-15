@@ -33,12 +33,18 @@ struct CashflowUnifiedEntryContainer: View {
     @ObservedObject var viewModel: CashflowViewModel
     /// Начальная вкладка задаётся caller'ом (income/expense/transfer → соответствующий таб).
     var initialTab: CashflowSheetTab
+    let initialMonth: Date?
 
     @State private var selectedTab: CashflowSheetTab
 
-    init(viewModel: CashflowViewModel, initialTab: CashflowSheetTab = .expenses) {
+    init(
+        viewModel: CashflowViewModel,
+        initialTab: CashflowSheetTab = .expenses,
+        initialMonth: Date? = nil
+    ) {
         self.viewModel = viewModel
         self.initialTab = initialTab
+        self.initialMonth = initialMonth
         _selectedTab = State(initialValue: initialTab)
     }
 
@@ -50,14 +56,16 @@ struct CashflowUnifiedEntryContainer: View {
                 CashflowCategoryTransactionSheet(
                     viewModel: viewModel,
                     kind: .expense,
-                    initialHistoryCardID: nil
+                    initialHistoryCardID: nil,
+                    initialMonth: initialMonth
                 )
                 .tag(CashflowSheetTab.expenses)
 
                 CashflowCategoryTransactionSheet(
                     viewModel: viewModel,
                     kind: .income,
-                    initialHistoryCardID: nil
+                    initialHistoryCardID: nil,
+                    initialMonth: initialMonth
                 )
                 .tag(CashflowSheetTab.incomes)
 
@@ -67,7 +75,10 @@ struct CashflowUnifiedEntryContainer: View {
                     viewModel: viewModel,
                     transactionType: .transfer,
                     showsTransactionTypeSection: false,
-                    customNavigationTitle: L("cashflow.operation.new_transfer")
+                    customNavigationTitle: L("cashflow.operation.new_transfer"),
+                    initialTransactionDate: initialMonth.map {
+                        CashflowCategorySheetBootstrap.initialTransactionDate(forSelectedMonth: $0)
+                    }
                 )
                 .tag(CashflowSheetTab.transfer)
             }

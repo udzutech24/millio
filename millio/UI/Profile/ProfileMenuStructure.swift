@@ -229,7 +229,6 @@ enum ProfileMenuStructure {
                 id: .settings,
                 items: [
                     .backup,
-                    .googleSheets,
                     .security,
                     .dailyReminders
                 ]

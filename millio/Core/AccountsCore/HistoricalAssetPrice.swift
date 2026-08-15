@@ -5,10 +5,8 @@ import SwiftData
 /// `MarketPriceProviding` внутрь `AccountBalanceEngine`/`AccountSnapshotRebuilder` (реплей не может
 /// делать сетевой запрос сам — см. докстринг `AccountMarketPriceService`).
 ///
-/// Апсерт разрешён ТОЛЬКО для СЕГОДНЯШНЕГО `dayKey` (см. `AccountMarketPriceService.upsertTodayPrice`) —
-/// прошлые дни, однажды записанные, больше не перезаписываются. Со временем (при регулярном онлайн-
-/// использовании приложения) таблица органически накапливает реальную историю закрытий БЕЗ единого
-/// платного бэкфилла (S9: не жечь квоту котировок на историю).
+/// Live-апсерт разрешён только для сегодняшнего `dayKey`. Historical prefetch может добавить
+/// отсутствующий provider close прошлого дня, но никогда не перезаписывает замороженную строку.
 @Model
 final class HistoricalAssetPrice: Persistable {
     var id: UUID = UUID()
@@ -18,7 +16,9 @@ final class HistoricalAssetPrice: Persistable {
     /// Календарный день цены, тот же формат "yyyy-MM-dd", что и `AccountEvent.dayKey`.
     var dayKey: String = ""
     var price: Decimal = 0
-    /// Источник цены (для диагностики) — сейчас всегда "market-backend" (тот же клиент, что питает старый мир).
+    /// Evidence source with frozen day-timezone metadata. Live observations use
+    /// `market-backend|tz=<IANA>`; explicit historical providers use
+    /// `historical:<provider>|tz=<IANA>`. Legacy rows without `tz` fail closed in valuation.
     var source: String = ""
     var fetchedAt: Date = Date()
 

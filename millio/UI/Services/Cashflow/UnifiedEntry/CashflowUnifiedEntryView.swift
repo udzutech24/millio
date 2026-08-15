@@ -17,7 +17,7 @@ struct CashflowCategoryTransactionSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    @State private var selectedMonth: Date = Calendar.current.startOfMonth(for: Date())
+    @State private var selectedMonth: Date
     @State private var selectedCategory: CashflowCategoryOption?
     @State private var searchText: String = ""
     @State private var isSearchExpanded: Bool = false
@@ -63,6 +63,20 @@ struct CashflowCategoryTransactionSheet: View {
     @FocusState private var isSearchFieldFocused: Bool
     private let outerCornerRadius: CGFloat = 22
     private let innerCornerRadius: CGFloat = 16
+
+    init(
+        viewModel: CashflowViewModel,
+        kind: CashflowCategoryTransactionSheetKind,
+        initialHistoryCardID: String?,
+        initialMonth: Date? = nil
+    ) {
+        self.viewModel = viewModel
+        self.kind = kind
+        self.initialHistoryCardID = initialHistoryCardID
+        _selectedMonth = State(
+            initialValue: CashflowMonthSelectionPolicy.canonicalMonth(initialMonth ?? .now)
+        )
+    }
 
     private var showsBudgetDetails: Bool {
         budgetSnapshot != nil

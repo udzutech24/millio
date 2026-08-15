@@ -27,6 +27,13 @@ protocol NotificationManagerProtocol {
     func cancelDailyReminder()
     func scheduleCashflowScheduledReminders(for transactions: [CashflowTransaction]) async
     func cancelCashflowScheduledReminders()
+    func scheduleAccountDepositMaturityReminder(accountID: UUID, accountName: String, maturityDate: Date) async -> Bool
+    func cancelAccountDepositMaturityReminder(accountID: UUID)
+}
+
+extension NotificationManagerProtocol {
+    func scheduleAccountDepositMaturityReminder(accountID: UUID, accountName: String, maturityDate: Date) async -> Bool { false }
+    func cancelAccountDepositMaturityReminder(accountID: UUID) {}
 }
 
 /// Менеджер локальных уведомлений
@@ -42,6 +49,8 @@ final class NotificationManager: NotificationManagerProtocol {
     private let defaults: UserDefaults
     private let scheduledReminderIDsKey = "cashflow_scheduled_reminder_ids"
     private static let scheduledReminderIdentifierPrefix = "cashflow_scheduled_reminder"
+    private static let creditCardReminderIdentifierPrefix = "credit_card_payment_reminder"
+    private static let accountDepositReminderIdentifierPrefix = "account_deposit_maturity"
     
     init(
         notificationCenter: any UserNotificationCenterProtocol = UNUserNotificationCenter.current(),
@@ -65,7 +74,7 @@ final class NotificationManager: NotificationManagerProtocol {
             logger.info("Notification authorization granted: \(granted)")
             return granted
         } catch {
-            logger.error("Failed to request notification authorization: \(error.localizedDescription)")
+            logger.error("Notification authorization request failed")
             return false
         }
     }
@@ -117,7 +126,7 @@ final class NotificationManager: NotificationManagerProtocol {
             do {
                 try await notificationCenter.add(request)
             } catch {
-                logger.error("Failed to schedule daily reminder for \(kind.rawValue): \(error.localizedDescription)")
+                logger.error("Daily reminder scheduling failed")
             }
         }
         logger.info("Daily reminders scheduled successfully")
@@ -164,7 +173,7 @@ final class NotificationManager: NotificationManagerProtocol {
                 try await notificationCenter.add(request)
                 createdIdentifiers.append(payload.identifier)
             } catch {
-                logger.error("Failed to schedule cashflow reminder \(payload.identifier): \(error.localizedDescription)")
+                logger.error("Cashflow reminder scheduling failed")
             }
         }
 
@@ -178,6 +187,86 @@ final class NotificationManager: NotificationManagerProtocol {
         notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
         notificationCenter.removeDeliveredNotifications(withIdentifiers: identifiers)
         defaults.set([], forKey: scheduledReminderIDsKey)
+    }
+
+    func scheduleCreditCardPaymentReminder(
+        accountID: UUID,
+        cardName: String,
+        settings: CreditCardPaymentSettings,
+        graceDays: Int?
+    ) async {
+        let identifier = Self.creditCardReminderIdentifier(accountID: accountID)
+        cancelCreditCardPaymentReminder(accountID: accountID)
+        guard let fireDate = CreditCardPaymentPolicy.reminderDate(
+            settings: settings, graceDays: graceDays, calendar: calendar
+        ), fireDate > now(), await requestAuthorization() else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = cardName
+        content.body = String(localized: "credit_card.reminder.payment_body", defaultValue: "Скоро платёж по кредитной карте")
+        content.sound = .default
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
+        do {
+            try await notificationCenter.add(UNNotificationRequest(
+                identifier: identifier,
+                content: content,
+                trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            ))
+        } catch {
+            logger.error("Credit-card reminder scheduling failed")
+        }
+    }
+
+    func cancelCreditCardPaymentReminder(accountID: UUID) {
+        let identifiers = [Self.creditCardReminderIdentifier(accountID: accountID)]
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
+        notificationCenter.removeDeliveredNotifications(withIdentifiers: identifiers)
+    }
+
+    static func creditCardReminderIdentifier(accountID: UUID) -> String {
+        "\(creditCardReminderIdentifierPrefix)|\(accountID.uuidString)"
+    }
+
+    /// Schedules the operational AccountsCore reminder one day before maturity at 09:00 in the
+    /// injected calendar. The return value lets UI keep a denied permission visibly non-operational.
+    func scheduleAccountDepositMaturityReminder(
+        accountID: UUID,
+        accountName: String,
+        maturityDate: Date
+    ) async -> Bool {
+        cancelAccountDepositMaturityReminder(accountID: accountID)
+        guard let reminderDate = calendar.date(byAdding: .day, value: -1, to: maturityDate),
+              let fireDate = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: reminderDate),
+              fireDate > now(), await requestAuthorization() else { return false }
+        let content = UNMutableNotificationContent()
+        content.title = L("accounts_core.deposit.reminder.title", defaultValue: "Deposit maturity")
+        content.body = String(
+            format: L("accounts_core.deposit.reminder.body", defaultValue: "%@ matures tomorrow"),
+            accountName
+        )
+        content.sound = .default
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
+        do {
+            try await notificationCenter.add(.init(
+                identifier: Self.accountDepositReminderIdentifier(accountID), content: content,
+                trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            ))
+            logger.info("AccountsCore deposit reminder scheduled")
+            return true
+        } catch {
+            logger.error("AccountsCore deposit reminder scheduling failed")
+            return false
+        }
+    }
+
+    func cancelAccountDepositMaturityReminder(accountID: UUID) {
+        let identifiers = [Self.accountDepositReminderIdentifier(accountID)]
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
+        notificationCenter.removeDeliveredNotifications(withIdentifiers: identifiers)
+    }
+
+    static func accountDepositReminderIdentifier(_ accountID: UUID) -> String {
+        "\(accountDepositReminderIdentifierPrefix)|\(accountID.uuidString)"
     }
     
     // MARK: - Private Methods
@@ -319,7 +408,7 @@ final class NotificationManager: NotificationManagerProtocol {
             }()
             return transaction.isRecurringTemplate
                 ? "Регулярный \(kind) — \(amountText)\(noteSuffix)"
-                : "Плановый \(kind) — \(amountText)\(noteSuffix)"
+                : "запланированный \(kind) — \(amountText)\(noteSuffix)"
 
         case .simplifiedChinese:
             let kind: String = {
@@ -330,8 +419,8 @@ final class NotificationManager: NotificationManagerProtocol {
                 }
             }()
             return transaction.isRecurringTemplate
-                ? "周期性\(kind) \(amountText) 今日\(noteSuffix)"
-                : "计划\(kind) \(amountText) 今日\(noteSuffix)"
+                ? "提醒：周期性\(kind) \(amountText) 今日\(noteSuffix)"
+                : "提醒：计划\(kind) \(amountText) 今日\(noteSuffix)"
 
         case .system, .english, .german, .spanish, .turkish, .french:
             let kind: String = {
@@ -342,8 +431,8 @@ final class NotificationManager: NotificationManagerProtocol {
                 }
             }()
             return transaction.isRecurringTemplate
-                ? "Recurring \(kind) — \(amountText)\(noteSuffix)"
-                : "Planned \(kind) — \(amountText)\(noteSuffix)"
+                ? "Reminder: Recurring \(kind) — \(amountText)\(noteSuffix)"
+                : "Reminder: Planned \(kind) — \(amountText)\(noteSuffix)"
         }
     }
 
@@ -399,9 +488,9 @@ final class NotificationManager: NotificationManagerProtocol {
 
         do {
             try await notificationCenter.add(request)
-            logger.info("Scheduled deposit maturity notification for \(identifier) at \(fireDate)")
+            logger.info("Legacy deposit maturity notification scheduled")
         } catch {
-            logger.error("Failed to schedule deposit notification: \(error.localizedDescription)")
+            logger.error("Legacy deposit maturity notification scheduling failed")
         }
     }
 

@@ -110,6 +110,7 @@ final class FinanceAccountService {
 
         let creditDescriptor = FetchDescriptor<Credit>()
         let allCredits = (try? modelContext.fetch(creditDescriptor)) ?? []
+        normalizeCreditTotalParticipation(allCredits)
         let availableCredits = allCredits.filter { $0.archivedAt == nil }
         let archivedCredits = allCredits.filter { $0.archivedAt != nil }
 
@@ -150,6 +151,20 @@ final class FinanceAccountService {
     }
 
     // MARK: - Normalize
+
+    /// Legacy credits are liabilities and therefore must always participate in net worth.
+    /// Older stores could persist `false`; normalize that compatibility flag before rebuilding
+    /// the read cache so group totals cannot silently omit debt.
+    private func normalizeCreditTotalParticipation(_ credits: [Credit]) {
+        let excludedCredits = credits.filter { !$0.includeInTotal }
+        guard !excludedCredits.isEmpty else { return }
+        excludedCredits.forEach { $0.includeInTotal = true }
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "Finance", "credit_total_participation_normalization_failed")
+        }
+    }
 
     private func normalizeMarketAssetIdentities(_ investments: [Investment]) {
         var requiresSave = false
@@ -471,6 +486,11 @@ final class FinanceAccountService {
 
         // 1. Каскад операций (обе ноги перевода + связи кредита/инвестиции).
         let related = relatedTransactions(forAccountID: accountID)
+        let mutationPolicy = CashflowMonthMutationPolicy(modelContext: modelContext)
+        guard !related.contains(where: { mutationPolicy.isClosed($0.transactionDate) }) else {
+            AppLogger.log(.warning, category: "Finance", "Legacy account purge rejected because it touches a closed Cashflow month")
+            return (.none, 0)
+        }
         for tx in related { modelContext.delete(tx) }
 
         // 2. Underlying-модель по типу счёта.

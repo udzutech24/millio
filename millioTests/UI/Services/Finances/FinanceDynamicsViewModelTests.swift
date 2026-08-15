@@ -879,9 +879,8 @@ struct FinanceDynamicsViewModelTests {
 
         // При делении на ноль должно вернуться специальное значение (не crash)
         let delta = dynamicsViewModel.state.periodDelta
-        // delta.percent должен быть большим числом (999999) или 0, но не NaN/Inf
-        #expect(!delta.percent.isNaN)
-        #expect(!delta.percent.isInfinite || abs(delta.percent) == 999999.0)
+        // Zero baseline with a non-zero delta has no mathematically defined percentage.
+        #expect(delta.percent == nil)
     }
 
     @Test("Кредитная карта: баланс отображается как задолженность")
