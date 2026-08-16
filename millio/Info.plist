@@ -37,6 +37,8 @@
 	</dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to unlock the app</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Add a planned Millio transaction to a calendar you choose.</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
 	<key>UIFileSharingEnabled</key>

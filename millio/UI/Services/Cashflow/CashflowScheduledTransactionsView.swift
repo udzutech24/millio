@@ -5,10 +5,12 @@
 //  Created by Codex on 01.03.2026.
 //
 
+import EventKitUI
 import SwiftUI
 
 struct CashflowScheduledTransactionsView: View {
     @ObservedObject var viewModel: CashflowViewModel
+    @Environment(ToastCenter.self) private var toastCenter
     let kind: CashflowCategoryKind
     let mode: CashflowScheduledTransactionsMode
 
@@ -22,6 +24,10 @@ struct CashflowScheduledTransactionsView: View {
     @State private var plannerDisplayMode: PlannerDisplayMode = .calendar
     @State private var plannerMonthAnchor: Date = CashflowScheduledTransactionsView.monthStart(for: Date())
     @State private var selectedPlannerDate: Date = Calendar.current.startOfDay(for: Date())
+    @State private var pendingCalendarExportEntry: CashflowScheduledEntry?
+    @State private var calendarExportPayload: AppleCalendarEventExportPayload?
+    @State private var isCalendarExportInProgress = false
+    @State private var calendarEventStore = AppleCalendarEventStore()
 
     private enum PlannerDisplayMode: String, CaseIterable, Identifiable {
         case calendar
@@ -196,6 +202,39 @@ struct CashflowScheduledTransactionsView: View {
         } message: {
             Text(L("cashflow.scheduled.delete_transaction.message"))
         }
+        .confirmationDialog(
+            L("cashflow.calendar_export.confirmation.title", defaultValue: "Add to Calendar?"),
+            isPresented: Binding(
+                get: { pendingCalendarExportEntry != nil },
+                set: { if !$0 { pendingCalendarExportEntry = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(L("cashflow.calendar_export.confirmation.action", defaultValue: "Continue")) {
+                guard let entry = pendingCalendarExportEntry else { return }
+                pendingCalendarExportEntry = nil
+                beginCalendarExport(for: entry)
+            }
+            Button(L("cashflow.common.cancel"), role: .cancel) {
+                pendingCalendarExportEntry = nil
+            }
+        } message: {
+            Text(L(
+                "cashflow.calendar_export.confirmation.message",
+                defaultValue: "Millio will open Apple Calendar. Changes to this transaction later will not update the exported event."
+            ))
+        }
+        .sheet(item: $calendarExportPayload) { payload in
+            AppleCalendarEventEditorSheet(eventStore: calendarEventStore, payload: payload) { action in
+                calendarExportPayload = nil
+                if action == .saved {
+                    toastCenter.show(message: L(
+                        "cashflow.calendar_export.saved",
+                        defaultValue: "Event saved to Calendar"
+                    ))
+                }
+            }
+        }
         .onAppear {
             configurePlannerFocusIfNeeded()
         }
@@ -308,7 +347,7 @@ struct CashflowScheduledTransactionsView: View {
                 listCard(dayAgendaEmptyState)
             } else {
                 ForEach(selectedDayEntries) { entry in
-                    transactionRow(entry.transaction, entryKind: entry.kind, scheduledDate: entry.scheduledDate)
+                    transactionRow(entry.transaction, entryKind: entry.kind, scheduledDate: entry.scheduledDate, scheduledEntry: entry)
                         .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
@@ -320,8 +359,8 @@ struct CashflowScheduledTransactionsView: View {
             } else {
                 if !filteredRecurringTransactions.isEmpty {
                     plannerSectionHeader(plannerMonthlySectionTitle)
-                    ForEach(filteredRecurringTransactions) { transaction in
-                        transactionRow(transaction, entryKind: .recurringMonthly)
+                    ForEach(filteredPlannerEntries.filter { $0.kind == .recurringMonthly }) { entry in
+                        transactionRow(entry.transaction, entryKind: entry.kind, scheduledDate: entry.scheduledDate, scheduledEntry: entry)
                             .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -330,8 +369,8 @@ struct CashflowScheduledTransactionsView: View {
 
                 if !filteredPlannedTransactions.isEmpty {
                     plannerSectionHeader(plannerOneTimeSectionTitle)
-                    ForEach(filteredPlannedTransactions) { transaction in
-                        transactionRow(transaction, entryKind: .oneTimePlanned, scheduledDate: transaction.transactionDate)
+                    ForEach(filteredPlannerEntries.filter { $0.kind == .oneTimePlanned }) { entry in
+                        transactionRow(entry.transaction, entryKind: entry.kind, scheduledDate: entry.scheduledDate, scheduledEntry: entry)
                             .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -738,7 +777,8 @@ struct CashflowScheduledTransactionsView: View {
     private func transactionRow(
         _ transaction: CashflowTransaction,
         entryKind: CashflowScheduledEntryKind? = nil,
-        scheduledDate: Date? = nil
+        scheduledDate: Date? = nil,
+        scheduledEntry: CashflowScheduledEntry? = nil
     ) -> some View {
         let resolvedKind = entryKind ?? (transaction.isRecurringTemplate ? .recurringMonthly : .oneTimePlanned)
 
@@ -791,6 +831,17 @@ struct CashflowScheduledTransactionsView: View {
             editingTransaction = transaction
         }
         .contextMenu {
+            if let scheduledEntry, canExportToCalendar(scheduledEntry) {
+                Button {
+                    pendingCalendarExportEntry = scheduledEntry
+                } label: {
+                    Label(
+                        L("cashflow.calendar_export.action", defaultValue: "Add to Calendar"),
+                        systemImage: "calendar.badge.plus"
+                    )
+                }
+                .disabled(isCalendarExportInProgress)
+            }
             Button(L("cashflow.common.edit")) {
                 editingTransaction = transaction
             }
@@ -805,6 +856,72 @@ struct CashflowScheduledTransactionsView: View {
                 Label(L("cashflow.history.detail.delete"), systemImage: "trash")
             }
         }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            if let scheduledEntry, canExportToCalendar(scheduledEntry) {
+                Button {
+                    pendingCalendarExportEntry = scheduledEntry
+                } label: {
+                    Label(
+                        L("cashflow.calendar_export.action", defaultValue: "Add to Calendar"),
+                        systemImage: "calendar.badge.plus"
+                    )
+                }
+                .tint(kind.accentColor)
+                .disabled(isCalendarExportInProgress)
+            }
+        }
+    }
+
+    private func canExportToCalendar(_ entry: CashflowScheduledEntry) -> Bool {
+        guard mode == .planner else { return false }
+        return AppleCalendarEventExportEligibility.isEligible(
+            scheduledDate: entry.scheduledDate,
+            now: Date(),
+            calendar: .current
+        )
+    }
+
+    private func beginCalendarExport(for entry: CashflowScheduledEntry) {
+        guard !isCalendarExportInProgress, canExportToCalendar(entry) else { return }
+        guard let payload = calendarPayload(for: entry) else {
+            toastCenter.show(message: L(
+                "cashflow.calendar_export.unavailable",
+                defaultValue: "Calendar event could not be prepared"
+            ))
+            return
+        }
+
+        isCalendarExportInProgress = true
+        Task { @MainActor in
+            let authorizer = AppleCalendarEventExportAuthorizer(eventStore: calendarEventStore)
+            let state = await authorizer.authorizeForExport()
+            isCalendarExportInProgress = false
+
+            switch state {
+            case .granted:
+                calendarExportPayload = payload
+            case .denied, .restricted:
+                toastCenter.show(message: L(
+                    "cashflow.calendar_export.access_denied",
+                    defaultValue: "Calendar access is unavailable. Allow it in iPhone Settings to add an event."
+                ))
+            case .notDetermined:
+                toastCenter.show(message: L(
+                    "cashflow.calendar_export.unavailable",
+                    defaultValue: "Calendar event could not be prepared"
+                ))
+            }
+        }
+    }
+
+    private func calendarPayload(for entry: CashflowScheduledEntry) -> AppleCalendarEventExportPayload? {
+        let amount = amountString(for: entry.transaction)
+        let title = "\(entry.transaction.transactionType.displayName) — \(amount)"
+        return AppleCalendarEventExportPayloadBuilder(calendar: .current).makePayload(
+            title: title,
+            notes: entry.transaction.note,
+            scheduledDate: entry.scheduledDate
+        )
     }
 
     private func handleCreateTapped() {
