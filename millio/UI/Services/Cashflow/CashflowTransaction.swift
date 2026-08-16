@@ -925,6 +925,7 @@ final class CashflowTransaction: Persistable {
     func export() throws -> Data {
         var dict: [String: Any] = [
             "type": "CashflowTransaction",
+            "uniqueID": uniqueID,
             "transactionTypeRaw": transactionTypeRaw,
             "amount": amount,
             "currency": currency,

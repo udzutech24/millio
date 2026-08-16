@@ -13,6 +13,19 @@ struct CashflowStatementImportContractTests {
         #expect(preview.operations.first?.amount == "-123.45")
         #expect(preview.operations.first?.validatedAmount == Decimal(string: "-123.45"))
         #expect(preview.reconciliation.balanced == false)
+        #expect(preview.balances == nil)
+    }
+
+    @Test("Schema v1 decodes additive bank-declared balance evidence exactly")
+    func decodesOptionalBalanceEvidence() throws {
+        let data = Data(#"{"schemaVersion":1,"status":"ready","statement":{"bankId":"fixture","templateVersion":"v1","format":"csv","accountScope":"opaque","period":{"from":"2026-07-01","to":"2026-07-31"}},"operations":[],"reconciliation":{"balanced":true,"declaredIncome":"0","declaredExpense":"0","computedIncome":"0","computedExpense":"0","difference":"0","reasons":[]},"balances":{"opening":{"amount":"999999999999999999.001","asOf":"2026-07-01"},"closing":{"amount":"999999999999999999.001","asOf":"2026-07-31"},"currency":"RUB","source":"bank_declared","confidence":1,"reasons":[]},"warnings":[]}"#.utf8)
+        let preview = try JSONDecoder().decode(CashflowStatementPreviewDTO.self, from: data)
+
+        #expect(preview.balances?.currency == "RUB")
+        #expect(preview.balances?.source == "bank_declared")
+        #expect(preview.balances?.closing?.asOf == "2026-07-31")
+        #expect(preview.balances?.closing?.amount == "999999999999999999.001")
+        #expect(preview.balances?.closing?.validatedAmount == Decimal(string: "999999999999999999.001"))
     }
 
     @Test("Unavailable client fails honestly")

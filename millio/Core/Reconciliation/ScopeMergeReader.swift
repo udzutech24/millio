@@ -79,7 +79,7 @@ enum ScopeMergeReader {
         counts[Model.transaction] = transactions.count
         watermarks[Model.transaction] = transactions.map(\.updatedAt).max()
         for tx in transactions {
-            let fp = tx.transactionUniqueID
+            let fp = CashflowReconciliationIdentity.fingerprint(for: tx)
             identity.insert(fp)
             txByFP[fp, default: 0] += 1
         }

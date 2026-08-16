@@ -11,6 +11,7 @@
 		777D08212F2D1234004777D8 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 777D08202F2D1234004777D8 /* FirebaseCrashlytics */; };
 		77B22ECF2F146CDC005146C6 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77B22ECE2F146CDC005146C6 /* StoreKit.framework */; };
 		78A100022F50000200A10001 /* millioCurrencyWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 78A100012F50000100A10001 /* millioCurrencyWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		78B200022F60000200B20001 /* millioStatementShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 78B200012F60000100B20001 /* millioStatementShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -35,6 +36,13 @@
 			remoteGlobalIDString = 78A100092F50000900A10001;
 			remoteInfo = millioCurrencyWidgetExtension;
 		};
+		78B2000E2F60000E00B20001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 772BE5152F12DBED00193DE9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 78B200092F60000900B20001;
+			remoteInfo = millioStatementShareExtension;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -45,6 +53,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				78A100022F50000200A10001 /* millioCurrencyWidgetExtension.appex in Embed Foundation Extensions */,
+				78B200022F60000200B20001 /* millioStatementShareExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -60,6 +69,7 @@
 		77E1A0012F40000100E1A001 /* millio/Config/Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = millio/Config/Debug.xcconfig; sourceTree = "<group>"; };
 		77E1A0022F40000200E1A001 /* millio/Config/Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = millio/Config/Release.xcconfig; sourceTree = "<group>"; };
 		78A100012F50000100A10001 /* millioCurrencyWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = millioCurrencyWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		78B200012F60000100B20001 /* millioStatementShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = millioStatementShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -79,6 +89,13 @@
 				Info.plist,
 			);
 			target = 78A100092F50000900A10001 /* millioCurrencyWidgetExtension */;
+		};
+		78B200052F60000500B20001 /* Exceptions for "millioStatementShareExtension" folder in "millioStatementShareExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 78B200092F60000900B20001 /* millioStatementShareExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -114,6 +131,14 @@
 			path = millioCurrencyWidgetExtension;
 			sourceTree = "<group>";
 		};
+		78B200042F60000400B20001 /* millioStatementShareExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				78B200052F60000500B20001 /* Exceptions for "millioStatementShareExtension" folder in "millioStatementShareExtension" target */,
+			);
+			path = millioStatementShareExtension;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -147,6 +172,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		78B200062F60000600B20001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -161,6 +193,7 @@
 				772BE52F2F12DBEF00193DE9 /* millioTests */,
 				772BE5392F12DBEF00193DE9 /* millioUITests */,
 				78A100042F50000400A10001 /* millioCurrencyWidgetExtension */,
+				78B200042F60000400B20001 /* millioStatementShareExtension */,
 				77B22ECD2F146CDC005146C6 /* Frameworks */,
 				772BE51E2F12DBED00193DE9 /* Products */,
 			);
@@ -173,6 +206,7 @@
 				772BE52C2F12DBEF00193DE9 /* millioTests.xctest */,
 				772BE5362F12DBEF00193DE9 /* millioUITests.xctest */,
 				78A100012F50000100A10001 /* millioCurrencyWidgetExtension.appex */,
+				78B200012F60000100B20001 /* millioStatementShareExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -202,6 +236,7 @@
 			);
 			dependencies = (
 				78A1000F2F50000F00A10001 /* PBXTargetDependency */,
+				78B2000F2F60000F00B20001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				772BE51F2F12DBED00193DE9 /* millio */,
@@ -284,6 +319,29 @@
 			productReference = 78A100012F50000100A10001 /* millioCurrencyWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		78B200092F60000900B20001 /* millioStatementShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 78B2000C2F60000C00B20001 /* Build configuration list for PBXNativeTarget "millioStatementShareExtension" */;
+			buildPhases = (
+				78B200082F60000800B20001 /* Sources */,
+				78B200062F60000600B20001 /* Frameworks */,
+				78B200072F60000700B20001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				78A100032F50000300A10001 /* Shared */,
+				78B200042F60000400B20001 /* millioStatementShareExtension */,
+			);
+			name = millioStatementShareExtension;
+			packageProductDependencies = (
+			);
+			productName = millioStatementShareExtension;
+			productReference = 78B200012F60000100B20001 /* millioStatementShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -306,6 +364,9 @@
 						TestTargetID = 772BE51C2F12DBED00193DE9;
 					};
 					78A100092F50000900A10001 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					78B200092F60000900B20001 = {
 						CreatedOnToolsVersion = 26.2;
 					};
 				};
@@ -337,6 +398,7 @@
 				772BE52B2F12DBEF00193DE9 /* millioTests */,
 				772BE5352F12DBEF00193DE9 /* millioUITests */,
 				78A100092F50000900A10001 /* millioCurrencyWidgetExtension */,
+				78B200092F60000900B20001 /* millioStatementShareExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -365,6 +427,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		78A100072F50000700A10001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		78B200072F60000700B20001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -430,6 +499,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		78B200082F60000800B20001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -447,6 +523,11 @@
 			isa = PBXTargetDependency;
 			target = 78A100092F50000900A10001 /* millioCurrencyWidgetExtension */;
 			targetProxy = 78A1000E2F50000E00A10001 /* PBXContainerItemProxy */;
+		};
+		78B2000F2F60000F00B20001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 78B200092F60000900B20001 /* millioStatementShareExtension */;
+			targetProxy = 78B2000E2F60000E00B20001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -584,7 +665,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = millio/millio.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = RZ9K4783T9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -603,7 +684,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.9;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.millio.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -624,7 +705,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = millio/millio.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = RZ9K4783T9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -643,7 +724,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.9;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.millio.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -661,7 +742,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = RZ9K4783T9;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
@@ -683,7 +764,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = RZ9K4783T9;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
@@ -704,7 +785,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = RZ9K4783T9;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
@@ -725,7 +806,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = RZ9K4783T9;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
@@ -748,7 +829,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = millioCurrencyWidgetExtension/millioCurrencyWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = RZ9K4783T9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = millioCurrencyWidgetExtension/Info.plist;
@@ -758,7 +839,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.9;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.millio.app.currencywidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -777,7 +858,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = millioCurrencyWidgetExtension/millioCurrencyWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = RZ9K4783T9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = millioCurrencyWidgetExtension/Info.plist;
@@ -787,13 +868,67 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.9;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.millio.app.currencywidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		78B2000A2F60000A00B20001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = millioStatementShareExtension/millioStatementShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = RZ9K4783T9;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = millioStatementShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.millio.app.statement-share";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		78B2000B2F60000B00B20001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = millioStatementShareExtension/millioStatementShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = RZ9K4783T9;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = millioStatementShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.millio.app.statement-share";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -844,6 +979,15 @@
 			buildConfigurations = (
 				78A1000A2F50000A00A10001 /* Debug */,
 				78A1000B2F50000B00A10001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		78B2000C2F60000C00B20001 /* Build configuration list for PBXNativeTarget "millioStatementShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				78B2000A2F60000A00B20001 /* Debug */,
+				78B2000B2F60000B00B20001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -14,21 +14,25 @@ struct FinanceAddAccountView: View {
     let preselectedGroup: AccountGroup?
     let preselectedAccountType: FinanceAccountType?
     let presentationStyle: FinanceEditorPresentationStyle
+    let incomingStatementController: CashflowStatementImportController?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
+    @Environment(\.diContainer) private var diContainer
 
     init(
         viewModel: FinanceViewModel,
         preselectedGroup: AccountGroup? = nil,
         preselectedAccountType: FinanceAccountType? = nil,
-        presentationStyle: FinanceEditorPresentationStyle = .modal
+        presentationStyle: FinanceEditorPresentationStyle = .modal,
+        incomingStatementController: CashflowStatementImportController? = nil
     ) {
         self.viewModel = viewModel
         self.preselectedGroup = preselectedGroup
         self.preselectedAccountType = preselectedAccountType
         self.presentationStyle = presentationStyle
+        self.incomingStatementController = incomingStatementController
     }
     
     @State private var selectedAccountType: FinanceAccountType = .card
@@ -60,6 +64,8 @@ struct FinanceAddAccountView: View {
     @State private var realEstatePhotoData: [Data] = []
     @State private var isProcessingRealEstatePhotos = false
     @State private var realEstatePhotoError: String?
+    @State private var statementDraft: AccountStatementCreateDraft?
+    @State private var showStatementOnboarding = false
 
     private enum HintsPrefs {
         static let hiddenKey = "finance_add_account_hints_hidden"
@@ -498,6 +504,9 @@ struct FinanceAddAccountView: View {
                 },
                 onCardDataChanged: { card in
                     self.cardData = card
+                    if card.cardType != .debit {
+                        invalidateStatementDraft()
+                    }
                 }
             ) {
                 groupSection
@@ -619,6 +628,7 @@ struct FinanceAddAccountView: View {
                     if selectedProductOption == .house {
                         realEstateCreationSection
                     }
+                    statementOnboardingSection
                 }
             }
             .padding(.horizontal, 20)
@@ -713,6 +723,17 @@ struct FinanceAddAccountView: View {
                         selectedGroupID = createdGroup.groupUniqueID
                     }
                     groupIDsBeforeCreate = []
+            }
+        }
+        .sheet(isPresented: $showStatementOnboarding) {
+            if let statementDraft {
+                AccountStatementOnboardingFlow(
+                    draft: statementDraft,
+                    modelContext: viewModel.modelContext,
+                    statementClient: statementImportClient,
+                    existingController: incomingStatementController,
+                    onComplete: { dismiss() }
+                )
             }
         }
         .toolbar {
@@ -1161,6 +1182,116 @@ struct FinanceAddAccountView: View {
         }
     }
 
+    @ViewBuilder
+    private var statementOnboardingSection: some View {
+        if AccountStatementOnboardingPresentationPolicy.isEligible(
+            option: selectedProductOption,
+            cardType: cardData?.cardType
+        ) {
+            VStack(alignment: .leading, spacing: 10) {
+                FinancesSectionHeader(title: localized("finances.statement.section", fallback: "Bank statement"))
+                FinancesGlassCard {
+                    Button {
+                        presentStatementOnboarding()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "doc.text.magnifyingglass")
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(localized("finances.statement.upload", fallback: "Upload statement"))
+                                    .font(.system(size: 16, weight: .semibold))
+                                Text(localized("finances.statement.upload_hint", fallback: "Create the account and import reviewed operations in one step"))
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(AppColors.textTertiary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isValid)
+                }
+            }
+        }
+    }
+
+    private var statementImportClient: any CashflowStatementImportClient {
+        guard let diContainer else { return UnavailableCashflowStatementImportClient() }
+        return diContainer.apiClientFactory.makeCashflowStatementImportClient(authService: diContainer.authService)
+    }
+
+    private func presentStatementOnboarding() {
+        guard validateEntitlementsForSave(),
+              let kind = newCoreMoneyKindForCurrentSelection,
+              let command = try? moneyCreateCommand(kind: kind) else { return }
+        statementDraft = AccountStatementCreateDraft(createTemplate: command)
+        showStatementOnboarding = true
+    }
+
+    private func invalidateStatementDraft() {
+        statementDraft = nil
+        showStatementOnboarding = false
+    }
+
+    private func moneyCreateCommand(kind: AccountKind, accountID: UUID = UUID()) throws -> CreateProductCommand {
+        let trimmedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = trimmedName.isEmpty ? selectedProductTypeTitle : trimmedName
+        let currency: String
+        let openingBalance: Decimal
+        var cardMeta: CardMeta?
+
+        switch kind {
+        case .cash, .debitCard:
+            guard let cardData else { throw AccountStatementOnboardingError.unsupportedProduct }
+            currency = cardData.currency
+            openingBalance = Decimal(cardData.balance)
+            cardMeta = CardMeta(
+                bank: cardData.bank == .other ? nil : cardData.bank.rawValue,
+                last4: cardData.cardNumber.isEmpty ? nil : cardData.cardNumber,
+                creditLimit: cardData.cardType == .credit ? cardData.creditLimit.map { Decimal($0) } : nil
+            )
+        default:
+            guard let investmentData else { throw AccountStatementOnboardingError.unsupportedProduct }
+            currency = investmentData.currency
+            openingBalance = Decimal(investmentData.amount)
+        }
+
+        let resolved = try FinanceProductCreationCommandResolver.resolve(.init(
+            option: selectedProductOption,
+            name: resolvedName,
+            currency: currency,
+            amount: openingBalance,
+            includeInTotal: cardData?.includeInTotal ?? investmentData?.includeInTotal ?? true,
+            groupID: targetGroup?.id,
+            cardType: cardData?.cardType,
+            bank: cardData?.bank,
+            cardLast4: cardData?.cardNumber,
+            creditLimit: cardMeta?.creditLimit,
+            statementDay: cardData?.statementDay,
+            dueDay: cardData?.dueDay,
+            minPayment: cardData?.minPayment.map { Decimal($0) },
+            graceDays: cardData?.graceDays,
+            note: cardData?.note
+        ))
+        return CreateProductCommand(
+            accountID: accountID,
+            productType: resolved.productType,
+            name: resolved.name,
+            currency: resolved.currency,
+            openingBalance: resolved.openingBalance,
+            includeInTotal: resolved.includeInTotal,
+            order: resolved.order,
+            groupID: resolved.groupID,
+            metadata: resolved.metadata,
+            note: resolved.note,
+            date: resolved.date,
+            initialMarketPurchase: resolved.initialMarketPurchase,
+            calendar: resolved.calendar
+        )
+    }
+
     /// Создание обязательства («Кредит»/«Долг») на новом ядре event-sourcing (Фаза 2).
     /// Никогда не создаёт старый `Credit`/`Investment(debt)` — единственная точка записи: `AccountsCoreService`.
     private func createObligationAccountOnNewCore(kind: AccountKind) {
@@ -1431,6 +1562,9 @@ struct FinanceAddAccountView: View {
             return
         }
 
+        if option != selectedProductOption {
+            invalidateStatementDraft()
+        }
         selectedAccountType = selection.accountType
         selectedInvestmentCategory = selection.investmentCategory
         selectedInvestmentPreset = selection.investmentPreset

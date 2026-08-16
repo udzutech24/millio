@@ -155,11 +155,54 @@ struct RootTabView: View {
                 .presentationDetents([.fraction(0.32)])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(item: incomingStatementBinding) { item in
+            if let financeViewModel, let cashflowViewModel {
+                IncomingStatementDestinationView(
+                    item: item,
+                    financeViewModel: financeViewModel,
+                    cashflowViewModel: cashflowViewModel,
+                    statementClient: statementImportClient,
+                    complete: { finishIncomingStatement(item) },
+                    discard: { finishIncomingStatement(item) }
+                )
+            }
+        }
         .onChange(of: dashboardPeriodDays) { _, newValue in
             SettingsManager.shared.dashboardDeltaPeriodDays = newValue
             showDeltaPeriodPicker = false
             Task { await financeViewModel?.computeDashboardSparkline() }
         }
+    }
+
+    private var incomingStatementBinding: Binding<IncomingStatementInboxItem?> {
+        Binding(
+            get: {
+                guard !showIncomeSheet,
+                      !showExpenseSheet,
+                      !showTransferSheet,
+                      !showProfileSheet,
+                      !router.showingSubscription,
+                      !showDeltaPeriodPicker,
+                      !appState.isStatementOnboardingActive,
+                      appState.pendingIncomingBackupURL == nil else { return nil }
+                return appState.pendingIncomingStatementItem
+            },
+            set: { value in appState.pendingIncomingStatementItem = value }
+        )
+    }
+
+    private var statementImportClient: any CashflowStatementImportClient {
+        guard let diContainer else { return UnavailableCashflowStatementImportClient() }
+        return diContainer.apiClientFactory.makeCashflowStatementImportClient(authService: diContainer.authService)
+    }
+
+    private func finishIncomingStatement(_ item: IncomingStatementInboxItem) {
+        do {
+            try IncomingStatementCoordinator.appGroup().complete(item)
+        } catch {
+            AppLogger.log(.error, category: "StatementIngress", "Statement cleanup failed code=cleanup_failed")
+        }
+        appState.pendingIncomingStatementItem = nil
     }
 
     // MARK: - Tab Content

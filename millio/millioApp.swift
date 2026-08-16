@@ -88,6 +88,7 @@ struct millioApp: App {
     @State private var backendAvailabilityTask: Task<Void, Never>?
     @State private var startupCoordinator = StartupCoordinator(initialScope: .guest)
     @State private var appRefreshCoordinator = AppRefreshCoordinator()
+    @State private var incomingStatementCoordinator: IncomingStatementCoordinator?
     private let appLockCoordinator = AppLockLifecycleCoordinator()
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "App")
     private let runtimeEnvironment: AppRuntimeEnvironment
@@ -101,7 +102,7 @@ struct millioApp: App {
         _activeScopeStoreExistedBeforeBinding = State(initialValue: Self.storeExists(for: initialScope))
         _activeDataScope = State(initialValue: initialScope)
         _activeModelContainer = State(initialValue: Self.makeModelContainer(for: initialScope))
-        if runtimeEnvironment.isScreenshotMode {
+        if runtimeEnvironment.isScreenshotMode || runtimeEnvironment.isUnifiedEntryPerformanceMode {
             let appState = AppState()
             appState.isGuestModeEnabled = true
             appState.isAppLocked = false
@@ -180,8 +181,15 @@ struct millioApp: App {
                 )
                 .task {
                     guard !runtimeEnvironment.isUITesting else { return }
-                    if runtimeEnvironment.isScreenshotMode {
-                        await ScreenshotDataSeeder.seed(into: container.mainContext)
+                    if runtimeEnvironment.isScreenshotMode || runtimeEnvironment.isUnifiedEntryPerformanceMode {
+                        if runtimeEnvironment.isUnifiedEntryPerformanceMode {
+                            try? UnifiedEntryPerformanceFixtureSeeder.seed(into: container.mainContext)
+                            // Dispatch after RootTabView is mounted; a value set during
+                            // App initialization is not an observable deep-link event.
+                            appState.pendingOpenCashflowIncome = true
+                        } else {
+                            await ScreenshotDataSeeder.seed(into: container.mainContext)
+                        }
                         return
                     }
                     await startupCoordinator.runColdStartIfNeeded {
@@ -193,7 +201,9 @@ struct millioApp: App {
                     appLockCoordinator.handleWillResignActive(appState: appState)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                    guard !runtimeEnvironment.isUITesting, !runtimeEnvironment.isScreenshotMode else { return }
+                    guard !runtimeEnvironment.isUITesting,
+                          !runtimeEnvironment.isScreenshotMode,
+                          !runtimeEnvironment.isUnifiedEntryPerformanceMode else { return }
                     Task { @MainActor in
                         await appRefreshCoordinator.refreshSubscriptionIfNeeded(
                             reason: .appDidBecomeActive,
@@ -204,6 +214,7 @@ struct millioApp: App {
                             appState: appState,
                             unlockWithBiometrics: unlockWithBiometricsIfEnabled
                         )
+                        presentNextIncomingStatementIfReady()
 
                         await financeStartupWarmupUseCase?.warmupIfNeeded()
                         await runHistoricalMaintenancePipeline()
@@ -212,9 +223,17 @@ struct millioApp: App {
                 .onOpenURL { url in
                     if url.pathExtension == "millio-backup" {
                         appState.pendingIncomingBackupURL = url
+                    } else if IncomingStatementFileKind.allCases.map(\.filenameExtension).contains(url.pathExtension.lowercased()) {
+                        handleIncomingStatementURL(url)
                     } else {
                         AppWidgetDeepLinkHandler.handle(url: url, appState: appState)
                     }
+                }
+                .onChange(of: appState.lifecycle) { _, _ in
+                    presentNextIncomingStatementIfReady()
+                }
+                .onChange(of: appState.isAppLocked) { _, _ in
+                    presentNextIncomingStatementIfReady()
                 }
             } else {
                 ErrorView(
@@ -230,6 +249,47 @@ struct millioApp: App {
                 .environment(appState)
             }
         }
+    }
+
+    @MainActor
+    private func handleIncomingStatementURL(_ url: URL) {
+        do {
+            let coordinator = try resolvedIncomingStatementCoordinator()
+            _ = try coordinator.stageDirectURL(url)
+            presentNextIncomingStatementIfReady()
+        } catch {
+            // Financial filenames, amounts and source paths must never enter logs.
+            AppLogger.log(.error, category: "StatementIngress", "Incoming statement rejected code=validation_failed")
+        }
+    }
+
+    @MainActor
+    private func presentNextIncomingStatementIfReady() {
+        guard appState.pendingIncomingStatementItem == nil else { return }
+        do {
+            let coordinator = try resolvedIncomingStatementCoordinator()
+            let readiness: IncomingStatementReadiness
+            if appState.isAppLocked {
+                readiness = .locked
+            } else if appState.lifecycle != .ready || activeModelContainer == nil {
+                readiness = .storeUnavailable
+            } else if appState.isRestoreInProgress || isSwitchingScope || isReconciling {
+                readiness = .modalBusy
+            } else {
+                readiness = .ready
+            }
+            appState.pendingIncomingStatementItem = try coordinator.nextItem(readiness: readiness)
+        } catch {
+            AppLogger.log(.error, category: "StatementIngress", "Statement inbox unavailable code=inbox_failed")
+        }
+    }
+
+    @MainActor
+    private func resolvedIncomingStatementCoordinator() throws -> IncomingStatementCoordinator {
+        if let incomingStatementCoordinator { return incomingStatementCoordinator }
+        let coordinator = try IncomingStatementCoordinator.appGroup()
+        incomingStatementCoordinator = coordinator
+        return coordinator
     }
     
     @MainActor

@@ -85,7 +85,9 @@ enum ScopeMergeDedup {
 
     private static func multisetTransactions(_ context: ModelContext, targets: [ScopeFingerprint: Int]) throws {
         let txs = try context.fetch(FetchDescriptor<CashflowTransaction>())
-        let instances = txs.map { (fingerprint: $0.transactionUniqueID, updatedAt: $0.updatedAt, ref: $0) }
+        let instances = txs.map {
+            (fingerprint: CashflowReconciliationIdentity.fingerprint(for: $0), updatedAt: $0.updatedAt, ref: $0)
+        }
         for tx in MultisetReconciler.instancesToDelete(instances, targets: targets) {
             context.delete(tx)
         }

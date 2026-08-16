@@ -125,6 +125,9 @@ final class AppState {
     var pendingOpenConverterService: Bool = false
     /// One-shot trigger: incoming backup file URL (from Files, AirDrop, drag-and-drop).
     var pendingIncomingBackupURL: URL?
+    /// App-owned, validated statement copy. Presentation is deferred until unlock and store readiness.
+    var pendingIncomingStatementItem: IncomingStatementInboxItem?
+    var isStatementOnboardingActive = false
     var backendRegionCode: String = ""
     var backendBaseURLString: String = ""
     var isBackendFallbackActive: Bool = false

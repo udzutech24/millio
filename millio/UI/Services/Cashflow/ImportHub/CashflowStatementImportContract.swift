@@ -26,6 +26,7 @@ struct CashflowStatementPreviewDTO: Decodable, Equatable {
     let statement: Statement
     let operations: [Operation]
     let reconciliation: Reconciliation
+    let balances: BalanceEvidence?
     let warnings: [String]
 
     struct Statement: Decodable, Equatable {
@@ -81,6 +82,24 @@ struct CashflowStatementPreviewDTO: Decodable, Equatable {
         let computedExpense: String
         let difference: String
         let reasons: [String]
+    }
+
+    struct BalanceEvidence: Decodable, Equatable {
+        let opening: BalancePoint?
+        let closing: BalancePoint?
+        let currency: String
+        let source: String
+        let confidence: Double
+        let reasons: [String]
+    }
+
+    struct BalancePoint: Decodable, Equatable {
+        let amount: String
+        let asOf: String
+
+        var validatedAmount: Decimal? {
+            Decimal(string: amount, locale: Locale(identifier: "en_US_POSIX"))
+        }
     }
 }
 

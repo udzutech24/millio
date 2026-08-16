@@ -86,6 +86,9 @@ struct CashflowTransactionImporter: ModelImporter {
         let investmentID = dict["investmentID"] as? String
         let note = dict["note"] as? String
         let operationGroupID = dict["operationGroupID"] as? String
+        let uniqueID = dict["uniqueID"] as? String
+        let importSourceRaw = dict["importSourceRaw"] as? String
+        let importReferenceKey = dict["importReferenceKey"] as? String
         let assetQuantityBefore = dict["assetQuantityBefore"] as? Double
         let assetQuantityAfter = dict["assetQuantityAfter"] as? Double
         let assetUnitPriceBefore = dict["assetUnitPriceBefore"] as? Double
@@ -129,6 +132,8 @@ struct CashflowTransactionImporter: ModelImporter {
             expenseCategoryRaw: expenseCategoryRaw,
             note: note,
             operationGroupID: operationGroupID,
+            importSourceRaw: importSourceRaw,
+            importReferenceKey: importReferenceKey,
             recurrenceRule: recurrenceRule,
             recurrenceWeekdays: recurrenceWeekdays,
             recurrenceSeriesID: recurrenceSeriesID,
@@ -137,6 +142,7 @@ struct CashflowTransactionImporter: ModelImporter {
         )
         transaction.createdAt = createdAt
         transaction.updatedAt = updatedAt
+        if let uniqueID, !uniqueID.isEmpty { transaction.uniqueID = uniqueID }
         transaction.exchangeRate = exchangeRate
         transaction.exchangeRateDate = exchangeRateDate
         transaction.exchangeRateCurrency = exchangeRateCurrency

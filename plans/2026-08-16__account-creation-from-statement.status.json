@@ -1,0 +1,15 @@
+{
+  "_generated": false,
+  "planFile": "2026-08-16__account-creation-from-statement.md",
+  "title": "Account creation from bank statement",
+  "updated": "2026-08-16T13:20:00+03:00",
+  "status": "in_progress",
+  "phases": [
+    { "name": "Phase 1 — balance evidence contract and characterization", "status": "implemented_pending_real_balance_fixture" },
+    { "name": "Phase 2 — reusable statement staging and atomic coordinator", "status": "completed" },
+    { "name": "Phase 3 — create-flow composition using existing review", "status": "completed" },
+    { "name": "Phase 3A — external file ingress and Share Sheet UX", "status": "completed" },
+    { "name": "Phase 4 — integration, localization and device acceptance", "status": "pending" },
+    { "name": "Phase 5 — separately authorized backend release", "status": "pending" }
+  ]
+}

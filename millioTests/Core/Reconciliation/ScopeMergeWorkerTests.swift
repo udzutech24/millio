@@ -44,6 +44,29 @@ struct ScopeMergeWorkerTests {
         return tx
     }
 
+    @discardableResult
+    private func insertStatementTx(
+        _ container: ModelContainer,
+        fingerprint: String,
+        createdAt: TimeInterval,
+        updatedAt: TimeInterval
+    ) -> CashflowTransaction {
+        let tx = CashflowTransaction(
+            transactionType: .expense,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: fixedDate,
+            importSourceRaw: CashflowStatementStagingService.importSource,
+            importReferenceKey: fingerprint,
+            affectsCardBalance: false,
+            affectsCashflowTotals: true
+        )
+        tx.createdAt = Date(timeIntervalSince1970: createdAt)
+        tx.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        container.mainContext.insert(tx)
+        return tx
+    }
+
     private func insertCoreAccount(_ container: ModelContainer, id: UUID, name: String) {
         let account = Account(id: id, name: name, kind: .manualAsset, currency: "RUB")
         let event = AccountEvent(id: UUID(), account: account, date: fixedDate,
@@ -145,6 +168,22 @@ struct ScopeMergeWorkerTests {
             let afterSecond = count(CashflowTransaction.self, in: user)
             #expect(afterFirst == 2)
             #expect(afterSecond == 2) // счётчик стабилен — идемпотентно
+        }
+    }
+
+    @Test func statementFingerprint_convergesAcrossScopesDespiteDifferentCreationTime() async throws {
+        try await withRegistry {
+            let guest = makeContainer(); let user = makeContainer()
+            insertStatementTx(guest, fingerprint: "bank-row", createdAt: 100, updatedAt: 100)
+            insertStatementTx(user, fingerprint: "bank-row", createdAt: 200, updatedAt: 200)
+            save(guest); save(user)
+
+            _ = try await runMerge(guest: guest, user: user)
+
+            #expect(count(CashflowTransaction.self, in: user) == 1)
+            let survivor = try #require(ModelContext(user).fetch(FetchDescriptor<CashflowTransaction>()).first)
+            #expect(survivor.importReferenceKey == "bank-row")
+            #expect(survivor.createdAt == Date(timeIntervalSince1970: 200))
         }
     }
 

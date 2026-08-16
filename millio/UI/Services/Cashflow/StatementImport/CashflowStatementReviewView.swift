@@ -1,14 +1,82 @@
 import SwiftData
 import SwiftUI
 
+enum CashflowStatementReviewLocalization {
+    static var monthHint: String { L("cashflow.statement_review.month_hint") }
+    static var reconciliationPassed: String { L("cashflow.statement_review.reconciliation_passed") }
+    static var reconciliationAttention: String { L("cashflow.statement_review.reconciliation_attention") }
+    static var reviewMode: String { L("cashflow.statement_review.review_mode") }
+    static var needsAttention: String { L("cashflow.statement_review.needs_attention") }
+    static var categories: String { L("cashflow.statement_review.categories") }
+    static var all: String { L("cashflow.statement_review.all") }
+    static var searchPrompt: String { L("cashflow.statement_review.search_prompt") }
+    static var title: String { L("cashflow.statement_review.title") }
+    static var noImportableOperations: String { L("cashflow.statement_review.no_importable_operations") }
+    static var confirmationHint: String { L("cashflow.statement_review.confirmation_hint") }
+    static var reviewedEmptyTitle: String { L("cashflow.statement_review.reviewed_empty_title") }
+    static var reviewedEmptyDescription: String { L("cashflow.statement_review.reviewed_empty_description") }
+    static var category: String { L("cashflow.statement_review.category") }
+    static var transferExcluded: String { L("cashflow.statement_review.transfer_excluded") }
+    static var reclassify: String { L("cashflow.statement_review.reclassify") }
+    static var asExpense: String { L("cashflow.statement_review.as_expense") }
+    static var asIncome: String { L("cashflow.statement_review.as_income") }
+    static var internalTransferExcluded: String { L("cashflow.statement_review.internal_transfer_excluded") }
+    static var duplicateExcluded: String { L("cashflow.statement_review.duplicate_excluded") }
+    static var technicalExcluded: String { L("cashflow.statement_review.technical_excluded") }
+    static var userExcluded: String { L("cashflow.statement_review.user_excluded") }
+    static var excludeAllTransfers: String { L("cashflow.statement_review.exclude_all_transfers") }
+    static var month: String { L("cashflow.statement_review.month") }
+    static var proposedImport: String { L("cashflow.statement_review.proposed_import") }
+    static var importedCount: String { L("cashflow.statement_review.imported_count") }
+    static var excludedCount: String { L("cashflow.statement_review.excluded_count") }
+    static var reclassifiedCount: String { L("cashflow.statement_review.reclassified_count") }
+    static var sourceReconciliation: String { L("cashflow.statement_review.source_reconciliation") }
+    static var balanced: String { L("cashflow.statement_review.balanced") }
+    static var discrepancy: String { L("cashflow.statement_review.discrepancy") }
+    static var difference: String { L("cashflow.statement_review.difference") }
+    static var account: String { L("cashflow.statement_review.account") }
+    static var linkToAccount: String { L("cashflow.statement_review.link_to_account") }
+    static var noMatchingAccounts: String { L("cashflow.statement_review.no_matching_accounts") }
+    static var selectAccount: String { L("cashflow.statement_review.select_account") }
+    static var balanceUnchanged: String { L("cashflow.statement_review.balance_unchanged") }
+    static var confirmationTitle: String { L("cashflow.statement_review.confirmation_title") }
+    static var cancel: String { L("common.cancel") }
+    static var openReview: String { L("cashflow.statement_review.open_review") }
+
+    static func operationCount(_ count: Int) -> String {
+        String.localizedStringWithFormat(L("cashflow.statement_review.operation_count"), count)
+    }
+
+    static func importCount(_ count: Int) -> String {
+        String.localizedStringWithFormat(L("cashflow.statement_review.import_count"), count)
+    }
+
+    static func confirmImportCount(_ count: Int) -> String {
+        String.localizedStringWithFormat(L("cashflow.statement_review.confirm_import_count"), count)
+    }
+}
+
 struct CashflowStatementReviewView: View {
     @ObservedObject var viewModel: CashflowViewModel
     @ObservedObject var controller: CashflowStatementImportController
     let month: Date
+    let context: CashflowStatementReviewContext
     @Environment(\.modelContext) private var modelContext
     @State private var filter: CashflowStatementReviewFilter = .needsAttention
     @State private var searchText = ""
     @State private var showConfirmation = false
+
+    init(
+        viewModel: CashflowViewModel,
+        controller: CashflowStatementImportController,
+        month: Date,
+        context: CashflowStatementReviewContext = .cashflowImport
+    ) {
+        self.viewModel = viewModel
+        self.controller = controller
+        self.month = month
+        self.context = context
+    }
 
     private var rows: [CashflowStatementReviewRow] {
         let filtered = CashflowStatementReviewPresentationBuilder.rows(controller.reviewRows, filter: filter)
@@ -26,24 +94,24 @@ struct CashflowStatementReviewView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(month.formatted(.dateTime.month(.wide).year().locale(AppLocalization.currentAppLocale)))
                             .font(.headline)
-                        Text("Выписка будет добавлена только в этот месяц")
+                        Text(CashflowStatementReviewLocalization.monthHint)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
                 if let preview = controller.preview {
                     Label(
-                        preview.reconciliation.balanced ? "Сверка выписки пройдена" : "Сверка требует внимания",
+                        preview.reconciliation.balanced ? CashflowStatementReviewLocalization.reconciliationPassed : CashflowStatementReviewLocalization.reconciliationAttention,
                         systemImage: preview.reconciliation.balanced ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
                     )
                     .foregroundStyle(preview.reconciliation.balanced ? .green : .orange)
                 }
             }
 
-            Picker("Режим проверки", selection: $filter) {
-                Text("Требуют внимания").tag(CashflowStatementReviewFilter.needsAttention)
-                Text("Категории").tag(CashflowStatementReviewFilter.categories)
-                Text("Все").tag(CashflowStatementReviewFilter.all)
+            Picker(CashflowStatementReviewLocalization.reviewMode, selection: $filter) {
+                Text(CashflowStatementReviewLocalization.needsAttention).tag(CashflowStatementReviewFilter.needsAttention)
+                Text(CashflowStatementReviewLocalization.categories).tag(CashflowStatementReviewFilter.categories)
+                Text(CashflowStatementReviewLocalization.all).tag(CashflowStatementReviewFilter.all)
             }
             .pickerStyle(.segmented)
             .listRowBackground(Color.clear)
@@ -54,20 +122,34 @@ struct CashflowStatementReviewView: View {
                 operationRows
             }
         }
-        .searchable(text: $searchText, prompt: "Найти операцию")
-        .navigationTitle("Проверка выписки")
+        .searchable(text: $searchText, prompt: CashflowStatementReviewLocalization.searchPrompt)
+        .navigationTitle(CashflowStatementReviewLocalization.title)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             Button {
-                showConfirmation = true
+                switch context {
+                case .cashflowImport:
+                    showConfirmation = true
+                case .accountOnboarding(let continueReview):
+                    continueReview()
+                }
             } label: {
-                Label("Импортировать \(controller.includedFingerprints.count) операций", systemImage: "checkmark.shield.fill")
+                Label(
+                    context.isAccountOnboarding
+                        ? String(localized: "finances.statement.continue", defaultValue: "Continue")
+                        : CashflowStatementReviewLocalization.importCount(controller.includedFingerprints.count),
+                    systemImage: "checkmark.shield.fill"
+                )
                     .font(.headline)
                     .frame(maxWidth: .infinity, minHeight: 50)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(controller.includedFingerprints.isEmpty)
-            .accessibilityHint(controller.includedFingerprints.isEmpty ? "Нет операций, доступных для импорта" : "Открывает итоговое подтверждение")
+            .disabled(controller.includedFingerprints.isEmpty && !context.isAccountOnboarding)
+            .accessibilityHint(
+                controller.includedFingerprints.isEmpty && !context.isAccountOnboarding
+                    ? CashflowStatementReviewLocalization.noImportableOperations
+                    : CashflowStatementReviewLocalization.confirmationHint
+            )
             .padding(.horizontal)
             .padding(.vertical, 8)
             .background(.ultraThinMaterial)
@@ -85,7 +167,7 @@ struct CashflowStatementReviewView: View {
     @ViewBuilder
     private var operationRows: some View {
         if rows.isEmpty {
-            ContentUnavailableView("Всё проверено", systemImage: "checkmark.circle", description: Text("Операций, требующих внимания, нет."))
+            ContentUnavailableView(CashflowStatementReviewLocalization.reviewedEmptyTitle, systemImage: "checkmark.circle", description: Text(CashflowStatementReviewLocalization.reviewedEmptyDescription))
                 .listRowBackground(Color.clear)
         } else {
             Section {
@@ -104,7 +186,7 @@ struct CashflowStatementReviewView: View {
                     HStack {
                         VStack(alignment: .leading) {
                             Text(categoryTitle(group.key.categoryRaw, kind: group.key.kind))
-                            Text("\(group.rows.count) операций")
+                            Text(CashflowStatementReviewLocalization.operationCount(group.rows.count))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -139,7 +221,7 @@ struct CashflowStatementReviewView: View {
     private func dispositionControls(_ row: CashflowStatementReviewRow) -> some View {
         switch row.disposition {
         case .included(let kind):
-            Picker("Категория", selection: Binding(
+            Picker(CashflowStatementReviewLocalization.category, selection: Binding(
                 get: { controller.categoryByFingerprint[row.id] ?? "other" },
                 set: { controller.setCategory($0, for: row.operation) }
             )) {
@@ -150,25 +232,25 @@ struct CashflowStatementReviewView: View {
             .pickerStyle(.menu)
         case .excludedExternalTransfer:
             HStack {
-                Label("Перевод исключён", systemImage: "arrow.left.arrow.right")
+                Label(CashflowStatementReviewLocalization.transferExcluded, systemImage: "arrow.left.arrow.right")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Menu("Преобразовать") {
-                    Button("В расход") { controller.reclassifyExternalTransfer(row.operation, as: .expense, categoryRaw: "other") }
-                    Button("В доход") { controller.reclassifyExternalTransfer(row.operation, as: .income, categoryRaw: "other") }
+                Menu(CashflowStatementReviewLocalization.reclassify) {
+                    Button(CashflowStatementReviewLocalization.asExpense) { controller.reclassifyExternalTransfer(row.operation, as: .expense, categoryRaw: "other") }
+                    Button(CashflowStatementReviewLocalization.asIncome) { controller.reclassifyExternalTransfer(row.operation, as: .income, categoryRaw: "other") }
                 }
             }
         case .excludedInternalTransfer:
-            Label("Внутренний перевод нельзя импортировать как доход или расход", systemImage: "lock.fill")
+            Label(CashflowStatementReviewLocalization.internalTransferExcluded, systemImage: "lock.fill")
                 .font(.caption).foregroundStyle(.secondary)
         case .excludedDuplicate:
-            Label("Дубликат — операция уже существует", systemImage: "doc.on.doc")
+            Label(CashflowStatementReviewLocalization.duplicateExcluded, systemImage: "doc.on.doc")
                 .font(.caption).foregroundStyle(.secondary)
         case .excludedTechnical:
-            Label("Техническая строка исключена", systemImage: "gearshape")
+            Label(CashflowStatementReviewLocalization.technicalExcluded, systemImage: "gearshape")
                 .font(.caption).foregroundStyle(.secondary)
         case .excludedByUser:
-            Label("Исключено пользователем", systemImage: "minus.circle")
+            Label(CashflowStatementReviewLocalization.userExcluded, systemImage: "minus.circle")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -177,7 +259,7 @@ struct CashflowStatementReviewView: View {
     private var transferActions: some View {
         if controller.reviewRows.contains(where: { $0.operation.type.hasPrefix("transfer_") }) {
             Section {
-                Button("Исключить все переводы") { controller.excludeAllTransfers() }
+                Button(CashflowStatementReviewLocalization.excludeAllTransfers) { controller.excludeAllTransfers() }
             }
         }
     }
@@ -200,29 +282,11 @@ struct CashflowStatementReviewView: View {
                 return
             }
         }
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        let operations = preview.operations.compactMap { operation -> CashflowApprovedStatementOperation? in
-            guard controller.includedFingerprints.contains(operation.fingerprint),
-                  let disposition = controller.dispositionByFingerprint[operation.fingerprint],
-                  let kind = disposition.kind,
-                  let date = formatter.date(from: operation.operationDate),
-                  let amount = operation.validatedAmount else { return nil }
-            return .init(
-                fingerprint: operation.fingerprint,
-                date: date,
-                amount: amount,
-                currency: operation.currency,
-                type: kind == .income ? .income : .expense,
-                categoryRaw: controller.categoryByFingerprint[operation.fingerprint] ?? "other",
-                accountID: accountID,
-                note: operation.description
-            )
-        }
-        guard operations.count == controller.includedFingerprints.count else {
+        guard let operations = try? CashflowApprovedStatementOperationBuilder.build(
+            preview: preview,
+            controller: controller,
+            accountID: accountID
+        ) else {
             controller.markApplyFailure()
             return
         }
@@ -235,6 +299,16 @@ struct CashflowStatementReviewView: View {
         } catch {
             controller.markApplyFailure()
         }
+    }
+}
+
+enum CashflowStatementReviewContext {
+    case cashflowImport
+    case accountOnboarding(continueReview: () -> Void)
+
+    var isAccountOnboarding: Bool {
+        if case .accountOnboarding = self { return true }
+        return false
     }
 }
 
@@ -262,35 +336,35 @@ private struct CashflowStatementConfirmationView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Месяц") {
+                Section(CashflowStatementReviewLocalization.month) {
                     Label(month.formatted(.dateTime.month(.wide).year()), systemImage: "calendar")
                 }
-                Section("Предлагаемый импорт") {
-                    LabeledContent("Будет импортировано", value: "\(summary.includedCount)")
-                    LabeledContent("Исключено", value: "\(summary.excludedCount)")
+                Section(CashflowStatementReviewLocalization.proposedImport) {
+                    LabeledContent(CashflowStatementReviewLocalization.importedCount, value: "\(summary.includedCount)")
+                    LabeledContent(CashflowStatementReviewLocalization.excludedCount, value: "\(summary.excludedCount)")
                     if summary.reclassifiedCount > 0 {
-                        LabeledContent("Преобразовано переводов", value: "\(summary.reclassifiedCount)")
+                        LabeledContent(CashflowStatementReviewLocalization.reclassifiedCount, value: "\(summary.reclassifiedCount)")
                     }
                     ForEach(summary.totalsByCurrency.keys.sorted(), id: \.self) { currency in
                         LabeledContent(currency, value: summary.totalsByCurrency[currency] ?? 0, format: .currency(code: currency))
                     }
                 }
                 if let preview = controller.preview {
-                    Section("Сверка исходной выписки") {
-                        Label(preview.reconciliation.balanced ? "Баланс сходится" : "Есть расхождение", systemImage: preview.reconciliation.balanced ? "checkmark.seal" : "exclamationmark.triangle")
-                        LabeledContent("Разница", value: preview.reconciliation.difference)
+                    Section(CashflowStatementReviewLocalization.sourceReconciliation) {
+                        Label(preview.reconciliation.balanced ? CashflowStatementReviewLocalization.balanced : CashflowStatementReviewLocalization.discrepancy, systemImage: preview.reconciliation.balanced ? "checkmark.seal" : "exclamationmark.triangle")
+                        LabeledContent(CashflowStatementReviewLocalization.difference, value: preview.reconciliation.difference)
                     }
                 }
-                Section("Счёт") {
-                    Toggle("Связать операции со счётом", isOn: $linksToAccount)
+                Section(CashflowStatementReviewLocalization.account) {
+                    Toggle(CashflowStatementReviewLocalization.linkToAccount, isOn: $linksToAccount)
                     if linksToAccount {
                         if selectableAccounts.isEmpty {
-                            Label("Нет активных счетов в валюте импортируемых операций", systemImage: "creditcard.trianglebadge.exclamationmark")
+                            Label(CashflowStatementReviewLocalization.noMatchingAccounts, systemImage: "creditcard.trianglebadge.exclamationmark")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         } else {
-                            Picker("Счёт", selection: $accountID) {
-                                Text("Выберите счёт").tag("")
+                            Picker(CashflowStatementReviewLocalization.account, selection: $accountID) {
+                                Text(CashflowStatementReviewLocalization.selectAccount).tag("")
                                 ForEach(selectableAccounts) { account in
                                     Text("\(account.pickerTitle) · \(account.currency)")
                                         .tag(account.cardID ?? "")
@@ -298,11 +372,11 @@ private struct CashflowStatementConfirmationView: View {
                             }
                         }
                     }
-                    Label("Баланс счёта не изменится", systemImage: "shield.checkered")
+                    Label(CashflowStatementReviewLocalization.balanceUnchanged, systemImage: "shield.checkered")
                         .foregroundStyle(.secondary)
                 }
                 Section {
-                    Button("Подтвердить импорт \(summary.includedCount) операций") {
+                    Button(CashflowStatementReviewLocalization.confirmImportCount(summary.includedCount)) {
                         apply(linksToAccount ? accountID : nil)
                     }
                     .disabled(
@@ -311,10 +385,10 @@ private struct CashflowStatementConfirmationView: View {
                     )
                 }
             }
-            .navigationTitle("Подтверждение")
+            .navigationTitle(CashflowStatementReviewLocalization.confirmationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(CashflowStatementReviewLocalization.cancel) { dismiss() } }
             }
             .onAppear {
                 viewModel.handle(.loadCards)
