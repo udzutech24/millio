@@ -1,1 +1,1 @@
-Neu in 1.8: Home-Screen-Widget mit Live-Kursen und KI-Screenshot-Erkennung. Konten, Cashback, Investments, Währungsrechner — Daten bleiben lokal, kein Account nötig.
+Neu in 1.9: Immobilien und Debitkarten als Konten, neuer Konten-Bildschirm mit Vermögen und Verbindlichkeiten, Kreditkarten mit Zahlungen. Daten bleiben auf Ihrem Gerät.

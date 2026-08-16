@@ -41,7 +41,10 @@ final class ScreenshotTests: XCTestCase {
 
         waitForMainUI(app)
         tap(app, id: "tab.dynamics")
-        sleep(2)
+        // Расчёт AccountDailySnapshot/групп асинхронный — 2с не хватает под нагрузкой
+        // параллельного прогона симуляторов (флейки на ru/iPhone 17 Pro Max, карточка
+        // была пустой 2 прогона подряд). Держим тот же запас, что и у backup (07).
+        sleep(6)
         snapshot("02-dynamics")
     }
 

@@ -6,10 +6,10 @@ TABLEAU DE BORD
 Solde total, dernières transactions, performance du portefeuille, récapitulatif cashback et taux de change en direct — sur un écran personnalisable. Widget écran d'accueil pour consulter les cours sans ouvrir l'app.
 
 COMPTES ET FINANCES
-Cartes, comptes bancaires, crédits, épargne et investissements — tout ensemble. Attribuez une icône et une couleur à chaque compte pour le retrouver instantanément. Multi-devises. Votre patrimoine net réel, toujours à jour.
+Cartes, comptes bancaires, crédits, épargne, investissements et immobilier — tout ensemble. L'écran Comptes sépare actifs et passifs, détaille la composition du solde et regroupe les comptes selon vos règles. Les cartes de crédit prennent en charge les opérations et paiements complets. Attribuez une icône et une couleur à chaque compte pour le retrouver instantanément. Multi-devises. Votre patrimoine net réel, toujours à jour.
 
 FLUX DE TRÉSORERIE
-Enregistrez revenus et dépenses par catégorie. Voyez exactement où part votre argent chaque mois. Saisie rapide en déplacement.
+Enregistrez revenus et dépenses par catégorie. Voyez exactement où part votre argent chaque mois. La section « À venir » affiche vos paiements et revenus à l'avance. Saisie rapide en déplacement.
 
 CASHBACK
 Quelle carte utiliser ? millio compare les taux de cashback de vos cartes par catégorie de dépense — choisissez toujours la meilleure option.

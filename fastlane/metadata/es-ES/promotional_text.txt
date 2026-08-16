@@ -1,1 +1,1 @@
-Nuevo en 1.8: widget de inicio con tasas en vivo y lector de capturas con IA. Cuentas, cashback, inversiones y conversor — datos en tu dispositivo, sin cuenta.
+Nuevo en 1.9: bienes raíces y tarjetas de débito, pantalla de Cuentas rediseñada con activos y pasivos, tarjetas de crédito con pagos. Datos solo en tu dispositivo.

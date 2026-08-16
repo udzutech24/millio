@@ -1,0 +1,22 @@
+{
+  "_generated": true,
+  "planFile": "2026-08-16__apple-calendar-planned-cashflows.md",
+  "title": "Plan: экспорт плановой операции в Apple Calendar",
+  "updated": "2026-08-16T04:02:39.694Z",
+  "phases": [
+    {
+      "name": "Phase 1 — domain and EventKit boundary",
+      "status": "done"
+    },
+    {
+      "name": "Phase 2 — planner UI and system editor",
+      "status": "done"
+    },
+    {
+      "name": "Phase 3 — verification and audit",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

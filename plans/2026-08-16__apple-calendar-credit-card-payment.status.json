@@ -1,0 +1,22 @@
+{
+  "_generated": true,
+  "planFile": "2026-08-16__apple-calendar-credit-card-payment.md",
+  "title": "Plan: экспорт ближайшего платежа кредитки в Apple Calendar",
+  "updated": "2026-08-16T10:07:20.547Z",
+  "phases": [
+    {
+      "name": "Phase 1 — payment export contract and tests",
+      "status": "done"
+    },
+    {
+      "name": "Phase 2 — detail-card action and system editor",
+      "status": "done"
+    },
+    {
+      "name": "Phase 3 — verification",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

@@ -71,4 +71,34 @@ struct CashflowUpcomingLocalizationTests {
             #expect(CashflowMonthWorkspaceLocalization.transactionCount(5) == "5 операций")
         }
     }
+
+    @Test("Statement review has localized copy in every selectable non-system language")
+    @MainActor
+    func statementReviewCoversSelectableLanguages() {
+        let expected: [(Language, String, String)] = [
+            (.english, "Review Statement", "Import 3 transactions"),
+            (.russian, "Проверка выписки", "Импортировать 3 операции"),
+            (.simplifiedChinese, "审核对账单", "导入 3 笔交易"),
+            (.german, "Kontoauszug prüfen", "3 Transaktionen importieren"),
+            (.spanish, "Revisar extracto", "Importar 3 transacciones"),
+        ]
+
+        for (language, title, importCount) in expected {
+            AppLanguageTestSupport.withLanguage(language) {
+                #expect(CashflowStatementReviewLocalization.title == title)
+                #expect(CashflowStatementReviewLocalization.importCount(3) == importCount)
+                #expect(CashflowStatementReviewLocalization.confirmImportCount(3).contains("3"))
+            }
+        }
+    }
+
+    @Test("Statement review operation count uses Russian plural categories")
+    @MainActor
+    func statementReviewRussianPluralization() {
+        AppLanguageTestSupport.withLanguage(.russian) {
+            #expect(CashflowStatementReviewLocalization.operationCount(1) == "1 операция")
+            #expect(CashflowStatementReviewLocalization.operationCount(3) == "3 операции")
+            #expect(CashflowStatementReviewLocalization.operationCount(5) == "5 операций")
+        }
+    }
 }

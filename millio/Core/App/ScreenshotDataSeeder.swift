@@ -49,7 +49,96 @@ enum ScreenshotDataSeeder {
                                  creditCardID: cards.credit.uniqueID,
                                  locale: locale)
         try? context.save()
+        // AccountsCore — новое ядро счетов (rebuild 2026-07): экраны «Финансы»/Дашборд считают
+        // баланс через AccountsTotalsService.totalAt по Account/AccountGroup, легаси-модели выше
+        // (Card/Investment) в тотал уже не входят. Без этого шага скриншоты показывали 0 ₽/пустой
+        // список продуктов, хотя легаси-сид отрабатывал штатно.
+        #if DEBUG
+        _ = try? AccountsCoreSeeder.seedDemoPortfolio(context: context, isEN: locale.isEN)
+        // Историческая оценка (HistoricalValuationResolver) работает fail-closed: если хотя бы одна
+        // зависимость дня (курс валюты или котировка) не имеет evidence, обнуляется ВЕСЬ портфель
+        // за этот день, и «Динамика» рисует пустой стейт «Нет групп». В симуляторе сети нет,
+        // провайдеры молчат — поэтому evidence надо положить локально ДО rebuild.
+        seedHistoricalValuationEvidence(into: context)
+        // Карточка «Динамика» строит график/группировку по `AccountDailySnapshot`, а не по
+        // событиям напрямую (см. `AccountSnapshotRebuilder` докстринг) — без явного rebuild
+        // счета, которые только что создал seedDemoPortfolio, остаются без единого снапшота,
+        // и экран показывает «Нет данных для отображения». `AccountSnapshotBackfillCoordinator`
+        // не подходит: он per-scope gate-ится через UserDefaults-флаг, который может быть уже
+        // взведён с прошлого запуска на симуляторе — тогда бэкфилл тихо не выполнится. Здесь же
+        // нужен безусловный прогон при каждом сиде, поэтому напрямую `rebuildAllAccounts()`.
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: context.container)
+        _ = try? await rebuilder.rebuildAllAccounts()
+        #endif
     }
+
+    // MARK: - Historical valuation evidence (FX + котировки)
+
+    #if DEBUG
+    /// Кладёт синтетическую exact-evidence на каждый день окна графика «Динамика».
+    ///
+    /// Формат `source` критичен и должен совпадать с тем, что распознаёт
+    /// `HistoricalValuationLocalEvidenceSnapshot`: у FX — префикс `historical` + `rateDate`
+    /// строго в начале дня; у котировок — `historical:<provider>|tz=<IANA>` с той же таймзоной,
+    /// что у `HistoricalValuationTimeContext` (иначе строка молча отбрасывается как legacy).
+    private static func seedHistoricalValuationEvidence(into context: ModelContext) {
+        let calendar = Calendar.current
+        let timeZoneID = TimeZone.current.identifier
+        let now = Date()
+        let today = calendar.startOfDay(for: now)
+
+        let dayKeyFormatter = DateFormatter()
+        dayKeyFormatter.calendar = calendar
+        dayKeyFormatter.timeZone = calendar.timeZone
+        dayKeyFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dayKeyFormatter.dateFormat = "yyyy-MM-dd"
+
+        // Валюты демо-портфеля (AccountsCoreSeeder): RUB (основная), USD, EUR.
+        // base, quote, курс сегодня, дневной дрейф в прошлое
+        let fxPairs: [(base: String, quote: String, rate: Double, drift: Double)] = [
+            ("USD", "RUB", 92.50, 0.030),
+            ("EUR", "RUB", 100.20, 0.034),
+            ("USD", "EUR", 0.92, 0.0003)
+        ]
+        // Тикеры демо-портфеля: AAPL (100 шт), NVDA (20 шт).
+        let tickers: [(symbol: String, price: Double, drift: Double)] = [
+            ("AAPL", 214.0, 0.11),
+            ("NVDA", 1_180.0, 0.62)
+        ]
+
+        // 400 дней покрывают все диапазоны карточки, включая 1Y.
+        for offset in 0..<400 {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
+            let dayKey = dayKeyFormatter.string(from: day)
+            // Полдень дня наблюдения, но не в будущем — иначе строка «сегодня» выглядит нереалистично.
+            let fetchedAt = min(day.addingTimeInterval(12 * 3600), now)
+            let age = Double(offset)
+
+            for pair in fxPairs {
+                context.insert(HistoricalRate(
+                    baseCurrency: pair.base,
+                    quoteCurrency: pair.quote,
+                    rate: pair.rate - pair.drift * age,
+                    rateDate: day,
+                    source: "historical:screenshot-seed",
+                    fetchedAt: fetchedAt
+                ))
+            }
+
+            for ticker in tickers {
+                context.insert(HistoricalAssetPrice(
+                    symbol: ticker.symbol,
+                    assetClass: .stock,
+                    dayKey: dayKey,
+                    price: Decimal(ticker.price - ticker.drift * age),
+                    source: "historical:screenshot-seed|tz=\(timeZoneID)",
+                    fetchedAt: fetchedAt
+                ))
+            }
+        }
+        try? context.save()
+    }
+    #endif
 
     // MARK: - Settings (UserDefaults)
 
@@ -99,6 +188,13 @@ enum ScreenshotDataSeeder {
         try? context.delete(model: Investment.self)
         try? context.delete(model: Cashback.self)
         try? context.delete(model: CashflowTransaction.self)
+        // AccountsCore — иначе идемпотентный маркер AccountsCoreSeeder переживает purge и
+        // повторный прогон (EN после RU в той же UI-тест-сессии) молча не досеивает данные.
+        try? context.delete(model: AccountEvent.self)
+        try? context.delete(model: HistoricalAssetPrice.self)
+        try? context.delete(model: AccountDailySnapshot.self)
+        try? context.delete(model: Account.self)
+        try? context.delete(model: AccountGroup.self)
     }
 
     // MARK: - Cards

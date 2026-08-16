@@ -1,1 +1,1 @@
-Nouveau en 1.8 : widget taux en direct + lecteur de captures IA. Comptes, cashback, investissements — données sur votre appareil, sans compte.
+Nouveau en 1.9 : immobilier et cartes de débit, écran Comptes repensé (actifs/passifs), cartes de crédit avec paiements. Vos données restent sur votre appareil.

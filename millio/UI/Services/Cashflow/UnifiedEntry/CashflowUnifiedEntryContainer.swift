@@ -36,6 +36,7 @@ struct CashflowUnifiedEntryContainer: View {
     let initialMonth: Date?
 
     @State private var selectedTab: CashflowSheetTab
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         viewModel: CashflowViewModel,
@@ -83,7 +84,16 @@ struct CashflowUnifiedEntryContainer: View {
                 .tag(CashflowSheetTab.transfer)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .animation(AppAnimation.medium, value: selectedTab)
+            .animation(reduceMotion ? nil : AppAnimation.medium, value: selectedTab)
+            .onChange(of: selectedTab) { oldValue, newValue in
+                let signpostID = CashflowUnifiedEntryTelemetry.beginTabTransition(from: oldValue, to: newValue)
+                Task { @MainActor in
+                    try? await Task.sleep(
+                        nanoseconds: CashflowUnifiedEntryTelemetry.tabTransitionSettlingNanoseconds
+                    )
+                    CashflowUnifiedEntryTelemetry.endTabTransition(signpostID, selectedTab: newValue)
+                }
+            }
         }
         .background(Color.black)
     }
@@ -106,13 +116,13 @@ struct CashflowUnifiedEntryContainer: View {
         let fg: Color = isSelected ? AppColors.textPrimary : AppColors.textPrimary.opacity(0.5)
         let bg: Color = isSelected ? Color.white.opacity(0.12) : .clear
         return Button(tab.title) {
-            withAnimation(AppAnimation.standard) { selectedTab = tab }
+            selectedTab = tab
         }
         .font(isSelected ? .millioBodySemibold : .millioBodyRegular)
         .foregroundStyle(fg)
         .padding(.horizontal, AppSpacing.ml)
         .padding(.vertical, AppSpacing.s)
         .background(bg, in: Capsule())
-        .animation(AppAnimation.fast, value: selectedTab)
+        .accessibilityIdentifier("cashflow.unified.tab.\(tab.rawValue)")
     }
 }

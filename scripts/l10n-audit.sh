@@ -12,7 +12,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 QUIET="${1:-}"
-SUPPORTED_LANGS=("en" "zh-Hans")   # ru — source lang, не проверяем как target
+# Keep this aligned with LocalizationSupport.releaseReadySelectableLanguages.
+# `system` resolves to one of these concrete catalogs.
+SUPPORTED_LANGS=("en" "ru" "zh-Hans" "de" "es")
 XCSTRINGS="millio/Localizable.xcstrings"
 
 # Исключённые файлы для String(localized:) и Text-проверок
@@ -117,6 +119,7 @@ check_hardcoded_cyrillic() {
     --exclude="*Resolver.swift" \
     2>/dev/null \
     | grep '"' \
+    | grep -E 'Text\(|Label\(|Button\(|Picker\(|Section\(|Toggle\(|Stepper\(|DatePicker\(|ContentUnavailableView\(|navigationTitle\(|searchable\(|adaptiveRow\(|statCell\(|titleOverride:|loadingTitle:' \
     | grep -v '^\s*//' \
     | grep -v '#Preview' \
     | grep -v 'L("' \
@@ -155,6 +158,7 @@ check_xcstrings_coverage() {
 
   python3 - "$XCSTRINGS" "${SUPPORTED_LANGS[@]}" << 'PYEOF'
 import json
+import re
 import sys
 
 xcstrings_path = sys.argv[1]
@@ -171,16 +175,37 @@ for lang in langs:
     for key, val in strings.items():
         if not key.strip():
             continue  # пропускаем пустые/пробельные ключи
+        # Symbols, punctuation and format-only templates are language-neutral.
+        # Requiring duplicate catalog entries for them creates audit noise without
+        # improving the UI.
+        source_values = []
+        for source_entry in val.get('localizations', {}).values():
+            unit = source_entry.get('stringUnit', {})
+            if unit.get('value'):
+                source_values.append(unit['value'])
+            for variation in source_entry.get('variations', {}).values():
+                for form in variation.values():
+                    form_value = form.get('stringUnit', {}).get('value', '')
+                    if form_value:
+                        source_values.append(form_value)
+        source = next(iter(source_values), key)
+        if not re.search(r'[A-Za-zА-Яа-яЁё\u4e00-\u9fff]', source):
+            continue
+
         locs = val.get('localizations', {})
         lang_entry = locs.get(lang)
         if lang_entry is None:
             missing.append(key)
             continue
         # Проверяем state — если new/needs_review/untranslated — считаем непокрытым
-        su = lang_entry.get('stringUnit', {})
-        state = su.get('state', '')
-        value = su.get('value', '')
-        if state in ('new', 'needs_review') or not value:
+        units = [lang_entry.get('stringUnit', {})]
+        for variation in lang_entry.get('variations', {}).values():
+            units.extend(form.get('stringUnit', {}) for form in variation.values())
+        valid_units = [unit for unit in units if unit]
+        if not valid_units or any(
+            unit.get('state', '') in ('new', 'needs_review') or not unit.get('value', '')
+            for unit in valid_units
+        ):
             missing.append(key)
 
     pct = round((1 - len(missing) / max(total, 1)) * 100, 1)
@@ -200,7 +225,7 @@ PYEOF
   # Если python напечатал маркер — поднимаем счётчик
   local py_out
   py_out=$(python3 - "$XCSTRINGS" "${SUPPORTED_LANGS[@]}" << 'PYEOF2' 2>/dev/null
-import json, sys
+import json, re, sys
 xcstrings_path = sys.argv[1]
 langs = sys.argv[2:]
 with open(xcstrings_path, encoding='utf-8') as f:
@@ -210,14 +235,31 @@ for lang in langs:
     for key, val in strings.items():
         if not key.strip():
             continue
+        source_values = []
+        for source_entry in val.get('localizations', {}).values():
+            unit = source_entry.get('stringUnit', {})
+            if unit.get('value'):
+                source_values.append(unit['value'])
+            for variation in source_entry.get('variations', {}).values():
+                for form in variation.values():
+                    form_value = form.get('stringUnit', {}).get('value', '')
+                    if form_value:
+                        source_values.append(form_value)
+        source = next(iter(source_values), key)
+        if not re.search(r'[A-Za-zА-Яа-яЁё\u4e00-\u9fff]', source):
+            continue
         locs = val.get('localizations', {})
         lang_entry = locs.get(lang)
         if lang_entry is None:
             print("MISSING"); sys.exit(0)
-        su = lang_entry.get('stringUnit', {})
-        state = su.get('state', '')
-        value = su.get('value', '')
-        if state in ('new', 'needs_review') or not value:
+        units = [lang_entry.get('stringUnit', {})]
+        for variation in lang_entry.get('variations', {}).values():
+            units.extend(form.get('stringUnit', {}) for form in variation.values())
+        valid_units = [unit for unit in units if unit]
+        if not valid_units or any(
+            unit.get('state', '') in ('new', 'needs_review') or not unit.get('value', '')
+            for unit in valid_units
+        ):
             print("MISSING"); sys.exit(0)
 PYEOF2
 )

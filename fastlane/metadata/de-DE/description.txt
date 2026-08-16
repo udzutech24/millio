@@ -6,10 +6,10 @@ DASHBOARD
 Gesamtvermögen, letzte Transaktionen, Portfolio-Performance, Cashback-Übersicht und Live-Wechselkurse auf einem anpassbaren Bildschirm. Füge die Widgets hinzu, die dir wichtig sind. Home-Screen-Widget — Live-Wechselkurse auf einen Blick, ohne die App zu öffnen.
 
 FINANZEN
-Karten, Bankkonten, Kredite, Sparkonten und Investments — alles an einem Ort. Vergib jedem Konto ein eigenes Icon und eine Farbe zur schnellen Wiedererkennung. Multiwährung. Dein tatsächliches Nettovermögen, immer aktuell.
+Karten, Bankkonten, Kredite, Sparkonten, Investments und Immobilien — alles an einem Ort. Der Konten-Bildschirm trennt Vermögen und Verbindlichkeiten, zeigt die Saldenaufschlüsselung und gruppiert Konten nach deinen Regeln. Kreditkarten unterstützen vollständige Transaktionen und Zahlungen. Vergib jedem Konto ein eigenes Icon und eine Farbe zur schnellen Wiedererkennung. Multiwährung. Dein tatsächliches Nettovermögen, immer aktuell.
 
 CASHFLOW
-Erfasse Einnahmen und Ausgaben nach Kategorien. Erkenne genau, wohin dein Geld jeden Monat fließt. Schnelleingabe für unterwegs.
+Erfasse Einnahmen und Ausgaben nach Kategorien. Erkenne genau, wohin dein Geld jeden Monat fließt. Der Bereich „Anstehend" zeigt Zahlungen und Einnahmen im Voraus. Schnelleingabe für unterwegs.
 
 CASHBACK
 Welche Karte lohnt sich wo? millio vergleicht die Cashback-Raten deiner Karten nach Ausgabenkategorie — damit du immer die rentabelste Option wählst.

@@ -12,9 +12,12 @@ enum AccountsCoreSeeder {
     static let markerAccountName = "__accounts_core_seed_v1__"
 
     /// Создаёт демо-портфель. Возвращает `false`, если сид уже был прогнан ранее (no-op).
+    /// - Parameter isEN: локаль скриншот-сида (см. `SeedLocale` в `ScreenshotDataSeeder`).
+    ///   Раньше имена групп/счетов были захардкожены по-русски — на EN-скриншотах App Store
+    ///   легенда donut chart смешивала русские и английские названия групп.
     @discardableResult
     @MainActor
-    static func seedDemoPortfolio(context: ModelContext) throws -> Bool {
+    static func seedDemoPortfolio(context: ModelContext, isEN: Bool = false) throws -> Bool {
         let markerName = markerAccountName
         let markerDescriptor = FetchDescriptor<Account>(
             predicate: #Predicate<Account> { $0.name == markerName }
@@ -31,7 +34,7 @@ enum AccountsCoreSeeder {
         }
 
         // MARK: Группа «Вклады» — 2 вклада, суммарно ~45 000 000 ₽ + начисление % за 6 мес.
-        let depositsGroup = AccountGroup(name: "Вклады")
+        let depositsGroup = AccountGroup(name: isEN ? "Deposits" : "Вклады")
         transactionContext.insert(depositsGroup)
 
         // Фаза 3: вклады переведены на `DepositInterestScheduler` — расписание генерируется от даты
@@ -45,7 +48,7 @@ enum AccountsCoreSeeder {
             earlyClosePenalty: 0.5, remindEnd: true, autoRollover: false
         )
         _ = try AccountProductGraphBuilder.build(CreateProductCommand(
-            productType: .deposit, name: "Вклад «Надёжный»", currency: "RUB",
+            productType: .deposit, name: isEN ? "\"Reliable\" Deposit" : "Вклад «Надёжный»", currency: "RUB",
             openingBalance: 30_000_000, groupID: depositsGroup.id,
             metadata: .init(deposit: deposit1Meta), date: monthsAgo(6), calendar: calendar
         ), in: transactionContext)
@@ -57,25 +60,25 @@ enum AccountsCoreSeeder {
             earlyClosePenalty: nil, remindEnd: true, autoRollover: true
         )
         _ = try AccountProductGraphBuilder.build(CreateProductCommand(
-            productType: .deposit, name: "Вклад «Пополняемый»", currency: "RUB",
+            productType: .deposit, name: isEN ? "\"Top-up\" Deposit" : "Вклад «Пополняемый»", currency: "RUB",
             openingBalance: 15_000_000, groupID: depositsGroup.id,
             metadata: .init(deposit: deposit2Meta), date: monthsAgo(6), calendar: calendar
         ), in: transactionContext)
 
         // MARK: Группа «Иностранные» — валютные счета (~10 400 $ + немного €, 2 счёта до общих 10)
-        let foreignGroup = AccountGroup(name: "Иностранные")
+        let foreignGroup = AccountGroup(name: isEN ? "Foreign" : "Иностранные")
         transactionContext.insert(foreignGroup)
         _ = try AccountProductGraphBuilder.build(CreateProductCommand(
-            productType: .bankAccount, name: "USD счёт", currency: "USD",
+            productType: .bankAccount, name: isEN ? "USD Account" : "USD счёт", currency: "USD",
             openingBalance: 10_400, groupID: foreignGroup.id, date: monthsAgo(6)
         ), in: transactionContext)
         _ = try AccountProductGraphBuilder.build(CreateProductCommand(
-            productType: .bankAccount, name: "EUR счёт", currency: "EUR",
+            productType: .bankAccount, name: isEN ? "EUR Account" : "EUR счёт", currency: "EUR",
             openingBalance: 1_800, groupID: foreignGroup.id, date: monthsAgo(6)
         ), in: transactionContext)
 
         // MARK: Группа «Акции» — 2 позиции, суммарно ~45 000 $
-        let stocksGroup = AccountGroup(name: "Акции")
+        let stocksGroup = AccountGroup(name: isEN ? "Stocks" : "Акции")
         transactionContext.insert(stocksGroup)
         _ = try AccountProductGraphBuilder.build(CreateProductCommand(
             productType: .marketStock, name: "AAPL", currency: "USD", openingBalance: 0,
@@ -89,7 +92,7 @@ enum AccountsCoreSeeder {
         ), in: transactionContext)
 
         // MARK: Группа «Кредиты» — −12 700 000 ₽
-        let creditsGroup = AccountGroup(name: "Кредиты")
+        let creditsGroup = AccountGroup(name: isEN ? "Loans" : "Кредиты")
         transactionContext.insert(creditsGroup)
         // Регрессия найдена при разборе Фазы 2: openingBalance для .loan — МАГНИТУДА (движок C сам
         // применяет знак минус через loanSignMap, см. AccountBalanceEngineTests.engineC_loanDrawAndPayment).
@@ -101,21 +104,23 @@ enum AccountsCoreSeeder {
 
         // Долг — owedToMe (мне должны) ~500 000 ₽, для полноты полигона обязательств (Фаза 2).
         _ = try AccountProductGraphBuilder.build(CreateProductCommand(
-            productType: .loan, name: "Ипотека", currency: "RUB",
+            productType: .loan, name: isEN ? "Mortgage" : "Ипотека", currency: "RUB",
             openingBalance: 12_700_000, groupID: creditsGroup.id,
             metadata: .init(loan: loanMeta), date: monthsAgo(6)
         ), in: transactionContext)
         _ = try AccountProductGraphBuilder.build(CreateProductCommand(
-            productType: .receivable, name: "Долг Игоря", currency: "RUB",
+            productType: .receivable, name: isEN ? "Igor's Debt" : "Долг Игоря", currency: "RUB",
             openingBalance: 500_000, groupID: creditsGroup.id,
-            metadata: .init(debt: DebtMeta(direction: .owedToMe, counterparty: "Игорь", dueDate: calendar.date(byAdding: .month, value: 3, to: now), rate: nil)),
+            metadata: .init(debt: DebtMeta(direction: .owedToMe, counterparty: isEN ? "Igor" : "Игорь", dueDate: calendar.date(byAdding: .month, value: 3, to: now), rate: nil)),
             date: monthsAgo(3)
         ), in: transactionContext)
 
         // MARK: Карты RUB (3 шт.) — по 2-3 income/expense события
-        let cardsGroup = AccountGroup(name: "Карты")
+        let cardsGroup = AccountGroup(name: isEN ? "Cards" : "Карты")
         transactionContext.insert(cardsGroup)
-        let cardNames = ["Основная карта", "Карта для покупок", "Карта на чёрный день"]
+        let cardNames = isEN
+            ? ["Main Card", "Shopping Card", "Rainy Day Card"]
+            : ["Основная карта", "Карта для покупок", "Карта на чёрный день"]
         for (index, name) in cardNames.enumerated() {
             let graph = try AccountProductGraphBuilder.build(CreateProductCommand(
                 productType: .debitCard, name: name, currency: "RUB",
@@ -134,10 +139,10 @@ enum AccountsCoreSeeder {
         }
 
         // MARK: Группа «Недвижимость» — ручной актив (Фаза 4): 2 переоценки, 20М ₽ на сегодня.
-        let realEstateGroup = AccountGroup(name: "Недвижимость")
+        let realEstateGroup = AccountGroup(name: isEN ? "Real Estate" : "Недвижимость")
         transactionContext.insert(realEstateGroup)
         let apartment = try AccountProductGraphBuilder.build(CreateProductCommand(
-            productType: .realEstate, name: "Квартира", currency: "RUB",
+            productType: .realEstate, name: isEN ? "Apartment" : "Квартира", currency: "RUB",
             openingBalance: 17_000_000, groupID: realEstateGroup.id,
             metadata: .init(manualAsset: ManualAssetMeta(revalReminderMonths: 12, depreciationRatePerYear: nil, linkedLoanID: nil)),
             date: monthsAgo(6)

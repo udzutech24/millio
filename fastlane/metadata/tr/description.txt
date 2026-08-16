@@ -6,10 +6,10 @@ PANEL
 Toplam bakiye, son işlemler, portföy performansı, cashback özeti ve canlı döviz kurları — tek özelleştirilebilir ekranda. Ana ekran widget'ı ile uygulamayı açmadan anlık döviz kurlarına erişin.
 
 HESAPLAR VE FİNANSLAR
-Kartlar, banka hesapları, krediler, birikimler ve yatırımlar — hepsi bir arada. Her hesaba özel ikon ve renk atayın. Çok para birimi desteği. Gerçek net varlığınız her an günceli.
+Kartlar, banka hesapları, krediler, birikimler, yatırımlar ve gayrimenkul — hepsi bir arada. Hesaplar ekranı varlıkları ve yükümlülükleri ayırır, bakiye dağılımını gösterir ve hesapları sizin istediğiniz şekilde gruplar. Kredi kartları tam işlem ve ödeme desteğine sahiptir. Her hesaba özel ikon ve renk atayın. Çok para birimi desteği. Gerçek net varlığınız her an günceli.
 
 NAKİT AKIŞI
-Gelir ve giderleri kategorilere göre kaydedin. Her ay paranızın nereye gittiğini görün. Hızlı giriş paneli ile her an kolayca kayıt yapın.
+Gelir ve giderleri kategorilere göre kaydedin. Her ay paranızın nereye gittiğini görün. "Yaklaşan" bölümü ödemeleri ve gelirleri önceden gösterir. Hızlı giriş paneli ile her an kolayca kayıt yapın.
 
 CASHBACK
 Hangi kart daha avantajlı? millio, kartlarınızın cashback oranlarını harcama kategorisine göre karşılaştırır — her zaman en iyi seçimi yapın.

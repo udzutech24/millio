@@ -1,0 +1,98 @@
+{
+  "_generated": true,
+  "planFile": "2026-08-16__unified-entry-redesign.md",
+  "title": "Unified Entry redesign and performance",
+  "updated": "2026-08-16T12:48:37.107Z",
+  "phases": [
+    {
+      "name": "Add signposts for selected-tab transition and monthly snapshot loading.",
+      "status": "done"
+    },
+    {
+      "name": "Create a realistic local performance fixture without personal financial data.",
+      "status": "done"
+    },
+    {
+      "name": "Record cold open and repeated expense↔income switch baseline on target iPhone. Blocked on 2026-08-1…",
+      "status": "pending"
+    },
+    {
+      "name": "Lock history/status semantics: upcoming, paid, all; define how a scheduled item links to its comple…",
+      "status": "done"
+    },
+    {
+      "name": "Introduce a single monthly entry snapshot calculation.",
+      "status": "done"
+    },
+    {
+      "name": "Remove duplicate category aggregation inside budget summary.",
+      "status": "done"
+    },
+    {
+      "name": "Add cancellation/latest-request protection and a bounded cache keyed by visible revisions.",
+      "status": "done"
+    },
+    {
+      "name": "Add focused cache/isolation/zero/large-fixture tests.",
+      "status": "done"
+    },
+    {
+      "name": "Replace the ambiguous clock action with a labelled History/workflow control.",
+      "status": "done"
+    },
+    {
+      "name": "Add Upcoming | Paid | All status filtering and deterministic ordering.",
+      "status": "done"
+    },
+    {
+      "name": "Preserve month, operation type, and category context when opening history.",
+      "status": "done"
+    },
+    {
+      "name": "Add filter contract, empty states, and accessibility identifiers.",
+      "status": "done"
+    },
+    {
+      "name": "Adopt the current Accounts/Cashflow quiet surface language.",
+      "status": "done"
+    },
+    {
+      "name": "Remove nested decorative strokes and icon-only category-management actions.",
+      "status": "done"
+    },
+    {
+      "name": "Preserve compact two-column cards; active/non-zero cards lead and zero cards are quieter.",
+      "status": "done"
+    },
+    {
+      "name": "Add persisted per-kind sort (activity, amount, manual, name), pinned-first and stable-after-save be…",
+      "status": "done"
+    },
+    {
+      "name": "Consolidate reorder/settings/create into category management; remove the floating category +.",
+      "status": "done"
+    },
+    {
+      "name": "Keep one tab transition animation and support Reduce Motion.",
+      "status": "done"
+    },
+    {
+      "name": "Run focused Unified Entry, category, budget, scheduled/history, localization, and Cashflow regressi…",
+      "status": "done"
+    },
+    {
+      "name": "Compare performance profile to Phase 0 baseline on the designated physical iPhone (device unavailab…",
+      "status": "pending"
+    },
+    {
+      "name": "Preserve existing add/import/plan/recurring routes and historical month behavior in the compiled na…",
+      "status": "done"
+    },
+    {
+      "name": "Update technical documentation and implementation history.",
+      "status": "done"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

@@ -188,7 +188,8 @@ extension CashflowViewModel {
     func monthlyBudgetSummary(
         for categoryKind: CashflowCategoryKind,
         month: Date,
-        in currency: String? = nil
+        in currency: String? = nil,
+        categoryTotals precomputedTotals: [String: Double]? = nil
     ) async -> (plan: BudgetPlan?, snapshot: BudgetProgressSnapshot?, categoryLimits: [String: Double]) {
         let descriptor = monthlyBudgetPeriodDescriptor(for: month)
         let targetCurrency = currency ?? state.displayCurrency
@@ -201,7 +202,13 @@ extension CashflowViewModel {
             fetchBudgetCategoryLimits(for: plan.budgetID).filter { $0.categoryKind == categoryKind }
         )
         let categoryLimits = Dictionary(uniqueKeysWithValues: limits.map { ($0.categoryRawValue, $0.limitAmount) })
-        let totals = await monthlyCategoryTotals(for: categoryKind, month: month, in: targetCurrency)
+        // Unified Entry already calculates this aggregation for its cards. Reusing it
+        // avoids a second full transaction/conversion pass on every open or tab switch.
+        let totals = if let precomputedTotals {
+            precomputedTotals
+        } else {
+            await monthlyCategoryTotals(for: categoryKind, month: month, in: targetCurrency)
+        }
         let totalAmount = totals.values.reduce(0, +)
         let titleResolver: (String) -> String = { [weak self] raw in
             guard let self else { return raw }

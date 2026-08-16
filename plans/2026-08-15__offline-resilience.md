@@ -1,6 +1,6 @@
 # Plan: offline resilience for backend outage
 
-**Status:** IMPLEMENTATION IN PROGRESS — Phase 0 is not signed off.
+**Status:** IMPLEMENTATION IN PROGRESS — Phase 0 is partially implemented and not signed off; phases 1–4 have not started.
 
 ## Inputs
 
@@ -89,6 +89,8 @@
 - 2026-08-15 — added product requirement: T+5 local-ready deadline and non-blocking top offline icon; blocking two-probe startup is explicitly rejected.
 - 2026-08-15 — Phase 0 started. Static endpoint selection and a separate availability state machine/root indicator were added. Sign-off is blocked: `AuthManager.restoreSession()` still participates in the cold-start critical path and can wait for the backend, so OR-0/OR-1 are not yet proven. Focused xcodebuild also did not start because CoreSimulator reported `simdiskimaged` unavailable and package dependencies could not resolve. No later phase may start until the local-ready path is independently bounded and this gate is repaired/re-run.
 - 2026-08-15 — Added explicit graph-continuity requirement (OR-3a) after observing finance UI with locally available accounts but a loading chart during outage. `CurrencyRateService` now reads a persisted repository snapshot before network and returns an existing stale quote immediately while refreshing in the background. This is a Phase-1 precursor; timestamp/UI-state work and persisted market-close verification remain open.
+- 2026-08-16 — Commit `e02ed11` added the non-blocking availability state machine/root indicator, cache-first currency-rate read, and historical-reader safety rollback. A physical device build succeeded and the device was manually verified after the rollback. This does **not** sign off Phase 0: no deterministic T+5 local-ready UI/lifecycle proof exists yet, no cache state UI/timestamp exists, and no backend/queue work has begun.
+- 2026-08-16 — Focused historical reader retest passed 5/5. The broader reader-gate run first exposed an unrelated Calendar actor-isolation compile error; its local fix is intentionally outside this plan and is not included in `e02ed11`.
 
 ## Phase 0 self-audit (in progress — not a sign-off)
 
@@ -97,3 +99,15 @@
 - Not closed: OR-0, OR-1 and OR-9. The required UI/lifecycle test has not run; localization strings for the new control still need catalog entries; background terminal-auth handling needs an explicit scope-transition audit.
 - Test evidence: `xcodebuild ... -only-testing:millioTests/BackendAvailabilityStateMachineTests -only-testing:millioTests/BackendStartupResolverTests test` failed before compilation: CoreSimulator `simdiskimaged` was unavailable and Xcode could not resolve package dependencies.
 - Remaining risks: current probe task awaits the five-second deadline before consuming an early failure; retry/lifecycle handling is intentionally incomplete until the cold-start contract is corrected and verified.
+
+## Current execution ledger (2026-08-16)
+
+| Area | State | Evidence / remaining proof |
+|---|---|---|
+| Availability state machine and root icon | Implemented, unverified end-to-end | Unit coverage exists; must add deterministic T+5 UI/lifecycle tests and accessibility/localization verification. |
+| Local auth/session boot | Partially decoupled | Must prove a dead backend cannot delay or reset the last valid SwiftData scope. |
+| Offline graph continuity | Safety rollback shipped | Structured reader now remains shadowed until approval; still must render cache timestamp and explicit unavailable state when evidence is absent. |
+| Phase 1 durable endpoint cache | Not started | Needs inventory, schema, scope isolation, expiry and auth-failure tests. |
+| Phase 2 backend revision contract | Not started | Needs additive Prisma migration and unit/e2e transaction proof. |
+| Phase 3 iOS queue/scheduler | Not started | Needs single latest snapshot, actor serialization, lifecycle/backoff and scope-isolation tests. |
+| Phase 4 observability/release proof | Not started | Needs safe telemetry, physical outage exercise and full available gates. |

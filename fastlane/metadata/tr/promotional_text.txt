@@ -1,1 +1,1 @@
-1.8 yenilik: ana ekran döviz kuru widget'ı ve AI ekran görüntüsü okuyucu. Hesaplar, cashback, yatırımlar — veriler cihazınızda, hesap gerekmez.
+1.9 yenilik: gayrimenkul ve banka kartları hesap olarak, varlık/yükümlülük ayrımlı yeni Hesaplar ekranı, ödeme destekli kredi kartları. Veriler cihazınızda kalır.

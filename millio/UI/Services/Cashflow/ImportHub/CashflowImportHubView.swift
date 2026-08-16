@@ -159,7 +159,7 @@ struct CashflowImportHubView: View {
             }
         case .needsReview:
             Section {
-                NavigationLink("Открыть проверку выписки") {
+                NavigationLink(CashflowStatementReviewLocalization.openReview) {
                     CashflowStatementReviewView(viewModel: viewModel, controller: statementController, month: selectedMonth)
                 }
             }

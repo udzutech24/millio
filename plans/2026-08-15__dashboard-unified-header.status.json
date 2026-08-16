@@ -1,0 +1,14 @@
+{
+  "_generated": true,
+  "planFile": "2026-08-15__dashboard-unified-header.md",
+  "title": "Plan: unified dashboard header (superseded)",
+  "updated": "2026-08-15T19:12:23.851Z",
+  "phases": [
+    {
+      "name": "Phase 1 — responsive unified header",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

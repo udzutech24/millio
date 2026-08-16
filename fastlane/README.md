@@ -15,6 +15,14 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 ## iOS
 
+### ios test
+
+```sh
+[bundle exec] fastlane ios test
+```
+
+Запустить unit-тесты и очистить XCTestDevices после прогона
+
 ### ios release_testflight
 
 ```sh

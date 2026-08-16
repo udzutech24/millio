@@ -2,7 +2,7 @@
   "_generated": true,
   "planFile": "2026-08-15__offline-resilience.md",
   "title": "Plan: offline resilience for backend outage",
-  "updated": "2026-08-15T19:17:29.227Z",
+  "updated": "2026-08-16T04:55:35.103Z",
   "phases": [
     {
       "name": "Product owner explicitly confirms this scope does not promise cross-device live finance sync.",
