@@ -56,6 +56,10 @@ struct AccountProductTransitionSection: View {
 
     var body: some View {
         Section(L("accounts_core.transition.title")) {
+            LabeledContent(L("accounts_core.transition.current")) {
+                Text(productTitle(account.productType ?? .unknownLegacy))
+                    .foregroundStyle(AppColors.textSecondary)
+            }
             Picker(L("accounts_core.transition.target"), selection: $target) {
                 ForEach(Self.availableTargets(current: account.productType), id: \.self) {
                     Text(productTitle($0)).tag($0)

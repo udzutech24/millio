@@ -66,6 +66,21 @@ final class AccountProductTransitionPresentationTests: XCTestCase {
         }
     }
 
+    func testTransitionLabelsClearlySeparateCurrentAndNewTypes() {
+        let expectations: [(String, String, String, String)] = [
+            ("en", "Current type", "New type", "Change type"),
+            ("ru", "Текущий тип", "Новый тип", "Изменить тип"),
+            ("zh-Hans", "当前类型", "新类型", "更改类型")
+        ]
+
+        for (language, current, target, action) in expectations {
+            let locale = Locale(identifier: language)
+            XCTAssertEqual(AppLocalization.string("accounts_core.transition.current", locale: locale), current)
+            XCTAssertEqual(AppLocalization.string("accounts_core.transition.target", locale: locale), target)
+            XCTAssertEqual(AppLocalization.string("accounts_core.transition.correct", locale: locale), action)
+        }
+    }
+
     func testDepositTermsProduceValidMetadata() throws {
         let end = Date(timeIntervalSince1970: 2_000_000_000)
 
