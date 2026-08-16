@@ -246,6 +246,9 @@ final class FinanceMarketDataService {
         if didUpdateAnyPrice {
             do {
                 try modelContext.save()
+                // Historical chart and live account totals share the investment price evidence.
+                // Notify the existing single refresh route only after the transaction commits.
+                EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             } catch {
                 AppLogger.log(.error, category: "Finance", "Failed to save refreshed stock quotes: \(error.localizedDescription)")
             }

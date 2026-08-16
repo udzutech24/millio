@@ -129,6 +129,8 @@ final class AppState {
     var backendBaseURLString: String = ""
     var isBackendFallbackActive: Bool = false
     var backendSelectionSummary: String = ""
+    /// Backend reachability only. It must never be used to sign out or change data scope.
+    var backendAvailability: BackendAvailability = .checking
 
     init() {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
@@ -151,6 +153,10 @@ final class AppState {
         backendBaseURLString = runtime.selectedEndpoint.baseURL.absoluteString
         isBackendFallbackActive = runtime.fallbackActivated
         backendSelectionSummary = runtime.selectionSummaryLine
+    }
+
+    func applyBackendAvailability(_ availability: BackendAvailability) {
+        backendAvailability = availability
     }
 
     func applySubscriptionSnapshot(_ snapshot: SubscriptionSnapshot) {

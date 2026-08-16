@@ -1,0 +1,46 @@
+{
+  "_generated": true,
+  "planFile": "2026-08-15__offline-resilience.md",
+  "title": "Plan: offline resilience for backend outage",
+  "updated": "2026-08-15T19:17:29.227Z",
+  "phases": [
+    {
+      "name": "Product owner explicitly confirms this scope does not promise cross-device live finance sync.",
+      "status": "pending"
+    },
+    {
+      "name": "Inventory every MarketDataClientProtocol response: whether it is cacheable, max stale age, scope, a…",
+      "status": "pending"
+    },
+    {
+      "name": "Privacy review approves cache retention and deletion semantics.",
+      "status": "pending"
+    },
+    {
+      "name": "Existing red test/build gates are recorded separately; no phase may relabel unrelated failures as t…",
+      "status": "pending"
+    },
+    {
+      "name": "Phase 0 — five-second local-ready path, availability state and failure harness",
+      "status": "pending"
+    },
+    {
+      "name": "Phase 1 — durable read cache",
+      "status": "pending"
+    },
+    {
+      "name": "Phase 2 — server-safe portfolio snapshot contract",
+      "status": "pending"
+    },
+    {
+      "name": "Phase 3 — iOS coalesced portfolio queue and scheduler",
+      "status": "pending"
+    },
+    {
+      "name": "Phase 4 — UX, observability and release proof",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

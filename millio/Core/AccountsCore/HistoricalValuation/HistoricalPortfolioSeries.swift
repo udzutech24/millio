@@ -116,13 +116,12 @@ struct HistoricalPortfolioReaderConfiguration: Sendable {
     let mode: HistoricalPortfolioReaderMode
 
     static func current(defaults: UserDefaults = .standard) -> Self {
-        // Phase 5 emergency correctness cutover: production readers default to the local-only
-        // structured path. It consumes persisted V7 closes and local FX/market evidence and never
-        // revives the legacy `nil dependency => omit account` pixels. An explicitly persisted mode
-        // remains authoritative so QA can keep shadow observation and release operations can roll
-        // back to the structured compatibility reader without deleting financial evidence.
+        // A structured projection is not a safe default: a new install has no accepted
+        // observation window yet, and an incomplete historical bundle would otherwise replace a
+        // locally renderable chart with an empty one. Start in shadow, collect the same evidence,
+        // and switch only through `approveStructuredCutover`.
         guard let raw = defaults.string(forKey: userDefaultsKey) else {
-            return Self(mode: .structured)
+            return Self(mode: .shadow)
         }
         let requested = HistoricalPortfolioReaderMode(rawValue: raw) ?? .structured
         if requested == .structured, !defaults.bool(forKey: structuredApprovalKey) {

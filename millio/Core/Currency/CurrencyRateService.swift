@@ -142,7 +142,26 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         let needsUpdate = cachedRates.count <= 1 || (now - lastUpdateTS) > cacheTimeout
 
         if needsUpdate {
-            await refreshRates()
+            // A repository may have a persisted snapshot even when this service was created
+            // before its own UserDefaults warm-up (or uses an injected repository in tests).
+            // Read it before considering the network so an offline relaunch remains immediate.
+            if cachedRates.count <= 1,
+               let persisted = await rateRepository.peekCachedSnapshot(source: rateSource),
+               !persisted.rates.isEmpty {
+                cachedRates = persisted.rates
+                lastUpdateTS = persisted.fetchedAt
+            }
+            // A stale persisted quote is still more useful than a blocked local UI. Refresh it
+            // opportunistically; waiting here made the finance graph and header spin during a
+            // backend/provider outage even though a last known rate was already available.
+            if cachedRates.count > 1 {
+                Task { @MainActor [weak self] in
+                    await self?.refreshRates()
+                }
+            } else {
+                // No cached value exists, so there is nothing honest to present yet.
+                await refreshRates()
+            }
         }
         
         // Для валют, отсутствующих в фиат-кэше (напр., BTC), запрашиваем цену в USD у внешнего провайдера

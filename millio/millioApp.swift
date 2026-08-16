@@ -85,6 +85,7 @@ struct millioApp: App {
     @State private var isReconciling = false
     @State private var scopeReconciliationService = ScopeReconciliationService()
     @State private var backendRuntime: BackendSessionRuntime?
+    @State private var backendAvailabilityTask: Task<Void, Never>?
     @State private var startupCoordinator = StartupCoordinator(initialScope: .guest)
     @State private var appRefreshCoordinator = AppRefreshCoordinator()
     private let appLockCoordinator = AppLockLifecycleCoordinator()
@@ -156,6 +157,12 @@ struct millioApp: App {
                         ScopeSwitchOverlayView(messageKey: "reconciliation.overlay.restoring")
                             .zIndex(11)
                     }
+
+                    BackendAvailabilityIndicator(
+                        availability: appState.backendAvailability,
+                        retry: { startBackendAvailabilityProbe() }
+                    )
+                    .zIndex(12)
                 }
                 .preferredColorScheme(.dark)
                 .environment(appState)
@@ -229,6 +236,7 @@ struct millioApp: App {
     private func initializeColdStart(using container: ModelContainer) async {
         let start = DispatchTime.now()
         let backendRuntime = await resolveBackendRuntimeIfNeeded()
+        startBackendAvailabilityProbe()
 
         appLockCoordinator.enforceLockStateOnLaunch(appState: appState, hasPin: AppLockPinStore.shared.hasPin())
 
@@ -253,8 +261,10 @@ struct millioApp: App {
         // на финальном (user) контейнере, а не на guest с последующим пересозданием.
         // presentRestoreFlow по-прежнему выполняется последним и видит lifecycle == .ready
         // (LaunchRecoveryPolicy требует .ready) — порядок restore-флоу сохранён (риск №5).
-        await authManager.restoreSession()
-        AppLogger.log(.info, category: "App", "Auth restored — isAuthenticated=\(authManager.isAuthenticated) userID=\(authManager.currentUser?.id ?? "nil")")
+        // Local scope must become usable without waiting for refresh-token network I/O. A saved
+        // snapshot is enough for the resilience path; the authoritative refresh runs afterwards.
+        let cachedUser = await authManager.restoreCachedSessionForResilience()
+        AppLogger.log(.info, category: "App", "Local auth snapshot restored — isAuthenticated=\(authManager.isAuthenticated) hasUser=\(cachedUser != nil)")
         await synchronizeDataScope(with: authManager.currentUser) {
             // 6b Фаза 2 (фикс адверсариального ревью 2026-07-10): легаси→core миграция ДО .ready.
             // Агрегат «Общий баланс» стал core-only (FinanceTotalsService.calculateTotalsSnapshot) —
@@ -264,6 +274,9 @@ struct millioApp: App {
             // финальном (пост-swap) контейнере, гарантированно до конструирования RootTabView/VM.
             guard await self.runLegacyAccountsMigrationIfNeeded() else { return }
             await useCase.initialize()
+        }
+        Task { @MainActor in
+            await authManager.restoreSession()
         }
         AppLogger.log(.info, category: "App", "Active scope after sync: \(activeDataScope.storeConfigurationName), storeExisted=\(activeScopeStoreExistedBeforeBinding)")
         logger.info("AppLifecycleUseCase.initialize finished in \(Double(DispatchTime.now().uptimeNanoseconds - initStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
@@ -378,10 +391,44 @@ struct millioApp: App {
             return fallbackRuntime
         }
 
-        let runtime = await BackendStartupResolver(endpoints: resolvedEndpoints).resolve()
+        // Endpoint configuration is local and deterministic. Availability is intentionally
+        // checked after local startup, so an outage cannot delay the usable SwiftData UI.
+        let runtime = BackendStartupResolver(endpoints: resolvedEndpoints).resolveStaticRuntime()
         self.backendRuntime = runtime
         appState.applyBackendRuntime(runtime)
         return runtime
+    }
+
+    @MainActor
+    private func startBackendAvailabilityProbe() {
+        guard let runtime = backendRuntime else { return }
+        backendAvailabilityTask?.cancel()
+        appState.applyBackendAvailability(.checking)
+
+        backendAvailabilityTask = Task { @MainActor in
+            async let result = BackendAvailabilityProbe().check(endpoint: runtime.selectedEndpoint)
+            async let deadline: Void = {
+                try? await Task.sleep(for: .seconds(5))
+            }()
+
+            await deadline
+            guard !Task.isCancelled else { return }
+            if appState.backendAvailability == .checking {
+                appState.applyBackendAvailability(.offline(.probeTimedOut))
+            }
+
+            let probeResult = await result
+            guard !Task.isCancelled else { return }
+            switch probeResult {
+            case .success:
+                // This changes availability only; it never triggers scope or navigation work.
+                appState.applyBackendAvailability(.online)
+            case .failure(let failure):
+                if appState.backendAvailability != .online {
+                    appState.applyBackendAvailability(.offline(failure))
+                }
+            }
+        }
     }
 
     @MainActor

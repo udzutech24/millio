@@ -34,9 +34,9 @@ struct HistoricalPortfolioShadowObservationTests {
     @Test("structured reader cannot be selected before an accepted observation window")
     func cutoverTransitionIsFailClosed() {
         let defaults = UserDefaults(suiteName: "HistoricalPortfolioCutover.\(UUID().uuidString)")!
-        // The absence of an override is the product-level emergency cutover. This test covers a
-        // manually persisted runtime transition, which must still pass the operational gate.
-        #expect(HistoricalPortfolioReaderConfiguration.current(defaults: defaults).mode == .structured)
+        // No persisted approval means no cutover. A new or restored scope must keep the
+        // compatibility pixels while the structured reader collects its observation evidence.
+        #expect(HistoricalPortfolioReaderConfiguration.current(defaults: defaults).mode == .shadow)
         defaults.set(HistoricalPortfolioReaderMode.structured.rawValue,
                      forKey: HistoricalPortfolioReaderConfiguration.userDefaultsKey)
         #expect(HistoricalPortfolioReaderConfiguration.current(defaults: defaults).mode == .shadow)

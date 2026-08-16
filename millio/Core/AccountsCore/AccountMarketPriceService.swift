@@ -57,6 +57,9 @@ final class AccountMarketPriceService {
         }
         if didUpdate {
             try? modelContext.save()
+            // Both live totals and historical series consume this persisted evidence. Reuse
+            // the established investment mutation event so every consumer rebuilds once.
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
         }
     }
 

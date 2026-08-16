@@ -149,6 +149,15 @@ struct DynamicsSeries {
     let points: [ChartDataPoint]
 }
 
+enum HistoricalDynamicsFallbackPolicy {
+    static func renderablePoints(
+        structured: [ChartDataPoint],
+        compatibility: [ChartDataPoint]
+    ) -> [ChartDataPoint] {
+        structured.isEmpty && !compatibility.isEmpty ? compatibility : structured
+    }
+}
+
 /// One immutable result of a historical request. It is committed only after the request revision
 /// is still current, so chart pixels and every series-derived consumer cannot observe different
 /// bundles when requests finish out of order.
@@ -156,6 +165,9 @@ private struct HistoricalDynamicsProjection {
     let bundle: HistoricalPortfolioSeriesResult
     let chartPoints: [ChartDataPoint]
     let shadowDeltaBucket: HistoricalPortfolioShadowDeltaBucket?
+    /// The structured series is retained as diagnostic evidence, but its incomplete values must
+    /// never become visible pixels or a stale hero. The compatibility series is local-only.
+    let usesCompatibilityFallback: Bool
 }
 
 // MARK: - Dynamics Mode
@@ -1829,16 +1841,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             // ядра ровно один раз на календарный день, дедуп точек по дню. График — это сам массив;
             // заголовок и карточка «Общая сумма» читают его концы. Снесён отдельный шаг
             // addingCoreContribution — core сворачивается внутри продюсера.
-            let compatibilitySeries = if historicalReaderMode == .shadow {
-                await aggregatedDynamicsSeries(
-                    accounts: chartAccounts,
-                    period: (start: period.start, end: period.end),
-                    useNetTotals: useNetTotals,
-                    liveEndBalance: liveEndBalanceAggr
-                )
-            } else {
-                historicalDateSkeleton(period: period)
-            }
+            // The structured reader is allowed to fail closed, but UI must not replace the
+            // last local valuation with a zero-valued date skeleton. Build the established
+            // local series as a bounded fallback for the same dates and scope.
+            let compatibilitySeries = await aggregatedDynamicsSeries(
+                accounts: chartAccounts,
+                period: (start: period.start, end: period.end),
+                useNetTotals: useNetTotals,
+                liveEndBalance: liveEndBalanceAggr
+            )
             guard isCurrentChartUpdateRevision(revision) else { return }
             let projection = await historicalAggregatedSeries(
                 period: period,
@@ -1850,25 +1861,21 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         case .byAccounts:
             // Каждый счет - отдельная линия
             var allDataPoints: [ChartDataPoint] = []
-            if historicalReaderMode == .shadow {
-                for account in chartAccounts {
-                    let liveEndBalancePerAccount: Double? = chartAccounts.count == 1
-                        && state.selectedDate == nil
-                        && !isAccountArchived(account)
-                        ? await liveConvertedBalance(for: account, displayCurrency: state.displayCurrency, at: period.end)
-                        : nil
-                    let accountData = await buildTimeSeriesData(
-                        accounts: [account],
-                        startDate: period.start,
-                        endDate: period.end,
-                        label: getAccountInfoForDynamics(account: account)?.name ?? L("finances.dynamics.chart.account_fallback"),
-                        debtAsNegative: false,
-                        liveEndBalance: liveEndBalancePerAccount
-                    )
-                    allDataPoints.append(contentsOf: accountData)
-                }
-            } else {
-                allDataPoints = historicalDateSkeleton(period: period).points
+            for account in chartAccounts {
+                let liveEndBalancePerAccount: Double? = chartAccounts.count == 1
+                    && state.selectedDate == nil
+                    && !isAccountArchived(account)
+                    ? await liveConvertedBalance(for: account, displayCurrency: state.displayCurrency, at: period.end)
+                    : nil
+                let accountData = await buildTimeSeriesData(
+                    accounts: [account],
+                    startDate: period.start,
+                    endDate: period.end,
+                    label: getAccountInfoForDynamics(account: account)?.name ?? L("finances.dynamics.chart.account_fallback"),
+                    debtAsNegative: false,
+                    liveEndBalance: liveEndBalancePerAccount
+                )
+                allDataPoints.append(contentsOf: accountData)
             }
             guard isCurrentChartUpdateRevision(revision) else { return }
             let projection = await historicalScopedSeries(
@@ -1884,21 +1891,17 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             // Один выбранный счет
             if let account = chartAccounts.first(where: { $0.accountUniqueID == accountID }) {
                 let chartData: [ChartDataPoint]
-                if historicalReaderMode == .shadow {
-                    let liveEndBalanceSingle: Double? = state.selectedDate == nil && !isAccountArchived(account)
-                        ? await liveConvertedBalance(for: account, displayCurrency: state.displayCurrency, at: period.end)
-                        : nil
-                    chartData = await buildTimeSeriesData(
-                        accounts: [account],
-                        startDate: period.start,
-                        endDate: period.end,
-                        label: getAccountInfoForDynamics(account: account)?.name ?? L("finances.dynamics.chart.account_fallback"),
-                        debtAsNegative: false,
-                        liveEndBalance: liveEndBalanceSingle
-                    )
-                } else {
-                    chartData = historicalDateSkeleton(period: period).points
-                }
+                let liveEndBalanceSingle: Double? = state.selectedDate == nil && !isAccountArchived(account)
+                    ? await liveConvertedBalance(for: account, displayCurrency: state.displayCurrency, at: period.end)
+                    : nil
+                chartData = await buildTimeSeriesData(
+                    accounts: [account],
+                    startDate: period.start,
+                    endDate: period.end,
+                    label: getAccountInfoForDynamics(account: account)?.name ?? L("finances.dynamics.chart.account_fallback"),
+                    debtAsNegative: false,
+                    liveEndBalance: liveEndBalanceSingle
+                )
                 guard isCurrentChartUpdateRevision(revision) else { return }
                 let coreID = coreAccountID(forVisibleAccountID: accountID)
                 let projection = await historicalScopedSeries(
@@ -2008,7 +2011,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             return HistoricalDynamicsProjection(
                 bundle: result,
                 chartPoints: compatibilitySeries.points,
-                shadowDeltaBucket: shadowDeltaBucket
+                shadowDeltaBucket: shadowDeltaBucket,
+                usesCompatibilityFallback: false
             )
         }
 
@@ -2035,10 +2039,26 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 )
             }
         }
+        // A legacy portfolio may still be awaiting structured coverage after a quote refresh.
+        // Preserve the established compatibility graph rather than rendering an empty chart;
+        // the structured bundle remains diagnostic-only until it is complete.
+        let renderablePoints = HistoricalDynamicsFallbackPolicy.renderablePoints(
+            structured: points,
+            compatibility: compatibilitySeries.points
+        )
+        if renderablePoints != points {
+            return HistoricalDynamicsProjection(
+                bundle: result,
+                chartPoints: renderablePoints,
+                shadowDeltaBucket: shadowDeltaBucket,
+                usesCompatibilityFallback: true
+            )
+        }
         return HistoricalDynamicsProjection(
             bundle: result,
             chartPoints: points,
-            shadowDeltaBucket: shadowDeltaBucket
+            shadowDeltaBucket: shadowDeltaBucket,
+            usesCompatibilityFallback: false
         )
     }
 
@@ -2046,13 +2066,42 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     /// guard immediately before this method. Structured readers derive hero and breakdown in the
     /// same synchronous commit; shadow mode keeps its compatibility consumers unchanged.
     private func commitHistoricalProjection(_ projection: HistoricalDynamicsProjection) {
+        // A refresh may temporarily have incomplete historical coverage (for example while a
+        // legacy portfolio is being reconciled after market data returns). Never erase a valid
+        // on-screen local series with an empty replacement: preserve the last truthful bundle
+        // and expose the incomplete state through the warning path instead.
+        guard !projection.chartPoints.isEmpty else {
+            if state.chartData.isEmpty {
+                state.currencyConversionWarning = L("finances.dynamics.warning.history_incomplete")
+            }
+            return
+        }
         historicalPortfolioSeries = projection.bundle
         historicalShadowDeltaBucket = projection.shadowDeltaBucket
         state.chartData = projection.chartPoints
 
         guard historicalReaderMode != .shadow else { return }
+        guard !projection.usesCompatibilityFallback else {
+            applyCompatibilityHero(from: projection.chartPoints, selectedDate: state.selectedDate)
+            state.currencyConversionWarning = L("finances.dynamics.warning.history_incomplete")
+            return
+        }
         applyStructuredHero(from: projection.bundle, selectedDate: state.selectedDate)
         state.dynamicsBreakdown = structuredDynamicsBreakdown(from: projection.bundle)
+    }
+
+    /// Keeps the hero, total row and chart on one local series while the structured reader is
+    /// incomplete. The fallback is a display projection only: it never writes a close or claims
+    /// that the incomplete structured valuation is final.
+    private func applyCompatibilityHero(from points: [ChartDataPoint], selectedDate: Date?) {
+        let ordered = points.sorted { $0.date < $1.date }
+        guard let first = ordered.first, let latest = ordered.last else { return }
+        let selected = selectedDate.flatMap { target in
+            ordered.min { abs($0.date.timeIntervalSince(target)) < abs($1.date.timeIntervalSince(target)) }
+        } ?? latest
+        let delta = selected.value - first.value
+        state.currentBalance = selected.value
+        state.periodDelta = (delta, calculateDeltaPercent(delta: delta, startBalance: first.value))
     }
 
     private func applyStructuredHero(

@@ -140,13 +140,17 @@ struct CurrencyRateServiceTests {
         mockRepo.shouldFail = true
         // Но в UserDefaults есть протухшие курсы от прошлого запуска
         mockRepo.stubbedStaleRates = ["USD": 1.0, "EUR": 0.92, "RUB": 90.0]
+        mockRepo.delayNanoseconds = 2_000_000_000
 
         let service = CurrencyRateService(rateSource: .erapi, rateRepository: mockRepo)
 
         // Конвертер должен работать на stale-данных, а не возвращать nil
+        let startedAt = ContinuousClock.now
         let rate = await service.getRate(from: "USD", to: "EUR")
+        let elapsed = startedAt.duration(to: .now)
         #expect(rate != nil, "При отключённой сети и наличии stale-кэша курс должен быть доступен")
         #expect(abs((rate ?? 0) - 0.92) < 0.01)
+        #expect(elapsed < .seconds(1), "Stale курс не должен ждать сетевой timeout")
     }
 
     @Test("Ошибка API: используются старые значения из кэша")

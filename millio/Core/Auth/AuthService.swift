@@ -1329,6 +1329,19 @@ final class AuthManager {
         }
     }
 
+    /// Restores only the locally persisted session snapshot for the launch resilience path.
+    /// It performs no network I/O and intentionally does not invoke `onSessionChanged`: the app
+    /// owns the one initial scope bind, preventing an async callback from rebuilding root UI.
+    func restoreCachedSessionForResilience() async -> AuthUser? {
+        guard let session = await service.lastKnownSession() else { return nil }
+        currentUser = session.user
+        accessTokenExpiresAt = session.accessTokenExpiresAt
+        lastAuthRequestId = session.requestId
+        status = .authenticated
+        clearFeedback()
+        return session.user
+    }
+
     func signIn(with authorization: Result<ASAuthorization, Error>) async {
         guard let attemptID = activeAppleSignInAttemptID else {
             diagnostics.log(.warning, phase: "apple_sign_in.ignored_busy", operation: .appleSignIn, requestId: lastAuthRequestId, backendRequestId: nil, details: [:])

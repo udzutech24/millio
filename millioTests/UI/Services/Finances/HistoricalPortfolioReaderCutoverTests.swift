@@ -13,7 +13,7 @@ struct HistoricalPortfolioReaderCutoverTests {
             .structured
         ]).count == 3)
         #expect(HistoricalPortfolioReaderMode(rawValue: "bareTotalAt") == nil)
-        #expect(HistoricalPortfolioReaderConfiguration.current(defaults: defaults).mode == .structured)
+        #expect(HistoricalPortfolioReaderConfiguration.current(defaults: defaults).mode == .shadow)
 
         defaults.set(
             HistoricalPortfolioReaderMode.compatibility.rawValue,
@@ -31,7 +31,7 @@ struct HistoricalPortfolioReaderCutoverTests {
         let section = String(tail[..<end.lowerBound])
 
         #expect(section.contains("HistoricalPortfolioSeriesProducer("))
-        #expect(section.contains("historicalPortfolioSeries = result"))
+        #expect(section.contains("historicalPortfolioSeries = projection.bundle"))
         #expect(section.contains("guard point.valuation.total != nil else { return [] }"))
         #expect(section.contains("guard let total = point.valuation.total else { return [] }"))
         #expect(!section.contains("diagnosticPartialTotal"))

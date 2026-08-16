@@ -233,7 +233,13 @@ struct BackendStartupResolver {
         self.forcedEndpointProvider = forcedEndpointProvider
     }
 
+    /// Legacy test helper retained for endpoint-selection tests. Production startup must use
+    /// `resolveStaticRuntime()` and run availability independently after local UI is ready.
     func resolve() async -> BackendSessionRuntime {
+        resolveStaticRuntime()
+    }
+
+    func resolveStaticRuntime() -> BackendSessionRuntime {
         let forcedEndpoint = forcedEndpointProvider(endpoints)
         let detectedCountryCode = countryCodeProvider()
         let selectionSource: BackendSelectionSource
@@ -247,121 +253,16 @@ struct BackendStartupResolver {
             selectionSource = .automaticLocale
         }
 
-        if await probe(endpoint: preferredEndpoint, logPrefix: "preferred") {
-            let runtime = BackendSessionRuntime(
-                selectedEndpoint: preferredEndpoint,
-                preferredEndpoint: preferredEndpoint,
-                fallbackActivated: false,
-                forcedOverride: forcedEndpoint != nil,
-                selectionSource: selectionSource,
-                detectedCountryCode: detectedCountryCode
-            )
-            logSelection(runtime)
-            return runtime
-        }
-
-        guard forcedEndpoint == nil else {
-            let runtime = BackendSessionRuntime(
-                selectedEndpoint: preferredEndpoint,
-                preferredEndpoint: preferredEndpoint,
-                fallbackActivated: false,
-                forcedOverride: true,
-                selectionSource: selectionSource,
-                detectedCountryCode: detectedCountryCode
-            )
-            logSelection(runtime)
-            return runtime
-        }
-
-        let fallbackEndpoint = endpoints.alternate(to: preferredEndpoint)
-        if await probe(endpoint: fallbackEndpoint, logPrefix: "fallback") {
-            let runtime = BackendSessionRuntime(
-                selectedEndpoint: fallbackEndpoint,
-                preferredEndpoint: preferredEndpoint,
-                fallbackActivated: true,
-                forcedOverride: false,
-                selectionSource: selectionSource,
-                detectedCountryCode: detectedCountryCode
-            )
-            logSelection(runtime)
-            return runtime
-        }
-
-        AppLogger.log(
-            .warning,
-            category: "Backend",
-            "Backend probe failed. Keeping preferred backend \(preferredEndpoint.region.rawValue) at \(preferredEndpoint.baseURL.absoluteString)"
-        )
-
         let runtime = BackendSessionRuntime(
             selectedEndpoint: preferredEndpoint,
             preferredEndpoint: preferredEndpoint,
             fallbackActivated: false,
-            forcedOverride: false,
+            forcedOverride: forcedEndpoint != nil,
             selectionSource: selectionSource,
             detectedCountryCode: detectedCountryCode
         )
         logSelection(runtime)
         return runtime
-    }
-
-    private func probe(endpoint: BackendEndpoint, logPrefix: String) async -> Bool {
-        let probeURL = endpoint.baseURL.appending(path: "runtime/server-info")
-        var request = URLRequest(url: probeURL)
-        request.httpMethod = "GET"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.timeoutInterval = 8
-
-        do {
-            let (data, response) = try await session.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                AppLogger.log(.warning, category: "Backend", "Backend \(logPrefix) probe returned non-HTTP response for \(endpoint.baseURL.absoluteString)")
-                return false
-            }
-
-            guard (200..<300).contains(httpResponse.statusCode) else {
-                AppLogger.log(.warning, category: "Backend", "Backend \(logPrefix) probe failed with status \(httpResponse.statusCode) for \(endpoint.baseURL.absoluteString)")
-                return false
-            }
-
-            let payload = try JSONDecoder().decode(ServerInfoResponse.self, from: data)
-            let reportedRegion = payload.region.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            guard
-                !reportedRegion.isEmpty,
-                let reportedURL = URL(string: payload.publicApiBaseUrl),
-                reportedURL.host() != nil
-            else {
-                AppLogger.log(.warning, category: "Backend", "Backend \(logPrefix) probe returned invalid server-info payload for \(endpoint.baseURL.absoluteString)")
-                return false
-            }
-
-            let reportedBaseURL = BackendEndpoint(region: endpoint.region, baseURL: reportedURL).baseURL
-
-            if reportedRegion != endpoint.region.rawValue {
-                AppLogger.log(
-                    .warning,
-                    category: "Backend",
-                    "Backend \(logPrefix) probe region mismatch. Expected \(endpoint.region.rawValue), got \(reportedRegion)"
-                )
-            }
-
-            if reportedBaseURL != endpoint.baseURL {
-                AppLogger.log(
-                    .warning,
-                    category: "Backend",
-                    "Backend \(logPrefix) probe publicApiBaseUrl mismatch. Expected \(endpoint.baseURL.absoluteString), got \(reportedBaseURL.absoluteString)"
-                )
-            }
-
-            return true
-        } catch {
-            AppLogger.log(
-                .warning,
-                category: "Backend",
-                "Backend \(logPrefix) probe failed for \(endpoint.baseURL.absoluteString): \(error.localizedDescription)"
-            )
-            return false
-        }
     }
 
     private func logSelection(_ runtime: BackendSessionRuntime) {
