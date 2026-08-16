@@ -35,7 +35,9 @@ struct RootTabBar: View {
             tabButton(
                 tab: .cashflow,
                 icon: "arrow.left.arrow.right",
-                label: MainLocalization.text(MainLocalization.serviceCashflow)
+                label: MainLocalization.text(MainLocalization.serviceCashflow),
+                activeIconColor: AppColors.cashflowGradient.first ?? AppColors.profileIconPurple,
+                inactiveIconColor: AppColors.cashflowGradient.first ?? AppColors.profileIconPurple
             )
         }
         .padding(.horizontal, 8)
@@ -145,7 +147,13 @@ struct RootTabBar: View {
 
     // MARK: - Tab Button
 
-    private func tabButton(tab: RootTab, icon: String, label: String) -> some View {
+    private func tabButton(
+        tab: RootTab,
+        icon: String,
+        label: String,
+        activeIconColor: Color = .white,
+        inactiveIconColor: Color? = nil
+    ) -> some View {
         let isActive = selectedTab == tab
         return Button {
             selectedTab = tab
@@ -153,16 +161,17 @@ struct RootTabBar: View {
             VStack(spacing: 3) {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: isActive ? .semibold : .regular))
+                    .foregroundStyle(
+                        isActive
+                            ? activeIconColor
+                            : (inactiveIconColor ?? Color.white).opacity(0.4)
+                    )
                     .scaleEffect(isActive ? 1.08 : 1.0)
                     .animation(.spring(response: 0.3, dampingFraction: 0.65), value: isActive)
                 Text(label)
                     .font(.system(size: 10, weight: isActive ? .semibold : .medium))
+                    .foregroundStyle(isActive ? Color.white : Color.white.opacity(0.4))
             }
-            .foregroundStyle(
-                isActive
-                    ? Color.white
-                    : Color.white.opacity(0.4)
-            )
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
         }

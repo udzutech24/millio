@@ -22,7 +22,13 @@ enum CashflowInsightsControlsStyle {
     /// Высота блока баров на основном экране cashflow.
     /// Должна включать и бар-треки, и подписи (лейблы) под ними, иначе подписи рисуются за пределами frame
     /// и пересекаются с переключателем гранулярности.
-    static let compactBarsHeight: CGFloat = 200
+    static let compactBarsHeight: CGFloat = 164
+    static let compactBarsAreaHeight: CGFloat = 104
+    static let minimumCompactLabelsAreaHeight: CGFloat = 44
+
+    static var compactLabelsAreaHeight: CGFloat {
+        compactBarsHeight - compactBarsAreaHeight
+    }
 
     static func granularityPickerMetrics(isFullScreen: Bool) -> CashflowInsightsGranularityPickerMetrics {
         if isFullScreen {

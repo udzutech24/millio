@@ -77,6 +77,10 @@ enum AppColors {
     
     /// Градиент для кнопки "Кешбэк"
     static let cashbackGradient = [Color(hex: "2B8CFF"), Color(hex: "005BFF")]
+
+    /// Акцент иконки Cashback на дашборде.
+    /// Отделён от `cashbackGradient`, чтобы локальная навигационная правка не перекрашивала весь сервис.
+    static let dashboardCashbackGradient = [Color(hex: "18C57A"), Color(hex: "00E0B8")]
     
     /// Градиент для кнопки "Кредиты"
     static let creditsGradient = [Color.blue, Color.indigo]

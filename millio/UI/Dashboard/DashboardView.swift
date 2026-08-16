@@ -376,7 +376,7 @@ struct DashboardView: View {
                 miniAppChip(
                     icon: "percent",
                     titleKey: MainLocalization.serviceCashback,
-                    accentColors: AppColors.cashbackGradient,
+                    accentColors: AppColors.dashboardCashbackGradient,
                     accessibilityID: "dashboard.chip.cashback",
                     action: onOpenCashback
                 )

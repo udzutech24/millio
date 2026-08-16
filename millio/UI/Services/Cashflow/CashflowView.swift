@@ -386,20 +386,28 @@ private struct CashflowContentView: View {
 
     private var monthContextActions: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                monthActionButton(
-                    title: CashflowMonthWorkspaceLocalization.add,
-                    systemImage: "plus",
-                    action: .addOperation,
-                    prominent: true
-                )
-                monthActionButton(
-                    title: CashflowMonthWorkspaceLocalization.title,
-                    systemImage: "calendar",
-                    action: .operations,
-                    prominent: false
-                )
+            GeometryReader { proxy in
+                HStack(spacing: CashflowPrimaryScreenLayoutPolicy.actionSpacing) {
+                    monthActionButton(
+                        title: CashflowMonthWorkspaceLocalization.add,
+                        systemImage: "plus",
+                        action: .addOperation,
+                        prominent: true
+                    )
+                    monthActionButton(
+                        title: CashflowMonthWorkspaceLocalization.title,
+                        systemImage: "calendar",
+                        action: .operations,
+                        prominent: false
+                    )
+                    .frame(
+                        width: CashflowPrimaryScreenLayoutPolicy.secondaryActionWidth(
+                            containerWidth: proxy.size.width
+                        )
+                    )
+                }
             }
+            .frame(height: 58)
 
             if isSelectedSpecificMonthClosed {
                 Label(CashflowMonthWorkspaceLocalization.closedExplanation, systemImage: "lock.fill")
@@ -429,10 +437,10 @@ private struct CashflowContentView: View {
                     .minimumScaleFactor(0.82)
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(prominent ? CashflowSurfaceStyle.accent : Color.white.opacity(0.90))
+            .foregroundStyle(prominent ? neonPositive : Color.white.opacity(0.86))
             .padding(.horizontal, 16)
             .frame(maxWidth: .infinity, minHeight: 58)
-            .background(CashflowSurfaceStyle.actionCard(isProminent: prominent))
+            .background(monthContextActionBackground(prominent: prominent))
         }
         .buttonStyle(.plain)
         .disabled(action != .operations && isSelectedSpecificMonthClosed)
@@ -442,6 +450,18 @@ private struct CashflowContentView: View {
                 ? CashflowMonthWorkspaceLocalization.closedExplanation
                 : monthActionAccessibilityHint
         )
+    }
+
+    private func monthContextActionBackground(prominent: Bool) -> some View {
+        RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+            .fill(prominent ? neonPositive.opacity(0.11) : Color.white.opacity(0.035))
+            .overlay {
+                RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                    .stroke(
+                        prominent ? neonPositive.opacity(0.72) : Color.white.opacity(0.10),
+                        lineWidth: prominent ? 1.2 : 0.8
+                    )
+            }
     }
 
     private var monthActionAccessibilityHint: String {
@@ -606,8 +626,17 @@ private struct CashflowContentView: View {
                     Spacer()
                     Text(formatSignedMoney(viewModel.state.assetValueChange))
                         .font(.system(size: 18, weight: .semibold))
+                        .monospacedDigit()
                         .foregroundStyle(positiveColor(for: viewModel.state.assetValueChange))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .frame(
+                            width: CashflowPrimaryScreenLayoutPolicy.assetValueColumnWidth,
+                            alignment: .trailing
+                        )
                         .contentTransition(.numericText())
+                    Color.clear
+                        .frame(width: CashflowPrimaryScreenLayoutPolicy.assetControlSlotWidth)
                 }
 
             }
@@ -651,9 +680,18 @@ private struct CashflowContentView: View {
                         .foregroundStyle(AppColors.textPrimary)
                     Spacer()
                     Text(formatSignedMoney(viewModel.state.periodTotalChange))
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.system(size: 19, weight: .semibold))
+                        .monospacedDigit()
                         .foregroundStyle(positiveColor(for: viewModel.state.periodTotalChange))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .frame(
+                            width: CashflowPrimaryScreenLayoutPolicy.assetValueColumnWidth,
+                            alignment: .trailing
+                        )
                         .contentTransition(.numericText())
+                    Color.clear
+                        .frame(width: CashflowPrimaryScreenLayoutPolicy.assetControlSlotWidth)
                 }
                 .padding(.horizontal, 4)
                 .padding(.bottom, 2)
@@ -775,9 +813,17 @@ private struct CashflowContentView: View {
             Spacer()
             Text(value)
                 .font(.system(size: 18, weight: .semibold))
+                .monospacedDigit()
                 .foregroundStyle(valueColor)
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(
+                    width: CashflowPrimaryScreenLayoutPolicy.assetValueColumnWidth,
+                    alignment: .trailing
+                )
                 .contentTransition(.numericText())
+            Color.clear
+                .frame(width: CashflowPrimaryScreenLayoutPolicy.assetControlSlotWidth)
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 2)
@@ -797,8 +843,14 @@ private struct CashflowContentView: View {
             HStack(spacing: 8) {
                 Text(value)
                     .font(.system(size: 18, weight: .semibold))
+                    .monospacedDigit()
                     .foregroundStyle(valueColor)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .frame(
+                        width: CashflowPrimaryScreenLayoutPolicy.assetValueColumnWidth,
+                        alignment: .trailing
+                    )
                     .contentTransition(.numericText())
                 Button {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
@@ -811,6 +863,7 @@ private struct CashflowContentView: View {
                         .foregroundStyle(primarySecondaryText)
                 }
                 .buttonStyle(.plain)
+                .frame(width: CashflowPrimaryScreenLayoutPolicy.assetControlSlotWidth)
                 .accessibilityLabel(
                     Text(
                         isExpanded.wrappedValue
@@ -885,6 +938,7 @@ private struct CashflowContentView: View {
                         let value = signedAmount(entry.convertedAmount)
                         Text(formatSignedMoney(value))
                             .font(.system(size: 14, weight: .semibold))
+                            .monospacedDigit()
                             .foregroundStyle(valueColor(entry.convertedAmount))
                             .lineLimit(1)
                     }
@@ -1138,11 +1192,12 @@ private struct CashflowContentView: View {
     }
 
     private var cashflowChartSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             periodSelectionHeader
 
             if EntitlementPolicy.canUseCashflowChart(isPro: appState.isPro) {
                 if hasChartData {
+                    cashflowHeroSummary
                     cashflowChartContent
                 } else {
                     cashflowChartEmptyState
@@ -1152,36 +1207,108 @@ private struct CashflowContentView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 14)
-        .background(financeCardBackground(cornerRadius: panelCornerRadius))
+        .padding(.top, 12)
+        .padding(.bottom, 12)
+        .background(CashflowSurfaceStyle.heroCard(cornerRadius: panelCornerRadius))
+    }
+
+    private var cashflowHeroPresentation: CashflowHeroPresentation {
+        CashflowHeroPresentationPolicy.make(
+            totalIncome: viewModel.state.totalIncome,
+            contributedExpense: viewModel.state.contributedExpense
+        )
+    }
+
+    private var cashflowHeroSummary: some View {
+        HStack(spacing: 10) {
+            cashflowHeroResult
+                .layoutPriority(1)
+
+            Divider()
+                .overlay(innerSeparator)
+                .frame(height: 62)
+
+            cashflowHeroMovement
+            cashflowExpandButton
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(financeInnerBackground(cornerRadius: rowCornerRadius))
+        .animation(.spring(response: 0.22, dampingFraction: 0.86), value: cashflowHeroPresentation)
+    }
+
+    private var cashflowHeroResult: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(L("cashflow.month_workspace.difference"))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(primarySecondaryText)
+
+            Text(heroAmountText(cashflowHeroPresentation.difference))
+                .font(.system(size: 28, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(positiveColor(for: cashflowHeroPresentation.difference))
+                .contentTransition(.numericText())
+                .lineLimit(1)
+                .minimumScaleFactor(0.58)
+                .allowsTightening(true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var cashflowHeroMovement: some View {
+        VStack(alignment: .trailing, spacing: 7) {
+            Text(formatSignedMoney(cashflowHeroPresentation.income))
+                .foregroundStyle(positiveColor(for: cashflowHeroPresentation.income))
+                .lineLimit(1)
+                .minimumScaleFactor(0.68)
+            Text(formatSignedMoney(cashflowHeroPresentation.expense))
+                .foregroundStyle(negativeColor(for: cashflowHeroPresentation.expense))
+                .lineLimit(1)
+                .minimumScaleFactor(0.68)
+        }
+        .font(.system(size: 14, weight: .semibold).monospacedDigit())
+        .frame(width: 76, alignment: .trailing)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            Text(
+                "\(L("cashflow.stats.income")) \(formatSignedMoney(cashflowHeroPresentation.income)), " +
+                "\(L("cashflow.stats.expenses")) \(formatSignedMoney(cashflowHeroPresentation.expense))"
+            )
+        )
+    }
+
+    private var cashflowExpandButton: some View {
+        Button {
+            showExpandedChart = true
+            fireLightImpact()
+        } label: {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary.opacity(0.90))
+                .frame(width: 44, height: 44)
+                .background(periodControlBackground)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(L("cashflow.chart.expand")))
+    }
+
+    private func heroAmountText(_ amount: Double) -> String {
+        let currency = displayCurrencyLabel()
+        return currency.isEmpty
+            ? formatSignedMoney(amount)
+            : "\(formatSignedMoney(amount)) \(currency)"
     }
 
     private var cashflowChartContent: some View {
         let presentation = cashflowInsightsPresentation
         let granularity = cashflowInsightsGranularity
 
-        return VStack(spacing: 18) {
-            HStack {
-                Spacer()
-                Button {
-                    showExpandedChart = true
-                    fireLightImpact()
-                } label: {
-                    Label(L("cashflow.chart.expand"), systemImage: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(primarySecondaryText)
-                .accessibilityLabel(Text(L("cashflow.chart.expand")))
-            }
-
+        return VStack(spacing: 0) {
             cashflowVariantAChart(
                 presentation: presentation,
                 granularity: granularity,
                 totalHeight: CashflowInsightsControlsStyle.compactBarsHeight,
-                barsAreaHeight: 120,
+                barsAreaHeight: CashflowInsightsControlsStyle.compactBarsAreaHeight,
                 minimumGroupWidth: 50,
                 barWidth: 32,
                 labelFontSize: 13,

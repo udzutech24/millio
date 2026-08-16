@@ -12,7 +12,11 @@ import Testing
 struct CashflowInsightsControlsStyleTests {
     @Test("Compact chart reserves enough height for bar labels")
     func compactBarsHeightPreventsPickerOverlap() {
-        #expect(CashflowInsightsControlsStyle.compactBarsHeight >= 190)
+        #expect(CashflowInsightsControlsStyle.compactBarsHeight < 200)
+        #expect(
+            CashflowInsightsControlsStyle.compactLabelsAreaHeight
+                >= CashflowInsightsControlsStyle.minimumCompactLabelsAreaHeight
+        )
     }
 
     @Test("Full screen granularity picker is larger than compact")
