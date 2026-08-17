@@ -14,7 +14,7 @@
 
 ## Решена ли задача
 
-Частично до подтверждения App Store Connect: локальный release artifact готов, focused functionality green. Commit, push и upload фиксируются в финале этого runbook.
+Да для internal TestFlight. Release commit `7ac7d57` отправлен в `origin/develop`. Xcode/App Store Connect провёл server-side analysis, принял IPA и вернул `Upload succeeded`; сборка `2.0 (1)` перешла в processing.
 
 ## Эффективно ли решение
 
