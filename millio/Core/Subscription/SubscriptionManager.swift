@@ -63,6 +63,13 @@ enum SubscriptionStatus {
     case expired
 }
 
+enum EntitlementVerificationState: Equatable {
+    case idle
+    case checking
+    case resolved(hasActiveSubscription: Bool)
+    case degraded
+}
+
 /// Протокол для управления подпиской
 @MainActor
 protocol SubscriptionManagerProtocol {
@@ -102,6 +109,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     @Published private(set) var status: SubscriptionStatus = .notSubscribed
     @Published private(set) var expirationDate: Date?
     @Published private(set) var isTrialActive: Bool = false
+    @Published private(set) var entitlementVerificationState: EntitlementVerificationState = .idle
     
     private var updateListenerTask: Task<Void, Never>?
     private var statusRefreshTask: Task<Void, Never>?
@@ -155,6 +163,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     }
 
     private func refreshSubscriptionStatus() async {
+        entitlementVerificationState = .checking
         defer {
             lastStatusRefreshAt = now()
             statusRefreshTask = nil
@@ -171,6 +180,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
             self.isTrialActive = false
             syncWidgetSubscriptionSnapshot()
             logger.info("Debug premium is active, expires: \(expiration)")
+            entitlementVerificationState = .resolved(hasActiveSubscription: true)
             return
         }
         
@@ -203,6 +213,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
             self.isTrialActive = false
             saveLocalStatus()
             logger.info("Active subscription found, expires: \(expiration)")
+            entitlementVerificationState = .resolved(hasActiveSubscription: true)
         } else {
             // Если нет активной подписки, проверяем триал
             if isTrialActive {
@@ -213,6 +224,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
             self.expirationDate = nil
             saveLocalStatus()
             logger.info("No active subscription found")
+            entitlementVerificationState = .resolved(hasActiveSubscription: false)
         }
     }
     
@@ -251,6 +263,9 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         
         try await AppStore.sync()
         await checkSubscriptionStatus(force: true)
+        guard status == .subscribed else {
+            throw SubscriptionError.noActiveSubscription
+        }
         
         logger.info("Purchases restored")
     }
@@ -489,6 +504,7 @@ enum SubscriptionError: LocalizedError {
     case verificationFailed
     case trialAlreadyUsed
     case alreadySubscribed
+    case noActiveSubscription
 
     private var localizationKey: String {
         switch self {
@@ -506,6 +522,8 @@ enum SubscriptionError: LocalizedError {
             return "subscription.error.trial_already_used"
         case .alreadySubscribed:
             return "subscription.error.already_subscribed"
+        case .noActiveSubscription:
+            return "subscription.error.no_active_subscription"
         }
     }
 

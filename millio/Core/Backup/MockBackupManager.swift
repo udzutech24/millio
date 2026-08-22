@@ -45,6 +45,14 @@ final class MockBackupManager: BackupManagerProtocol {
         // Ничего не делаем, backup отключен
     }
 
+    func restoreVersionVerified(
+        recordName: String,
+        passphrase: String?,
+        progress: RecoveryProgressSink?
+    ) async throws -> RecoveryReceipt {
+        throw AppError.iCloudUnavailable
+    }
+
     func listBackupVersions() async -> [BackupVersionInfo] {
         []
     }

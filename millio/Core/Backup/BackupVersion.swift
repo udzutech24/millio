@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct BackupVersion: Comparable, Codable {
+struct BackupVersion: Comparable, Codable, Sendable {
     let major: Int
     let minor: Int
     let patch: Int

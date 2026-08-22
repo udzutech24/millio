@@ -10,16 +10,11 @@ import Testing
 /// легаси-данные реальны. Ни мигратор, ни конвертер не публикуют `FinanceEvent`, поэтому авто-
 /// пересчёта после миграции нет — transient держится до случайного триггера или перезапуска.
 ///
-/// Продовый фикс: `millioApp.runLegacyAccountsMigrationIfNeeded()` вызывается ДО
-/// `AppLifecycleUseCase.initialize()` (который выставляет `lifecycle = .ready`), внутри
-/// `onScopeResolved` в `synchronizeDataScope` — на финальном (пост-swap) контейнере, но раньше,
-/// чем RootTabView/FinanceViewModel вообще монтируются и считают тотал. `millioApp.swift`
-/// недоступен юнит-тестам напрямую (SwiftUI `App`), поэтому здесь порядок вызовов
-/// воспроизводится напрямую (детерминированно, без ожидания фоновых Task из init — тот же
-/// проверенный паттерн, что и `FinanceViewModelTests.testCalculateTotalAmountDoesNotForceRefreshRates`):
-/// секция 1 документирует механизм бага (старый порядок — расчёт ДО миграции), секция 2 доказывает,
-/// что фикс (новый порядок — миграция ДО расчёта) устраняет нулевой результат.
-@Suite("Legacy migration ordering vs FinanceViewModel total calculation (6b Фаза 2 review fix)")
+/// Фаза 7 сохраняет защиту от нулевого итога иначе: readiness-гейт входит до `.ready`, затем
+/// миграция выполняется после первого кадра и пересоздаёт scoped UI. `millioApp.swift`
+/// недоступен юнит-тестам напрямую (SwiftUI `App`), поэтому здесь проверяются оба инварианта:
+/// порядок данных после миграции и недоступность исторического результата до её завершения.
+@Suite("Legacy migration ordering vs FinanceViewModel total calculation", .serialized)
 @MainActor
 struct LegacyMigrationOrderingTests {
 
@@ -97,14 +92,50 @@ struct LegacyMigrationOrderingTests {
         seedLegacyCard(ctx, balance: 150_000)
         try ctx.save()
 
-        // Новый продовый порядок: runLegacyAccountsMigrationIfNeeded (вызывается ДО .ready в
-        // millioApp.initializeColdStart) — раньше, чем RootTabView вообще создаёт FinanceViewModel
-        // и считает тотал.
+        // Миграция завершена до создания обновлённого scoped UI.
         let migrator = makeMigrator(modelContext: ctx, scopeSuffix: "fix")
         let summary = migrator.migrateIfNeeded(scopeIdentifier: "test-ordering-fix")
         #expect(summary.migrated == 1)
 
         let viewModel = await mountAndCalculateTotal(ctx)
         #expect(abs(viewModel.state.totalAmount - 150_000) < 0.01, "Тотал должен быть корректен с первого расчёта — ни одного нулевого результата")
+    }
+
+    @Test("Readiness-гейт не публикует исторический итог до отложенной миграции")
+    func readinessGateBlocksHistoricalPublicationUntilDeferredMigrationCompletes() async throws {
+        let scopeID = "deferred-migration-\(UUID().uuidString)"
+        let readiness = HistoricalValuationReadinessCoordinator.shared
+        readiness.resetForTesting()
+        defer { readiness.resetForTesting() }
+
+        let ctx = try makeContext()
+        seedLegacyCard(ctx, balance: 150_000)
+        try ctx.save()
+
+        readiness.begin(scopeID: scopeID, operation: .revisionMigration)
+        let viewModel = FinanceViewModel(
+            modelContext: ctx,
+            currencyService: MockCurrencyRateService(),
+            historicalValuationScopeID: scopeID,
+            skipInitialLoad: true
+        )
+        let beforeMigration = await viewModel.accountsTotalsService.historicalValuation(
+            at: Date(),
+            in: "RUB",
+            scopeID: scopeID,
+            timeContext: HistoricalValuationTimeContext(
+                timeZone: TimeZone(secondsFromGMT: 0)!
+            ),
+            clock: SystemHistoricalValuationClock()
+        )
+        #expect(beforeMigration.scopeReadiness == HistoricalScopeReadiness.revisionMigrating)
+        #expect(beforeMigration.quality == .unavailable)
+
+        let migrator = makeMigrator(modelContext: ctx, scopeSuffix: "deferred")
+        #expect(migrator.migrateIfNeeded(scopeIdentifier: scopeID).migrated == 1)
+        readiness.complete(scopeID: scopeID, operation: .revisionMigration)
+
+        let remountedViewModel = await mountAndCalculateTotal(ctx)
+        #expect(abs(remountedViewModel.state.totalAmount - 150_000) < 0.01)
     }
 }

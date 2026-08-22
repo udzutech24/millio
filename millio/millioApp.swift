@@ -58,6 +58,8 @@ struct millioApp: App {
         let portfolioSymbolsSyncService: PortfolioSymbolsSyncService
         let accountSnapshotBackfillCoordinator: AccountSnapshotBackfillCoordinator
         let historicalValuationMaintenance: HistoricalValuationProductionMaintenance
+        let changeDrivenBackupCoordinator: ChangeDrivenBackupCoordinator
+        let postRestoreRefreshCoordinator: PostRestoreRefreshCoordinator
     }
 
     @UIApplicationDelegateAdaptor(FirebaseAppDelegate.self) private var firebaseDelegate
@@ -68,6 +70,9 @@ struct millioApp: App {
     @State private var portfolioSymbolsSyncService: PortfolioSymbolsSyncService?
     @State private var accountSnapshotBackfillCoordinator: AccountSnapshotBackfillCoordinator?
     @State private var historicalValuationMaintenance: HistoricalValuationProductionMaintenance?
+    @State private var changeDrivenBackupCoordinator: ChangeDrivenBackupCoordinator?
+    @State private var postRestoreRefreshCoordinator: PostRestoreRefreshCoordinator?
+    @State private var historicalMaintenanceTask: Task<Void, Never>?
     @State private var authManager = AuthManager()
     @State private var toastCenter = ToastCenter()
     @State private var isBiometricUnlockInProgress = false
@@ -86,7 +91,10 @@ struct millioApp: App {
     @State private var scopeReconciliationService = ScopeReconciliationService()
     @State private var backendRuntime: BackendSessionRuntime?
     @State private var backendAvailabilityTask: Task<Void, Never>?
+    @State private var backendAvailabilityRetryTask: Task<Void, Never>?
+    @State private var backendAvailabilityFailureCount = 0
     @State private var startupCoordinator = StartupCoordinator(initialScope: .guest)
+    @State private var deferredLegacyMigrationTask: Task<Void, Never>?
     @State private var appRefreshCoordinator = AppRefreshCoordinator()
     @State private var incomingStatementCoordinator: IncomingStatementCoordinator?
     private let appLockCoordinator = AppLockLifecycleCoordinator()
@@ -98,10 +106,11 @@ struct millioApp: App {
         self.runtimeEnvironment = runtimeEnvironment
         EarlyFirebaseBootstrap.ensureConfigured()
         Self.registerFeatures()
-        let initialScope = DataScope.guest
+        let initialScope = Self.resolveInitialDataScope()
         _activeScopeStoreExistedBeforeBinding = State(initialValue: Self.storeExists(for: initialScope))
         _activeDataScope = State(initialValue: initialScope)
         _activeModelContainer = State(initialValue: Self.makeModelContainer(for: initialScope))
+        _startupCoordinator = State(initialValue: StartupCoordinator(initialScope: initialScope))
         if runtimeEnvironment.isScreenshotMode || runtimeEnvironment.isUnifiedEntryPerformanceMode {
             let appState = AppState()
             appState.isGuestModeEnabled = true
@@ -197,7 +206,11 @@ struct millioApp: App {
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-                    triggerBackgroundBackup()
+                    Task { @MainActor in
+                        await changeDrivenBackupCoordinator?.flushIfNeeded()
+                        triggerBackgroundBackup()
+                    }
+                    cancelBackendAvailabilityWork()
                     appLockCoordinator.handleWillResignActive(appState: appState)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
@@ -205,6 +218,7 @@ struct millioApp: App {
                           !runtimeEnvironment.isScreenshotMode,
                           !runtimeEnvironment.isUnifiedEntryPerformanceMode else { return }
                     Task { @MainActor in
+                        startBackendAvailabilityProbe()
                         await appRefreshCoordinator.refreshSubscriptionIfNeeded(
                             reason: .appDidBecomeActive,
                             appState: appState
@@ -217,7 +231,7 @@ struct millioApp: App {
                         presentNextIncomingStatementIfReady()
 
                         await financeStartupWarmupUseCase?.warmupIfNeeded()
-                        await runHistoricalMaintenancePipeline()
+                        scheduleHistoricalMaintenancePipeline()
                     }
                 }
                 .onOpenURL { url in
@@ -307,34 +321,34 @@ struct millioApp: App {
         )
         applyDependencyBinding(binding, backendRuntime: backendRuntime)
 
-        let useCase = AppLifecycleUseCase(
-            appState: appState,
-            backupManager: binding.container.backupManager
-        )
-        
-        self.lifecycleUseCase = useCase
         let initStart = DispatchTime.now()
-        // A1 (фикс race guest→user): сессия восстанавливается и скоуп синхронизируется
-        // ДО перевода приложения в .ready. lifecycle = .ready выставляется внутри
-        // useCase.initialize() из замыкания onScopeResolved — уже ПОСЛЕ свопа контейнера,
-        // поэтому RootTabView (и его FinanceViewModel/CashflowViewModel) монтируется сразу
-        // на финальном (user) контейнере, а не на guest с последующим пересозданием.
-        // presentRestoreFlow по-прежнему выполняется последним и видит lifecycle == .ready
-        // (LaunchRecoveryPolicy требует .ready) — порядок restore-флоу сохранён (риск №5).
         // Local scope must become usable without waiting for refresh-token network I/O. A saved
         // snapshot is enough for the resilience path; the authoritative refresh runs afterwards.
         let cachedUser = await authManager.restoreCachedSessionForResilience()
         AppLogger.log(.info, category: "App", "Local auth snapshot restored — isAuthenticated=\(authManager.isAuthenticated) hasUser=\(cachedUser != nil)")
+
+        // An already authenticated local session has useful offline data to show. Do not keep it
+        // on the decorative minimum splash timer; unauthenticated launches keep the existing delay.
+        let useCase = AppLifecycleUseCase(
+            appState: appState,
+            backupManager: binding.container.backupManager,
+            minimumLaunchDuration: ColdStartPresentationPolicy.minimumLaunchDurationOverride(
+                hasCachedAuthenticatedSession: cachedUser != nil
+            )
+        )
+        self.lifecycleUseCase = useCase
+
+        // A cached scope must reach the ready route before expensive legacy migration starts.
+        // Enter the readiness gate first so a freshly mounted FinanceViewModel cannot publish an
+        // incomplete core portfolio as a final zero balance.
         await synchronizeDataScope(with: authManager.currentUser) {
-            // 6b Фаза 2 (фикс адверсариального ревью 2026-07-10): легаси→core миграция ДО .ready.
-            // Агрегат «Общий баланс» стал core-only (FinanceTotalsService.calculateTotalsSnapshot) —
-            // если FinanceViewModel монтируется раньше миграции, первый расчёт видит core пустым и
-            // показывает «баланс ≈ 0» (ни мигратор, ни конвертер не публикуют FinanceEvent — авто-
-            // пересчёта нет, transient держится до случайного триггера или рестарта). Здесь — на
-            // финальном (пост-swap) контейнере, гарантированно до конструирования RootTabView/VM.
-            guard await self.runLegacyAccountsMigrationIfNeeded() else { return }
+            HistoricalValuationReadinessCoordinator.shared.begin(
+                scopeID: self.activeDataScope.storeConfigurationName,
+                operation: .revisionMigration
+            )
             await useCase.initialize()
         }
+        scheduleDeferredLegacyMigrationForActiveScope()
         Task { @MainActor in
             await authManager.restoreSession()
         }
@@ -387,6 +401,27 @@ struct millioApp: App {
             modelContainer: modelContainer,
             scopeID: scopeIdentifier
         )
+        let changeDrivenBackupCoordinator = ChangeDrivenBackupCoordinator(
+            canBackup: {
+                guard appState.isBackupEnabled,
+                      appState.isAutoBackupEnabled,
+                      !appState.isRestoreInProgress,
+                      !ScopeMergeLock.shared.isMergeInProgress,
+                      let count = Self.recoveryUserDataCount(in: modelContainer) else { return false }
+                return count > 0
+            },
+            backup: {
+                try await container.backupManager.backupNow()
+            }
+        )
+        let postRestoreRefreshCoordinator = PostRestoreRefreshCoordinator { _ in
+            guard activeModelContainer === modelContainer else { return }
+            scopeIdentityToken &+= 1
+            startupCoordinator.scopeDiagnostics.didRebuildRoot(
+                generation: UInt(max(0, scopeIdentityToken)),
+                targetKind: activeDataScope.diagnosticKind
+            )
+        }
 
         logger.info("DIContainer.create finished in \(Double(DispatchTime.now().uptimeNanoseconds - diStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         return AppDependencyBinding(
@@ -394,7 +429,9 @@ struct millioApp: App {
             financeWarmupUseCase: financeWarmupUseCase,
             portfolioSymbolsSyncService: portfolioSymbolsSyncService,
             accountSnapshotBackfillCoordinator: accountSnapshotBackfillCoordinator,
-            historicalValuationMaintenance: historicalValuationMaintenance
+            historicalValuationMaintenance: historicalValuationMaintenance,
+            changeDrivenBackupCoordinator: changeDrivenBackupCoordinator,
+            postRestoreRefreshCoordinator: postRestoreRefreshCoordinator
         )
     }
 
@@ -404,12 +441,18 @@ struct millioApp: App {
         backendRuntime: BackendSessionRuntime
     ) {
         portfolioSymbolsSyncService?.stop()
+        changeDrivenBackupCoordinator?.stop()
+        postRestoreRefreshCoordinator?.stop()
         diContainer = binding.container
         financeStartupWarmupUseCase = binding.financeWarmupUseCase
         portfolioSymbolsSyncService = binding.portfolioSymbolsSyncService
         accountSnapshotBackfillCoordinator = binding.accountSnapshotBackfillCoordinator
         historicalValuationMaintenance = binding.historicalValuationMaintenance
+        changeDrivenBackupCoordinator = binding.changeDrivenBackupCoordinator
+        postRestoreRefreshCoordinator = binding.postRestoreRefreshCoordinator
         portfolioSymbolsSyncService?.start()
+        changeDrivenBackupCoordinator?.start()
+        postRestoreRefreshCoordinator?.start()
         authManager.configure(service: binding.container.authService)
         authManager.configure(toastCenter: toastCenter)
         authManager.configure(authConfiguration: backendRuntime.authConfiguration)
@@ -461,6 +504,14 @@ struct millioApp: App {
 
     @MainActor
     private func startBackendAvailabilityProbe() {
+        backendAvailabilityRetryTask?.cancel()
+        backendAvailabilityRetryTask = nil
+        backendAvailabilityFailureCount = 0
+        runBackendAvailabilityProbe()
+    }
+
+    @MainActor
+    private func runBackendAvailabilityProbe() {
         guard let runtime = backendRuntime else { return }
         backendAvailabilityTask?.cancel()
         appState.applyBackendAvailability(.checking)
@@ -482,13 +533,43 @@ struct millioApp: App {
             switch probeResult {
             case .success:
                 // This changes availability only; it never triggers scope or navigation work.
+                backendAvailabilityFailureCount = 0
                 appState.applyBackendAvailability(.online)
             case .failure(let failure):
                 if appState.backendAvailability != .online {
                     appState.applyBackendAvailability(.offline(failure))
                 }
+                scheduleBackendAvailabilityRetry(after: failure)
             }
         }
+    }
+
+    @MainActor
+    private func scheduleBackendAvailabilityRetry(after failure: BackendAvailabilityFailure) {
+        guard failure != .cancelled, backendAvailabilityRetryTask == nil else { return }
+
+        backendAvailabilityFailureCount += 1
+        let delay = BackendAvailabilityRetryPolicy.delay(for: backendAvailabilityFailureCount)
+        AppLogger.log(
+            .info,
+            category: "Backend",
+            "Availability probe failed (\(String(describing: failure))); retrying in \(delay.components.seconds) seconds"
+        )
+
+        backendAvailabilityRetryTask = Task { @MainActor in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            backendAvailabilityRetryTask = nil
+            runBackendAvailabilityProbe()
+        }
+    }
+
+    @MainActor
+    private func cancelBackendAvailabilityWork() {
+        backendAvailabilityTask?.cancel()
+        backendAvailabilityTask = nil
+        backendAvailabilityRetryTask?.cancel()
+        backendAvailabilityRetryTask = nil
     }
 
     @MainActor
@@ -649,7 +730,7 @@ struct millioApp: App {
         if let backendRuntime, let binding {
             applyDependencyBinding(binding, backendRuntime: backendRuntime)
 
-            // Триггер легаси→core self-heal-миграции на КАЖДОМ свопе контейнера, а не только на
+            // Триггер легаси→core self-heal-миграции на runtime-свопе контейнера, а не только на
             // cold-start-замыкании onScopeResolved (initializeColdStart:262). Async-своп на user через
             // onSessionChanged → synchronizeDataScope(onScopeResolved: nil) РАНЬШЕ миграцию не переигрывал:
             // cold-start резолвил guest (без легаси) и мигрировал его вхолостую, а user-стор со своими
@@ -658,9 +739,11 @@ struct millioApp: App {
             // миграция читает diContainer.modelContainer, который тот только что переключил на новый scope
             // (до :541 ушло бы в старый контейнер). Повторный вызов в том же процессе (cold-start уже
             // мигрировал этот scope) — дешёвый no-op: один fetchCount(Account) + флаг-short-circuit.
-            guard await runLegacyAccountsMigrationIfNeeded() else {
-                if isRuntimeSwap { isSwitchingScope = false }
-                return false
+            if isRuntimeSwap {
+                guard await runLegacyAccountsMigrationIfNeeded() else {
+                    isSwitchingScope = false
+                    return false
+                }
             }
         }
 
@@ -669,6 +752,10 @@ struct millioApp: App {
         // modelContext. Отмена in-flight задач старых VM происходит в их deinit при
         // teardown старого дерева (риск №3); старый контейнер жив по ARC до дезаллокации VM.
         scopeIdentityToken &+= 1
+        startupCoordinator.scopeDiagnostics.didRebuildRoot(
+            generation: UInt(max(0, scopeIdentityToken)),
+            targetKind: targetScope.diagnosticKind
+        )
 
         if isRuntimeSwap {
             // Даём кадр новому дереву на первичный рендер, затем снимаем оверлей.
@@ -686,6 +773,36 @@ struct millioApp: App {
     /// Watchdog reconciliation (Track B): максимальная длительность оверлея «Восстанавливаю данные…».
     private static let reconcileWatchdogSeconds = 20
 
+    /// Leaves the first interactive frame unblocked while retaining the historical valuation gate
+    /// that was entered before `.ready`. A stale task must not migrate a scope that is no longer
+    /// active after login/logout.
+    @MainActor
+    private func scheduleDeferredLegacyMigrationForActiveScope() {
+        guard deferredLegacyMigrationTask == nil else { return }
+
+        let scopeIdentifier = activeDataScope.storeConfigurationName
+        deferredLegacyMigrationTask = Task { @MainActor in
+            await Task.yield()
+            defer { deferredLegacyMigrationTask = nil }
+
+            guard activeDataScope.storeConfigurationName == scopeIdentifier else {
+                HistoricalValuationReadinessCoordinator.shared.complete(
+                    scopeID: scopeIdentifier,
+                    operation: .revisionMigration
+                )
+                return
+            }
+
+            guard await runLegacyAccountsMigrationIfNeeded(readinessAlreadyStarted: true) else {
+                return
+            }
+
+            // Legacy migration does not publish FinanceEvent. Recreating scoped view models is the
+            // smallest reliable way to replace any pre-migration, non-final calculation.
+            scopeIdentityToken &+= 1
+        }
+    }
+
     @MainActor
     private func runPostStartupRefreshes() async {
         await appRefreshCoordinator.refreshSubscriptionIfNeeded(
@@ -700,7 +817,7 @@ struct millioApp: App {
         )
 
         await financeStartupWarmupUseCase?.warmupIfNeeded()
-        await runHistoricalMaintenancePipeline()
+        scheduleHistoricalMaintenancePipeline()
 
         // 6b Фаза 2 (фикс ревью 2026-07-10): легаси→core миграция ПЕРЕНЕСЕНА отсюда — теперь
         // вызывается раньше, ДО lifecycle == .ready (см. runLegacyAccountsMigrationIfNeeded и
@@ -724,6 +841,24 @@ struct millioApp: App {
         )
     }
 
+    /// Heavy historical replay must not compete with the first interactive frame. The backfill
+    /// readiness gate is entered synchronously before scheduling, so historical publication stays
+    /// blocked until the delayed work reaches a terminal state.
+    @MainActor
+    private func scheduleHistoricalMaintenancePipeline() {
+        guard historicalMaintenanceTask == nil else { return }
+
+        let scopeIdentifier = activeDataScope.storeConfigurationName
+        _ = accountSnapshotBackfillCoordinator?.prepareIfNeeded(scopeIdentifier: scopeIdentifier)
+
+        historicalMaintenanceTask = Task { @MainActor in
+            defer { historicalMaintenanceTask = nil }
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            await runHistoricalMaintenancePipeline()
+        }
+    }
+
     /// 6b Фаза 2 (фикс адверсариального ревью 2026-07-10): одноразовая opening-balance-миграция
     /// активных легаси-счетов (Card/Credit/Investment) в ядро AccountsCore + перенос полей легаси-
     /// групп. Вызывается ИЗ initializeColdStart ДО useCase.initialize() (который выставляет
@@ -733,14 +868,25 @@ struct millioApp: App {
     /// первом кадре (агрегат тотала core-only с Фазы 2, а FinanceViewModel не пересчитывает сам
     /// себя после миграции — ни мигратор, ни конвертер не публикуют FinanceEvent).
     @MainActor
-    private func runLegacyAccountsMigrationIfNeeded() async -> Bool {
+    private func runLegacyAccountsMigrationIfNeeded(
+        readinessAlreadyStarted: Bool = false
+    ) async -> Bool {
         guard let modelContainer = diContainer?.modelContainer else {
+            if readinessAlreadyStarted {
+                HistoricalValuationReadinessCoordinator.shared.fail(
+                    scopeID: activeDataScope.storeConfigurationName,
+                    operation: .revisionMigration,
+                    reasonCode: "missing_model_container"
+                )
+            }
             appState.lifecycle = .error(.incompatibleSchemaVersion)
             return false
         }
         let scopeIdentifier = activeDataScope.storeConfigurationName
         let readiness = HistoricalValuationReadinessCoordinator.shared
-        readiness.begin(scopeID: scopeIdentifier, operation: .revisionMigration)
+        if !readinessAlreadyStarted {
+            readiness.begin(scopeID: scopeIdentifier, operation: .revisionMigration)
+        }
 
         do {
             let evidence = LegacyProductEvidenceCollector.collect(in: modelContainer.mainContext)
@@ -875,6 +1021,15 @@ struct millioApp: App {
         }
     }
 
+    /// The previous successful user scope is durable only until an explicit logout clears it.
+    /// Opening that existing store synchronously prevents a cold launch from mounting a blank guest
+    /// tree and immediately recreating it on the user store after auth snapshot restoration.
+    private static func resolveInitialDataScope() -> DataScope {
+        guard let userID = ScopeCache.lastKnownUserID() else { return .guest }
+        let userScope = DataScope.user(id: userID)
+        return storeExists(for: userScope) ? userScope : .guest
+    }
+
     private static func storeURL(for scope: DataScope) -> URL? {
         guard let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return nil
@@ -998,6 +1153,17 @@ struct millioApp: App {
         return models.count
     }
 
+    @MainActor
+    private static func recoveryUserDataCount(in container: ModelContainer) -> Int? {
+        let context = ModelContext(container)
+        let repository = DataRepository(modelContext: context, modelContainer: container)
+        guard let payload = try? repository.exportAllData() else {
+            AppLogger.log(.warning, category: "App", "LaunchRecovery: user-data export failed")
+            return nil
+        }
+        return RecoveryDataPresence.userFinancialModelCount(in: payload)
+    }
+
     /// Прямой подсчёт строк в SQLite-сторе, минуя SwiftData.
     /// Считает все строки в пользовательских таблицах (Z-префикс, не системные Z_METADATA и т.п.).
     private static func sqliteUserDataCount(at url: URL) -> Int? {
@@ -1040,7 +1206,7 @@ struct millioApp: App {
 
         // Не бекапим пустой или неизвестный стор — неизвестное состояние (nil) опаснее пропущенного бэкапа.
         guard let container = activeModelContainer,
-              let count = Self.exportedModelCount(in: container),
+              let count = Self.recoveryUserDataCount(in: container),
               count > 0 else { return }
 
         Task {
@@ -1063,7 +1229,7 @@ struct millioApp: App {
     private func presentRestoreFlowIfNeeded() async {
         guard let diContainer, let activeModelContainer else { return }
 
-        guard let localDataCount = Self.exportedModelCount(in: activeModelContainer) else {
+        guard let localDataCount = Self.recoveryUserDataCount(in: activeModelContainer) else {
             AppLogger.log(.warning, category: "App", "LaunchRecovery: count uncertain, skipping restore")
             return
         }
@@ -1071,14 +1237,19 @@ struct millioApp: App {
         // в ручном restore после двух неудачных попыток (например, при passphrase-бэкапе).
         if localDataCount > 0 {
             UserDefaults.standard.set(0, forKey: Self.autoRestoreAttemptsKey)
+            RecoveryPromptStore.acknowledge(scopeIdentifier: activeDataScope.storeConfigurationName)
         }
         let latestBackupInfo = await diContainer.backupManager.lastBackupInfo()
         let input = LaunchRecoveryPolicy.Input(
             lifecycle: appState.lifecycle,
             hasCompletedOnboarding: lifecycleUseCase?.checkOnboardingStatus() ?? false,
+            isAuthenticatedUserScope: authManager.isAuthenticated && activeDataScope != .guest,
             didLocalStoreExistBeforeLaunch: activeScopeStoreExistedBeforeBinding,
             localDataCount: localDataCount,
-            latestBackupInfo: latestBackupInfo
+            latestBackupInfo: latestBackupInfo,
+            hasAcknowledgedEmptyRecovery: RecoveryPromptStore.isAcknowledged(
+                scopeIdentifier: activeDataScope.storeConfigurationName
+            )
         )
         let recoveryDecision = LaunchRecoveryPolicy.evaluate(input)
         AppLogger.log(.info, category: "App", "LaunchRecovery: localCount=\(localDataCount) storeExisted=\(activeScopeStoreExistedBeforeBinding) backup=\(latestBackupInfo != nil) lifecycle=\(appState.lifecycle) → \(recoveryDecision)")
@@ -1113,6 +1284,7 @@ struct millioApp: App {
                         try await diContainer.backupManager.restoreLatest(passphrase: nil)
                     }
                     UserDefaults.standard.set(0, forKey: Self.autoRestoreAttemptsKey)
+                    RecoveryPromptStore.acknowledge(scopeIdentifier: activeDataScope.storeConfigurationName)
                     AppLogger.log(.info, category: "App", "Auto-restore completed successfully")
                     await MainActor.run { appState.lifecycle = .ready }
                 } catch {

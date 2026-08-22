@@ -14,6 +14,8 @@ final class DIContainer {
     let modelContainer: ModelContainer
     let dataRepository: DataRepositoryProtocol
     let backupManager: BackupManagerProtocol
+    let recoveryCoordinator: RecoveryCoordinator
+    let recoveryScopeToken: RecoveryScopeToken
     let authService: any AuthServiceProtocol
     let apiClientFactory: APIClientFactory
     let sheetsExportService: any SheetsExportServiceProtocol
@@ -24,6 +26,8 @@ final class DIContainer {
         modelContainer: ModelContainer,
         dataRepository: DataRepositoryProtocol,
         backupManager: BackupManagerProtocol,
+        recoveryCoordinator: RecoveryCoordinator,
+        recoveryScopeToken: RecoveryScopeToken,
         authService: any AuthServiceProtocol,
         apiClientFactory: APIClientFactory,
         sheetsExportService: any SheetsExportServiceProtocol,
@@ -33,6 +37,8 @@ final class DIContainer {
         self.modelContainer = modelContainer
         self.dataRepository = dataRepository
         self.backupManager = backupManager
+        self.recoveryCoordinator = recoveryCoordinator
+        self.recoveryScopeToken = recoveryScopeToken
         self.authService = authService
         self.apiClientFactory = apiClientFactory
         self.sheetsExportService = sheetsExportService
@@ -122,12 +128,28 @@ final class DIContainer {
         let authService: any AuthServiceProtocol = apiClientFactory.makeAuthService()
         let sheetsExportService = apiClientFactory.makeSheetsExportService(authService: authService)
         let sheetsExportTrigger = apiClientFactory.makeSheetsExportTrigger(exportService: sheetsExportService)
+        let recoveryScopeToken = RecoveryScopeToken(
+            kind: scopeIdentifier == DataScope.guest.storeConfigurationName ? .guest : .authenticated,
+            generation: 0
+        )
+        let recoveryCoordinator = RecoveryCoordinator(
+            backupManager: backupManager,
+            localModelCount: {
+                guard let payload = try? dataRepository.exportAllData(),
+                      let object = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
+                      let models = object["models"] as? [[String: Any]] else { return nil }
+                return models.count
+            },
+            isScopeCurrent: { $0 == recoveryScopeToken }
+        )
 
         return DIContainer(
             appState: appState,
             modelContainer: modelContainer,
             dataRepository: dataRepository,
             backupManager: backupManager,
+            recoveryCoordinator: recoveryCoordinator,
+            recoveryScopeToken: recoveryScopeToken,
             authService: authService,
             apiClientFactory: apiClientFactory,
             sheetsExportService: sheetsExportService,

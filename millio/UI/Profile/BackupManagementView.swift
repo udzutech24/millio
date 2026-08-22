@@ -30,6 +30,7 @@ struct BackupManagementView: View {
     @State private var selectedRestoreRecordName: String?
     @State private var selectedVersionForSheet: BackupVersionInfo?
     @State private var showRestoreSuccessPrompt = false
+    @State private var lastRecoveryReceipt: RecoveryReceipt?
     @State private var isImportingVersion = false
     @State private var isExportingVersion = false
     @State private var exportDocument: BackupTransferFileDocument?
@@ -801,8 +802,17 @@ struct BackupManagementView: View {
 
     @MainActor
     private func createBackupNow() async {
-        guard let backupManager else {
+        guard let backupManager, let diContainer else {
             toastCenter.show(message: AppError.iCloudUnavailable.localizedDescription)
+            return
+        }
+        guard let payload = try? diContainer.dataRepository.exportAllData(),
+              let financialCount = RecoveryDataPresence.userFinancialModelCount(in: payload),
+              financialCount > 0 else {
+            toastCenter.show(message: BackupL10n.tr(
+                "backup.error.no_financial_data",
+                fallback: "Add an account or transaction before creating a backup."
+            ))
             return
         }
         guard hasReachedPinnedVersionLimit == false else {
@@ -835,7 +845,7 @@ struct BackupManagementView: View {
 
     @MainActor
     private func restoreSelectedVersion() async {
-        guard let backupManager, let selectedRestoreRecordName else {
+        guard let diContainer, let selectedRestoreRecordName else {
             toastCenter.show(message: AppError.restoreFailed(BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore")).localizedDescription)
             return
         }
@@ -846,7 +856,18 @@ struct BackupManagementView: View {
         do {
             focusedField = nil
             let passphraseToUse = trimmedPassphrase.isEmpty ? nil : trimmedPassphrase
-            try await backupManager.restoreVersion(recordName: selectedRestoreRecordName, passphrase: passphraseToUse)
+            let receipt = try await diContainer.recoveryCoordinator.restoreExplicit(
+                recordName: selectedRestoreRecordName,
+                passphrase: passphraseToUse,
+                scope: diContainer.recoveryScopeToken
+            )
+            guard receipt.isVerified else {
+                throw RecoveryFailure.verificationMismatch(
+                    expected: receipt.expectedModelCount,
+                    actual: receipt.importedModelCount
+                )
+            }
+            lastRecoveryReceipt = receipt
             await refreshStatusIfNeeded(force: true)
             selectedVersionForSheet = nil
             showRestoreSuccessPrompt = true
@@ -1374,6 +1395,17 @@ struct BackupManagementView: View {
                             .foregroundStyle(AppColors.textSecondary)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
+
+                        if let receipt = lastRecoveryReceipt {
+                            Text(BackupL10n.format(
+                                "backup.restore.success.verified_count",
+                                fallback: "%lld of %lld records verified",
+                                receipt.importedModelCount,
+                                receipt.expectedModelCount
+                            ))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppColors.toggleOnGreen)
+                        }
                     }
 
                     Button {

@@ -21,13 +21,13 @@ struct LaunchRecoveryPolicyTests {
         #expect(decision.shouldPresentRestore)
     }
 
-    @Test("Evaluator skips restore when onboarding is incomplete")
-    func testEvaluateSkipsRestoreForIncompleteOnboarding() {
+    @Test("Evaluator offers authenticated recovery before onboarding")
+    func testEvaluateOffersRestoreBeforeOnboarding() {
         let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
 
         let decision = LaunchRecoveryPolicy.evaluate(
             .init(
-                lifecycle: .ready,
+                lifecycle: .onboarding,
                 hasCompletedOnboarding: false,
                 didLocalStoreExistBeforeLaunch: false,
                 localDataCount: 0,
@@ -35,8 +35,8 @@ struct LaunchRecoveryPolicyTests {
             )
         )
 
-        #expect(decision == .skip(.onboardingIncomplete))
-        #expect(!decision.shouldPresentRestore)
+        #expect(decision == .presentRestore)
+        #expect(decision.shouldPresentRestore)
     }
 
     @Test("Evaluator skips restore while app lifecycle is not ready")
@@ -127,6 +127,22 @@ struct LaunchRecoveryPolicyTests {
         #expect(!decision.shouldPresentRestore)
     }
 
+    @Test("Unacknowledged empty authenticated scope opens recovery while CloudKit metadata is unresolved")
+    func testEvaluateOffersRecoveryBeforeFirstCloudLookupResolves() {
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: true,
+                localDataCount: 0,
+                latestBackupInfo: nil,
+                hasAcknowledgedEmptyRecovery: false
+            )
+        )
+
+        #expect(decision == .presentRestore)
+    }
+
     @Test("Policy enters restore only when there is no pre-existing local store, local data is empty, and backup exists")
     func testShouldPresentRestoreOnlyForRecoveryCase() {
         let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
@@ -152,8 +168,8 @@ struct LaunchRecoveryPolicyTests {
         )
 
         #expect(
-            !LaunchRecoveryPolicy.shouldPresentRestore(
-                lifecycle: .ready,
+            LaunchRecoveryPolicy.shouldPresentRestore(
+                lifecycle: .onboarding,
                 hasCompletedOnboarding: false,
                 didLocalStoreExistBeforeLaunch: false,
                 localDataCount: 0,

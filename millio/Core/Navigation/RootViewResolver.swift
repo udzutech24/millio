@@ -28,7 +28,15 @@ struct RootViewResolver: View {
         isAuthenticated: Bool,
         isGuestModeEnabled: Bool
     ) -> RootViewRoute {
-        if lifecycle == .launching || authStatus == .restoring {
+        if lifecycle == .launching {
+            return .launching
+        }
+
+        // A cached authenticated session is sufficient to open its local SwiftData scope.
+        // Network token refresh continues in the background and may be unreachable (for example,
+        // when a regional route to the backend is blocked). Holding the splash here would hide
+        // already available offline data behind a remote request.
+        if authStatus == .restoring && !isAuthenticated {
             return .launching
         }
 

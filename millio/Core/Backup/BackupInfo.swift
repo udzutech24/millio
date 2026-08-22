@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct BackupInfo: Codable, Equatable {
+struct BackupInfo: Codable, Equatable, Sendable {
     let date: Date
     let size: Int64
     let version: String
@@ -18,14 +18,14 @@ struct BackupInfo: Codable, Equatable {
 }
 
 // Откуда пришла запись в списке версий (только для диагностики, не хранится в CK).
-enum BackupVersionSource: String {
+enum BackupVersionSource: String, Sendable {
     case index          // из AppBackupIndex (кэш)
     case snapshotQuery  // прямой CKQuery по AppBackup records
     case legacyLatest   // запись latest_backup (старый формат)
     case unknown
 }
 
-struct BackupVersionInfo: Codable, Identifiable, Equatable {
+struct BackupVersionInfo: Codable, Identifiable, Equatable, Sendable {
     let recordName: String
     let date: Date
     let size: Int64

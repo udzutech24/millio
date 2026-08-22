@@ -1,0 +1,54 @@
+{
+  "_generated": true,
+  "planFile": "2026-08-22__phase-9-reliable-recovery.md",
+  "title": "Plan: Phase 9 — reliable data and subscription recovery",
+  "updated": "2026-08-22T12:12:06.453Z",
+  "phases": [
+    {
+      "name": "9.0 — Contract tests first",
+      "status": "done"
+    },
+    {
+      "name": "9.1 — Recovery domain and coordinator",
+      "status": "done"
+    },
+    {
+      "name": "9.2 — Transactional import verification and rollback",
+      "status": "done"
+    },
+    {
+      "name": "9.3 — Authenticated recovery before onboarding",
+      "status": "done"
+    },
+    {
+      "name": "9.4 — Unified recovery UI",
+      "status": "done"
+    },
+    {
+      "name": "9.5 — Acknowledged refresh barrier",
+      "status": "done"
+    },
+    {
+      "name": "9.6 — Change-driven auto-backup",
+      "status": "done"
+    },
+    {
+      "name": "9.7 — Scope transition diagnostics and Accounts jank proof",
+      "status": "done"
+    },
+    {
+      "name": "9.8 — Subscription recovery",
+      "status": "done"
+    },
+    {
+      "name": "9.9 — Full verification, documentation, and signed artifact",
+      "status": "done"
+    },
+    {
+      "name": "9.10 — User-authorized device checklist",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

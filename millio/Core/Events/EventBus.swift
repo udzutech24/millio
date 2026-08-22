@@ -17,6 +17,7 @@ enum BackupEvent: AppEvent {
     case failed(AppError)
     case restoreStarted
     case restoreCompleted
+    case restoreVerified(RecoveryReceipt)
     case restoreFailed(AppError)
 }
 

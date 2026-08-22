@@ -1,0 +1,26 @@
+{
+  "_generated": true,
+  "planFile": "2026-08-21__russia-backend-reachability.md",
+  "title": "Plan: Russia backend reachability",
+  "updated": "2026-08-21T05:20:45.832Z",
+  "phases": [
+    {
+      "name": "Provision a separately reachable HTTPS API endpoint for Russian networks, with TLS and the complete…",
+      "status": "pending"
+    },
+    {
+      "name": "Validate DNS, certificate chain, authentication, uploads, CloudKit-dependent flows and /runtime/ser…",
+      "status": "pending"
+    },
+    {
+      "name": "Configure the production RU_API_BASE_URL to the proven endpoint and make BackendEndpoints.live reso…",
+      "status": "pending"
+    },
+    {
+      "name": "Add client tests for region selection and failover, then ship a build only after the endpoint healt…",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

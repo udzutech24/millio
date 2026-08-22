@@ -249,6 +249,7 @@ final class FinanceViewModel: ViewModelProtocol {
     private var ungroupedGroupName: String { FinanceSystemGroups.ungroupedName }
     private var financeEventsSubscriptionID: UUID?
     private var rateSourceObserver: NSObjectProtocol?
+    private var rateSnapshotObserver: NSObjectProtocol?
     private var backgroundTasks: [UUID: Task<Void, Never>] = [:]
 
     /// Монотонный счётчик поколений пересчёта тоталов. Растёт синхронно в момент старта нового
@@ -490,6 +491,15 @@ final class FinanceViewModel: ViewModelProtocol {
                 await self?.refreshRates()
             }
         }
+        rateSnapshotObserver = NotificationCenter.default.addObserver(
+            forName: .currencyRateSnapshotDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.refreshRates()
+            }
+        }
         if !skipInitialLoad {
             FinanceSystemGroups.normalizeUngroupedGroupName(in: modelContext)
             loadGroups()
@@ -515,6 +525,9 @@ final class FinanceViewModel: ViewModelProtocol {
                 EventBus.shared.unsubscribe(subscriptionID)
             }
             if let observer = rateSourceObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            if let observer = rateSnapshotObserver {
                 NotificationCenter.default.removeObserver(observer)
             }
         }
@@ -821,6 +834,8 @@ final class FinanceViewModel: ViewModelProtocol {
                 self.scheduleBackgroundTask { viewModel in
                     await viewModel.refreshGroupTotalsAndAmounts()
                 }
+            case BackupEvent.restoreVerified:
+                break
             default:
                 break
             }

@@ -9,6 +9,7 @@ import Foundation
 
 extension Notification.Name {
     static let currencyRateSourceDidChange = Notification.Name("currencyRateSourceDidChange")
+    static let currencyRateSnapshotDidChange = Notification.Name("currencyRateSnapshotDidChange")
 }
 
 // MARK: - RateSourceCapability

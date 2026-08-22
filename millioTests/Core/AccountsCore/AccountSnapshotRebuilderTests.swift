@@ -57,6 +57,35 @@ struct AccountSnapshotRebuilderTests {
         #expect(day3Snapshot?.balance == day3Replay)
     }
 
+    @Test @MainActor
+    func rebuildAllReplacesPersistedSnapshotsWithoutReadingAccountRelationship() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let service = AccountsCoreService(modelContext: context)
+        let account = try service.createAccount(
+            name: "Карта",
+            kind: .cash,
+            currency: "RUB",
+            openingBalance: 100,
+            date: day(0)
+        )
+        try service.recordEvent(account: account, type: .income, amount: 50, date: day(1))
+        context.insert(AccountDailySnapshot(
+            account: account,
+            dayKey: AccountEvent.dayKey(for: day(0)),
+            balance: 1,
+            isClosed: false
+        ))
+        try context.save()
+
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        try await rebuilder.rebuildAll(accountID: account.persistentModelID)
+
+        let snapshots = try fetchSnapshots(context, accountID: account.id)
+        #expect(snapshots.count == 2)
+        #expect(snapshots.max(by: { $0.dayKey < $1.dayKey })?.balance == 150)
+    }
+
     // MARK: - Инкрементальность: правка события в середине истории пересобирает только хвост
 
     @Test @MainActor

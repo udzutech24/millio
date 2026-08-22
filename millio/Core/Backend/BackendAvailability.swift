@@ -19,6 +19,22 @@ enum BackendAvailabilityFailure: Error, Equatable, Sendable {
     case invalidResponse
 }
 
+/// Ограничивает частоту фоновых проверок после временной ошибки сети. Последняя задержка
+/// повторяется, чтобы приложение восстанавливалось само, не превращаясь в частый polling.
+enum BackendAvailabilityRetryPolicy {
+    private static let delays: [Duration] = [
+        .seconds(5),
+        .seconds(15),
+        .seconds(30),
+        .seconds(60)
+    ]
+
+    static func delay(for failureCount: Int) -> Duration {
+        let index = min(max(failureCount - 1, 0), delays.count - 1)
+        return delays[index]
+    }
+}
+
 /// Pure transition policy. Keeping it free of URLSession and SwiftUI makes the five-second
 /// launch contract deterministic in tests and prevents a late availability result from
 /// rebuilding the scope/navigation tree.

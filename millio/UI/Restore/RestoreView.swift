@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 private enum RestoreTimeoutError: Error {
     case timedOut
@@ -17,6 +18,8 @@ struct RestoreView: View {
     @Environment(\.diContainer) private var diContainer
     @Environment(\.dismiss) private var dismiss
     @State private var isRestoring = false
+    @State private var recoveryStage: RecoveryStage = .searching
+    @State private var recoveryReceipt: RecoveryReceipt?
     @State private var restoreError: AppError?
     @State private var showSkipConfirmation = false
     @State private var backupPassphrase: String = ""
@@ -45,7 +48,9 @@ struct RestoreView: View {
                 VStack(spacing: 14) {
                     header
 
-                    if isRestoring {
+                    if let receipt = recoveryReceipt {
+                        recoverySuccessView(receipt: receipt)
+                    } else if isRestoring {
                         restoringView
                     } else if let selectedVersion = selectedBackupVersion {
                         backupFoundView(version: selectedVersion)
@@ -113,6 +118,14 @@ struct RestoreView: View {
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .multilineTextAlignment(.center)
+
+                ProgressView(value: recoveryStage.progress)
+                    .tint(AppColors.brandPrimary)
+
+                Text(recoveryStageTitle)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .accessibilityLabel(recoveryStageTitle)
             }
             .padding(22)
             .frame(maxWidth: .infinity)
@@ -161,6 +174,7 @@ struct RestoreView: View {
 
                         Button {
                             showSkipConfirmation = false
+                            acknowledgeRecoveryPrompt()
                             appState.lifecycle = .ready
                             dismiss()
                         } label: {
@@ -398,23 +412,26 @@ struct RestoreView: View {
         }
 
         isRestoring = true
+        recoveryStage = .downloading
+        recoveryReceipt = nil
         restoreError = nil
 
         Task {
             do {
                 let passphrase = backupPassphrase.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let selectedRecordName {
-                    try await backupManager.restoreVersion(
-                        recordName: selectedRecordName,
-                        passphrase: passphrase.isEmpty ? nil : passphrase
-                    )
-                } else {
-                    try await backupManager.restoreLatest(passphrase: passphrase.isEmpty ? nil : passphrase)
+                guard let recordName = selectedRecordName ?? selectedBackupVersion?.recordName else {
+                    throw RecoveryFailure.noBackup
                 }
+                guard let diContainer else { throw RecoveryFailure.invalidScope }
+                let receipt = try await diContainer.recoveryCoordinator.restoreExplicit(
+                    recordName: recordName,
+                    passphrase: passphrase.isEmpty ? nil : passphrase,
+                    scope: diContainer.recoveryScopeToken,
+                    progress: { stage in await MainActor.run { recoveryStage = stage } }
+                )
                 await MainActor.run {
+                    recoveryReceipt = receipt
                     isRestoring = false
-                    appState.lifecycle = .ready
-                    dismiss()
                 }
             } catch let error as AppError {
                 await MainActor.run {
@@ -428,6 +445,57 @@ struct RestoreView: View {
                 }
             }
         }
+    }
+
+    private var recoveryStageTitle: String {
+        switch recoveryStage {
+        case .searching: BackupL10n.tr("backup.restore.stage.searching", fallback: "Searching for backups…")
+        case .downloading: BackupL10n.tr("backup.restore.stage.downloading", fallback: "Downloading backup…")
+        case .validating: BackupL10n.tr("backup.restore.stage.validating", fallback: "Checking backup…")
+        case .importing: BackupL10n.tr("backup.restore.stage.importing", fallback: "Importing data…")
+        case .verifying: BackupL10n.tr("backup.restore.stage.verifying", fallback: "Verifying restored data…")
+        case .finishing: BackupL10n.tr("backup.restore.stage.finishing", fallback: "Finishing safely…")
+        }
+    }
+
+    private func recoverySuccessView(receipt: RecoveryReceipt) -> some View {
+        FinancesGlassCard(accentColor: AppColors.toggleOnGreen, cornerRadius: 22) {
+            VStack(spacing: 14) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 38, weight: .semibold))
+                    .foregroundStyle(AppColors.toggleOnGreen)
+                Text(BackupL10n.tr("backup.restore.success.title", fallback: "Data Restored"))
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppColors.textPrimary)
+                Text(BackupL10n.format(
+                    "backup.restore.success.verified_count",
+                    fallback: "%lld of %lld records verified",
+                    receipt.importedModelCount,
+                    receipt.expectedModelCount
+                ))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppColors.textSecondary)
+                .accessibilityLabel("\(receipt.importedModelCount) / \(receipt.expectedModelCount)")
+                Button {
+                    acknowledgeRecoveryPrompt()
+                    appState.lifecycle = .ready
+                    dismiss()
+                } label: {
+                    Text(BackupL10n.tr("common.done", fallback: "Done"))
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(22)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func acknowledgeRecoveryPrompt() {
+        guard let scopeIdentifier = diContainer?.modelContainer.configurations.first?.name else { return }
+        RecoveryPromptStore.acknowledge(scopeIdentifier: scopeIdentifier)
     }
 
     @MainActor

@@ -4,6 +4,20 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct StartupCoordinatorTests {
+
+    @Test("Кешированная авторизованная сессия пропускает декоративную задержку splash")
+    func cachedSessionSkipsMinimumLaunchDuration() {
+        #expect(
+            ColdStartPresentationPolicy.minimumLaunchDurationOverride(
+                hasCachedAuthenticatedSession: true
+            ) == 0
+        )
+        #expect(
+            ColdStartPresentationPolicy.minimumLaunchDurationOverride(
+                hasCachedAuthenticatedSession: false
+            ) == nil
+        )
+    }
     @Test("Cold start runs only once even if the view task is recreated")
     func coldStartRunsOnlyOnce() async {
         let coordinator = StartupCoordinator(initialScope: .guest)

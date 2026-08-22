@@ -12,6 +12,13 @@ enum DataScope: Equatable, Sendable {
     case guest
     case user(id: String)
 
+    var diagnosticKind: String {
+        switch self {
+        case .guest: "guest"
+        case .user: "authenticated"
+        }
+    }
+
     var storeConfigurationName: String {
         switch self {
         case .guest:

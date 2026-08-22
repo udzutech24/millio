@@ -19,9 +19,25 @@ protocol BackupManagerProtocol {
     func restoreLatest() async throws
     func restoreLatest(passphrase: String?) async throws
     func restoreVersion(recordName: String, passphrase: String?) async throws
+    func restoreVersionVerified(
+        recordName: String,
+        passphrase: String?,
+        progress: RecoveryProgressSink?
+    ) async throws -> RecoveryReceipt
     func listBackupVersions() async -> [BackupVersionInfo]
     func deleteBackupVersion(recordName: String) async throws
     func lastBackupInfo() async -> BackupInfo?
+}
+
+extension BackupManagerProtocol {
+    func restoreVersionVerified(
+        recordName: String,
+        passphrase: String?,
+        progress: RecoveryProgressSink?
+    ) async throws -> RecoveryReceipt {
+        try await restoreVersion(recordName: recordName, passphrase: passphrase)
+        throw RecoveryFailure.underlying(message: "verified_restore_unsupported")
+    }
 }
 
 actor BackupManager: BackupManagerProtocol {
@@ -31,6 +47,7 @@ actor BackupManager: BackupManagerProtocol {
     private let staticEncryption: BackupEncryptionProtocol?
     private let usesSettingsEncryption: Bool
     private var backupTask: Task<Void, Never>?
+    private var activeMutation: String?
 
     /// Хук «стор заменён восстановлением»: вызывается один раз после УСПЕШНОГО импорта бэкапа в том же
     /// сеансе. Нужен для self-heal легаси→core миграции — restore до-AccountsCore-бэкапа возвращает
@@ -134,6 +151,8 @@ actor BackupManager: BackupManagerProtocol {
     }
 
     private func performBackup(passphrase: String?, isPinned: Bool) async throws {
+        try beginMutation("backup")
+        defer { endMutation("backup") }
         logger.info("Starting backup...")
 
         // Блокировка бэкапа во время reconciliation (Track B, митигация B1b №7): пока merge
@@ -232,6 +251,8 @@ actor BackupManager: BackupManagerProtocol {
     }
     
     func restoreLatest(passphrase: String?) async throws {
+        try beginMutation("restore")
+        defer { endMutation("restore") }
         logger.info("Starting restore...")
         if let historicalValuationScopeID {
             historicalValuationReadiness.begin(
@@ -311,6 +332,8 @@ actor BackupManager: BackupManagerProtocol {
     }
 
     func restoreVersion(recordName: String, passphrase: String?) async throws {
+        try beginMutation("restore")
+        defer { endMutation("restore") }
         logger.info("Starting restore from selected version...")
         if let historicalValuationScopeID {
             historicalValuationReadiness.begin(
@@ -364,6 +387,59 @@ actor BackupManager: BackupManagerProtocol {
             CrashReporting.record(error: error)
             throw error
         }
+    }
+
+    func restoreVersionVerified(
+        recordName: String,
+        passphrase: String?,
+        progress: RecoveryProgressSink? = nil
+    ) async throws -> RecoveryReceipt {
+        try beginMutation("restore")
+        defer { endMutation("restore") }
+        let startedAt = Date()
+        await progress?(.downloading)
+        guard await isAvailable() else { throw AppError.iCloudUnavailable }
+        guard let downloadedData = try await cloudStore.downloadBackup(recordName: recordName) else {
+            throw restoreFailure(.backupNotFound)
+        }
+
+        await progress?(.validating)
+        let backupData = try decodeBackupPayload(
+            downloadedData,
+            passphrase: passphrase,
+            encryption: resolvedEncryption()
+        )
+        let metadata = try Self.backupMetadata(from: backupData)
+
+        await progress?(.importing)
+        let counts = try await replaceRepositoryDataWithVerifiedBackup(
+            backupData,
+            expectedModelCount: metadata.modelCount,
+            dataRepository: dataRepository,
+            progress: progress
+        )
+
+        await progress?(.finishing)
+        let receipt = RecoveryReceipt(
+            id: UUID(),
+            backupDate: metadata.timestamp,
+            expectedModelCount: metadata.modelCount,
+            localModelCountBefore: counts.before,
+            importedModelCount: counts.imported,
+            localModelCountAfter: counts.after,
+            duration: Date().timeIntervalSince(startedAt)
+        )
+        guard receipt.isVerified else {
+            throw RecoveryFailure.verificationMismatch(
+                expected: metadata.modelCount,
+                actual: counts.imported
+            )
+        }
+        await MainActor.run {
+            EventBus.shared.publish(BackupEvent.restoreVerified(receipt))
+            EventBus.shared.publish(BackupEvent.restoreCompleted)
+        }
+        return receipt
     }
 
     func listBackupVersions() async -> [BackupVersionInfo] {
@@ -736,6 +812,99 @@ actor BackupManager: BackupManagerProtocol {
         // Достигается только на успешном импорте (rollback-ветка выше перебрасывает ошибку). Self-heal
         // легаси→core сразу, а не на следующий relaunch: restore мог вернуть стор без ядра.
         await onDidReplaceStore?()
+    }
+
+    private func replaceRepositoryDataWithVerifiedBackup(
+        _ backupData: Data,
+        expectedModelCount: Int,
+        dataRepository: DataRepositoryProtocol,
+        progress: RecoveryProgressSink?
+    ) async throws -> (before: Int, imported: Int, after: Int) {
+        let previousData = try await dataRepository.exportAllDataAsync()
+        let beforeCount = try Self.modelCount(in: previousData)
+        let snapshotURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("millio-pre-restore-\(UUID().uuidString).json")
+        do {
+            try previousData.write(to: snapshotURL, options: .atomic)
+        } catch {
+            throw taggedRestoreFailure(.preRestoreSnapshotFailed)
+        }
+
+        do {
+            try Task.checkCancellation()
+            try await dataRepository.clearAllDataAsync()
+            try await dataRepository.importAllDataAsync(backupData)
+            await progress?(.verifying)
+            let importedData = try await dataRepository.exportAllDataAsync()
+            let importedCount = try Self.modelCount(in: importedData)
+            guard importedCount == expectedModelCount else {
+                throw RecoveryFailure.verificationMismatch(
+                    expected: expectedModelCount,
+                    actual: importedCount
+                )
+            }
+
+            await onDidReplaceStore?()
+            let finalData = try await dataRepository.exportAllDataAsync()
+            let finalCount = try Self.modelCount(in: finalData)
+            guard finalCount >= importedCount else {
+                throw RecoveryFailure.verificationMismatch(
+                    expected: importedCount,
+                    actual: finalCount
+                )
+            }
+            try? FileManager.default.removeItem(at: snapshotURL)
+            return (beforeCount, importedCount, finalCount)
+        } catch {
+            do {
+                try await dataRepository.clearAllDataAsync()
+                let snapshotData = try Data(contentsOf: snapshotURL)
+                try await dataRepository.importAllDataAsync(snapshotData)
+                let rolledBackCount = try Self.modelCount(
+                    in: try await dataRepository.exportAllDataAsync()
+                )
+                try? FileManager.default.removeItem(at: snapshotURL)
+                guard rolledBackCount == beforeCount else {
+                    throw RecoveryFailure.rollbackFailed
+                }
+            } catch {
+                throw RecoveryFailure.rollbackFailed
+            }
+            throw error
+        }
+    }
+
+    nonisolated private static func backupMetadata(from data: Data) throws -> BackupMetadata {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let metadataObject = object["metadata"] as? [String: Any] else {
+            throw AppError.backupCorrupted
+        }
+        let metadataData = try JSONSerialization.data(withJSONObject: metadataObject)
+        let metadata = try JSONDecoder().decode(BackupMetadata.self, from: metadataData)
+        guard metadata.modelCount > 0, metadata.isCompatibleWithCurrentSchema() else {
+            throw AppError.backupCorrupted
+        }
+        return metadata
+    }
+
+    nonisolated private static func modelCount(in data: Data) throws -> Int {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let models = object["models"] as? [[String: Any]] else {
+            throw AppError.backupCorrupted
+        }
+        return models.count
+    }
+
+    private func beginMutation(_ operation: String) throws {
+        guard activeMutation == nil else {
+            throw AppError.backupFailed("operation_in_progress")
+        }
+        activeMutation = operation
+    }
+
+    private func endMutation(_ operation: String) {
+        guard activeMutation == operation else { return }
+        activeMutation = nil
     }
     
     func lastBackupInfo() async -> BackupInfo? {

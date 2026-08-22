@@ -47,7 +47,8 @@
 ### 2.2. Правила retention
 
 - Автобэкап хранится как один non-pinned snapshot record `AppBackup`; старый auto-snapshot удаляется при записи нового.
-- Автобэкап обновляется не чаще одного раза в 24 часа, когда приложение уходит в фон, backup включён и auto-backup не выключен отдельным тумблером.
+- Завершённые backup-relevant `FinanceEvent` помечают scope как dirty. `ChangeDrivenBackupCoordinator` объединяет burst изменений 30-секундным debounce; уход в фон запрашивает flush без ожидания нового изменения.
+- Dirty-состояние сохраняется при недоступном iCloud/временной блокировке и будет повторено при следующем flush. Пустой или неопределённый store, restore и reconciliation блокируют auto-backup.
 - Пользователь может хранить максимум 4 pinned/manual snapshot-а одновременно.
 - Для legacy-совместимости параллельно best-effort обновляется `latest_backup`.
 - Сохранённые пользователем версии создаются как отдельные snapshot records.
@@ -189,6 +190,9 @@ Auto restore не должен silently пропускать:
 - если import нового backup не удался, выполняется rollback
 - если rollback не удался, restore завершается критической ошибкой
 - restore не считается успешным, пока импорт и post-import cleanup не завершены
+- verified restore сравнивает `metadata.modelCount` с новым экспортом сразу после импорта; mismatch считается ошибкой и запускает rollback
+- после self-heal финальное число не может быть меньше проверенного imported count
+- UI получает `RecoveryReceipt` с expected/before/imported/after counts и не закрывает recovery до явного подтверждения
 
 ---
 

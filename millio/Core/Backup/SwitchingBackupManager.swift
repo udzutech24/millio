@@ -65,6 +65,18 @@ final class SwitchingBackupManager: BackupManagerProtocol {
         try await enabledManager.restoreVersion(recordName: recordName, passphrase: passphrase)
     }
 
+    func restoreVersionVerified(
+        recordName: String,
+        passphrase: String?,
+        progress: RecoveryProgressSink?
+    ) async throws -> RecoveryReceipt {
+        try await enabledManager.restoreVersionVerified(
+            recordName: recordName,
+            passphrase: passphrase,
+            progress: progress
+        )
+    }
+
     func listBackupVersions() async -> [BackupVersionInfo] {
         await enabledManager.listBackupVersions()
     }

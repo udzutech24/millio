@@ -34,4 +34,13 @@ struct BackendAvailabilityStateMachineTests {
             #expect(machine.state == .offline(failure))
         }
     }
+
+    @Test("Automatic availability retries use bounded backoff")
+    func retryPolicyCapsDelayForPersistentFailure() {
+        #expect(BackendAvailabilityRetryPolicy.delay(for: 1) == .seconds(5))
+        #expect(BackendAvailabilityRetryPolicy.delay(for: 2) == .seconds(15))
+        #expect(BackendAvailabilityRetryPolicy.delay(for: 3) == .seconds(30))
+        #expect(BackendAvailabilityRetryPolicy.delay(for: 4) == .seconds(60))
+        #expect(BackendAvailabilityRetryPolicy.delay(for: 99) == .seconds(60))
+    }
 }

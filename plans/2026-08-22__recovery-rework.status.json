@@ -1,0 +1,49 @@
+{
+  "planFile": "2026-08-22__recovery-rework.md",
+  "title": "Переработка backup/recovery",
+  "updated": "2026-08-22T15:47:38.964389+00:00",
+  "phases": [
+    {
+      "name": "R0 — Stress-test и решение владельца",
+      "status": "done",
+      "note": "stress-test SR1-SR10; владелец: да с условиями (3 условия в плане)"
+    },
+    {
+      "name": "R1 — Единый владелец состояния recovery (D1, D10)",
+      "status": "in_progress",
+      "note": "RecoveryDecisionStore + идемпотентный вход"
+    },
+    {
+      "name": "R2 — Верифицированный авто-restore (D6, D7)",
+      "status": "pending",
+      "note": "restoreVerified + отбор по modelCount"
+    },
+    {
+      "name": "R3 — Путь «файл → данные» (D2–D5)",
+      "status": "pending",
+      "note": "главный сценарий A1"
+    },
+    {
+      "name": "R4 — Диагностика и RU-строки (D8, D9)",
+      "status": "pending",
+      "note": "BackupLookupOutcome + Retry"
+    },
+    {
+      "name": "R5 — Чистка и ponytail (D11, D12)",
+      "status": "pending",
+      "note": "мёртвый код, DI вместо CloudBackupStore()"
+    },
+    {
+      "name": "R6 — Интеграционный гейт",
+      "status": "pending",
+      "note": "25 регресс-файлов + security-review"
+    },
+    {
+      "name": "R7 — Финальная приёмка (Fable, 17 сценариев)",
+      "status": "pending",
+      "note": "агент без параметра model; чек-лист S1–S17 + аудит шимов/bloat"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": 720
+}

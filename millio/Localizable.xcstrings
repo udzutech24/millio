@@ -98047,6 +98047,39 @@
         }
       }
     },
+    "backup.restore.stage.downloading" : { "extractionState" : "manual", "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Backup wird geladen…" } }, "en" : { "stringUnit" : { "state" : "translated", "value" : "Downloading backup…" } }, "es" : { "stringUnit" : { "state" : "translated", "value" : "Descargando copia…" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Téléchargement de la sauvegarde…" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Загружаем копию…" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Yedek indiriliyor…" } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在下载备份…" } }
+    } },
+    "backup.restore.stage.finishing" : { "extractionState" : "manual", "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Sicherer Abschluss…" } }, "en" : { "stringUnit" : { "state" : "translated", "value" : "Finishing safely…" } }, "es" : { "stringUnit" : { "state" : "translated", "value" : "Finalizando de forma segura…" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Finalisation sécurisée…" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Безопасно завершаем…" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Güvenle tamamlanıyor…" } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在安全完成…" } }
+    } },
+    "backup.restore.stage.importing" : { "extractionState" : "manual", "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Daten werden importiert…" } }, "en" : { "stringUnit" : { "state" : "translated", "value" : "Importing data…" } }, "es" : { "stringUnit" : { "state" : "translated", "value" : "Importando datos…" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Importation des données…" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Импортируем данные…" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Veriler içe aktarılıyor…" } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在导入数据…" } }
+    } },
+    "backup.restore.stage.searching" : { "extractionState" : "manual", "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Backups werden gesucht…" } }, "en" : { "stringUnit" : { "state" : "translated", "value" : "Searching for backups…" } }, "es" : { "stringUnit" : { "state" : "translated", "value" : "Buscando copias…" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Recherche de sauvegardes…" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ищем резервные копии…" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Yedekler aranıyor…" } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在查找备份…" } }
+    } },
+    "backup.restore.stage.validating" : { "extractionState" : "manual", "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Backup wird geprüft…" } }, "en" : { "stringUnit" : { "state" : "translated", "value" : "Checking backup…" } }, "es" : { "stringUnit" : { "state" : "translated", "value" : "Comprobando copia…" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Vérification de la sauvegarde…" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Проверяем копию…" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Yedek kontrol ediliyor…" } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在检查备份…" } }
+    } },
+    "backup.restore.stage.verifying" : { "extractionState" : "manual", "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Wiederhergestellte Daten werden verifiziert…" } }, "en" : { "stringUnit" : { "state" : "translated", "value" : "Verifying restored data…" } }, "es" : { "stringUnit" : { "state" : "translated", "value" : "Verificando datos restaurados…" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Vérification des données restaurées…" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Проверяем восстановленные данные…" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "Geri yüklenen veriler doğrulanıyor…" } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在验证已恢复数据…" } }
+    } },
+    "backup.restore.success.verified_count" : { "extractionState" : "manual", "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "%1$lld von %2$lld Einträgen verifiziert" } }, "en" : { "stringUnit" : { "state" : "translated", "value" : "%1$lld of %2$lld records verified" } }, "es" : { "stringUnit" : { "state" : "translated", "value" : "%1$lld de %2$lld registros verificados" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "%1$lld enregistrements sur %2$lld vérifiés" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Проверено записей: %1$lld из %2$lld" } }, "tr" : { "stringUnit" : { "state" : "translated", "value" : "%1$lld / %2$lld kayıt doğrulandı" } }, "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已验证 %1$lld/%2$lld 条记录" } }
+    } },
+    "subscription.error.no_active_subscription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Es wurde kein aktives Abonnement gefunden" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No active subscription was found" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se encontró ninguna suscripción activa" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucun abonnement actif n’a été trouvé" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Активная подписка не найдена" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Etkin abonelik bulunamadı" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "未找到有效订阅" } }
+      }
+    },
     "subscription.error.load_products" : {
       "extractionState" : "manual",
       "localizations" : {

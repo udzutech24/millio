@@ -99,6 +99,7 @@ struct RootViewResolverTests {
     func testRouteMapping() {
         #expect(RootViewResolver.route(for: .launching, authStatus: .signedOut, isAuthenticated: false, isGuestModeEnabled: false) == .launching)
         #expect(RootViewResolver.route(for: .ready, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: false) == .launching)
+        #expect(RootViewResolver.route(for: .ready, authStatus: .restoring, isAuthenticated: true, isGuestModeEnabled: false) == .ready)
         #expect(RootViewResolver.route(for: .onboarding, authStatus: .signedOut, isAuthenticated: false, isGuestModeEnabled: false) == .auth)
         #expect(RootViewResolver.route(for: .onboarding, authStatus: .signedOut, isAuthenticated: false, isGuestModeEnabled: true) == .onboarding)
         #expect(RootViewResolver.route(for: .onboarding, authStatus: .authenticated, isAuthenticated: true, isGuestModeEnabled: false) == .onboarding)

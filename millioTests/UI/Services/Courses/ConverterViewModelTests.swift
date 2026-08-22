@@ -400,6 +400,22 @@ struct ConverterViewModelTests {
 
     @Test("Ручное обновление курсов показывает, какие валюты не обновились")
     func testFetchRatesShowsRequestedCodesOnFailure() async {
+        let defaults = UserDefaults.standard
+        let ratesKey = "rate_repo_rates_millio"
+        let updatedKey = "rate_repo_updated_at_millio"
+        let fetchedKey = "rate_repo_fetched_at_millio"
+        let previousRates = defaults.object(forKey: ratesKey)
+        let previousUpdated = defaults.object(forKey: updatedKey)
+        let previousFetched = defaults.object(forKey: fetchedKey)
+        defaults.removeObject(forKey: ratesKey)
+        defaults.removeObject(forKey: updatedKey)
+        defaults.removeObject(forKey: fetchedKey)
+        defer {
+            defaults.set(previousRates, forKey: ratesKey)
+            defaults.set(previousUpdated, forKey: updatedKey)
+            defaults.set(previousFetched, forKey: fetchedKey)
+        }
+
         let mockRepo = MockConverterRateRepository()
         mockRepo.shouldFail = true
 

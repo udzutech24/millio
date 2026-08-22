@@ -785,7 +785,13 @@ struct SubscriptionView: View {
             appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
 
         } catch {
-            errorMessage = .key("subscription.error.restore_purchases")
+            if let subscriptionError = error as? SubscriptionError {
+                errorMessage = LocalizedTextResolver { locale in
+                    subscriptionError.localizedDescription(for: locale)
+                }
+            } else {
+                errorMessage = .key("subscription.error.restore_purchases")
+            }
             showError = true
         }
     }

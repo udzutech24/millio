@@ -79,9 +79,7 @@ final class ConverterViewModel: ViewModelProtocol {
     
     // Persisted settings (using UserDefaults instead of @AppStorage for MVVM compliance)
     private let defaults = UserDefaults.standard
-    // var нужен — struct, сеттеры converterOverride и preferred мутируют локальную копию defaults
-    private var store = RateSourcePreferenceStore.shared
-    private let rateRepository: RateRepositoryProtocol
+    private let currencyService: CurrencyRateService
     
     private var selectedCodesRaw: String {
         get { defaults.string(forKey: "conv_selected_codes") ?? "RUB,USD,EUR,TRY,GBP,KZT" }
@@ -120,29 +118,8 @@ final class ConverterViewModel: ViewModelProtocol {
         }
     }
     
-    private var storedRateSource: String {
-        get {
-            // converterOverride = nil означает «следовать глобальному preferred»
-            store.converterOverride?.rawValue ?? store.preferred.rawValue
-        }
-        set {
-            let source = RateSource(rawValue: newValue) ?? store.preferred
-            if source == store.preferred {
-                // override совпадает с глобальным — override не нужен
-                store.converterOverride = nil
-            } else {
-                store.converterOverride = source
-            }
-            // Виджет-синк источника убран — теперь только в RateSourcePickerViewModel.selectSource
-        }
-    }
-
-    /// Метка источника для UI конвертера:
-    /// «По умолчанию (Millio)» если override не задан, иначе — название источника.
+    /// Конвертер использует общий источник, чтобы его суммы совпадали с финансовыми экранами.
     var rateSourceDisplayLabel: String {
-        if store.converterOverride == nil {
-            return ConverterL10n.rateSourceDefaultLabel(preferred: store.preferred)
-        }
         return state.rateSource.title
     }
     
@@ -250,13 +227,21 @@ final class ConverterViewModel: ViewModelProtocol {
         ConverterL10n.shareTitle(index: storedShareSequence + 1)
     }
     
-    init(rateRepository: RateRepositoryProtocol = RateRepository.shared) {
-        self.rateRepository = rateRepository
+    init(currencyService: CurrencyRateService) {
+        self.currencyService = currencyService
         onAppearInit()
         // Проверяем валюты после инициализации, если курсы уже загружены
         if state.allRates.count > 1 {
             filterSelectedCurrenciesToAvailable()
         }
+    }
+
+    convenience init() {
+        self.init(currencyService: .shared)
+    }
+
+    convenience init(rateRepository: RateRepositoryProtocol) {
+        self.init(currencyService: CurrencyRateService(rateSource: .millio, rateRepository: rateRepository))
     }
     
     // MARK: - Actions
@@ -375,10 +360,9 @@ final class ConverterViewModel: ViewModelProtocol {
             state.calcModeOn.toggle()
             
         case .setRateSource(let source):
-            state.rateSource = source
-            storedRateSource = source.rawValue
-            // conv_rate_source больше не зеркалится в iCloud — это локальный override конвертера
-            let cachedRates = storedCachedRates
+            currencyService.setRateSource(source)
+            state.rateSource = currencyService.rateSource
+            let cachedRates = currencyService.currentRateSnapshot()?.rates ?? [:]
             if cachedRates.count > 1 {
                 state.allRates = cachedRates
                 filterSelectedCurrenciesToAvailable()
@@ -484,7 +468,7 @@ final class ConverterViewModel: ViewModelProtocol {
         state.activeCode = storedActive.isEmpty ? "TRY" : storedActive
         state.inputText = storedInput.isEmpty ? "0" : storedInput
         
-        state.rateSource = RateSource(rawValue: storedRateSource) ?? .millio
+        state.rateSource = currencyService.rateSource
         state.showOfflineBadge = storedShowOfflineBadge
         state.hapticsEnabled = storedHapticsEnabled
         if state.expressionText.isEmpty {
@@ -495,7 +479,7 @@ final class ConverterViewModel: ViewModelProtocol {
         state.fractionDigits = storedFractionDigits
         state.shareHistory = loadShareHistory()
         
-        let cachedRates = storedCachedRates
+        let cachedRates = currencyService.currentRateSnapshot()?.rates ?? [:]
         if cachedRates.count > 1 {
             state.allRates = cachedRates
             filterSelectedCurrenciesToAvailable()
@@ -901,31 +885,29 @@ final class ConverterViewModel: ViewModelProtocol {
             return
         }
         
-        do {
-            let snapshot = try await rateRepository.getLatestRates(source: state.rateSource, forceRefresh: true, allowStaleOnError: true)
-            state.allRates = snapshot.rates
-
-            _ = await refreshCryptoRates(requiredCodes: requiredCrypto)
-            storedCachedRates = state.allRates
-            // Для UI и виджета важнее момент фактической загрузки на устройстве,
-            // чем дата/время публикации у провайдера. Иначе часть источников
-            // показывает "синтетическое" или неочевидное для пользователя время.
-            storedLastRatesTS = snapshot.fetchedAt
-            state.isOffline = false
-            
-            // Фильтруем выбранные валюты, оставляя только те, что есть в новом источнике
-            filterSelectedCurrenciesToAvailable()
-            syncWidgetConverterSnapshot()
-            presentRefreshIssueIfNeeded(for: missingRequestedCodes(from: requestedCodes))
-            
-            // Тактильный отклик теперь только в UI при нажатии на кнопку
-        } catch {
+        await currencyService.forceRefreshRates()
+        guard let snapshot = currencyService.currentRateSnapshot(), snapshot.rates.count > 1 else {
             state.isOffline = true
             presentRefreshIssueIfNeeded(
                 for: requestedCodes,
-                fallback: errorRefreshMessage(for: requestedCodes, error: error)
+                fallback: errorRefreshMessage(for: requestedCodes, error: URLError(.notConnectedToInternet))
             )
+            return
         }
+
+        state.allRates = snapshot.rates
+        _ = await refreshCryptoRates(requiredCodes: requiredCrypto)
+        storedCachedRates = state.allRates
+        // Для UI и виджета важнее момент фактической загрузки на устройстве,
+        // чем дата/время публикации у провайдера. Иначе часть источников
+        // показывает "синтетическое" или неочевидное для пользователя время.
+        storedLastRatesTS = snapshot.fetchedAt
+        state.isOffline = false
+
+        // Фильтруем выбранные валюты, оставляя только те, что есть в новом источнике
+        filterSelectedCurrenciesToAvailable()
+        syncWidgetConverterSnapshot()
+        presentRefreshIssueIfNeeded(for: missingRequestedCodes(from: requestedCodes))
     }
     
     // MARK: - Share Helpers

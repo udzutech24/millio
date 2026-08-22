@@ -15,9 +15,14 @@ final class StartupCoordinator {
     private var didFinishColdStart = false
     private var scopeSwitchTask: Task<Bool, Never>?
     private var scopeSwitchSequence: UInt = 0
+    let scopeDiagnostics: ScopeTransitionDiagnostics
 
-    init(initialScope: DataScope = .guest) {
+    init(
+        initialScope: DataScope = .guest,
+        scopeDiagnostics: ScopeTransitionDiagnostics? = nil
+    ) {
         self.activeScope = initialScope
+        self.scopeDiagnostics = scopeDiagnostics ?? ScopeTransitionDiagnostics()
     }
 
     func runColdStartIfNeeded(
@@ -45,14 +50,27 @@ final class StartupCoordinator {
         to targetScope: DataScope,
         operation: @escaping @MainActor (_ targetScope: DataScope) async -> Bool
     ) async -> Bool {
+        let targetKind = targetScope.diagnosticKind
         guard targetScope != activeScope || scopeSwitchTask != nil else {
+            scopeDiagnostics.didCoalesce(
+                generation: scopeSwitchSequence,
+                targetKind: targetKind
+            )
             return false
         }
 
         scopeSwitchSequence += 1
         let sequence = scopeSwitchSequence
+        scopeDiagnostics.requested(
+            generation: sequence,
+            targetKind: targetKind,
+            reason: "auth_resolution"
+        )
 
-        scopeSwitchTask?.cancel()
+        if scopeSwitchTask != nil {
+            scopeDiagnostics.didCancel(generation: sequence - 1, targetKind: targetKind)
+            scopeSwitchTask?.cancel()
+        }
 
         let task = Task { @MainActor [weak self] in
             let changed = await operation(targetScope)
@@ -61,6 +79,10 @@ final class StartupCoordinator {
 
             if changed {
                 self.activeScope = targetScope
+                self.scopeDiagnostics.didCommit(
+                    generation: sequence,
+                    targetKind: targetKind
+                )
             }
             self.scopeSwitchTask = nil
             return changed

@@ -39,7 +39,8 @@ Millio — iOS-приложение с локальным хранением д�
 - В `RestoreView` есть поле для ввода парольной фразы (нужно для passphrase-mode)
 - Restore полностью заменяет локальные данные (snapshot)
 - Ручные сохранённые версии хранятся отдельно и не перезаписываются автоматически; они остаются в истории, пока пользователь их не удалит
-- Автобэкап хранит один auto-snapshot `AppBackup`, обновляется не чаще одного раза в 24 часа при фоновой активности приложения и перезаписывает предыдущую auto-копию; `latest_backup` поддерживается как legacy fallback
+- Автобэкап хранит один auto-snapshot `AppBackup`: завершённые финансовые изменения объединяются 30-секундным debounce, а уход в фон запрашивает flush. Пустой/неопределённый store, restore и reconciliation блокируют backup; предыдущая auto-копия перезаписывается, `latest_backup` остаётся legacy fallback
+- Restore успешен только после сравнения `BackupMetadata.modelCount` с фактическим post-import экспортом; mismatch запускает rollback pre-restore snapshot
 - В Release ошибки backup/restore отправляются как non-fatal в Crashlytics через `CrashReporting.record(error:)`
 - Сжатие LZFSE применяется только если уменьшает размер; ошибки сжатия/упаковки считаются критическими для операции backup/restore
 

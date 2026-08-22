@@ -1,0 +1,38 @@
+{
+  "_generated": true,
+  "planFile": "2026-08-21__analytics-resume-cache.md",
+  "title": "Analytics resume cache",
+  "updated": "2026-08-21T05:02:25.078Z",
+  "phases": [
+    {
+      "name": "Prove the lock/resume blank state is a local-hydration race.",
+      "status": "done"
+    },
+    {
+      "name": "Add a protected, scope-keyed Analytics presentation snapshot.",
+      "status": "done"
+    },
+    {
+      "name": "Restore only for the unscoped Analytics overview.",
+      "status": "done"
+    },
+    {
+      "name": "Preserve valid snapshots from partial/empty refreshes.",
+      "status": "done"
+    },
+    {
+      "name": "Distinguish initial loading from a real empty scope.",
+      "status": "done"
+    },
+    {
+      "name": "Add unit coverage and install a signed physical-device build without deleting data.",
+      "status": "done"
+    },
+    {
+      "name": "Confirm the next manual lock → unlock after Analytics has created its first snapshot.",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}
