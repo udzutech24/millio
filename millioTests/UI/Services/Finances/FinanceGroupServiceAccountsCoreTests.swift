@@ -138,7 +138,10 @@ struct FinanceGroupServiceAccountsCoreTests {
     @Test("Failed group delete rolls back archive, links and deletion before unrelated save")
     func failedDeleteIsAllOrNothing() throws {
         struct SaveFailure: Error {}
-        let (_, context) = try makeContext()
+        // Контейнер обязан жить до конца теста: `context` — это его `mainContext`, и он не удерживает
+        // контейнер сильной ссылкой. Потеряем контейнер — первый же `insert` падает внутри SwiftData.
+        let (container, context) = try makeContext()
+        defer { withExtendedLifetime(container) {} }
         let group = AccountGroup(name: "Atomic")
         context.insert(group)
         let account = Account(name: "Cash", kind: .cash, productType: .cash)
