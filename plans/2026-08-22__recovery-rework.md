@@ -146,8 +146,44 @@ xcodebuild test -project millio.xcodeproj -scheme millio \
 - **Grep-чек:** `autoRestoreAttemptsKey`, `RecoveryPromptStore`, `activeScopeStoreExistedBeforeBinding` — 0 вхождений вне стора и миграции.
 - **Impact:** startup-путь, guest→user переход, экран онбординга. Риск: пропуск recovery из-за слишком строгой идемпотентности — покрыть тестом «отказ → перезапуск → recovery всё ещё доступен из Профиля».
 
-### R2 — Верифицированный авто-restore *(D6, D7)*
+### R2 — Верифицированный авто-restore *(D6, D7)* — [x] РЕАЛИЗОВАН (2026-08-22)
 - **Оценка:** ~2 ч
+- **Фактическая реализация** (переформулировано: в `develop` receipt'а не было вообще — создан с нуля):
+  - **`RestoreReceipt` + `RestoreVerificationFailure` + `RestoreModelCensus`** — новый файл
+    `millio/Core/Backup/RestoreReceipt.swift`. Пересчёт моделей по типам в снимке формата backup;
+    после импорта стор экспортируется повторно (тот же формат) и сравнивается с бэкапом.
+  - **Критерий успеха** (не строгое равенство — `DataIntegrityCleaner.dedupeAll` законно схлопывает
+    дубли): бэкап непустой И стор непустой И ни один тип не потерян целиком. Иначе — типизированный
+    провал, откат к до-restore снимку, ошибка с локализованным текстом
+    (`backup.restore.verification.*`, ru/en/zh-Hans + de/es/fr/tr).
+  - **Пустой бэкап отсекается ДО деструктивной фазы** (`BackupManager.replaceRepositoryDataWithBackup`):
+    удалять локальные данные ради нуля моделей нельзя ни при каком исходе.
+  - **`.restoreCompleted` публикуется только после verified-receipt.** Отдельное событие
+    `.restoreVerified` НЕ вводилось (ponytail): у него не было бы ни одного потребителя, а
+    существующее событие теперь и означает подтверждённый успех.
+  - **Отбор кандидата по содержимому (D7):** порог `size >= 1024` и TODO в `millioApp.swift` удалены.
+    Пустой/неполный снимок теперь отбраковывает receipt, а в автоматическом режиме перебираются
+    более старые кандидаты (`RestoreVerificationFailure` ловится отдельной веткой до общих catch).
+  - **Гейт R1 задействован:** результат авто-restore публикуется через
+    `LaunchRecoveryGate.shouldPublishRestoreOutcome` (без изменений, проверено трассировкой).
+  - **Обновление UI после restore — механизм уже есть, новый не строился:** `CashflowViewModel:620`,
+    `FinanceViewModel:818`, `FinanceDynamicsViewModel:409` перезагружаются по `.restoreCompleted`;
+    Dashboard — presentational-view, данные приходят из этих же VM через `RootTabView:437`.
+  - **Найден и исправлен реальный блокирующий баг:** `CashbackImporter.importPriority` был 20, то есть
+    кешбэк импортировался ДО `Account` (31), не находил core-счёт (ремап Ф5b плана 6b) и ронял ВЕСЬ
+    restore в `backupCorrupted`. Эталонный файл владельца не восстанавливался вовсе — ровно жалоба
+    «результат пустой». Priority → 40.
+- **Тесты:** `millioTests/Core/BackupVerifiedRestoreTests.swift` (12, все зелёные), включая
+  интеграционный на реальном файле владельца — фикстура
+  `millioTests/Fixtures/owner-backup-1673-models.milliobackup` (137 КБ, MBKP/format 2, схема 2.0,
+  lzfse, без шифрования): **ожидалось 1673 → импортировано 1673, receipt verified, missingTypes пуст**.
+  Тестовые payload'ы в `BackupManagerTests` заменены на валидные снимки (`makeRestorablePayload`):
+  прежние произвольные байты «успешно восстанавливались», чего verified-restore больше не допускает.
+- **Гейт:** сборка без ошибок; backup/recovery-сюиты 67/67 зелёные; полный прогон 2358 тестов, 36
+  красных против фона 35 — оба «лишних» (`FinanceDynamicsViewModelTests`) проходят в изоляции
+  (45 тестов, 1 фоновый красный), то есть order-flake, не регрессия. Новых красных в backup/recovery — 0.
+
+#### Исходная формулировка (писалась до отката Phase 9)
 - **Файлы:** `millio/Core/Backup/BackupManager.swift` (249-320, 417-442, 909-916), `millio/Core/Backup/RecoveryCoordinator.swift`, `millio/Core/Backup/PostRestoreRefreshCoordinator.swift:21`, `millio/millioApp.swift:1276-1290`
 - **Changes:** авто-restore идёт тем же verified-путём, что и `restoreExplicit`: receipt → `.restoreVerified` → refresh-барьер. `.restoreCompleted` остаётся, но не является признаком успеха. Отбор кандидата — по `modelCount`/валидированным метаданным, порог `size >= 1024` и TODO удаляются.
 - **Tests:** `BackupVerifiedRestoreTests` (+ авто-путь), `PostRestoreRefreshCoordinatorTests` (барьер срабатывает после авто-restore), `RestoreCandidateTelemetryTests` (отбор по modelCount, кандидат без modelCount), **интеграционный тест пути** «пустая база → авто-restore → счётчики моделей на Dashboard-источниках» (правило из памяти: при знаковых/структурных фиксах инвариант-теста мало).
@@ -268,4 +304,5 @@ xcodebuild test -project millio.xcodeproj -scheme millio \
 | Date | Phase | Changes |
 |------|-------|---------|
 | 2026-08-22 | — | План создан (spec + plan + сайдкар), код не писан |
+| 2026-08-22 | R2 | РЕАЛИЗОВАН на `feature/recovery-rework`. Создан `RestoreReceipt`/`RestoreModelCensus`/`RestoreVerificationFailure` (`millio/Core/Backup/RestoreReceipt.swift`); успех restore публикуется только после пересчёта стора; пустой бэкап отсекается до деструктивной фазы; провал проверки = откат + локализованная ошибка (`backup.restore.verification.*`). Порог `size >= 1024` в авто-restore удалён (отбор по содержимому). Побочно найден и исправлен блокер: `CashbackImporter.importPriority` 20 → 40 (кешбэк импортировался до `Account` и ронял весь restore реального бэкапа в `backupCorrupted`). Эталон владельца: 1673 → 1673, verified. Гейт: backup-сюиты 67/67, полный прогон 2358/36 при фоне 35 (2 лишних — order-flake Dynamics, в изоляции зелёные) |
 | 2026-08-22 | R1 | РЕАЛИЗОВАН на `feature/recovery-rework`. Доказан двойной вызов `presentRestoreFlowIfNeeded` (cold start `:328` + `onSessionChanged` от `restoreSession` `:339`). Добавлен `LaunchRecoveryGate` (идемпотентность по поколению scope + stale-guard), `LaunchRecoveryPolicy.localDataCount` → `Int?` с ветками `presentRestoreManualOnly`/`allowsAutomaticRestore`/`locksLaunchRecovery`. 11 новых тестов (вкл. блокирующий S16). Гейт: 2346 тестов, 35 красных = фон, новых нет. Миграция флагов (D10) сознательно НЕ делалась — риск SR3 без выигрыша для D1 |

@@ -55,16 +55,19 @@ actor SpyBackupManager: BackupManagerProtocol {
         )
     }
     
-    func restoreLatest() async throws {
+    func restoreLatest() async throws -> RestoreReceipt {
         restoreCalls += 1
-    }
-    
-    func restoreLatest(passphrase: String?) async throws {
-        restoreCalls += 1
+        return RestoreReceiptFixtures.verified
     }
 
-    func restoreVersion(recordName: String, passphrase: String?) async throws {
+    func restoreLatest(passphrase: String?) async throws -> RestoreReceipt {
         restoreCalls += 1
+        return RestoreReceiptFixtures.verified
+    }
+
+    func restoreVersion(recordName: String, passphrase: String?) async throws -> RestoreReceipt {
+        restoreCalls += 1
+        return RestoreReceiptFixtures.verified
     }
 
     func listBackupVersions() async -> [BackupVersionInfo] {

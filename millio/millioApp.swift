@@ -1131,20 +1131,17 @@ struct millioApp: App {
                     }
                 }
                 do {
-                    // TODO(temp): заменить size-guard на preflight.modelCount > 0 когда появится preflightLatestBackup()
-                    let versions = await diContainer.backupManager.listBackupVersions()
-                    guard let latestVersion = versions.first, latestVersion.size >= 1024 else {
-                        AppLogger.log(.warning, category: "App", "Auto-restore: нет валидных версий (пусто или < 1KB), переходим к ручному restore")
-                        await MainActor.run { publishAutoRestoreLifecycle(.restoring, token: gateToken) }
-                        return
-                    }
+                    // Кандидат отбирается по содержимому, а не по размеру файла: пустой/неполный
+                    // снимок отсекает verified-receipt внутри restoreLatest (R2), а в автоматическом
+                    // режиме перебираются более старые снимки. Прежний порог `size >= 1024` был
+                    // догадкой о содержимом и мог отбросить валидный бэкап.
                     // Точка перед деструктивной фазой: если пользователь успел разлогиниться или
                     // сменить аккаунт, восстановление в чужой scope не запускаем вовсе.
                     guard await MainActor.run(body: { launchRecoveryGate.isCurrent(gateToken) }) else {
                         AppLogger.log(.warning, category: "App", "Auto-restore: scope сменился до старта восстановления — отменено")
                         return
                     }
-                    try await withTaskTimeout(seconds: Self.autoRestoreTimeoutSeconds) {
+                    let receipt = try await withTaskTimeout(seconds: Self.autoRestoreTimeoutSeconds) {
                         try await diContainer.backupManager.restoreLatest(passphrase: nil)
                     }
                     guard await MainActor.run(body: { launchRecoveryGate.shouldPublishRestoreOutcome(for: gateToken) }) else {
@@ -1152,7 +1149,7 @@ struct millioApp: App {
                         return
                     }
                     UserDefaults.standard.set(0, forKey: Self.autoRestoreAttemptsKey)
-                    AppLogger.log(.info, category: "App", "Auto-restore completed successfully")
+                    AppLogger.log(.info, category: "App", "Auto-restore completed successfully: \(receipt.diagnosticSummary)")
                     await MainActor.run { publishAutoRestoreLifecycle(.ready, token: gateToken) }
                 } catch {
                     CrashReporting.record(error: error)

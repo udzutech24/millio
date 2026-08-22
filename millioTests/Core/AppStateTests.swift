@@ -778,9 +778,9 @@ final class FakeBackupManager: BackupManagerProtocol {
             isPinned: true
         )
     }
-    func restoreLatest() async throws {}
-    func restoreLatest(passphrase: String?) async throws {}
-    func restoreVersion(recordName: String, passphrase: String?) async throws {}
+    func restoreLatest() async throws -> RestoreReceipt { RestoreReceiptFixtures.verified }
+    func restoreLatest(passphrase: String?) async throws -> RestoreReceipt { RestoreReceiptFixtures.verified }
+    func restoreVersion(recordName: String, passphrase: String?) async throws -> RestoreReceipt { RestoreReceiptFixtures.verified }
     func listBackupVersions() async -> [BackupVersionInfo] { [] }
     func deleteBackupVersion(recordName: String) async throws {}
     func lastBackupInfo() async -> BackupInfo? {

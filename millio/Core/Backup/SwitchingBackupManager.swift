@@ -51,17 +51,20 @@ final class SwitchingBackupManager: BackupManagerProtocol {
         try await enabledManager.importVersion(from: data)
     }
     
-    func restoreLatest() async throws {
+    @discardableResult
+    func restoreLatest() async throws -> RestoreReceipt {
         // Восстановление не зависит от тумблера автосоздания backup.
         try await enabledManager.restoreLatest()
     }
-    
-    func restoreLatest(passphrase: String?) async throws {
+
+    @discardableResult
+    func restoreLatest(passphrase: String?) async throws -> RestoreReceipt {
         // Восстановление не зависит от тумблера автосоздания backup.
         try await enabledManager.restoreLatest(passphrase: passphrase)
     }
 
-    func restoreVersion(recordName: String, passphrase: String?) async throws {
+    @discardableResult
+    func restoreVersion(recordName: String, passphrase: String?) async throws -> RestoreReceipt {
         try await enabledManager.restoreVersion(recordName: recordName, passphrase: passphrase)
     }
 
