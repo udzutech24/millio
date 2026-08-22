@@ -79,6 +79,10 @@ struct millioApp: App {
     // и его FinanceViewModel/CashflowViewModel на новом modelContext (иначе VM навсегда
     // остаются на guest-контейнере, снятом в let при первом монтировании).
     @State private var scopeIdentityToken: Int = 0
+    // Единственный владелец состояния launch-recovery: App-level @State переживает пересоздание
+    // дерева по RootSceneIdentity, поэтому решение «recovery уже отработал для этого поколения
+    // scope» не теряется при remount RestoreView (D1).
+    @State private var launchRecoveryGate = LaunchRecoveryGate()
     // Оверлей «Переключение профиля…» на время рантайм-смены скоупа (login/logout/force-signout).
     @State private var isSwitchingScope = false
     // Track B: оверлей «Восстанавливаю данные…» на время merge guest→user (reconciliation).
@@ -669,6 +673,9 @@ struct millioApp: App {
         // modelContext. Отмена in-flight задач старых VM происходит в их deinit при
         // teardown старого дерева (риск №3); старый контейнер жив по ARC до дезаллокации VM.
         scopeIdentityToken &+= 1
+        // Смена scope = новое поколение recovery: ранее выданные токены становятся stale,
+        // а для нового scope решение принимается заново.
+        launchRecoveryGate.bumpGeneration()
 
         if isRuntimeSwap {
             // Даём кадр новому дереву на первичный рендер, затем снимаем оверлей.
@@ -1063,13 +1070,21 @@ struct millioApp: App {
     private func presentRestoreFlowIfNeeded() async {
         guard let diContainer, let activeModelContainer else { return }
 
-        guard let localDataCount = Self.exportedModelCount(in: activeModelContainer) else {
-            AppLogger.log(.warning, category: "App", "LaunchRecovery: count uncertain, skipping restore")
+        // Идемпотентность (D1): synchronizeDataScope дёргается и на cold start (:328), и на
+        // каждом onSessionChanged (:418) — включая тот, что приходит от restoreSession в том же
+        // запуске. Без гейта второй проход открывал RestoreView повторно / инкрементил счётчик
+        // попыток второй раз.
+        guard let gateToken = launchRecoveryGate.beginEvaluation(
+            scopeKey: activeDataScope.storeConfigurationName
+        ) else {
+            AppLogger.log(.info, category: "App", "LaunchRecovery: решение уже принято для текущего поколения scope — no-op")
             return
         }
+
+        let localDataCount = Self.exportedModelCount(in: activeModelContainer)
         // Если данные есть — счётчик авто-восстановления сбрасываем, чтобы не застревать
         // в ручном restore после двух неудачных попыток (например, при passphrase-бэкапе).
-        if localDataCount > 0 {
+        if let localDataCount, localDataCount > 0 {
             UserDefaults.standard.set(0, forKey: Self.autoRestoreAttemptsKey)
         }
         let latestBackupInfo = await diContainer.backupManager.lastBackupInfo()
@@ -1081,15 +1096,24 @@ struct millioApp: App {
             latestBackupInfo: latestBackupInfo
         )
         let recoveryDecision = LaunchRecoveryPolicy.evaluate(input)
-        AppLogger.log(.info, category: "App", "LaunchRecovery: localCount=\(localDataCount) storeExisted=\(activeScopeStoreExistedBeforeBinding) backup=\(latestBackupInfo != nil) lifecycle=\(appState.lifecycle) → \(recoveryDecision)")
+        let countDescription = localDataCount.map(String.init) ?? "unknown"
+        AppLogger.log(.info, category: "App", "LaunchRecovery: localCount=\(countDescription) storeExisted=\(activeScopeStoreExistedBeforeBinding) backup=\(latestBackupInfo != nil) lifecycle=\(appState.lifecycle) → \(recoveryDecision)")
 
+        // Транзиентный skip (lifecycle не готов, онбординг не пройден, лукап бэкапа пуст/упал)
+        // не фиксируется как принятое решение — повторный проход обязан отработать заново (SR7).
+        launchRecoveryGate.finish(
+            gateToken,
+            outcome: recoveryDecision.locksLaunchRecovery ? .decided : .unresolved
+        )
         guard recoveryDecision.shouldPresentRestore else { return }
         appState.isICloudAvailable = await diContainer.backupManager.isAvailable()
         appState.lastBackupDate = latestBackupInfo?.date
 
         // Если стор существовал, но данные исчезли (потеря при обновлении / миграции схемы) —
         // восстанавливаем последний бекап автоматически, без участия пользователя.
-        if activeScopeStoreExistedBeforeBinding, latestBackupInfo != nil {
+        // Неизвестный счётчик локальных моделей запрещает деструктивный авто-путь:
+        // пользователь сам подтверждает перезапись в RestoreView.
+        if recoveryDecision.allowsAutomaticRestore, activeScopeStoreExistedBeforeBinding, latestBackupInfo != nil {
             let attempts = UserDefaults.standard.integer(forKey: Self.autoRestoreAttemptsKey)
             guard attempts < Self.autoRestoreMaxAttempts else {
                 AppLogger.log(.warning, category: "App", "Auto-restore: лимит попыток исчерпан (\(attempts)), переходим к ручному restore")
@@ -1100,31 +1124,64 @@ struct millioApp: App {
             appState.isRestoreInProgress = true
             appState.lifecycle = .autoRestoring
             Task {
-                defer { Task { @MainActor in appState.isRestoreInProgress = false } }
+                defer {
+                    Task { @MainActor in
+                        guard launchRecoveryGate.shouldPublishRestoreOutcome(for: gateToken) else { return }
+                        appState.isRestoreInProgress = false
+                    }
+                }
                 do {
                     // TODO(temp): заменить size-guard на preflight.modelCount > 0 когда появится preflightLatestBackup()
                     let versions = await diContainer.backupManager.listBackupVersions()
                     guard let latestVersion = versions.first, latestVersion.size >= 1024 else {
                         AppLogger.log(.warning, category: "App", "Auto-restore: нет валидных версий (пусто или < 1KB), переходим к ручному restore")
-                        await MainActor.run { appState.lifecycle = .restoring }
+                        await MainActor.run { publishAutoRestoreLifecycle(.restoring, token: gateToken) }
+                        return
+                    }
+                    // Точка перед деструктивной фазой: если пользователь успел разлогиниться или
+                    // сменить аккаунт, восстановление в чужой scope не запускаем вовсе.
+                    guard await MainActor.run(body: { launchRecoveryGate.isCurrent(gateToken) }) else {
+                        AppLogger.log(.warning, category: "App", "Auto-restore: scope сменился до старта восстановления — отменено")
                         return
                     }
                     try await withTaskTimeout(seconds: Self.autoRestoreTimeoutSeconds) {
                         try await diContainer.backupManager.restoreLatest(passphrase: nil)
                     }
+                    guard await MainActor.run(body: { launchRecoveryGate.shouldPublishRestoreOutcome(for: gateToken) }) else {
+                        AppLogger.log(.warning, category: "App", "Auto-restore: результат устарел (сменился scope) — успех не публикуется")
+                        return
+                    }
                     UserDefaults.standard.set(0, forKey: Self.autoRestoreAttemptsKey)
                     AppLogger.log(.info, category: "App", "Auto-restore completed successfully")
-                    await MainActor.run { appState.lifecycle = .ready }
+                    await MainActor.run { publishAutoRestoreLifecycle(.ready, token: gateToken) }
                 } catch {
                     CrashReporting.record(error: error)
                     AppLogger.log(.error, category: "App", "Auto-restore failed, falling back to manual: \(error.localizedDescription)")
-                    await MainActor.run { appState.lifecycle = .restoring }
+                    await MainActor.run { publishAutoRestoreLifecycle(.restoring, token: gateToken) }
                 }
             }
         } else {
-            // Свежая установка с доступным бекапом — показываем экран выбора версии.
+            if case .presentRestoreManualOnly(let reason) = recoveryDecision {
+                AppLogger.log(.warning, category: "App", "LaunchRecovery: авто-restore запрещён (\(reason)) — ручной сценарий")
+            }
+            // Свежая установка с доступным бекапом (или неизвестный локальный счётчик) —
+            // показываем экран выбора версии.
             appState.lifecycle = .restoring
         }
+    }
+
+    /// Единственная точка публикации результата авто-restore в lifecycle.
+    /// Stale-колбэк (scope сменился во время восстановления) молча отбрасывается.
+    @MainActor
+    private func publishAutoRestoreLifecycle(
+        _ lifecycle: AppLifecycleState,
+        token: LaunchRecoveryGate.Token
+    ) {
+        guard launchRecoveryGate.shouldPublishRestoreOutcome(for: token) else {
+            AppLogger.log(.warning, category: "App", "Auto-restore: stale-колбэк, lifecycle не меняем")
+            return
+        }
+        appState.lifecycle = lifecycle
     }
 
     @MainActor

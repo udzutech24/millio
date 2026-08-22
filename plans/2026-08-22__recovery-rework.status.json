@@ -1,7 +1,7 @@
 {
   "planFile": "2026-08-22__recovery-rework.md",
   "title": "Переработка backup/recovery",
-  "updated": "2026-08-22T16:53:20.558578+00:00",
+  "updated": "2026-08-22T17:55:37.483183+00:00",
   "phases": [
     {
       "name": "R0 — Stress-test и решение владельца",
@@ -11,12 +11,12 @@
     {
       "name": "R-1 — Зелёная база (блокер)",
       "status": "in_progress",
-      "note": "краш failedDeleteIsAllOrNothing валит 359 тестов; ветка fix/baseline-green"
+      "note": "краш failedDeleteIsAllOrNothing не воспроизвёлся на прогоне R1 (35 красных); ветка fix/baseline-green"
     },
     {
-      "name": "R1 — Единый владелец состояния recovery (D1, D10)",
-      "status": "pending",
-      "note": "RecoveryDecisionStore + идемпотентный вход"
+      "name": "R1 — Единый владелец состояния recovery (D1, D8-часть)",
+      "status": "done",
+      "note": "LaunchRecoveryGate + policy localDataCount:Int?; 11 тестов вкл. S16; 2346/35 красных = фон"
     },
     {
       "name": "R2 — Верифицированный авто-restore (D6, D7)",

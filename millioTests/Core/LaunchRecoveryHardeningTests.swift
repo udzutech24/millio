@@ -6,10 +6,12 @@ struct LaunchRecoveryHardeningTests {
 
     // MARK: - AC1: nil count skips restore (policy level)
 
-    @Test("LaunchRecoveryPolicy skips restore when lifecycle is not ready (covers nil-count early exit path)")
+    @Test("LaunchRecoveryPolicy skips restore when lifecycle is not ready")
     func nilCountSkipsRestoreViaLifecycleGuard() {
-        // presentRestoreFlowIfNeeded returns before calling the policy when count is nil.
-        // At the policy level: any non-ready lifecycle also returns .skip.
+        // R1: старое ожидание («count == nil ⇒ молчаливый выход до политики») было неверным —
+        // молчаливый пропуск уводил пользователя в онбординг поверх восстановимого бэкапа.
+        // Теперь nil обрабатывает сама политика (см. LaunchRecoveryPolicyTests, manual-only ветка),
+        // а этот тест проверяет только гард по lifecycle.
         let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
         let decision = LaunchRecoveryPolicy.evaluate(
             .init(

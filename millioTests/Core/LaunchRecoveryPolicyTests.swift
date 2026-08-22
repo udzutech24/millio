@@ -3,6 +3,64 @@ import Testing
 @testable import millio
 
 struct LaunchRecoveryPolicyTests {
+
+    // MARK: - D8: неизвестный счётчик локальных моделей
+
+    @Test("Неизвестный localDataCount не пропускает recovery молча — ручной сценарий")
+    func testUnknownCountPresentsManualRestore() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: true,
+                localDataCount: nil,
+                latestBackupInfo: backupInfo
+            )
+        )
+
+        #expect(decision == .presentRestoreManualOnly(.localDataCountUnknown))
+        #expect(decision.shouldPresentRestore)
+        #expect(!decision.allowsAutomaticRestore, "Деструктивный авто-restore при неизвестном счётчике запрещён")
+        #expect(decision.locksLaunchRecovery)
+    }
+
+    @Test("Неизвестный localDataCount без бэкапа — обычный skip")
+    func testUnknownCountWithoutBackupSkips() {
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: true,
+                localDataCount: nil,
+                latestBackupInfo: nil
+            )
+        )
+
+        #expect(decision == .skip(.noBackupAvailable))
+        #expect(!decision.shouldPresentRestore)
+    }
+
+    // MARK: - SR7: какие исходы фиксируют решение
+
+    @Test("Транзиентные причины skip не блокируют повторную попытку recovery")
+    func testTransientSkipsDoNotLockRecovery() {
+        #expect(!LaunchRecoveryPolicy.Decision.skip(.lifecycleNotReady).locksLaunchRecovery)
+        #expect(!LaunchRecoveryPolicy.Decision.skip(.onboardingIncomplete).locksLaunchRecovery)
+        #expect(!LaunchRecoveryPolicy.Decision.skip(.noBackupAvailable).locksLaunchRecovery)
+        #expect(LaunchRecoveryPolicy.Decision.skip(.localDataPresent).locksLaunchRecovery)
+        #expect(LaunchRecoveryPolicy.Decision.skip(.existingLocalStore).locksLaunchRecovery)
+        #expect(LaunchRecoveryPolicy.Decision.presentRestore.locksLaunchRecovery)
+    }
+
+    @Test("Авто-restore разрешён только для обычного presentRestore")
+    func testAutomaticRestoreAllowance() {
+        #expect(LaunchRecoveryPolicy.Decision.presentRestore.allowsAutomaticRestore)
+        #expect(!LaunchRecoveryPolicy.Decision.presentRestoreManualOnly(.localDataCountUnknown).allowsAutomaticRestore)
+        #expect(!LaunchRecoveryPolicy.Decision.skip(.localDataPresent).allowsAutomaticRestore)
+    }
+
     @Test("Evaluator classifies fresh install with backup as launch-time recovery")
     func testEvaluateFreshInstallWithBackup() {
         let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")

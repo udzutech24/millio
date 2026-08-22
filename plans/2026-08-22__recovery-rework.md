@@ -109,8 +109,34 @@ xcodebuild test -project millio.xcodeproj -scheme millio \
 - **Гейт:** `AskUserQuestion` владельцу с риском и вариантами (продолжить / отложить / пересмотреть). **Без явного «да» — реализация не начинается.** Правило 7 workspace CLAUDE.md; guard phrase не отменяет его.
 - **Артефакт:** раздел «Stress-test» в конце этого плана.
 
-### R1 — Единый владелец состояния recovery *(D1, D10, D8-часть)*
+### R1 — Единый владелец состояния recovery *(D1, D8-часть)* — [x] РЕАЛИЗОВАН (2026-08-22)
 - **Оценка:** ~2 ч
+- **Фактическая реализация** (переформулировано под код `develop` после отката Phase 9):
+  - **Причина двойного открытия доказана:** `presentRestoreFlowIfNeeded()` вызывается безусловно
+    в конце `synchronizeDataScope` (`millioApp.swift:544`), а сам `synchronizeDataScope` дёргается
+    дважды за старт: cold start (`:328`) и `onSessionChanged` (`:418`), который прилетает от
+    `restoreSession()` (`:339` → `AuthService.swift:1544`). `StartupCoordinator.switchScopeIfNeeded`
+    гасит только своп контейнера, но не сам вызов recovery. Второй проход при свопе guest→user
+    дополнительно бампит `scopeIdentityToken` (`:671`) → меняется `RootSceneIdentity` (`:150`) →
+    RestoreView пересоздаётся с чистым `@State` (список версий, выбранная версия, пароль).
+  - **`LaunchRecoveryGate`** (новый, `millio/Core/Backup/LaunchRecoveryGate.swift`, ~80 стр) —
+    App-level `@State`, переживает remount. Токен на поколение scope; повторный вызов = no-op;
+    `bumpGeneration()` в `rebindDataScope` после свопа; `shouldPublishRestoreOutcome` отсекает
+    stale-колбэки (S16). Транзиентные исходы (`lifecycleNotReady`, `onboardingIncomplete`,
+    `noBackupAvailable`) не фиксируются как решение (SR7).
+  - **`LaunchRecoveryPolicy`:** `localDataCount` стал `Int?`; `nil` → `.presentRestoreManualOnly(.localDataCountUnknown)`
+    (экран показывается, деструктивный авто-restore запрещён) вместо молчаливого `return`.
+    Добавлены `allowsAutomaticRestore` и `locksLaunchRecovery`.
+  - **`RecoveryDecisionStore` и миграция 3 флагов НЕ делались** (ponytail + условие владельца №2):
+    объединение глобального `autoRestoreAttemptsKey` с per-scope-флагами — это риск SR3
+    без выигрыша для D1; ключи оставлены как есть. D10 переносится в отдельную фазу, если
+    вообще понадобится.
+- **Тесты (все зелёные):** `millioTests/Core/LaunchRecoveryGateTests.swift` (7, включая блокирующий
+  S16 «Stale-колбэк не публикует успех восстановления в чужой scope»), +4 в `LaunchRecoveryPolicyTests`.
+- **Гейт:** 2346 тестов, 35 красных (фон ≈37, до правки 392 из-за краша-каскада — воспроизведён
+  не был); НИ ОДНОГО красного в backup/recovery-сюитах, новых красных нет.
+
+#### Исходная формулировка (писалась до отката Phase 9)
 - **Файлы:** `millio/millioApp.swift` (81, 110, 159, 237-241, 344, 459-461, 625, 728, 1128, 1229-1290), `millio/Core/Backup/RecoveryPromptStore.swift` → `RecoveryDecisionStore.swift`, `millio/Core/Backup/LaunchRecoveryPolicy.swift`, `millio/Core/Startup/StartupCoordinator.swift:49`
 - **Changes:**
   - `RecoveryDecisionStore` — единственный владелец: `attemptsCount`, `userDeclined`, `storeExistedBeforeBinding`, `lastEvaluatedScopeGeneration`. Миграция значений старых ключей при первом чтении.
@@ -242,3 +268,4 @@ xcodebuild test -project millio.xcodeproj -scheme millio \
 | Date | Phase | Changes |
 |------|-------|---------|
 | 2026-08-22 | — | План создан (spec + plan + сайдкар), код не писан |
+| 2026-08-22 | R1 | РЕАЛИЗОВАН на `feature/recovery-rework`. Доказан двойной вызов `presentRestoreFlowIfNeeded` (cold start `:328` + `onSessionChanged` от `restoreSession` `:339`). Добавлен `LaunchRecoveryGate` (идемпотентность по поколению scope + stale-guard), `LaunchRecoveryPolicy.localDataCount` → `Int?` с ветками `presentRestoreManualOnly`/`allowsAutomaticRestore`/`locksLaunchRecovery`. 11 новых тестов (вкл. блокирующий S16). Гейт: 2346 тестов, 35 красных = фон, новых нет. Миграция флагов (D10) сознательно НЕ делалась — риск SR3 без выигрыша для D1 |

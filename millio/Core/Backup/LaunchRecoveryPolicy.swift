@@ -12,7 +12,9 @@ struct LaunchRecoveryPolicy {
         let lifecycle: AppLifecycleState
         let hasCompletedOnboarding: Bool
         let didLocalStoreExistBeforeLaunch: Bool
-        let localDataCount: Int
+        /// `nil` — посчитать локальные модели не удалось. Это НЕ «данных нет»:
+        /// неизвестное состояние трактуется как потенциально непустое (безопасная сторона).
+        let localDataCount: Int?
         let latestBackupInfo: BackupInfo?
     }
 
@@ -24,15 +26,46 @@ struct LaunchRecoveryPolicy {
         case noBackupAvailable
     }
 
+    /// Почему автоматическое (деструктивное) восстановление запрещено, хотя экран показать надо.
+    enum ManualOnlyReason: Equatable {
+        case localDataCountUnknown
+    }
+
     enum Decision: Equatable {
         case presentRestore
+        /// Показать RestoreView, но без авто-restore: решение о перезаписи принимает пользователь.
+        case presentRestoreManualOnly(ManualOnlyReason)
         case skip(BlockReason)
 
         var shouldPresentRestore: Bool {
+            switch self {
+            case .presentRestore, .presentRestoreManualOnly:
+                return true
+            case .skip:
+                return false
+            }
+        }
+
+        /// Разрешён ли автоматический restore без подтверждения пользователя.
+        var allowsAutomaticRestore: Bool {
             if case .presentRestore = self {
                 return true
             }
             return false
+        }
+
+        /// Является ли исход окончательным для текущего поколения scope.
+        /// Транзиентные причины (ещё не готов lifecycle, онбординг не пройден, лукап бэкапа
+        /// не дал результата) не должны блокировать повторную попытку recovery (SR7).
+        var locksLaunchRecovery: Bool {
+            switch self {
+            case .presentRestore, .presentRestoreManualOnly:
+                return true
+            case .skip(.existingLocalStore), .skip(.localDataPresent):
+                return true
+            case .skip(.onboardingIncomplete), .skip(.lifecycleNotReady), .skip(.noBackupAvailable):
+                return false
+            }
         }
     }
 
@@ -43,13 +76,22 @@ struct LaunchRecoveryPolicy {
         guard input.lifecycle == .ready else {
             return .skip(.lifecycleNotReady)
         }
+        // Счёт локальных моделей не удался: молча выходить нельзя — иначе пользователь уходит
+        // в онбординг поверх восстановимого бэкапа. Показываем ручной сценарий,
+        // деструктивный авто-restore запрещён.
+        guard let localDataCount = input.localDataCount else {
+            guard input.latestBackupInfo != nil else {
+                return .skip(.noBackupAvailable)
+            }
+            return .presentRestoreManualOnly(.localDataCountUnknown)
+        }
         // Normal relaunch: store existed and still contains user data — nothing to recover.
         // But if the store existed yet is now empty (e.g. SwiftData schema migration wiped it),
         // fall through so we can offer restore from the available backup.
-        if input.didLocalStoreExistBeforeLaunch && input.localDataCount > 0 {
+        if input.didLocalStoreExistBeforeLaunch && localDataCount > 0 {
             return .skip(.existingLocalStore)
         }
-        guard input.localDataCount == 0 else {
+        guard localDataCount == 0 else {
             return .skip(.localDataPresent)
         }
         guard input.latestBackupInfo != nil else {
@@ -62,7 +104,7 @@ struct LaunchRecoveryPolicy {
         lifecycle: AppLifecycleState,
         hasCompletedOnboarding: Bool,
         didLocalStoreExistBeforeLaunch: Bool,
-        localDataCount: Int,
+        localDataCount: Int?,
         latestBackupInfo: BackupInfo?
     ) -> Bool {
         evaluate(

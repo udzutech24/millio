@@ -330,6 +330,12 @@
         }
       }
     },
+    "○" : {
+
+    },
+    "✓" : {
+
+    },
     "📋" : {
 
     },
@@ -26472,6 +26478,7 @@
       }
     },
     "cashflow.common.settings" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -34776,6 +34783,7 @@
       }
     },
     "cashflow.operation.history_accessibility" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -75651,7 +75659,6 @@
       }
     },
     "finances.statement.account" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75668,7 +75675,6 @@
       }
     },
     "finances.statement.apply_failed" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75685,7 +75691,6 @@
       }
     },
     "finances.statement.as_of" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75702,7 +75707,6 @@
       }
     },
     "finances.statement.backend_unavailable" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75719,7 +75723,6 @@
       }
     },
     "finances.statement.balance" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75736,7 +75739,6 @@
       }
     },
     "finances.statement.bank_declared" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75753,7 +75755,6 @@
       }
     },
     "finances.statement.confirmation" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75770,7 +75771,6 @@
       }
     },
     "finances.statement.continue" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75787,7 +75787,6 @@
       }
     },
     "finances.statement.create" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75804,7 +75803,6 @@
       }
     },
     "finances.statement.creating" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75821,7 +75819,6 @@
       }
     },
     "finances.statement.currency" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75838,7 +75835,6 @@
       }
     },
     "finances.statement.currency_mismatch" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75855,7 +75851,6 @@
       }
     },
     "finances.statement.destination" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75872,7 +75867,6 @@
       }
     },
     "finances.statement.destination.create" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75889,7 +75883,6 @@
       }
     },
     "finances.statement.destination.import" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75906,7 +75899,6 @@
       }
     },
     "finances.statement.duplicate_conflict" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75923,7 +75915,6 @@
       }
     },
     "finances.statement.incoming" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75940,7 +75931,6 @@
       }
     },
     "finances.statement.manual_balance" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75957,7 +75947,6 @@
       }
     },
     "finances.statement.manual_confirm" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75974,7 +75963,6 @@
       }
     },
     "finances.statement.manual_not_derived" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -75991,7 +75979,6 @@
       }
     },
     "finances.statement.multimonth" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -76008,7 +75995,6 @@
       }
     },
     "finances.statement.name" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -76025,7 +76011,6 @@
       }
     },
     "finances.statement.operations" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -76042,7 +76027,6 @@
       }
     },
     "finances.statement.processing" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -76059,7 +76043,6 @@
       }
     },
     "finances.statement.reconciliation_failed" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -76076,7 +76059,6 @@
       }
     },
     "finances.statement.replace" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -76093,7 +76075,6 @@
       }
     },
     "finances.statement.review_count" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -76110,7 +76091,6 @@
       }
     },
     "finances.statement.title" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -76127,7 +76107,6 @@
       }
     },
     "finances.statement.type" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -76144,7 +76123,6 @@
       }
     },
     "finances.statement.unsupported" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -76161,7 +76139,6 @@
       }
     },
     "finances.statement.upload" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
