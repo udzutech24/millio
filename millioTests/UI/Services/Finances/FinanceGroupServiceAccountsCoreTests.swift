@@ -132,7 +132,9 @@ struct FinanceGroupServiceAccountsCoreTests {
         let deleteGroupBody = String(tail[..<end.lowerBound])
 
         #expect(!deleteGroupBody.contains("try? accountsService.archiveAccount"))
-        #expect(deleteGroupBody.contains("modelContext.rollback()"))
+        // Имя переменной контекста не фиксируем (сейчас это `transactionContext` — отдельный
+        // контекст транзакции): важен сам факт отката в catch-ветке.
+        #expect(deleteGroupBody.contains(".rollback()"))
     }
 
     @Test("Failed group delete rolls back archive, links and deletion before unrelated save")

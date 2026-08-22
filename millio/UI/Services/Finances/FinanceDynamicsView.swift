@@ -51,9 +51,11 @@ enum FinanceDynamicsHeaderStyle {
 }
 
 enum FinanceAccountArchivePolicy {
-    /// Нужно ли показывать предупреждение перед архивированием счёта
+    /// Нужно ли показывать предупреждение перед архивированием счёта.
+    /// Порог ВКЛЮЧИТЕЛЬНЫЙ: 0.01 — минимальная представимая единица валюты, это уже реальные
+    /// деньги на счёте, и молча архивировать такой счёт нельзя.
     static func shouldShowBalanceWarning(balance: Double) -> Bool {
-        abs(balance) > 0.01
+        abs(balance) >= 0.01
     }
 }
 

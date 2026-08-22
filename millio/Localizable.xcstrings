@@ -75653,10 +75653,16 @@
     "finances.statement.account" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Account"
+            "state" : "translated",
+            "value" : "Счёт"
           }
         }
       }
@@ -75664,10 +75670,16 @@
     "finances.statement.apply_failed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not create the account. Nothing was saved."
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Could not create the account. Nothing was saved."
+            "state" : "translated",
+            "value" : "Не удалось создать счёт. Ничего не сохранено."
           }
         }
       }
@@ -75675,10 +75687,16 @@
     "finances.statement.as_of" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As of"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "As of"
+            "state" : "translated",
+            "value" : "На дату"
           }
         }
       }
@@ -75686,10 +75704,16 @@
     "finances.statement.backend_unavailable" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Statement service is unavailable."
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Statement service is unavailable."
+            "state" : "translated",
+            "value" : "Сервис выписок недоступен."
           }
         }
       }
@@ -75697,10 +75721,16 @@
     "finances.statement.balance" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Balance"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Balance"
+            "state" : "translated",
+            "value" : "Баланс"
           }
         }
       }
@@ -75708,10 +75738,16 @@
     "finances.statement.bank_declared" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Declared by bank"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Declared by bank"
+            "state" : "translated",
+            "value" : "По данным банка"
           }
         }
       }
@@ -75719,10 +75755,16 @@
     "finances.statement.confirmation" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Final confirmation"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Final confirmation"
+            "state" : "translated",
+            "value" : "Финальное подтверждение"
           }
         }
       }
@@ -75730,10 +75772,16 @@
     "finances.statement.continue" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Continue"
+            "state" : "translated",
+            "value" : "Продолжить"
           }
         }
       }
@@ -75741,10 +75789,16 @@
     "finances.statement.create" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create account and import"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Create account and import"
+            "state" : "translated",
+            "value" : "Создать счёт и импортировать"
           }
         }
       }
@@ -75752,10 +75806,16 @@
     "finances.statement.creating" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Creating account…"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Creating account…"
+            "state" : "translated",
+            "value" : "Создаём счёт…"
           }
         }
       }
@@ -75763,10 +75823,16 @@
     "finances.statement.currency" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Currency"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Currency"
+            "state" : "translated",
+            "value" : "Валюта"
           }
         }
       }
@@ -75774,10 +75840,16 @@
     "finances.statement.currency_mismatch" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The account, balance and all imported operations must use one currency."
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "The account, balance and all imported operations must use one currency."
+            "state" : "translated",
+            "value" : "Счёт, баланс и все импортируемые операции должны быть в одной валюте."
           }
         }
       }
@@ -75785,10 +75857,16 @@
     "finances.statement.destination" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What do you want to do?"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "What do you want to do?"
+            "state" : "translated",
+            "value" : "Что вы хотите сделать?"
           }
         }
       }
@@ -75796,10 +75874,16 @@
     "finances.statement.destination.create" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create a new account"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Create a new account"
+            "state" : "translated",
+            "value" : "Создать новый счёт"
           }
         }
       }
@@ -75807,10 +75891,16 @@
     "finances.statement.destination.import" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import into Cashflow"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Import into Cashflow"
+            "state" : "translated",
+            "value" : "Импортировать в Cashflow"
           }
         }
       }
@@ -75818,10 +75908,16 @@
     "finances.statement.duplicate_conflict" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some statement operations were imported earlier. Resolve that import before creating this account."
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Some statement operations were imported earlier. Resolve that import before creating this account."
+            "state" : "translated",
+            "value" : "Часть операций из выписки уже импортирована. Разберитесь с тем импортом, прежде чем создавать этот счёт."
           }
         }
       }
@@ -75829,10 +75925,16 @@
     "finances.statement.incoming" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incoming statement"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Incoming statement"
+            "state" : "translated",
+            "value" : "Входящая выписка"
           }
         }
       }
@@ -75840,10 +75942,16 @@
     "finances.statement.manual_balance" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm balance manually"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Confirm balance manually"
+            "state" : "translated",
+            "value" : "Подтвердить баланс вручную"
           }
         }
       }
@@ -75851,10 +75959,16 @@
     "finances.statement.manual_confirm" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I confirm this balance and date"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "I confirm this balance and date"
+            "state" : "translated",
+            "value" : "Подтверждаю баланс и дату"
           }
         }
       }
@@ -75862,10 +75976,16 @@
     "finances.statement.manual_not_derived" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The balance is not calculated from statement turnover."
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "The balance is not calculated from statement turnover."
+            "state" : "translated",
+            "value" : "Баланс не рассчитан из оборотов по выписке."
           }
         }
       }
@@ -75873,10 +75993,16 @@
     "finances.statement.multimonth" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use a statement for one calendar month."
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Use a statement for one calendar month."
+            "state" : "translated",
+            "value" : "Используйте выписку за один календарный месяц."
           }
         }
       }
@@ -75884,10 +76010,16 @@
     "finances.statement.name" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Name"
+            "state" : "translated",
+            "value" : "Название"
           }
         }
       }
@@ -75895,10 +76027,16 @@
     "finances.statement.operations" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Operations"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Operations"
+            "state" : "translated",
+            "value" : "Операции"
           }
         }
       }
@@ -75906,10 +76044,16 @@
     "finances.statement.processing" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Processing statement…"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Processing statement…"
+            "state" : "translated",
+            "value" : "Обрабатываем выписку…"
           }
         }
       }
@@ -75917,10 +76061,16 @@
     "finances.statement.reconciliation_failed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Statement totals did not reconcile."
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Statement totals did not reconcile."
+            "state" : "translated",
+            "value" : "Итоги выписки не сошлись."
           }
         }
       }
@@ -75928,10 +76078,16 @@
     "finances.statement.replace" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose another statement"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Choose another statement"
+            "state" : "translated",
+            "value" : "Выбрать другую выписку"
           }
         }
       }
@@ -75939,10 +76095,16 @@
     "finances.statement.review_count" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review operations: %lld"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Review operations: %lld"
+            "state" : "translated",
+            "value" : "Операций на проверку: %lld"
           }
         }
       }
@@ -75950,10 +76112,16 @@
     "finances.statement.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create from statement"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Create from statement"
+            "state" : "translated",
+            "value" : "Создание из выписки"
           }
         }
       }
@@ -75961,10 +76129,16 @@
     "finances.statement.type" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Type"
+            "state" : "translated",
+            "value" : "Тип"
           }
         }
       }
@@ -75972,10 +76146,16 @@
     "finances.statement.unsupported" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This statement format is not supported."
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "This statement format is not supported."
+            "state" : "translated",
+            "value" : "Этот формат выписки не поддерживается."
           }
         }
       }
@@ -75983,10 +76163,16 @@
     "finances.statement.upload" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upload statement"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Upload statement"
+            "state" : "translated",
+            "value" : "Загрузить выписку"
           }
         }
       }
