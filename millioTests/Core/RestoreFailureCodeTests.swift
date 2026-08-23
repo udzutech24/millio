@@ -13,24 +13,32 @@ struct RestoreFailureCodeTests {
         #expect(RestoreFailureCode.rollbackFailed.reason == .restoreFailed)
     }
 
-    @Test("RestoreFailureCode maps to AppError.restoreFailed with expected user message")
+    // Прежний тест сравнивал `appError` с английскими литералами. Ожидание было неверным:
+    // это сообщение уходит прямо в UI, поэтому оно обязано быть локализованным, а тест на
+    // английский литерал фиксировал баг D9. Проверяем стабильные ключи и непустой текст.
+    @Test("RestoreFailureCode maps to AppError.restoreFailed with a localized, non-empty message")
     func testAppErrorMapping() {
-        #expect(RestoreFailureCode.backupNotFound.appError == .restoreFailed("Backup not found in iCloud"))
-        #expect(
-            RestoreFailureCode.passphraseRequired.appError
-                == .restoreFailed("Backup is encrypted with a passphrase. Enter the passphrase and try again.")
-        )
-        #expect(
-            RestoreFailureCode.keychainUnavailable.appError
-                == .restoreFailed("Backup is encrypted and cannot be decrypted on this device")
-        )
-        #expect(
-            RestoreFailureCode.keychainKeyMissingOnDevice.appError
-                == .restoreFailed("Backup encryption key is missing on this device")
-        )
-        #expect(
-            RestoreFailureCode.passphraseDecryptFailed.appError
-                == .restoreFailed("Failed to decrypt backup (wrong passphrase or corrupted data)")
-        )
+        #expect(RestoreFailureCode.backupNotFound.localizationKey == "backup.restore.failure.not_found")
+        #expect(RestoreFailureCode.passphraseRequired.localizationKey == "backup.restore.failure.passphrase_required")
+        #expect(RestoreFailureCode.keychainUnavailable.localizationKey == "backup.restore.failure.keychain_unavailable")
+        #expect(RestoreFailureCode.keychainKeyMissingOnDevice.localizationKey == "backup.restore.failure.keychain_key_missing")
+        #expect(RestoreFailureCode.passphraseDecryptFailed.localizationKey == "backup.restore.failure.passphrase_wrong")
+
+        for code in [RestoreFailureCode.backupNotFound, .passphraseRequired, .keychainUnavailable, .keychainKeyMissingOnDevice, .passphraseDecryptFailed] {
+            #expect(code.appError == .restoreFailed(code.message))
+            #expect(code.message.isEmpty == false)
+        }
+    }
+
+    @Test("Разные причины отказа не схлопываются в один текст")
+    func testFailureMessagesAreDistinct() {
+        let messages = [
+            RestoreFailureCode.passphraseDecryptFailed.message,
+            RestoreFailureCode.keychainKeyMissingOnDevice.message,
+            RestoreFailureCode.preRestoreSnapshotFailed.message,
+            RestoreFailureCode.rollbackFailed.message
+        ]
+
+        #expect(Set(messages).count == messages.count)
     }
 }
