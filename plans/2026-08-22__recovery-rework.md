@@ -509,6 +509,49 @@ S1/S11). Дельта по красным — шум параллельных с
 - **Коммит:** `a8bcea5`. Чужие незакоммиченные правки (`AccountsTotalsService`,
   `CurrencyRateService` + тест) не тронуты и не коммитились.
 
+---
+
+### R9 — Возврат unified FX snapshot из архива — [x] РЕАЛИЗОВАН (2026-08-23)
+- **Причина фазы:** при откате Phase 9 вместе со сломанным recovery уехала независимая работа по
+  курсам (`specs/2026-08-21-unified-fx-snapshot.md`). Recovery-часть архива переделана заново в
+  R1–R8 и не возвращается; FX-часть возвращена по смыслу, не `checkout`-ом ветки.
+- **Что перенесено** (из `archive/phase9-broken-2026-08-22`, `2e0777e`):
+  - `millio/Core/Currency/CurrencyRateSnapshotRevisionStore.swift` (новый) — revision полного
+    набора курсов; хранит только метаданные, matrix остаётся у `RateRepository`.
+  - `Notification.Name.currencyRateSnapshotDidChange` (`millio/Core/Currency/RateSource.swift:12`).
+  - `CurrencyRateService`: `activeSnapshot`, `currentRateSnapshot()`,
+    `adoptSnapshot(_:notify:)` (`CurrencyRateService.swift:384`) — единственная точка замены
+    matrix вместо шести разрозненных присваиваний `cachedRates`/`lastUpdateTS`; ограниченная
+    `buildFallbackChain()` (`:262`): `millio→erapi`, `frankfurter→millio→erapi`, `cbr`/`custom` —
+    без фолбэка. Это и есть фикс класса «разные экраны показывают разные рубли».
+  - `AccountSnapshotRebuilder` (`:142`): `account.snapshots`/`account.events` заменены на явные
+    `FetchDescriptor` внутри актора — relationship-fault больше не тянется между контекстами.
+- **Что добавлено сверх списка владельца и почему:** подписки потребителей на
+  `currencyRateSnapshotDidChange` (`FinanceViewModel:494`, `CashflowViewModel:237`,
+  `CardViewModel:126`, `CreditViewModel:150`, `CurrencyRatesWidget:59`) — хунки 1:1 из архива.
+  Без них уведомление не имело ни одного слушателя, то есть цель спеки («Finance, Cashflow и
+  виджет пересчитываются после смены revision») не достигалась.
+- **Что НЕ возвращено:** `Core/Backup/*`, `UI/Restore/*`, `millioApp.swift`, `Localizable.xcstrings`,
+  `FinanceDynamicsSnapshotStore` (отдельный вопрос), а также `ConverterViewModel` —
+  в архиве это не FX-хунк, а смена DI и снос `RateSourcePreferenceStore.converterOverride`
+  (AC «конвертер берёт курсы у того же сервиса» остаётся ОТКРЫТЫМ).
+- **Адаптация под текущий код:** тест `buildFallbackChain для .cbr` (`CurrencyRateServiceTests.swift:554`)
+  в архиве не был обновлён и ожидал старый контракт «все источники» — приведён к новому
+  (`chain == [.cbr]`, ЦБ РФ не смешивается с глобальными провайдерами). Остальные файлы после
+  R1–R8 не разошлись с архивной базой — конфликтов не было.
+- **Тесты:** восстановлены `Millio недоступен → сервис принимает полный ER-API snapshot`
+  (проверяет `attemptedSources == [.millio, .erapi]` и источник активного snapshot),
+  3 теста цепочки источников, `rebuildAllReplacesPersistedSnapshotsWithoutReadingAccountRelationship`.
+- **Гейт:** 2424 теста / 35 красных при базе 2421/38 (`r7`-эталон: 2400/35). Новых красных ноль:
+  три «новых» относительно эталона (`MarketSymbolSearchViewModelTests` ×2, `FinanceDynamicsViewModelTests`
+  ×1) зелёные в изолированном прогоне — cross-suite contention. Сюиты Currency, AccountsCore,
+  backup/recovery — зелёные. `GroupsMigrator` красный только в параллельном прогоне (в изоляции
+  зелёный и на `18b8aa0`, и на текущем HEAD).
+- **Коммиты:** `7f0474d` (ядро + тесты + спека), `528a634` (подписчики), `0f9756b` (тест `.cbr`).
+- **Чужие незакоммиченные правки** (`AccountsTotalsService`, `CurrencyRateService.getCachedRate`,
+  `AccountsTotalsServiceTests`) сохранены в ветке `wip/fx-cached-rate-fallback` (`e6b4a00`) и в
+  работу не включались.
+
 
 ## Итого оценка
 
@@ -560,6 +603,7 @@ S1/S11). Дельта по красным — шум параллельных с
 
 | Date | Phase | Changes |
 |------|-------|---------|
+| 2026-08-23 | R9 | Возвращён единый FX snapshot из `archive/phase9-broken-2026-08-22` (`2e0777e`) — независимая от recovery работа, уехавшая при откате Phase 9. `CurrencyRateSnapshotRevisionStore` + `adoptSnapshot(_:notify:)` как единственная точка замены полного matrix (revision публикуется только при реальной смене набора курсов), ограниченная цепочка `millio→erapi` без смешивания публичных провайдеров, `AccountSnapshotRebuilder` читает snapshots/events явным `FetchDescriptor` внутри актора. Дополнительно возвращены подписки потребителей (Finance, Cashflow, Cards, Credits, виджет курсов) — без них уведомление было мёртвым кодом. Не возвращены Backup/Restore/`millioApp`/`xcstrings`/`FinanceDynamicsSnapshotStore` и рефактор `ConverterViewModel` (AC «конвертер через тот же сервис» открыт). Адаптация: тест цепочки `.cbr` приведён к новому контракту. Гейт: 2424/35 при базе 2421/38, новых красных ноль (3 отличия от эталона — cross-suite flake, в изоляции зелёные). Коммиты `7f0474d`, `528a634`, `0f9756b`; чужие правки сохранены в `wip/fx-cached-rate-fallback` (`e6b4a00`) |
 | 2026-08-23 | R8 | Пустой график активов/обязательств после restore при верных списке и тотале. Причина — три источника core-счетов на экране «Счета»: список читал живое `AccountGroup.accounts`, тотал — живой fetch, а ledger-график единственный читал срез `FinanceViewModel.state.accounts`, который обновляется только по событиям (снапшот, снятый до того, как импорт довёз `Account`, оставлял график пустым навсегда). `coreAccountsSnapshot(matching:)` удалён, `buildLedgerPresentation` зовёт `orderedAccounts(for:)`, `ungroupedAccounts()` переведён на живой fetch — на экране остался один источник. Регресс-тесты на реальной фикстуре владельца (`FinanceOverviewChartAfterRestoreTests`): до фикса 0 items при 44 счетах в списке и тотале 104 075 826, после — 37 items; плюс инвариант «тотал > 0 ⇒ график не пуст». «Динамика» тем же классом не болеет (свои fetch'и). Гейт: 2421/38 при базе 2419/38, 5 подозрительных красных воспроизведены на родительском `8c2dccf` — новых нет. Коммит `a8bcea5` |
 | 2026-08-23 | R7-fix | Закрыты дефекты приёмки R7 на `feature/recovery-rework` (`f635fc8`, `368063a`, `62d264a`, `26b0d10`, `e152931`, +2 тестовых). **S3:** входящий файл из Files больше не теряется при закрытом приложении — `IncomingBackupFileIntake` потребляет URL только при готовом `backupManager`, иначе оставляет его в `AppState` и добирает по `onChange(of: isReady)`. Побочно вскрыт более тяжёлый дефект: модификатор навешен снаружи `.environment(\.diContainer, …)`, из окружения читал вечный nil — восстановление из файла отвечало «iCloud недоступен» на ЛЮБОМ пути, менеджер теперь передаётся явным параметром. **S13:** `DataRepository.validateSchemaCompatibility(of:)` вызывается до `clearAllDataAsync` (рядом с census) — отказ по схеме больше не требует отката. **S8:** счётчик попыток вынесен в `AutoRestoreAttemptCounter`, тавтологические тесты заменены на вызов продового кода. **Security:** pre-restore снимок пишется с `.completeFileProtection`, осиротевшие `millio-pre-restore-*` старше суток подметаются перед каждым restore (свежий — последний шанс на ручное восстановление — не трогаем); чтение входящего файла через `readFile(at:)` с потолком 256 МБ и локализованной ошибкой. **Тест-инфра:** `RecoveryEndToEndIntegrationTests` больше не ловит restore-события чужих параллельных сюит (метка операции в task-local) и не зависит от порядка fetch (в бэкапе владельца 3 счёта из 44 без имени). Гейт: 2406 тестов, 34 красных (база 672392b без чужих правок: 2398/35); дельта к базе — только сюиты Finance/Dynamics/Cashflow, где лежат ЧУЖИЕ незакоммиченные правки (`AccountsTotalsService`, `CurrencyRateService`); backup/recovery/restore/launch — ноль красных |
 | 2026-08-23 | R7-fix-2 | **S1 и S11 закрыты решением владельца** (`c835f15`, `d9ca867`). **S1:** восстановление предлагается ДО онбординга — непройденный онбординг больше не блокирует launch-recovery, политика ждёт `.onboarding` у нового пользователя и `.ready` у прошедшего; отказ нового пользователя ведёт в онбординг, успешный restore — сразу в приложение с проставленным флагом онбординга. **S11:** отказ «продолжить без данных» запоминается per-scope в `LaunchRecoveryStateStore` (переименованный `AutoRestoreAttemptCounter`, третья сущность не заведена): авто-restore после отказа не стартует, ручной путь из Профиля работает всегда, отказ одного аккаунта не наследуется другим, флаг снимается при появлении данных в scope. Гейт: 2419 тестов / 38 красных (база 2406/34); все 6 «новых» красных зелены в изолированном прогоне (89/89) и лежат вне зоны задачи, backup/recovery/restore/launch — ноль красных |

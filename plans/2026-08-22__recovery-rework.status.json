@@ -1,7 +1,7 @@
 {
   "planFile": "2026-08-22__recovery-rework.md",
   "title": "Переработка backup/recovery",
-  "updated": "2026-08-23T21:30:00+00:00",
+  "updated": "2026-08-23T20:06:55.222714+03:00",
   "phases": [
     {
       "name": "R0 — Stress-test и решение владельца",
@@ -62,6 +62,11 @@
       "name": "R8 — Пустой график активов/обязательств после restore",
       "status": "done",
       "note": "a8bcea5: три источника core-счетов схлопнуты в один живой (orderedAccounts/live ungrouped), coreAccountsSnapshot удалён; регресс-тесты на фикстуре владельца (0→37 items) + инвариант «тотал > 0 ⇒ график не пуст»; гейт 2421/38 при базе 2419/38, 5 подозрительных красных воспроизведены на 8c2dccf"
+    },
+    {
+      "name": "R9 — Возврат unified FX snapshot из архива",
+      "status": "done",
+      "note": "7f0474d/528a634/0f9756b: revision-store + adoptSnapshot как единственная точка замены matrix, цепочка millio→erapi, FetchDescriptor в AccountSnapshotRebuilder, подписчики FX; гейт 2424/35 при базе 2421/38, новых красных ноль; чужие правки — ветка wip/fx-cached-rate-fallback"
     }
   ],
   "costUsd": null,
