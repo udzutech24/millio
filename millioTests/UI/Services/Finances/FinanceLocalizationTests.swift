@@ -146,7 +146,9 @@ struct FinanceLocalizationTests {
         #expect(!compactOverview.contains("finances.overview.chart.saldo"))
         #expect(compactOverview.contains("FinanceBalanceCompositionDonut(presentation: presentation)"))
         #expect(!financesView.contains("heroLedgerPresentation"))
-        #expect(overviewCardView.contains("financeViewModel.coreAccountsSnapshot(matching: group)"))
+        // [R8] Ledger-цикл обязан читать ТОТ ЖЕ живой источник, что список группы.
+        #expect(overviewCardView.contains("financeViewModel.orderedAccounts(for: group)"))
+        #expect(!overviewCardView.contains("coreAccountsSnapshot"))
         #expect(!overviewCardView.contains("sortedCoreAccounts(group.accounts ?? [])"))
     }
 

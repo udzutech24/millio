@@ -1129,9 +1129,14 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     /// Core-счета БЕЗ группы (канон Ungrouped — `account.group == nil`, не сущность).
+    /// [R8] Живой fetch, а НЕ срез `state.accounts`: срез обновляется только по событиям, и любой
+    /// пропущенный сигнал (снапшот снят до конца импорта restore — группы импортируются раньше
+    /// счетов) делал секцию и график пустыми при заполненных списке групп и тотале шапки.
+    /// Источник обязан совпадать с `orderedAccounts(for:)` — тот тоже читает стор напрямую.
     func ungroupedAccounts() -> [Account] {
         let today = nowProvider()
-        let accounts = state.accounts.filter { $0.group == nil && $0.isVisible(on: today) }
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.group == nil })
+        let accounts = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.isVisible(on: today) }
         return sortedAccounts(accounts, group: nil)
     }
 
@@ -1177,13 +1182,6 @@ final class FinanceViewModel: ViewModelProtocol {
             .sorted { lhs, rhs in
                 lhs.order != rhs.order ? lhs.order < rhs.order : lhs.createdAt < rhs.createdAt
             }
-    }
-
-    /// Снапшот-версия `newCoreAccounts(matching:)` без живого FetchDescriptor — читает pre-populated
-    /// `state.accounts`. Единая точка для View-потребителей (`FinanceRows`/`FinanceGroupEditorView`).
-    func coreAccountsSnapshot(matching group: AccountGroup) -> [Account] {
-        let groupID = group.id
-        return state.accounts.filter { $0.group?.id == groupID }
     }
 
     /// [Ф5c.7 contract] NAME-based мост (был единственной формой `newCoreAccounts` ДО флипа) —
