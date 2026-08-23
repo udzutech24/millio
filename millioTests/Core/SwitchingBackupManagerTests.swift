@@ -9,9 +9,11 @@ actor SpyBackupManager: BackupManagerProtocol {
     private(set) var infoCalls = 0
     
     let available: Bool
-    
-    init(available: Bool) {
+    private let versions: [BackupVersionInfo]
+
+    init(available: Bool, versions: [BackupVersionInfo] = []) {
         self.available = available
+        self.versions = versions
     }
     
     func isAvailable() async -> Bool {
@@ -82,7 +84,7 @@ actor SpyBackupManager: BackupManagerProtocol {
 
     func listBackupVersions() async -> [BackupVersionInfo] {
         infoCalls += 1
-        return []
+        return versions
     }
 
     func deleteBackupVersion(recordName: String) async throws {}
@@ -96,7 +98,13 @@ actor SpyBackupManager: BackupManagerProtocol {
 struct SwitchingBackupManagerTests {
     @Test("SwitchingBackupManager routes only backup creation by appState.isBackupEnabled")
     func testSwitchingBackupManagerRoutesBackupCreationByToggle() async throws {
-        let appState = await MainActor.run { AppState() }
+        // R10: маршрутизация проверяется в авторизованном scope — в гостевом облачные
+        // операции запрещены гейтом доступа (см. BackupGuestScopeAccessTests).
+        let appState = await MainActor.run {
+            let state = AppState()
+            state.activeScopeKey = DataScope.user(id: "owner-1").storeConfigurationName
+            return state
+        }
         let enabledSpy = SpyBackupManager(available: true)
         let disabledSpy = SpyBackupManager(available: false)
         let manager = SwitchingBackupManager(appState: appState, enabled: enabledSpy, disabled: disabledSpy)
@@ -116,7 +124,13 @@ struct SwitchingBackupManagerTests {
 
     @Test("SwitchingBackupManager always uses enabled manager for restore and backup status")
     func testSwitchingBackupManagerAlwaysUsesEnabledForRestoreAndStatus() async throws {
-        let appState = await MainActor.run { AppState() }
+        // R10: маршрутизация проверяется в авторизованном scope — в гостевом облачные
+        // операции запрещены гейтом доступа (см. BackupGuestScopeAccessTests).
+        let appState = await MainActor.run {
+            let state = AppState()
+            state.activeScopeKey = DataScope.user(id: "owner-1").storeConfigurationName
+            return state
+        }
         let enabledSpy = SpyBackupManager(available: true)
         let disabledSpy = SpyBackupManager(available: false)
         let manager = SwitchingBackupManager(appState: appState, enabled: enabledSpy, disabled: disabledSpy)
