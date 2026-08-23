@@ -64,35 +64,35 @@ struct LaunchRecoveryHardeningTests {
         // R7-fix S8: тест вызывает продовый счётчик, а не воспроизводит его логику на UserDefaults.
         let defaults = try #require(UserDefaults(suiteName: "test.\(UUID().uuidString)"))
         defer { defaults.removeSuite(named: defaults.description) }
-        let counter = AutoRestoreAttemptCounter(defaults: defaults)
+        let counter = LaunchRecoveryStateStore(defaults: defaults)
 
-        #expect(counter.attempts == 0)
-        #expect(!counter.hasReachedLimit)
+        #expect(counter.autoRestoreAttempts == 0)
+        #expect(!counter.hasReachedAutoRestoreLimit)
 
-        counter.registerAttempt()
-        #expect(counter.attempts == 1)
-        #expect(!counter.hasReachedLimit, "После первой неудачи авто-restore ещё разрешён")
+        counter.registerAutoRestoreAttempt()
+        #expect(counter.autoRestoreAttempts == 1)
+        #expect(!counter.hasReachedAutoRestoreLimit, "После первой неудачи авто-restore ещё разрешён")
 
-        counter.registerAttempt()
-        #expect(counter.attempts == 2)
-        #expect(counter.hasReachedLimit)
+        counter.registerAutoRestoreAttempt()
+        #expect(counter.autoRestoreAttempts == 2)
+        #expect(counter.hasReachedAutoRestoreLimit)
 
-        counter.reset()
-        #expect(counter.attempts == 0)
-        #expect(!counter.hasReachedLimit)
+        counter.resetAutoRestoreAttempts()
+        #expect(counter.autoRestoreAttempts == 0)
+        #expect(!counter.hasReachedAutoRestoreLimit)
     }
 
     @Test("Attempt limit guard blocks auto-restore when threshold is reached")
     func attemptLimitPreventsAutoRestore() throws {
         let defaults = try #require(UserDefaults(suiteName: "test.\(UUID().uuidString)"))
-        let counter = AutoRestoreAttemptCounter(defaults: defaults)
-        for _ in 0..<AutoRestoreAttemptCounter.maxAttempts {
-            counter.registerAttempt()
+        let counter = LaunchRecoveryStateStore(defaults: defaults)
+        for _ in 0..<LaunchRecoveryStateStore.maxAutoRestoreAttempts {
+            counter.registerAutoRestoreAttempt()
         }
         // Ровно этот предикат гасит деструктивный авто-путь в millioApp.presentRestoreFlowIfNeeded.
-        #expect(counter.hasReachedLimit)
-        counter.registerAttempt()
-        #expect(counter.hasReachedLimit, "Лимит не имеет права «отпускать» при дальнейших попытках")
+        #expect(counter.hasReachedAutoRestoreLimit)
+        counter.registerAutoRestoreAttempt()
+        #expect(counter.hasReachedAutoRestoreLimit, "Лимит не имеет права «отпускать» при дальнейших попытках")
     }
 
     // MARK: - AC6: triggerBackgroundBackup nil guard contract

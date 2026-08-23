@@ -439,9 +439,12 @@ struct RestoreView: View {
         }
     }
 
+    /// S11: отказ «продолжить без данных» запоминается для текущего scope — при следующем
+    /// запуске автоматическое восстановление не предлагается (ручной путь из Профиля открыт).
     /// S1: новый пользователь, отказавшийся восстанавливаться, уходит в онбординг, а не в пустое
     /// приложение — вводные экраны показываются после recovery, а не вместо него.
     private func declineRecovery() {
+        LaunchRecoveryStateStore().recordRecoveryDecline(scopeKey: appState.activeScopeKey)
         appState.lifecycle = LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(
             didRestore: false,
             hasCompletedOnboarding: Self.hasCompletedOnboarding
@@ -451,6 +454,9 @@ struct RestoreView: View {
     /// Восстановленный пользователь приходит со своими данными и настройками — онбординг ему
     /// не нужен ни сейчас, ни при следующем запуске, поэтому флаг проставляется здесь же.
     private func finishAfterSuccessfulRestore() {
+        let store = LaunchRecoveryStateStore()
+        store.clearRecoveryDecline(scopeKey: appState.activeScopeKey)
+        store.resetAutoRestoreAttempts()
         UserDefaults.standard.set(true, forKey: Self.onboardingCompletedKey)
         appState.lifecycle = LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(
             didRestore: true,

@@ -19,6 +19,9 @@ struct LaunchRecoveryPolicy {
         /// Стор гостя (пользователь ещё не вошёл). Восстанавливать облачную копию в гостевой
         /// стор нельзя: после входа она уедет в reconciliation guest→user и удвоит данные.
         let isGuestScope: Bool
+        /// Пользователь уже отказался восстанавливаться в этом scope («продолжить без данных»).
+        /// Гасит только автоматическое предложение; ручной путь из Профиля не затрагивает (S11).
+        let hasDeclinedRecovery: Bool
 
         init(
             lifecycle: AppLifecycleState,
@@ -26,7 +29,8 @@ struct LaunchRecoveryPolicy {
             didLocalStoreExistBeforeLaunch: Bool,
             localDataCount: Int?,
             latestBackupInfo: BackupInfo?,
-            isGuestScope: Bool = false
+            isGuestScope: Bool = false,
+            hasDeclinedRecovery: Bool = false
         ) {
             self.lifecycle = lifecycle
             self.hasCompletedOnboarding = hasCompletedOnboarding
@@ -34,12 +38,15 @@ struct LaunchRecoveryPolicy {
             self.localDataCount = localDataCount
             self.latestBackupInfo = latestBackupInfo
             self.isGuestScope = isGuestScope
+            self.hasDeclinedRecovery = hasDeclinedRecovery
         }
     }
 
     enum BlockReason: Equatable {
         /// Пользователь ещё не вошёл: launch-recovery ждёт своего scope, а не молчит.
         case guestScopeBeforeSignIn
+        /// Пользователь уже отказался восстанавливаться в этом scope (S11).
+        case userDeclinedRecovery
         case lifecycleNotReady
         case existingLocalStore
         case localDataPresent
@@ -81,7 +88,7 @@ struct LaunchRecoveryPolicy {
             switch self {
             case .presentRestore, .presentRestoreManualOnly:
                 return true
-            case .skip(.existingLocalStore), .skip(.localDataPresent):
+            case .skip(.existingLocalStore), .skip(.localDataPresent), .skip(.userDeclinedRecovery):
                 return true
             case .skip(.lifecycleNotReady), .skip(.noBackupAvailable),
                  .skip(.guestScopeBeforeSignIn):
@@ -102,6 +109,10 @@ struct LaunchRecoveryPolicy {
         // на .ready. Любой другой lifecycle — ещё не наш момент (транзиентный skip).
         guard input.lifecycle == (input.hasCompletedOnboarding ? .ready : .onboarding) else {
             return .skip(.lifecycleNotReady)
+        }
+        // S11: отказ «продолжить без данных» запоминается — автоматически больше не предлагаем.
+        guard !input.hasDeclinedRecovery else {
+            return .skip(.userDeclinedRecovery)
         }
         // Счёт локальных моделей не удался: молча выходить нельзя — иначе пользователь уходит
         // в онбординг поверх восстановимого бэкапа. Показываем ручной сценарий,
@@ -133,7 +144,8 @@ struct LaunchRecoveryPolicy {
         didLocalStoreExistBeforeLaunch: Bool,
         localDataCount: Int?,
         latestBackupInfo: BackupInfo?,
-        isGuestScope: Bool = false
+        isGuestScope: Bool = false,
+        hasDeclinedRecovery: Bool = false
     ) -> Bool {
         evaluate(
             Input(
@@ -142,7 +154,8 @@ struct LaunchRecoveryPolicy {
                 didLocalStoreExistBeforeLaunch: didLocalStoreExistBeforeLaunch,
                 localDataCount: localDataCount,
                 latestBackupInfo: latestBackupInfo,
-                isGuestScope: isGuestScope
+                isGuestScope: isGuestScope,
+                hasDeclinedRecovery: hasDeclinedRecovery
             )
         ).shouldPresentRestore
     }

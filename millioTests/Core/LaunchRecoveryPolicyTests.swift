@@ -50,6 +50,7 @@ struct LaunchRecoveryPolicyTests {
         #expect(!LaunchRecoveryPolicy.Decision.skip(.noBackupAvailable).locksLaunchRecovery)
         #expect(LaunchRecoveryPolicy.Decision.skip(.localDataPresent).locksLaunchRecovery)
         #expect(LaunchRecoveryPolicy.Decision.skip(.existingLocalStore).locksLaunchRecovery)
+        #expect(LaunchRecoveryPolicy.Decision.skip(.userDeclinedRecovery).locksLaunchRecovery)
         #expect(LaunchRecoveryPolicy.Decision.presentRestore.locksLaunchRecovery)
     }
 
@@ -176,6 +177,67 @@ struct LaunchRecoveryPolicyTests {
             "Отказ нового пользователя не должен съедать онбординг"
         )
         #expect(LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(didRestore: false, hasCompletedOnboarding: true) == .ready)
+    }
+
+    // MARK: - S11: отказ запоминается
+
+    @Test("S11: после отказа авто-restore на следующем запуске не предлагается")
+    func testDeclinedRecoveryBlocksNextLaunchAutoRestore() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+        // Следующий запуск после отказа: стор уже существует и пуст — раньше это был
+        // прямой путь в молчаливый авто-restore (millioApp.presentRestoreFlowIfNeeded).
+        let input = LaunchRecoveryPolicy.Input(
+            lifecycle: .ready,
+            hasCompletedOnboarding: true,
+            didLocalStoreExistBeforeLaunch: true,
+            localDataCount: 0,
+            latestBackupInfo: backupInfo,
+            hasDeclinedRecovery: true
+        )
+
+        let decision = LaunchRecoveryPolicy.evaluate(input)
+
+        #expect(decision == .skip(.userDeclinedRecovery))
+        #expect(!decision.shouldPresentRestore)
+        #expect(!decision.allowsAutomaticRestore)
+        #expect(decision.locksLaunchRecovery)
+    }
+
+    @Test("S11: без отказа тот же запуск по-прежнему запускает авто-restore")
+    func testWithoutDeclineSameLaunchStillRestores() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: true,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo,
+                hasDeclinedRecovery: false
+            )
+        )
+
+        #expect(decision == .presentRestore)
+        #expect(decision.allowsAutomaticRestore)
+    }
+
+    @Test("S11: отказ до онбординга тоже переживает перезапуск")
+    func testDeclinedRecoveryBlocksBeforeOnboarding() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .onboarding,
+                hasCompletedOnboarding: false,
+                didLocalStoreExistBeforeLaunch: true,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo,
+                hasDeclinedRecovery: true
+            )
+        )
+
+        #expect(decision == .skip(.userDeclinedRecovery))
     }
 
     @Test("Evaluator skips restore while app lifecycle is not ready")

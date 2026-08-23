@@ -1073,18 +1073,20 @@ struct millioApp: App {
         // каждом onSessionChanged (:418) — включая тот, что приходит от restoreSession в том же
         // запуске. Без гейта второй проход открывал RestoreView повторно / инкрементил счётчик
         // попыток второй раз.
-        guard let gateToken = launchRecoveryGate.beginEvaluation(
-            scopeKey: activeDataScope.storeConfigurationName
-        ) else {
+        let scopeKey = activeDataScope.storeConfigurationName
+        guard let gateToken = launchRecoveryGate.beginEvaluation(scopeKey: scopeKey) else {
             AppLogger.log(.info, category: "App", "LaunchRecovery: решение уже принято для текущего поколения scope — no-op")
             return
         }
 
+        let recoveryStateStore = LaunchRecoveryStateStore()
         let localDataCount = Self.exportedModelCount(in: activeModelContainer)
         // Если данные есть — счётчик авто-восстановления сбрасываем, чтобы не застревать
         // в ручном restore после двух неудачных попыток (например, при passphrase-бэкапе).
+        // Заодно снимается прошлый отказ: он относился к пустому стору (S11).
         if let localDataCount, localDataCount > 0 {
-            AutoRestoreAttemptCounter().reset()
+            recoveryStateStore.resetAutoRestoreAttempts()
+            recoveryStateStore.clearRecoveryDecline(scopeKey: scopeKey)
         }
         let isGuestScope = activeDataScope == .guest
         // В гостевом scope облако не опрашиваем вовсе: решение всё равно «ждём входа»,
@@ -1096,7 +1098,8 @@ struct millioApp: App {
             didLocalStoreExistBeforeLaunch: activeScopeStoreExistedBeforeBinding,
             localDataCount: localDataCount,
             latestBackupInfo: latestBackupInfo,
-            isGuestScope: isGuestScope
+            isGuestScope: isGuestScope,
+            hasDeclinedRecovery: recoveryStateStore.hasDeclinedRecovery(scopeKey: scopeKey)
         )
         let recoveryDecision = LaunchRecoveryPolicy.evaluate(input)
         let countDescription = localDataCount.map(String.init) ?? "unknown"
@@ -1109,6 +1112,10 @@ struct millioApp: App {
             outcome: recoveryDecision.locksLaunchRecovery ? .decided : .unresolved
         )
         guard recoveryDecision.shouldPresentRestore else { return }
+        // RestoreView сама решает, что делать с отказом и куда уходить после восстановления,
+        // и для этого ей нужен ключ активного scope. Публикуем ровно здесь — в единственной
+        // точке, из которой приложение попадает на экран восстановления при старте.
+        appState.activeScopeKey = scopeKey
         appState.isICloudAvailable = await diContainer.backupManager.isAvailable()
         appState.lastBackupDate = latestBackupInfo?.date
 
@@ -1117,13 +1124,12 @@ struct millioApp: App {
         // Неизвестный счётчик локальных моделей запрещает деструктивный авто-путь:
         // пользователь сам подтверждает перезапись в RestoreView.
         if recoveryDecision.allowsAutomaticRestore, activeScopeStoreExistedBeforeBinding, latestBackupInfo != nil {
-            let attemptCounter = AutoRestoreAttemptCounter()
-            guard !attemptCounter.hasReachedLimit else {
-                AppLogger.log(.warning, category: "App", "Auto-restore: лимит попыток исчерпан (\(attemptCounter.attempts)), переходим к ручному restore")
+            guard !recoveryStateStore.hasReachedAutoRestoreLimit else {
+                AppLogger.log(.warning, category: "App", "Auto-restore: лимит попыток исчерпан (\(recoveryStateStore.autoRestoreAttempts)), переходим к ручному restore")
                 appState.lifecycle = .restoring
                 return
             }
-            attemptCounter.registerAttempt()
+            recoveryStateStore.registerAutoRestoreAttempt()
             appState.isRestoreInProgress = true
             appState.lifecycle = .autoRestoring
             Task {
@@ -1151,7 +1157,7 @@ struct millioApp: App {
                         AppLogger.log(.warning, category: "App", "Auto-restore: результат устарел (сменился scope) — успех не публикуется")
                         return
                     }
-                    attemptCounter.reset()
+                    recoveryStateStore.resetAutoRestoreAttempts()
                     AppLogger.log(.info, category: "App", "Auto-restore completed successfully: \(receipt.diagnosticSummary)")
                     await MainActor.run { publishAutoRestoreLifecycle(.ready, token: gateToken) }
                 } catch {
