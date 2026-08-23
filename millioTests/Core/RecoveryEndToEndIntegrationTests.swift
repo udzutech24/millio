@@ -96,7 +96,9 @@ struct RecoveryEndToEndIntegrationTests {
         let observer = RestoreEventObserver()
         defer { observer.stop() }
 
-        let receipt = try await manager.restoreLatest(passphrase: nil)
+        let receipt = try await observer.observing {
+            try await manager.restoreLatest(passphrase: nil)
+        }
 
         #expect(receipt.isVerified)
         #expect(receipt.importedModelCount == 1673)
@@ -154,7 +156,9 @@ struct RecoveryEndToEndIntegrationTests {
         defer { observer.stop() }
 
         await #expect(throws: Error.self) {
-            _ = try await manager.restoreFromFile(try Self.emptyEnvelope(), passphrase: nil)
+            _ = try await observer.observing {
+                try await manager.restoreFromFile(try Self.emptyEnvelope(), passphrase: nil)
+            }
         }
 
         #expect(observer.sawRestoreCompleted == false, "Успех не имеет права публиковаться без verified-receipt")
@@ -390,22 +394,40 @@ struct RecoveryEndToEndIntegrationTests {
     }
 }
 
+/// Метка «своей» restore-операции. `EventBus.shared` один на процесс, а сюиты Swift Testing идут
+/// параллельно — без метки наблюдатель ловит restore-события ЧУЖИХ сюит, и негативные проверки
+/// («успех не публиковался») становятся ложными. Метка едет в task-local и доезжает до подписчика:
+/// `EventBus.publish` вызывает обработчик синхронно, внутри задачи, запустившей restore.
+private enum RestoreEventScope {
+    @TaskLocal static var operationID: UUID?
+}
+
 /// Подписчик EventBus: «UI-слой получил сигнал обновления» проверяется через ту же шину,
 /// на которую подписаны CashflowViewModel/FinanceViewModel/FinanceDynamicsViewModel.
 @MainActor
 private final class RestoreEventObserver {
+    private let operationID = UUID()
     private var token: UUID?
     private(set) var sawRestoreCompleted = false
     private(set) var sawRestoreFailed = false
 
     init() {
         token = EventBus.shared.subscribe { [weak self] event in
-            guard let self, let backupEvent = event as? BackupEvent else { return }
+            guard let self,
+                  RestoreEventScope.operationID == self.operationID,
+                  let backupEvent = event as? BackupEvent else { return }
             switch backupEvent {
             case .restoreCompleted: self.sawRestoreCompleted = true
             case .restoreFailed: self.sawRestoreFailed = true
             default: break
             }
+        }
+    }
+
+    /// Все restore-вызовы теста идут через этот метод — иначе события не будут помечены как свои.
+    func observing<T>(_ body: () async throws -> T) async rethrows -> T {
+        try await RestoreEventScope.$operationID.withValue(operationID) {
+            try await body()
         }
     }
 
