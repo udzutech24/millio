@@ -98,7 +98,7 @@ struct RootViewResolverTests {
     @Test("RootViewResolver.route корректно маппит AppLifecycleState")
     func testRouteMapping() {
         #expect(RootViewResolver.route(for: .launching, authStatus: .signedOut, isAuthenticated: false, isGuestModeEnabled: false) == .launching)
-        #expect(RootViewResolver.route(for: .ready, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: false) == .launching)
+        #expect(RootViewResolver.route(for: .ready, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: false) == .ready)
         #expect(RootViewResolver.route(for: .onboarding, authStatus: .signedOut, isAuthenticated: false, isGuestModeEnabled: false) == .auth)
         #expect(RootViewResolver.route(for: .onboarding, authStatus: .signedOut, isAuthenticated: false, isGuestModeEnabled: true) == .onboarding)
         #expect(RootViewResolver.route(for: .onboarding, authStatus: .authenticated, isAuthenticated: true, isGuestModeEnabled: false) == .onboarding)
@@ -111,11 +111,17 @@ struct RootViewResolverTests {
     func testReadyRouteSurvivesBackgroundSessionRestore() {
         // Холодный старт авторизованного пользователя: локальный снапшот сессии → .ready,
         // затем сетевой restoreSession выставляет authStatus = .restoring.
+        //
+        // ⚠️ Ключ регресса: во время .restoring isAuthenticated == FALSE, потому что
+        // AuthManager.isAuthenticated == (status == .authenticated && currentUser != nil)
+        // (AuthService.swift:1203). Прежняя версия этого теста подавала здесь `true` и
+        // поэтому не воспроизводила баг, хотя на устройстве дерево сносилось в сплэш
+        // (лог: ROUTE ready -> launching -> ready за 108 мс, один и тот же PID).
         let sequence: [(AppLifecycleState, AuthManagerStatus, Bool)] = [
             (.launching, .signedOut, false),      // старт
             (.launching, .authenticated, true),   // снапшот сессии восстановлен
             (.ready, .authenticated, true),       // дерево смонтировано
-            (.ready, .restoring, true),           // фоновой сетевой restoreSession
+            (.ready, .restoring, false),          // фоновой сетевой restoreSession
             (.ready, .authenticated, true)        // restoreSession завершён
         ]
         let routes = sequence.map { lifecycle, status, isAuthenticated in
@@ -131,15 +137,44 @@ struct RootViewResolverTests {
         #expect(!routes.drop(while: { $0 != .ready }).contains(.launching))
     }
 
-    @Test("Гость и неавторизованный: restoring по-прежнему держит сплэш вместо мигания .auth")
-    func testUnauthenticatedRestoringKeepsSplash() {
-        #expect(RootViewResolver.route(for: .ready, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: false) == .launching)
-        // Терминальный отказ сессии — экран авторизации, как и раньше.
+    @Test("restoring не мигает ни .auth, ни сплэшем: до монтирования — сплэш, после — текущий экран")
+    func testUnauthenticatedRestoringNeverFlashesAuth() {
+        // До того как дерево смонтировано (lifecycle == .launching) — сплэш, а не .auth.
+        #expect(RootViewResolver.route(for: .launching, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: false) == .launching)
+        // Дерево уже смонтировано: транзиентный .restoring НЕ откатывает экран назад.
+        #expect(RootViewResolver.route(for: .ready, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: false) == .ready)
+        #expect(RootViewResolver.route(for: .onboarding, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: false) == .onboarding)
+        #expect(RootViewResolver.route(for: .restoring, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: false) == .restoring)
+        // Терминальный отказ сессии (logout / 401 → .signedOut) — экран авторизации, как и раньше.
         #expect(RootViewResolver.route(for: .ready, authStatus: .signedOut, isAuthenticated: false, isGuestModeEnabled: false) == .auth)
+        #expect(RootViewResolver.route(for: .onboarding, authStatus: .signedOut, isAuthenticated: false, isGuestModeEnabled: false) == .auth)
         // Гостевой режим не зависит от статуса auth.
         #expect(RootViewResolver.route(for: .ready, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: true) == .ready)
-        // Смена аккаунта: пока новая сессия не поднялась, гостевого режима нет → сплэш.
-        #expect(RootViewResolver.route(for: .onboarding, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: false) == .launching)
+    }
+
+    @Test("Полная хронология холодного старта с устройства не содержит второго прохода UI")
+    func testDeviceColdStartTimelineHasNoSecondMount() {
+        // Воспроизводит трассировку StartupTrace с iPhone 17 Pro Max (один PID, без краша):
+        // t+0.058 launching → t+2.405 ready → t+3.739 restoreSession → t+3.847 authenticated.
+        let sequence: [(AppLifecycleState, AuthManagerStatus, Bool)] = [
+            (.launching, .signedOut, false),
+            (.launching, .authenticated, true),
+            (.ready, .authenticated, true),
+            (.ready, .restoring, false),
+            (.ready, .authenticated, true)
+        ]
+        let routes = sequence.map { lifecycle, status, isAuthenticated in
+            RootViewResolver.route(
+                for: lifecycle,
+                authStatus: status,
+                isAuthenticated: isAuthenticated,
+                isGuestModeEnabled: false
+            )
+        }
+        // После первого .ready маршрут больше не меняется → RootTabView монтируется ровно один раз.
+        let afterFirstReady = Array(routes.drop(while: { $0 != .ready }))
+        #expect(afterFirstReady.allSatisfy { $0 == .ready })
+        #expect(!routes.contains(.auth))
     }
 
     @Test("RootViewResolver сбрасывает стек только при смене root-route")

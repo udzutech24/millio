@@ -32,10 +32,15 @@ struct RootViewResolver: View {
             return .launching
         }
 
-        if !isAuthenticated && !isGuestModeEnabled {
-            // Пока сессия восстанавливается, мы ещё не знаем, залогинен ли пользователь —
-            // показываем сплэш вместо мигания экраном авторизации.
-            return authStatus == .restoring ? .launching : .auth
+        // authStatus == .restoring — транзиентная фаза сетевого обновления сессии, в которой
+        // isAuthenticated временно false (isAuthenticated == status == .authenticated).
+        // Сюда мы попадаем уже ПОСЛЕ lifecycle != .launching (см. ранний return выше), то есть
+        // дерево уже смонтировано. Возврат .launching/.auth в этот момент сносил RootTabView в
+        // сплэш и монтировал его заново — тот самый «загрузился → перезагрузился → вошёл»
+        // (доказано логом с устройства: ROUTE ready -> launching -> ready за 108 мс, один PID).
+        // Терминальный выход (logout / 401) даёт .signedOut и по-прежнему уводит на .auth.
+        if !isAuthenticated && !isGuestModeEnabled && authStatus != .restoring {
+            return .auth
         }
 
         // authStatus == .restoring НЕ откатывает уже разрешённый маршрут назад в .launching.
