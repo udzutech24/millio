@@ -16,9 +16,30 @@ struct LaunchRecoveryPolicy {
         /// неизвестное состояние трактуется как потенциально непустое (безопасная сторона).
         let localDataCount: Int?
         let latestBackupInfo: BackupInfo?
+        /// Стор гостя (пользователь ещё не вошёл). Восстанавливать облачную копию в гостевой
+        /// стор нельзя: после входа она уедет в reconciliation guest→user и удвоит данные.
+        let isGuestScope: Bool
+
+        init(
+            lifecycle: AppLifecycleState,
+            hasCompletedOnboarding: Bool,
+            didLocalStoreExistBeforeLaunch: Bool,
+            localDataCount: Int?,
+            latestBackupInfo: BackupInfo?,
+            isGuestScope: Bool = false
+        ) {
+            self.lifecycle = lifecycle
+            self.hasCompletedOnboarding = hasCompletedOnboarding
+            self.didLocalStoreExistBeforeLaunch = didLocalStoreExistBeforeLaunch
+            self.localDataCount = localDataCount
+            self.latestBackupInfo = latestBackupInfo
+            self.isGuestScope = isGuestScope
+        }
     }
 
     enum BlockReason: Equatable {
+        /// Пользователь ещё не вошёл: launch-recovery ждёт своего scope, а не молчит.
+        case guestScopeBeforeSignIn
         case onboardingIncomplete
         case lifecycleNotReady
         case existingLocalStore
@@ -63,13 +84,19 @@ struct LaunchRecoveryPolicy {
                 return true
             case .skip(.existingLocalStore), .skip(.localDataPresent):
                 return true
-            case .skip(.onboardingIncomplete), .skip(.lifecycleNotReady), .skip(.noBackupAvailable):
+            case .skip(.onboardingIncomplete), .skip(.lifecycleNotReady), .skip(.noBackupAvailable),
+                 .skip(.guestScopeBeforeSignIn):
                 return false
             }
         }
     }
 
     static func evaluate(_ input: Input) -> Decision {
+        // Гостевой стор — не место для облачной копии пользователя: решение откладывается
+        // до входа (исход транзиентный, повторная оценка после свопа scope обязательна).
+        guard !input.isGuestScope else {
+            return .skip(.guestScopeBeforeSignIn)
+        }
         guard input.hasCompletedOnboarding else {
             return .skip(.onboardingIncomplete)
         }
@@ -105,7 +132,8 @@ struct LaunchRecoveryPolicy {
         hasCompletedOnboarding: Bool,
         didLocalStoreExistBeforeLaunch: Bool,
         localDataCount: Int?,
-        latestBackupInfo: BackupInfo?
+        latestBackupInfo: BackupInfo?,
+        isGuestScope: Bool = false
     ) -> Bool {
         evaluate(
             Input(
@@ -113,7 +141,8 @@ struct LaunchRecoveryPolicy {
                 hasCompletedOnboarding: hasCompletedOnboarding,
                 didLocalStoreExistBeforeLaunch: didLocalStoreExistBeforeLaunch,
                 localDataCount: localDataCount,
-                latestBackupInfo: latestBackupInfo
+                latestBackupInfo: latestBackupInfo,
+                isGuestScope: isGuestScope
             )
         ).shouldPresentRestore
     }

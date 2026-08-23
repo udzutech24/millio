@@ -1088,17 +1088,21 @@ struct millioApp: App {
         if let localDataCount, localDataCount > 0 {
             UserDefaults.standard.set(0, forKey: Self.autoRestoreAttemptsKey)
         }
-        let latestBackupInfo = await diContainer.backupManager.lastBackupInfo()
+        let isGuestScope = activeDataScope == .guest
+        // В гостевом scope облако не опрашиваем вовсе: решение всё равно «ждём входа»,
+        // а лишний запрос к CloudKit на каждом старте до логина не нужен.
+        let latestBackupInfo = isGuestScope ? nil : await diContainer.backupManager.lastBackupInfo()
         let input = LaunchRecoveryPolicy.Input(
             lifecycle: appState.lifecycle,
             hasCompletedOnboarding: lifecycleUseCase?.checkOnboardingStatus() ?? false,
             didLocalStoreExistBeforeLaunch: activeScopeStoreExistedBeforeBinding,
             localDataCount: localDataCount,
-            latestBackupInfo: latestBackupInfo
+            latestBackupInfo: latestBackupInfo,
+            isGuestScope: isGuestScope
         )
         let recoveryDecision = LaunchRecoveryPolicy.evaluate(input)
         let countDescription = localDataCount.map(String.init) ?? "unknown"
-        AppLogger.log(.info, category: "App", "LaunchRecovery: localCount=\(countDescription) storeExisted=\(activeScopeStoreExistedBeforeBinding) backup=\(latestBackupInfo != nil) lifecycle=\(appState.lifecycle) → \(recoveryDecision)")
+        AppLogger.log(.info, category: "App", "LaunchRecovery: scope=\(isGuestScope ? "guest" : "user") localCount=\(countDescription) storeExisted=\(activeScopeStoreExistedBeforeBinding) backup=\(latestBackupInfo != nil) lifecycle=\(appState.lifecycle) → \(recoveryDecision)")
 
         // Транзиентный skip (lifecycle не готов, онбординг не пройден, лукап бэкапа пуст/упал)
         // не фиксируется как принятое решение — повторный проход обязан отработать заново (SR7).

@@ -279,4 +279,55 @@ struct LaunchRecoveryPolicyTests {
         #expect(decision == .skip(.existingLocalStore))
         #expect(!decision.shouldPresentRestore)
     }
+
+    // MARK: - Guest scope (R4 / S10)
+
+    @Test("Гостевой scope до логина: восстановление не предлагается, причина названа явно")
+    func testGuestScopeSkipsRecoveryWithExplicitReason() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 17_000, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo,
+                isGuestScope: true
+            )
+        )
+
+        #expect(decision == .skip(.guestScopeBeforeSignIn))
+        #expect(!decision.shouldPresentRestore)
+        #expect(!decision.allowsAutomaticRestore)
+    }
+
+    @Test("Отказ по гостевому scope транзиентный: после входа recovery оценивается заново")
+    func testGuestScopeSkipDoesNotLockRecovery() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 17_000, version: "2.0.0")
+
+        let guestDecision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo,
+                isGuestScope: true
+            )
+        )
+        let userDecision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo,
+                isGuestScope: false
+            )
+        )
+
+        #expect(!guestDecision.locksLaunchRecovery)
+        #expect(userDecision == .presentRestore)
+    }
 }
