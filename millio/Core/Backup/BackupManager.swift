@@ -815,11 +815,17 @@ actor BackupManager: BackupManagerProtocol {
         // срабатывала уже после clearAllData(), и данные спасал только откат.
         try DataRepository.validateSchemaCompatibility(of: backupData)
 
+        // Осиротевшие снимки прошлых restore (kill процесса в середине, провал отката) — это полный
+        // открытый дамп финансов в tmp/. Подметаем перед тем, как положить новый.
+        Self.sweepOrphanedPreRestoreSnapshots()
+
         let previousData = try await dataRepository.exportAllDataAsync()
         let snapshotURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("millio-pre-restore-\(UUID().uuidString).json")
+            .appendingPathComponent("\(Self.preRestoreSnapshotPrefix)\(UUID().uuidString).json")
         do {
-            try previousData.write(to: snapshotURL, options: .atomic)
+            // .completeFileProtection: снимок нечитаем, пока устройство заблокировано, — restore
+            // всегда идёт на разблокированном экране, ограничение доступа ничего не ломает.
+            try previousData.write(to: snapshotURL, options: [.atomic, .completeFileProtection])
         } catch {
             throw taggedRestoreFailure(.preRestoreSnapshotFailed)
         }
@@ -850,6 +856,35 @@ actor BackupManager: BackupManagerProtocol {
         // легаси→core сразу, а не на следующий relaunch: restore мог вернуть стор без ядра.
         await onDidReplaceStore?()
         return receipt
+    }
+
+    static let preRestoreSnapshotPrefix = "millio-pre-restore-"
+
+    /// Снимок последнего проваленного отката — единственный шанс на ручное восстановление, поэтому
+    /// свежие файлы не трогаем: подметаем только заведомо осиротевшие, старше суток.
+    @discardableResult
+    static func sweepOrphanedPreRestoreSnapshots(
+        in directory: URL = FileManager.default.temporaryDirectory,
+        olderThan maxAge: TimeInterval = 24 * 60 * 60,
+        now: Date = Date()
+    ) -> Int {
+        let manager = FileManager.default
+        guard let entries = try? manager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+
+        var removed = 0
+        for url in entries where url.lastPathComponent.hasPrefix(preRestoreSnapshotPrefix) {
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            guard now.timeIntervalSince(modified) > maxAge else { continue }
+            if (try? manager.removeItem(at: url)) != nil {
+                removed += 1
+            }
+        }
+        return removed
     }
 
     /// Возврат к до-restore снимку. Провал отката — отдельный, более тяжёлый исход, чем провал restore:

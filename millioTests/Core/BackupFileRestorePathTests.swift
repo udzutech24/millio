@@ -195,6 +195,35 @@ struct BackupFileRestorePathTests {
         #expect(try repository.exportAllData() == repository.exportData, "Данные обязаны остаться на месте")
     }
 
+    // MARK: - Security: уборка осиротевших pre-restore снимков
+
+    @Test("Осиротевшие pre-restore снимки подметаются, чужие файлы и свежий снимок остаются")
+    func testOrphanedPreRestoreSnapshotsAreSwept() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sweep-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let old = ["\(BackupManager.preRestoreSnapshotPrefix)a.json", "\(BackupManager.preRestoreSnapshotPrefix)b.json"]
+        let kept = ["\(BackupManager.preRestoreSnapshotPrefix)fresh.json", "unrelated.json"]
+        for name in old + kept {
+            try Data("{}".utf8).write(to: directory.appendingPathComponent(name))
+        }
+        let longAgo = Date(timeIntervalSinceNow: -48 * 60 * 60)
+        for name in old {
+            try FileManager.default.setAttributes(
+                [.modificationDate: longAgo],
+                ofItemAtPath: directory.appendingPathComponent(name).path
+            )
+        }
+
+        let removed = BackupManager.sweepOrphanedPreRestoreSnapshots(in: directory)
+
+        #expect(removed == 2)
+        let survivors = try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted()
+        #expect(survivors == kept.sorted(), "Свежий снимок (последний шанс на откат) и чужие файлы трогать нельзя")
+    }
+
     // MARK: - Helpers
 
     private static func makePayload(
