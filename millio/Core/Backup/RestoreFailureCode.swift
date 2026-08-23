@@ -22,9 +22,11 @@ struct RestoreRollbackFailure: Error, LocalizedError {
     var severity: RestoreFailureSeverity { .critical }
 
     var errorDescription: String? {
-        AppLocalization.string(
+        // Через BackupL10n, а не AppLocalization: каталог гарантирует RU/zh-Hans даже если ключ
+        // ещё не доехал до Localizable.xcstrings — сообщение критического исхода не имеет права
+        // выпадать в английский на русском устройстве.
+        BackupL10n.tr(
             "backup.restore.failure.rollback_failed",
-            locale: AppLocalization.currentAppLocale,
             fallback: "Failed to roll back data after a restore error. Do not delete the app: open Profile → Backup and restore from a version manually."
         )
     }
