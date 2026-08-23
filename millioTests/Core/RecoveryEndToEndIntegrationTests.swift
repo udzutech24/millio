@@ -50,8 +50,11 @@ struct RecoveryEndToEndIntegrationTests {
         #expect(transactions.count == 328)
 
         // 3. Три конкретные сущности читаемы и не пустые — импорт восстановил поля, а не только строки.
-        let account = try #require(accounts.first)
-        #expect(account.name.isEmpty == false)
+        // У 3 из 44 счетов реального бэкапа владельца имя пустое, а fetch без сортировки отдаёт
+        // произвольный порядок: проверка «accounts.first.name не пуст» краснела раз в несколько
+        // прогонов. Проверяем детерминированно — сколько именованных счетов доехало.
+        #expect(accounts.filter { !$0.name.isEmpty }.count == 41, "Имена счетов не восстановились")
+        let account = try #require(accounts.sorted { $0.id.uuidString < $1.id.uuidString }.first)
         #expect(account.currency.isEmpty == false)
         #expect(Set(accounts.map(\.id)).count == accounts.count, "Дубли Account после restore")
 

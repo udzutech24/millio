@@ -403,6 +403,24 @@ xcodebuild test -project millio.xcodeproj -scheme millio \
 
 **Итого: 10 ✅ · 4 ⚠️ (S1, S8, S11, S12) · 2 ❌ (S3, S13) · S15 ✅ с device-подтверждением.**
 
+#### R7-fix (2026-08-23, Александр) — S3, S13, S8 и оба security-замечания ЗАКРЫТЫ
+
+| Замечание | Статус | Что сделано |
+|-----------|--------|-------------|
+| **S3** | ✅ закрыто | `IncomingBackupFileIntake` (`millio/UI/Restore/IncomingBackupFileIntake.swift`): URL потребляется ТОЛЬКО при готовом `backupManager`, иначе `.deferredUntilReady` и значение остаётся в `AppState`; второй триггер — `onChange(of: isReady)`. Побочно найден более тяжёлый дефект того же места: модификатор навешен СНАРУЖИ `.environment(\.diContainer, …)` (`millioApp.swift:177` vs `:227`), поэтому из окружения читал вечный nil — восстановление из файла отвечало «iCloud недоступен» ВСЕГДА, а не только на холодном старте. Менеджер передаётся явным параметром. Тесты: `IncomingBackupFileIntakeTests` (4) |
+| **S13** | ✅ закрыто | `DataRepository.validateSchemaCompatibility(of:)` вызывается в `BackupManager.replaceRepositoryDataWithBackup` рядом с `RestoreModelCensus.counts`, то есть до `exportAllDataAsync`/`clearAllDataAsync`. Тест `RecoveryEndToEndIntegrationTests/testIncompatibleSchemaRejectedBeforeDestructivePhase` (реальный `DataRepository`: схема 99.0 → `incompatibleSchemaVersion`, данные физически на месте) |
+| **S8** | ✅ закрыто | Логика счётчика вынесена в `AutoRestoreAttemptCounter` (`millio/Core/Backup/`), тесты `LaunchRecoveryHardeningTests:62/:89` теперь вызывают продовый код на изолированном `UserDefaults`-suite, а не воспроизводят guard инлайном |
+| **Security (средняя)** | ✅ закрыто | Pre-restore снимок пишется с `.completeFileProtection`; `BackupManager.sweepOrphanedPreRestoreSnapshots()` подметает `millio-pre-restore-*` старше суток перед каждым restore (свежий снимок проваленного отката не трогаем — он последний шанс на ручное восстановление). Тест `BackupFileRestorePathTests/testOrphanedPreRestoreSnapshotsAreSwept` |
+| **Security (низкая)** | ✅ закрыто | `IncomingBackupFileIntake.readFile(at:)` — проверка `.fileSizeKey`, потолок 256 МБ (реальный бэкап владельца 134 КБ), локализованная ошибка `backup.incoming_file.too_large` (ru/en/zh-Hans + inline-каталог). Тот же ридер на пути импорта версии в `BackupManagementView` |
+
+**Побочная находка (починена):** негативные проверки событий в `RecoveryEndToEndIntegrationTests`
+(«успех/провал не публиковался») были неустойчивы — `EventBus.shared` один на процесс, а сюиты
+Swift Testing идут параллельно, поэтому наблюдатель ловил restore-события ЧУЖИХ сюит. Наблюдатель
+помечает свою операцию через task-local и игнорирует чужие события.
+
+**Остаются открытыми (решение владельца):** S1 (онбординг раньше recovery), S11 (нет флага
+`userDeclined` — авто-restore после отказа на следующем запуске), S12 (passphrase-бэкап из Files).
+
 #### Аудит вне гейта (шимы / идиоматичность / bloat)
 
 **(а) Переходные слои:**
