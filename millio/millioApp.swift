@@ -977,8 +977,6 @@ struct millioApp: App {
     }
 
     private static let autoRestoreTimeoutSeconds: TimeInterval = 30
-    private static let autoRestoreMaxAttempts = 2
-    private static let autoRestoreAttemptsKey = "autoRestoreAttemptCount"
 
     private static func exportedModelCount(in container: ModelContainer) -> Int? {
         // Первичный путь: прямое чтение SQLite — обходит timing issue SwiftData, где
@@ -1086,7 +1084,7 @@ struct millioApp: App {
         // Если данные есть — счётчик авто-восстановления сбрасываем, чтобы не застревать
         // в ручном restore после двух неудачных попыток (например, при passphrase-бэкапе).
         if let localDataCount, localDataCount > 0 {
-            UserDefaults.standard.set(0, forKey: Self.autoRestoreAttemptsKey)
+            AutoRestoreAttemptCounter().reset()
         }
         let isGuestScope = activeDataScope == .guest
         // В гостевом scope облако не опрашиваем вовсе: решение всё равно «ждём входа»,
@@ -1119,13 +1117,13 @@ struct millioApp: App {
         // Неизвестный счётчик локальных моделей запрещает деструктивный авто-путь:
         // пользователь сам подтверждает перезапись в RestoreView.
         if recoveryDecision.allowsAutomaticRestore, activeScopeStoreExistedBeforeBinding, latestBackupInfo != nil {
-            let attempts = UserDefaults.standard.integer(forKey: Self.autoRestoreAttemptsKey)
-            guard attempts < Self.autoRestoreMaxAttempts else {
-                AppLogger.log(.warning, category: "App", "Auto-restore: лимит попыток исчерпан (\(attempts)), переходим к ручному restore")
+            let attemptCounter = AutoRestoreAttemptCounter()
+            guard !attemptCounter.hasReachedLimit else {
+                AppLogger.log(.warning, category: "App", "Auto-restore: лимит попыток исчерпан (\(attemptCounter.attempts)), переходим к ручному restore")
                 appState.lifecycle = .restoring
                 return
             }
-            UserDefaults.standard.set(attempts + 1, forKey: Self.autoRestoreAttemptsKey)
+            attemptCounter.registerAttempt()
             appState.isRestoreInProgress = true
             appState.lifecycle = .autoRestoring
             Task {
@@ -1153,7 +1151,7 @@ struct millioApp: App {
                         AppLogger.log(.warning, category: "App", "Auto-restore: результат устарел (сменился scope) — успех не публикуется")
                         return
                     }
-                    UserDefaults.standard.set(0, forKey: Self.autoRestoreAttemptsKey)
+                    attemptCounter.reset()
                     AppLogger.log(.info, category: "App", "Auto-restore completed successfully: \(receipt.diagnosticSummary)")
                     await MainActor.run { publishAutoRestoreLifecycle(.ready, token: gateToken) }
                 } catch {
