@@ -93,7 +93,7 @@ struct IncomingBackupFileRestoreModifier: ViewModifier {
             let info = try await backupManager.inspectBackupFile(data)
             pending = PendingBackupFile(data: data, info: info)
         } catch {
-            alert = .failure(Self.message(for: error))
+            alert = .failure(RestoreErrorPresenter.userMessage(for: error))
         }
     }
 
@@ -110,21 +110,10 @@ struct IncomingBackupFileRestoreModifier: ViewModifier {
             alert = .success
         } catch {
             CrashReporting.record(error: error)
-            alert = .failure(Self.message(for: error))
+            alert = .failure(RestoreErrorPresenter.userMessage(for: error))
         }
     }
 
-    /// Провал отката (`RestoreRollbackFailure`) — исход высшей тяжести: у пользователя нет ни старых,
-    /// ни новых данных, поэтому сообщение берём как есть, не подменяя общим «не удалось восстановить».
-    static func message(for error: Error) -> String {
-        if let rollbackFailure = error as? RestoreRollbackFailure {
-            return rollbackFailure.errorDescription ?? rollbackFailure.underlyingDescription
-        }
-        if let appError = error as? AppError {
-            return appError.localizedDescription
-        }
-        return AppError.restoreFailed(error.localizedDescription).localizedDescription
-    }
 }
 
 struct PendingBackupFile: Identifiable {

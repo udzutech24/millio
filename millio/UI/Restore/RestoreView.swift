@@ -7,10 +7,6 @@
 
 import SwiftUI
 
-private enum RestoreTimeoutError: Error {
-    case timedOut
-}
-
 struct RestoreView: View {
     @Bindable var appState: AppState
     @Bindable var router: AppRouter
@@ -489,8 +485,17 @@ struct RestoreView: View {
         restoreError = nil
         defer { isLookingUpBackups = false }
 
+        // Доступность облака спрашиваем у DI-менеджера, а не у собственного CloudBackupStore:
+        // SwitchingBackupManager отвечает и при выключенном автобэкапе, но остаётся одним владельцем
+        // доступа к CloudKit (D12).
+        guard let backupManager else {
+            // Не «копий нет»: без менеджера облако вообще не опрашивалось.
+            applyLookupOutcome(.failed(.iCloudUnavailable))
+            return
+        }
+
         let available = await withTimeout(seconds: Self.lookupTimeoutSeconds) {
-            await CloudBackupStore().isAvailable()
+            await backupManager.isAvailable()
         }
         guard let available else {
             applyLookupOutcome(.timedOut)
@@ -498,7 +503,7 @@ struct RestoreView: View {
         }
         appState.isICloudAvailable = available
 
-        guard available, let backupManager else {
+        guard available else {
             // Не «копий нет»: без доступа к iCloud список вообще не запрашивался.
             applyLookupOutcome(.failed(.iCloudUnavailable))
             return
@@ -520,29 +525,6 @@ struct RestoreView: View {
         // не должна выглядеть как «копий нет».
         if outcome.isUnresolved == false {
             appState.lastBackupDate = versions.first?.date
-        }
-    }
-
-    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async -> T) async -> T? {
-        do {
-            return try await withThrowingTaskGroup(of: T.self, returning: T?.self) { group in
-                group.addTask {
-                    await operation()
-                }
-
-                group.addTask {
-                    try await Task.sleep(for: .seconds(max(0, seconds)))
-                    throw RestoreTimeoutError.timedOut
-                }
-
-                let result = try await group.next()
-                group.cancelAll()
-                return result
-            }
-        } catch is RestoreTimeoutError {
-            return nil
-        } catch {
-            return nil
         }
     }
 

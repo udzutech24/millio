@@ -779,10 +779,11 @@ struct BackupManagementView: View {
             return
         }
 
-        let cloudStore = CloudBackupStore()
-        appState.isICloudAvailable = await cloudStore.isAvailable()
-
-        guard appState.isICloudAvailable, let backupManager else { return }
+        // Один владелец доступа к CloudKit — DI-менеджер (D12); прямой CloudBackupStore() из UI
+        // ходил в облако мимо SwitchingBackupManager.
+        guard let backupManager else { return }
+        appState.isICloudAvailable = await backupManager.isAvailable()
+        guard appState.isICloudAvailable else { return }
         backupVersions = await backupManager.listBackupVersions()
         appState.lastBackupDate = backupVersions.first?.date
 
@@ -842,10 +843,10 @@ struct BackupManagementView: View {
             await refreshStatusIfNeeded(force: true)
             selectedVersionForSheet = nil
             showRestoreSuccessPrompt = true
-        } catch let appError as AppError {
-            toastCenter.show(message: appError.localizedDescription)
         } catch {
-            toastCenter.show(message: AppError.unknown(error).localizedDescription)
+            // Тот же презентер, что и в RestoreView / открытии файла: технический английский
+            // AppError.localizedDescription пользователю не показываем (D9).
+            toastCenter.show(message: RestoreErrorPresenter.userMessage(for: error))
         }
     }
 
