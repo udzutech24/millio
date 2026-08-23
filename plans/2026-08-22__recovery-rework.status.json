@@ -1,7 +1,7 @@
 {
   "planFile": "2026-08-22__recovery-rework.md",
   "title": "Переработка backup/recovery",
-  "updated": "2026-08-23T20:06:55.222714+03:00",
+  "updated": "2026-08-23T21:46:23.458107+03:00",
   "phases": [
     {
       "name": "R0 — Stress-test и решение владельца",
@@ -67,6 +67,11 @@
       "name": "R9 — Возврат unified FX snapshot из архива",
       "status": "done",
       "note": "7f0474d/528a634/0f9756b: revision-store + adoptSnapshot как единственная точка замены matrix, цепочка millio→erapi, FetchDescriptor в AccountSnapshotRebuilder, подписчики FX; гейт 2424/35 при базе 2421/38, новых красных ноль; чужие правки — ветка wip/fx-cached-rate-fallback"
+    },
+    {
+      "name": "R10 — Доступ к бэкапам в гостевом режиме",
+      "status": "done",
+      "note": "0ebc2ed/c91c123: BackupAccessPolicy + гейт в SwitchingBackupManager (все облачные пути), UI-слой в BackupManagementView, activeScopeKey на каждом свопе scope, импорт файла в гостевом режиме запрещён; +8 тестов; гейт 2434/39 при базе 2424/35, новых красных ноль; очистка гостевых данных — за владельцем"
     }
   ],
   "costUsd": null,
