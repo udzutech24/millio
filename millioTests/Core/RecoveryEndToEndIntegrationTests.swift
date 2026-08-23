@@ -105,6 +105,44 @@ struct RecoveryEndToEndIntegrationTests {
         #expect(observer.sawRestoreFailed == false)
     }
 
+    // MARK: - S13: несовместимая схема отсекается ДО деструктивной фазы
+
+    @Test("Несовместимая схема отвергается до очистки стора — локальные данные целы")
+    func testIncompatibleSchemaRejectedBeforeDestructivePhase() async throws {
+        // Регрессия S13: проверка схемы жила только внутри importAllData, то есть срабатывала уже
+        // ПОСЛЕ clearAllDataAsync() — данные спасал лишь откат.
+        let environment = try Self.makeEnvironment()
+        let context = environment.container.mainContext
+        context.insert(
+            CashflowTransaction(
+                transactionType: .expense,
+                amount: 4_200,
+                currency: "RUB",
+                transactionDate: Date(timeIntervalSince1970: 1_700_000_000)
+            )
+        )
+        try context.save()
+
+        let manager = BackupManager(
+            cloudStore: Self.offlineCloudStore(),
+            dataRepository: environment.repository
+        )
+
+        await #expect(throws: AppError.incompatibleSchemaVersion) {
+            _ = try await manager.restoreFromFile(
+                try Self.makeEnvelope(
+                    models: [["_type": "Card", "id": "card-1"]],
+                    schemaVersion: "99.0"
+                ),
+                passphrase: nil
+            )
+        }
+
+        let survivors = try context.fetch(FetchDescriptor<CashflowTransaction>())
+        #expect(survivors.count == 1, "Отказ по схеме не имеет права стирать локальные данные")
+        #expect(survivors.first?.amount == 4_200)
+    }
+
     @Test("Провал проверки на пустом бэкапе не публикует сигнал обновления в UI")
     func testUnverifiedRestoreDoesNotSignalRefresh() async throws {
         let environment = try Self.makeEnvironment()
@@ -311,11 +349,14 @@ struct RecoveryEndToEndIntegrationTests {
         return try BackupEnvelope.pack(header: header, payload: payload)
     }
 
-    private static func makeEnvelope(models: [[String: Any]]) throws -> Data {
+    private static func makeEnvelope(
+        models: [[String: Any]],
+        schemaVersion: String = BackupMetadata.currentSchemaVersion
+    ) throws -> Data {
         let metadata = BackupMetadata(
             version: .current,
             timestamp: Date(timeIntervalSince1970: 0),
-            schemaVersion: BackupMetadata.currentSchemaVersion,
+            schemaVersion: schemaVersion,
             modelCount: models.count
         )
         let dict: [String: Any] = [
