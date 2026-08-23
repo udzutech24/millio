@@ -99,9 +99,7 @@ struct RecoveryEndToEndIntegrationTests {
         let observer = RestoreEventObserver()
         defer { observer.stop() }
 
-        let receipt = try await observer.observing {
-            try await manager.restoreLatest(passphrase: nil)
-        }
+        let receipt = try await manager.restoreLatest(passphrase: nil)
 
         #expect(receipt.isVerified)
         #expect(receipt.importedModelCount == 1673)
@@ -159,9 +157,7 @@ struct RecoveryEndToEndIntegrationTests {
         defer { observer.stop() }
 
         await #expect(throws: Error.self) {
-            _ = try await observer.observing {
-                try await manager.restoreFromFile(try Self.emptyEnvelope(), passphrase: nil)
-            }
+            _ = try await manager.restoreFromFile(try Self.emptyEnvelope(), passphrase: nil)
         }
 
         #expect(observer.sawRestoreCompleted == false, "Успех не имеет права публиковаться без verified-receipt")
@@ -400,10 +396,9 @@ struct RecoveryEndToEndIntegrationTests {
 /// Подписчик EventBus: «UI-слой получил сигнал обновления» проверяется через ту же шину,
 /// на которую подписаны CashflowViewModel/FinanceViewModel/FinanceDynamicsViewModel.
 ///
-/// Подписка обновляется на протяжении операции: параллельные сюиты
-/// (`CashflowViewModelTests`, `FinanceViewModelTests`, `FinanceLifecycleHarness`) зовут
-/// `EventBus.shared.removeAllSubscribers()` и сносят ЧУЖИЕ подписки — без обновления
-/// наблюдатель терял событие и тест краснел «событие не пришло».
+/// Подписка ЗАЩИЩЁННАЯ: параллельные сюиты (`CashflowViewModelTests`, `FinanceViewModelTests`,
+/// `FinanceLifecycleHarness`) зовут `EventBus.shared.removeAllSubscribers()` для своей изоляции
+/// и сносили этого наблюдателя посреди его же операции — событие терялось, тест краснел ложно.
 @MainActor
 private final class RestoreEventObserver {
     private var token: UUID?
@@ -411,11 +406,7 @@ private final class RestoreEventObserver {
     private(set) var sawRestoreFailed = false
 
     init() {
-        subscribe()
-    }
-
-    private func subscribe() {
-        token = EventBus.shared.subscribe { [weak self] event in
+        token = EventBus.shared.subscribeProtected { [weak self] event in
             guard let self, let backupEvent = event as? BackupEvent else { return }
             switch backupEvent {
             case .restoreCompleted: self.sawRestoreCompleted = true
@@ -423,21 +414,6 @@ private final class RestoreEventObserver {
             default: break
             }
         }
-    }
-
-    /// Все restore-вызовы теста идут через этот метод: пока идёт операция, подписка
-    /// восстанавливается, если её снесла чужая сюита.
-    func observing<T>(_ body: () async throws -> T) async rethrows -> T {
-        let keepAlive = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                if let self, let token = self.token, !EventBus.shared.containsSubscriber(token) {
-                    self.subscribe()
-                }
-                try? await Task.sleep(for: .milliseconds(1))
-            }
-        }
-        defer { keepAlive.cancel() }
-        return try await body()
     }
 
     func stop() {
