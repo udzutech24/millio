@@ -14,6 +14,8 @@ import CloudKit
 enum BackupLookupFailureReason: String, Equatable, Sendable {
     /// iCloud выключен, нет аккаунта или аккаунт временно недоступен.
     case iCloudUnavailable
+    /// Гостевой scope: облако не опрашивалось намеренно (R10, `BackupAccessPolicy`).
+    case requiresSignIn
     /// Нет сети или запрос к CloudKit не дошёл.
     case network
     /// Квота/троттлинг/сервис занят — имеет смысл повторить позже.
@@ -50,6 +52,8 @@ enum BackupLookupFailureReason: String, Equatable, Sendable {
         switch self {
         case .iCloudUnavailable:
             return "backup.restore.lookup.failure.icloud"
+        case .requiresSignIn:
+            return "backup.access.requires_sign_in.message"
         case .network:
             return "backup.restore.lookup.failure.network"
         case .serviceBusy:
@@ -63,6 +67,8 @@ enum BackupLookupFailureReason: String, Equatable, Sendable {
         switch self {
         case .iCloudUnavailable:
             return "iCloud is unavailable on this device, so backups cannot be listed. Sign in to iCloud and try again."
+        case .requiresSignIn:
+            return "Sign in to your Millio account to work with cloud backups. In guest mode backups stay unavailable."
         case .network:
             return "No connection to iCloud. Check the network and try again."
         case .serviceBusy:

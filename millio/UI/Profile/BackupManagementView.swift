@@ -45,6 +45,21 @@ struct BackupManagementView: View {
         diContainer?.backupManager
     }
 
+    /// R10: облачные копии принадлежат аккаунту Millio, а CloudKit — iCloud устройства.
+    /// В гостевом сторе экран не показывает и не трогает ни одной версии.
+    private var isCloudBackupUnlocked: Bool {
+        BackupAccessPolicy.isCloudAccessAllowed(scopeKey: appState.activeScopeKey)
+    }
+
+    /// Гостю операция запрещена уже на уровне сервиса — UI только объясняет причину
+    /// вместо технической ошибки из catch-ветки.
+    @MainActor
+    private func denyCloudActionInGuestScope() -> Bool {
+        guard !isCloudBackupUnlocked else { return false }
+        toastCenter.show(message: RestoreErrorPresenter.userMessage(for: BackupAccessPolicy.denialError))
+        return true
+    }
+
     private var dashboardContent: BackupDashboardContent {
         BackupExperiencePresenter.dashboard(
             isBackupEnabled: appState.isBackupEnabled,
@@ -80,7 +95,7 @@ struct BackupManagementView: View {
     }
 
     private var isBackupOperational: Bool {
-        appState.isBackupEnabled && appState.isICloudAvailable
+        isCloudBackupUnlocked && appState.isBackupEnabled && appState.isICloudAvailable
     }
 
     private var canCreateBackup: Bool {
@@ -88,7 +103,8 @@ struct BackupManagementView: View {
     }
 
     private var canRestoreSelectedVersion: Bool {
-        appState.isICloudAvailable
+        isCloudBackupUnlocked
+            && appState.isICloudAvailable
             && selectedRestoreRecordName != nil
             && !isBusy
             && deletingRecordName == nil
@@ -294,6 +310,15 @@ struct BackupManagementView: View {
                     }
                 }
             }
+        }
+        .onChange(of: appState.activeScopeKey) { _, _ in
+            // Logout при открытом экране: закрываем шиты/пикеры и перечитываем состояние
+            // уже под новым scope — доступ к чужим копиям не должен пережить смену стора (R10).
+            selectedVersionForSheet = nil
+            isImportingVersion = false
+            isExportingVersion = false
+            exportDocument = nil
+            Task { await refreshStatusIfNeeded(force: true) }
         }
         .onChange(of: passphrase) { _, _ in
             guard !shouldIgnorePassphraseStateChange() else { return }
@@ -615,11 +640,21 @@ struct BackupManagementView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
 
+                if !isCloudBackupUnlocked {
+                    subtleCallout(
+                        title: BackupL10n.tr("backup.access.requires_sign_in.title", fallback: "Sign in required"),
+                        text: BackupL10n.tr(
+                            "backup.access.requires_sign_in.message",
+                            fallback: "Sign in to your Millio account to work with cloud backups. In guest mode backups stay unavailable."
+                        )
+                    )
+                }
+
                 primaryActionButton(
                     title: createButtonTitle,
                     subtitle: createSliderSubtitle,
                     icon: "arrow.clockwise.circle.fill",
-                    isEnabled: canCreateBackup || hasReachedPinnedVersionLimit
+                    isEnabled: isCloudBackupUnlocked && (canCreateBackup || hasReachedPinnedVersionLimit)
                 ) {
                     Task { await createBackupNow() }
                 }
@@ -653,7 +688,7 @@ struct BackupManagementView: View {
                     compactActionButton(
                         title: BackupL10n.tr("backup.limit.reached.action.delete_oldest", fallback: "Delete oldest version"),
                         icon: "trash",
-                        isEnabled: deletingRecordName == nil && !isBusy
+                        isEnabled: isCloudBackupUnlocked && deletingRecordName == nil && !isBusy
                     ) {
                         Task { await deleteVersion(recordName: oldestPinnedVersion.recordName) }
                     }
@@ -781,6 +816,16 @@ struct BackupManagementView: View {
 
         // Один владелец доступа к CloudKit — DI-менеджер (D12); прямой CloudBackupStore() из UI
         // ходил в облако мимо SwitchingBackupManager.
+        // Гостевой scope: облако не опрашиваем вовсе и подчищаем всё, что могло остаться
+        // на экране от предыдущего (авторизованного) scope — logout при открытом экране (R10).
+        guard isCloudBackupUnlocked else {
+            backupVersions = []
+            selectedRestoreRecordName = nil
+            selectedVersionForSheet = nil
+            appState.lastBackupDate = nil
+            return
+        }
+
         guard let backupManager else { return }
         appState.isICloudAvailable = await backupManager.isAvailable()
         guard appState.isICloudAvailable else { return }
@@ -806,6 +851,8 @@ struct BackupManagementView: View {
             ))
             return
         }
+
+        guard !denyCloudActionInGuestScope() else { return }
 
         isBusy = true
         defer { isBusy = false }
@@ -833,6 +880,8 @@ struct BackupManagementView: View {
             return
         }
 
+        guard !denyCloudActionInGuestScope() else { return }
+
         isBusy = true
         defer { isBusy = false }
 
@@ -857,6 +906,8 @@ struct BackupManagementView: View {
             return
         }
 
+        guard !denyCloudActionInGuestScope() else { return }
+
         deletingRecordName = recordName
         defer { deletingRecordName = nil }
 
@@ -876,6 +927,8 @@ struct BackupManagementView: View {
             toastCenter.show(message: AppError.backupFailed(BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore")).localizedDescription)
             return
         }
+
+        guard !denyCloudActionInGuestScope() else { return }
 
         isBusy = true
 
@@ -900,6 +953,8 @@ struct BackupManagementView: View {
             toastCenter.show(message: AppError.iCloudUnavailable.localizedDescription)
             return
         }
+
+        guard !denyCloudActionInGuestScope() else { return }
 
         isBusy = true
         defer { isBusy = false }

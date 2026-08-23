@@ -37,6 +37,11 @@ enum RestoreErrorPresenter {
                 "backup.restore.failure.incompatible_schema",
                 fallback: "The backup was created by a newer version of Millio. Update the app and try again."
             )
+        case .backupRequiresSignIn:
+            return BackupL10n.tr(
+                "backup.access.requires_sign_in.message",
+                fallback: "Sign in to your Millio account to work with cloud backups. In guest mode backups stay unavailable."
+            )
         case .securityFailed, .unknown:
             return genericMessage
         }

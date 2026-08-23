@@ -648,6 +648,10 @@ struct millioApp: App {
         }
 
         activeDataScope = targetScope
+        // R10: ключ активного стора публикуется на КАЖДОМ свопе scope, а не только перед
+        // launch-recovery. От него зависит гейт доступа к облачным копиям (BackupAccessPolicy):
+        // после logout ключ обязан стать гостевым в тот же кадр, что и сам стор.
+        appState.activeScopeKey = targetScope.storeConfigurationName
         activeModelContainer = targetContainer
         activeScopeStoreExistedBeforeBinding = didTargetStoreExistBeforeBinding
 
