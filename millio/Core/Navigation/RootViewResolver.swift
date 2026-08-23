@@ -95,9 +95,11 @@ struct RootViewResolver: View {
             }
         }
         .task {
+            StartupTrace.log("ROUTE initial=\(route) lifecycle=\(appState.lifecycle) authStatus=\(authManager.status) isAuth=\(authManager.isAuthenticated) guest=\(appState.isGuestModeEnabled)")
             authManager.logResolvedRoute(route)
         }
-        .onChange(of: route) { _, newRoute in
+        .onChange(of: route) { oldRoute, newRoute in
+            StartupTrace.log("ROUTE \(oldRoute) -> \(newRoute) lifecycle=\(appState.lifecycle) authStatus=\(authManager.status) isAuth=\(authManager.isAuthenticated) guest=\(appState.isGuestModeEnabled)")
             authManager.logResolvedRoute(newRoute)
         }
         .onChange(of: route) { oldRoute, newRoute in

@@ -17,6 +17,12 @@ enum FinancesStackRoute: Hashable {
 
 struct RootTabView: View {
     @Bindable var router: AppRouter
+
+    init(router: AppRouter) {
+        _router = Bindable(wrappedValue: router)
+        StartupTrace.log("RootTabView.init")
+    }
+
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
     @Environment(\.diContainer) private var diContainer
