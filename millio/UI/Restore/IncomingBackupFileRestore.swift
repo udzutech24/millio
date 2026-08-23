@@ -10,19 +10,26 @@ import SwiftUI
 ///
 /// Раньше потребителем был только `BackupManagementView` — файл, открытый из Files где угодно, кроме
 /// экрана «Резервные копии», не доходил ни до импорта, ни до восстановления, а значение залипало в
-/// `AppState` и блокировало шиты импорта выписок (`RootTabView`). Поэтому URL здесь потребляется
-/// безусловно и синхронно, до любого `await`, на всех ветках выхода.
+/// `AppState` и блокировало шиты импорта выписок (`RootTabView`). Поэтому URL потребляется синхронно,
+/// до любого `await`, на всех ветках выхода — но ТОЛЬКО когда приложение готово его обработать
+/// (см. `IncomingBackupFileIntake`).
 @MainActor
 struct IncomingBackupFileRestoreModifier: ViewModifier {
     let appState: AppState
-
-    @Environment(\.diContainer) private var diContainer
+    /// Передаётся ЯВНО, а не через `@Environment(\.diContainer)`: модификатор навешен на корень сцены
+    /// СНАРУЖИ `.environment(\.diContainer, …)`, поэтому из окружения он читал бы вечный nil —
+    /// восстановление из файла на любом экране отвечало бы «iCloud недоступен».
+    let backupManager: BackupManagerProtocol?
 
     @State private var pending: PendingBackupFile?
     @State private var isRestoring = false
     @State private var alert: RestoreAlert?
 
-    private var backupManager: BackupManagerProtocol? { diContainer?.backupManager }
+    private var isReady: Bool { backupManager != nil }
+
+    private var intake: IncomingBackupFileIntake {
+        IncomingBackupFileIntake(appState: appState, backupManager: backupManager)
+    }
 
     func body(content: Content) -> some View {
         content
@@ -34,6 +41,11 @@ struct IncomingBackupFileRestoreModifier: ViewModifier {
             }
             .onChange(of: appState.pendingIncomingBackupURL) { _, url in
                 guard let url else { return }
+                Task { await handle(url) }
+            }
+            .onChange(of: isReady) { _, ready in
+                // Второй триггер: файл дождался готовности DI (холодный старт из Files).
+                guard ready, let url = appState.pendingIncomingBackupURL else { return }
                 Task { await handle(url) }
             }
             .overlay {
@@ -72,28 +84,14 @@ struct IncomingBackupFileRestoreModifier: ViewModifier {
     }
 
     private func handle(_ url: URL) async {
-        // Потребление ДО любого await и до любого return: `RootTabView` держит шиты выписок
-        // заблокированными, пока значение != nil.
-        appState.pendingIncomingBackupURL = nil
-
-        guard let backupManager else {
-            alert = .failure(AppError.iCloudUnavailable.localizedDescription)
-            return
-        }
-
-        let didAccessScope = url.startAccessingSecurityScopedResource()
-        defer {
-            if didAccessScope {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-
-        do {
-            let data = try Data(contentsOf: url)
-            let info = try await backupManager.inspectBackupFile(data)
-            pending = PendingBackupFile(data: data, info: info)
-        } catch {
-            alert = .failure(RestoreErrorPresenter.userMessage(for: error))
+        switch await intake.intake(url) {
+        case .deferredUntilReady:
+            // URL остаётся в AppState — обработаем, как только появится backupManager.
+            break
+        case .prepared(let file):
+            pending = file
+        case .failed(let message):
+            alert = .failure(message)
         }
     }
 
@@ -175,7 +173,10 @@ struct RestoreAlert: Identifiable {
 
 extension View {
     /// Подключается ОДИН раз в корне сцены — иначе URL потребят несколько экранов сразу.
-    func incomingBackupFileRestore(appState: AppState) -> some View {
-        modifier(IncomingBackupFileRestoreModifier(appState: appState))
+    func incomingBackupFileRestore(
+        appState: AppState,
+        backupManager: BackupManagerProtocol?
+    ) -> some View {
+        modifier(IncomingBackupFileRestoreModifier(appState: appState, backupManager: backupManager))
     }
 }

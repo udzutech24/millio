@@ -159,6 +159,7 @@ struct BackupFileRestorePathTests {
             "backup.incoming_file.success.title",
             "backup.incoming_file.success.message",
             "backup.incoming_file.failure.title",
+            "backup.incoming_file.too_large",
             "backup.restore.from_file.action",
             "backup.restore.failure.rollback_failed"
         ]

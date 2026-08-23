@@ -194,6 +194,29 @@
         }
       }
     },
+    "backup.incoming_file.too_large" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file is too large to be a Millio backup."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот файл слишком большой для резервной копии Millio."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此文件过大，不是 Millio 备份。"
+          }
+        }
+      }
+    },
     "backup.restore.action.retry" : {
       "extractionState" : "manual",
       "localizations" : {

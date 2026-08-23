@@ -92,6 +92,11 @@ private enum BackupInlineCatalog {
             ru: "Резервная копия из файла восстановлена на это устройство.",
             zhHans: "备份文件已恢复到此设备。"
         ),
+        "backup.incoming_file.too_large": .init(
+            en: "This file is too large to be a Millio backup.",
+            ru: "Этот файл слишком большой для резервной копии Millio.",
+            zhHans: "此文件过大，不是 Millio 备份。"
+        ),
         "backup.incoming_file.failure.title": .init(
             en: "Restore Failed",
             ru: "Не удалось восстановить",

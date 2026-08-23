@@ -912,7 +912,8 @@ struct BackupManagementView: View {
         }
 
         do {
-            let data = try Data(contentsOf: url)
+            // Тот же потолок размера, что и на пути «файл из Files» — читаем через общий ридер.
+            let data = try IncomingBackupFileIntake.readFile(at: url)
             let importedVersion = try await backupManager.importVersion(from: data)
             selectedRestoreRecordName = importedVersion.recordName
             await refreshStatusIfNeeded(force: true)

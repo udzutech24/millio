@@ -224,7 +224,7 @@ struct millioApp: App {
                         await runHistoricalMaintenancePipeline()
                     }
                 }
-                .incomingBackupFileRestore(appState: appState)
+                .incomingBackupFileRestore(appState: appState, backupManager: diContainer?.backupManager)
                 .onOpenURL { url in
                     if BackupFileFormat.isBackupFile(url) {
                         appState.pendingIncomingBackupURL = url
