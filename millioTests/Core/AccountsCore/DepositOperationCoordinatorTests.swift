@@ -165,6 +165,106 @@ struct DepositOperationCoordinatorTests {
         #expect(interest.first { value.calendar.isDate($0.date, inSameDayAs: month2) }?.amount == Decimal(string: "1009.50"))
     }
 
+    @Test("Balance correction appends one delta, preserves confirmed interest and rebuilds forecasts")
+    func balanceAdjustmentIsAtomicAndIdempotent() throws {
+        let value = try fixture()
+        let coordinator = DepositOperationCoordinator(modelContext: value.context)
+        let firstPayout = value.calendar.date(byAdding: .month, value: 1, to: value.opening)!
+        _ = try coordinator.confirmInterest(
+            depositID: value.depositID,
+            command: .init(operationID: "confirmed-interest", amount: 900, date: firstPayout),
+            calendar: value.calendar
+        )
+        let correctionDate = value.calendar.date(byAdding: .day, value: 1, to: firstPayout)!
+        let command = DepositBalanceAdjustmentCommand(
+            operationID: "balance-correction-1", newBalance: 120_000, date: correctionDate,
+            note: "bank balance correction"
+        )
+
+        let first = try coordinator.adjustBalance(
+            depositID: value.depositID, command: command, calendar: value.calendar
+        )
+        let second = try coordinator.adjustBalance(
+            depositID: value.depositID, command: command, calendar: value.calendar
+        )
+
+        #expect(first.didChange)
+        #expect(!first.wasAlreadyPersisted)
+        #expect(second.wasAlreadyPersisted)
+        let context = verificationContext(value)
+        let depositEvents = try events(value.depositID, in: context)
+        let adjustment = try #require(depositEvents.first { $0.sourceTransactionID == "balance-correction-1" })
+        #expect(adjustment.type == .adjustment)
+        #expect(adjustment.amount == 19_100)
+        #expect(adjustment.note == "bank balance correction")
+        #expect(depositEvents.first { $0.sourceTransactionID == "confirmed-interest" }?.amount == 900)
+        #expect(AccountBalanceEngine.balanceAt(events: depositEvents, kind: .deposit, on: correctionDate) == 120_000)
+        #expect(depositEvents.filter { $0.type == .interest && $0.date > correctionDate }.map(\.amount).contains(1_200))
+    }
+
+    @Test("Balance correction no-op writes no empty event and rejects invalid balances")
+    func balanceAdjustmentNoOpAndValidation() throws {
+        let value = try fixture()
+        let coordinator = DepositOperationCoordinator(modelContext: value.context)
+        let date = value.calendar.date(byAdding: .day, value: 10, to: value.opening)!
+        let before = try events(value.depositID, in: verificationContext(value)).count
+
+        let noOp = try coordinator.adjustBalance(
+            depositID: value.depositID,
+            command: .init(operationID: "same-balance", newBalance: 100_000, date: date),
+            calendar: value.calendar
+        )
+
+        #expect(!noOp.didChange)
+        let context = verificationContext(value)
+        #expect(try events(value.depositID, in: context).count == before)
+        #expect(try events(value.depositID, in: context).allSatisfy { $0.sourceTransactionID != "same-balance" })
+
+        let zeroBalance = try coordinator.adjustBalance(
+            depositID: value.depositID,
+            command: .init(operationID: "zero-balance", newBalance: 0, date: date),
+            calendar: value.calendar
+        )
+        #expect(zeroBalance.didChange)
+        let adjustedEvents = try events(value.depositID, in: verificationContext(value))
+        #expect(adjustedEvents.first { $0.sourceTransactionID == "zero-balance" }?.amount == -100_000)
+        #expect(throws: DepositOperationError.invalidBalance) {
+            try coordinator.adjustBalance(
+                depositID: value.depositID,
+                command: .init(operationID: "negative", newBalance: -1, date: date),
+                calendar: value.calendar
+            )
+        }
+    }
+
+    @Test("Balance correction rolls back event and future forecast at every mutation stage", arguments: [
+        DepositOperationStage.primaryEvent, .futureCleanup, .schedule, .save
+    ])
+    func balanceAdjustmentRollback(stage: DepositOperationStage) throws {
+        let value = try fixture()
+        let date = value.calendar.date(byAdding: .day, value: 10, to: value.opening)!
+        let before = verificationContext(value)
+        let baseline = try events(value.depositID, in: before).map {
+            ($0.id, $0.typeRaw, $0.amount, $0.date, $0.sourceTransactionID)
+        }
+
+        #expect(throws: InjectedFailure.self) {
+            try DepositOperationCoordinator(modelContext: value.context).adjustBalance(
+                depositID: value.depositID,
+                command: .init(operationID: "failed-correction", newBalance: 120_000, date: date),
+                calendar: value.calendar,
+                stageHook: { visited in
+                    if visited == stage { throw InjectedFailure() }
+                }
+            )
+        }
+
+        let after = try events(value.depositID, in: verificationContext(value)).map {
+            ($0.id, $0.typeRaw, $0.amount, $0.date, $0.sourceTransactionID)
+        }
+        #expect(Set(after.map(String.init(describing:))) == Set(baseline.map(String.init(describing:))))
+    }
+
     @Test("Terms edit preserves confirmed past and replaces only future schedule")
     func termsEditPreservesPast() throws {
         let value = try fixture()

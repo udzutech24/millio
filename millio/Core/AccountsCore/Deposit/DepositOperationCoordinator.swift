@@ -4,6 +4,7 @@ import SwiftData
 enum DepositOperationError: Error, Equatable {
     case invalidOperationID
     case invalidAmount
+    case invalidBalance
     case accountNotFound(UUID)
     case invalidDeposit
     case missingMetadata
@@ -69,6 +70,28 @@ struct DepositInterestConfirmationCommand {
     }
 }
 
+/// Sets a deposit's confirmed balance as of `date` without rewriting its event history.
+/// The coordinator persists only the calculated adjustment delta and regenerates estimates that
+/// occur strictly after the correction date.
+struct DepositBalanceAdjustmentCommand {
+    let operationID: String
+    let newBalance: Decimal
+    let date: Date
+    let note: String?
+
+    init(
+        operationID: String,
+        newBalance: Decimal,
+        date: Date = Date(),
+        note: String? = nil
+    ) {
+        self.operationID = operationID
+        self.newBalance = newBalance
+        self.date = date
+        self.note = note
+    }
+}
+
 struct DepositTermsEditCommand {
     let meta: DepositMeta
     let effectiveDate: Date
@@ -127,6 +150,21 @@ struct DepositOperationResult: Equatable {
     let operationID: String?
     let eventIDs: [UUID]
     let wasAlreadyPersisted: Bool
+    /// `false` means the requested target already matched the confirmed balance, so no event or
+    /// save was produced. This is distinct from an idempotent retry of a previously saved command.
+    let didChange: Bool
+
+    init(
+        operationID: String?,
+        eventIDs: [UUID],
+        wasAlreadyPersisted: Bool,
+        didChange: Bool = true
+    ) {
+        self.operationID = operationID
+        self.eventIDs = eventIDs
+        self.wasAlreadyPersisted = wasAlreadyPersisted
+        self.didChange = didChange
+    }
 }
 
 /// Sole atomic writer for deposit-specific operations. Every command resolves persisted IDs in a
@@ -255,6 +293,72 @@ final class DepositOperationCoordinator {
             invalidate(deposit, from: command.date, in: context)
             return DepositOperationResult(
                 operationID: operationID, eventIDs: [confirmed.id], wasAlreadyPersisted: false
+            )
+        }
+    }
+
+    /// Appends the delta required to reach `newBalance` at `command.date`. Deposit forecasts are
+    /// derived data, so retaining the old generated interest after a correction would be a silent
+    /// financial error; only generated events strictly after the correction date are rebuilt.
+    func adjustBalance(
+        depositID: UUID,
+        command: DepositBalanceAdjustmentCommand,
+        calendar: Calendar = Calendar(identifier: .gregorian),
+        stageHook: StageHook = { _ in }
+    ) throws -> DepositOperationResult {
+        try execute(stageHook: stageHook) { context in
+            try stageHook(.validation)
+            try validateBalance(command.newBalance)
+            let operationID = try normalizedOperationID(command.operationID)
+            try stageHook(.load)
+            let deposit = try loadDeposit(depositID, in: context)
+            let meta = try activeMeta(for: deposit, on: command.date)
+            let allEvents = try events(for: deposit, in: context)
+
+            if let existing = try existingEvents(operationID: operationID, in: context) {
+                guard existing.count == 1,
+                      let adjustment = existing.first,
+                      adjustment.account?.id == depositID,
+                      adjustment.type == .adjustment,
+                      adjustment.date == command.date else {
+                    throw DepositOperationError.duplicateOperationConflict
+                }
+                let historicalEvents = allEvents.filter {
+                    $0.id != adjustment.id && !isGenerated($0, accountID: deposit.id)
+                }
+                let balanceBeforeAdjustment = AccountBalanceEngine.balanceAt(
+                    events: historicalEvents, kind: .deposit, on: command.date
+                )
+                guard adjustment.amount == command.newBalance - balanceBeforeAdjustment else {
+                    throw DepositOperationError.duplicateOperationConflict
+                }
+                return persistedResult(operationID: operationID, events: existing)
+            }
+
+            let confirmedEvents = allEvents.filter { !isGenerated($0, accountID: deposit.id) }
+            let currentBalance = AccountBalanceEngine.balanceAt(
+                events: confirmedEvents, kind: .deposit, on: command.date
+            )
+            let delta = command.newBalance - currentBalance
+            guard delta != 0 else {
+                return DepositOperationResult(
+                    operationID: operationID, eventIDs: [], wasAlreadyPersisted: false, didChange: false
+                )
+            }
+
+            try stageHook(.primaryEvent)
+            let adjustment = AccountEvent(
+                account: deposit, date: command.date, type: .adjustment, amount: delta,
+                note: command.note, sourceTransactionID: operationID
+            )
+            context.insert(adjustment)
+            try rebuildFutureSchedule(
+                for: deposit, meta: meta, after: command.date, calendar: calendar,
+                context: context, stageHook: stageHook
+            )
+            invalidate(deposit, from: command.date, in: context)
+            return DepositOperationResult(
+                operationID: operationID, eventIDs: [adjustment.id], wasAlreadyPersisted: false
             )
         }
     }
@@ -450,7 +554,7 @@ final class DepositOperationCoordinator {
         context.autosaveEnabled = false
         do {
             let result = try body(context)
-            if result.wasAlreadyPersisted { return result }
+            if result.wasAlreadyPersisted || !result.didChange { return result }
             try stageHook(.save)
             try saveBoundary.commit(context, operation: .updateAccount)
             publishCommitted()
@@ -494,6 +598,10 @@ final class DepositOperationCoordinator {
 
     private func validateAmount(_ amount: Decimal) throws {
         guard !amount.isNaN, amount > 0 else { throw DepositOperationError.invalidAmount }
+    }
+
+    private func validateBalance(_ balance: Decimal) throws {
+        guard !balance.isNaN, balance >= 0 else { throw DepositOperationError.invalidBalance }
     }
 
     private func validateTerms(

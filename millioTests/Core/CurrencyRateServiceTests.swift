@@ -551,13 +551,13 @@ struct CBRRateSourceTests {
         }
     }
 
-    @Test("buildFallbackChain для .cbr ставит его первым без дубликатов")
+    @Test("buildFallbackChain для .cbr: ЦБ РФ не смешивается с глобальными провайдерами")
     func testBuildFallbackChainCBR() {
         let svc = CurrencyRateService(rateSource: .cbr, rateRepository: MockRateRepository())
         let chain = svc.buildFallbackChain()
-        #expect(chain.first == .cbr)
-        #expect(Set(chain).count == chain.count)
-        #expect(chain.count == RateSource.allCases.count)
+        // Явно выбранный ЦБ РФ — не «одна из» цепочки: подмена его курсов Millio/ER-API дала бы
+        // на экране суммы из другого набора курсов, ради чего и вводился единый snapshot.
+        #expect(chain == [.cbr])
     }
 
     @Test("setRateSource(.cbr) сбрасывает кэш и инкрементирует generation")
