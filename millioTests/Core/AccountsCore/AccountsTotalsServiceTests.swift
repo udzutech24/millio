@@ -10,10 +10,20 @@ final class DateAwareMockRateService: CurrencyRateServiceProtocol {
     var todayRate: Double = 110
     var historicalRatesByDayKey: [String: Double] = [:]
     private(set) var historicalCallCount = 0
+    /// Если true — `getRate` имитирует недоступный live-курс (офлайн/cold-start), а
+    /// `getCachedRate` отдаёт последний известный курс, как это делает реальный сервис.
+    var simulateLiveRateUnavailable = false
+    var cachedFallbackRate: Double?
 
     func getRate(from: String, to: String) async -> Double? {
         if from.uppercased() == to.uppercased() { return 1 }
+        if simulateLiveRateUnavailable { return nil }
         return todayRate
+    }
+
+    func getCachedRate(from: String, to: String) -> Double? {
+        if from.uppercased() == to.uppercased() { return 1 }
+        return cachedFallbackRate
     }
 
     func getHistoricalRate(on date: Date, from: String, to: String) async -> Double? {
@@ -78,6 +88,48 @@ struct AccountsTotalsServiceTests {
         let totals = AccountsTotalsService(modelContext: ctx, rebuilder: rebuilder, rateService: rateService)
         let total = await totals.totalAt(Date(), in: "RUB")
         #expect(total == 6000) // 5000 + 10×100
+    }
+
+    // MARK: - Регрессия: отсутствие live-курса не должно молча исключать счёт из суммы
+
+    /// Баг: `rate()` при недоступном `getRate` (офлайн/cold-start) возвращал nil, а `total(for:)`
+    /// делал `continue`, теряя счёт целиком (виджет "Активы/обязательства" рисовал пустой стейт,
+    /// хотя список счетов и общий баланс показывали реальные суммы через другой путь).
+    @Test @MainActor
+    func totalFallsBackToCachedRateWhenLiveRateUnavailable() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+        rateService.simulateLiveRateUnavailable = true
+        rateService.cachedFallbackRate = 95 // последний прогретый курс, до сбоя getRate
+
+        let account = try service.createAccount(name: "Иностранный счёт", kind: .bankAccount, currency: "USD", openingBalance: 10)
+
+        let totals = AccountsTotalsService(modelContext: ctx, rebuilder: rebuilder, rateService: rateService)
+        let total = await totals.total(for: [account], on: Date(), in: "RUB")
+        #expect(total == 950) // 10 × 95 (cached), НЕ 0 (молчаливый пропуск счёта)
+    }
+
+    /// Без прогретого кэша (`getCachedRate` тоже nil, как у большинства моков без переопределения)
+    /// счёт по-прежнему выпадает из суммы — это честный edge case (нет вообще никакого курса),
+    /// а не регрессия. Фиксируем текущее поведение, чтобы не спутать с багом выше.
+    @Test @MainActor
+    func totalStaysZeroWhenNeitherLiveNorCachedRateExists() async throws {
+        let container = try makeContainer()
+        let ctx = container.mainContext
+        let service = AccountsCoreService(modelContext: ctx)
+        let rebuilder = AccountSnapshotRebuilder(modelContainer: container)
+        let rateService = DateAwareMockRateService()
+        rateService.simulateLiveRateUnavailable = true
+        rateService.cachedFallbackRate = nil
+
+        let account = try service.createAccount(name: "Иностранный счёт", kind: .bankAccount, currency: "USD", openingBalance: 10)
+
+        let totals = AccountsTotalsService(modelContext: ctx, rebuilder: rebuilder, rateService: rateService)
+        let total = await totals.total(for: [account], on: Date(), in: "RUB")
+        #expect(total == 0)
     }
 
     @Test @MainActor

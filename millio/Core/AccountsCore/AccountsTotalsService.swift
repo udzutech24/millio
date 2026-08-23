@@ -537,7 +537,15 @@ final class AccountsTotalsService {
     private func rate(from: String, to: String, on date: Date) async -> Double? {
         if from.uppercased() == to.uppercased() { return 1 }
         if Calendar.current.isDateInToday(date) {
-            return await rateService.getRate(from: from, to: to)
+            if let liveRate = await rateService.getRate(from: from, to: to) {
+                return liveRate
+            }
+            // `getRate` не смог обновиться (офлайн/cold-start/провайдер недоступен) — берём
+            // последний прогретый курс тем же способом, что уже используют CurrencyRatesWidget и
+            // RateSourcePickerViewModel. Без этого `total(for:)` тихо пропускает счёт через
+            // `guard let rate = ... else { continue }`, и виджет активов/обязательств рисует
+            // "нет данных", хотя список счетов и общий баланс показывают реальные суммы.
+            return rateService.getCachedRate(from: from, to: to)
         }
         // Compatibility core reads share the same persistent cache-first path as legacy reads.
         // Structured Phase 5 reads consume the rows written here through the immutable evidence

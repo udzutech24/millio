@@ -22,6 +22,15 @@ protocol CurrencyRateServiceProtocol {
     func getHistoricalRate(on date: Date, from: String, to: String) async -> Double?
     func convert(amount: Double, from: String, to: String) async -> Double?
     func forceRefreshRates() async
+    /// Синхронный best-effort курс из уже прогретого кэша, без сетевого ожидания.
+    /// Используется как fallback, когда `getRate` не смог получить свежий курс — чтобы счёт
+    /// не выпадал молча из суммы (см. `AccountsTotalsService.rate`), а не как основной путь.
+    func getCachedRate(from: String, to: String) -> Double?
+}
+
+extension CurrencyRateServiceProtocol {
+    /// Дефолт для конформеров без прогретого кэша (моки, тестовые стабы) — не даёт ложный курс.
+    func getCachedRate(from: String, to: String) -> Double? { nil }
 }
 
 // MARK: - Currency Rate Service
