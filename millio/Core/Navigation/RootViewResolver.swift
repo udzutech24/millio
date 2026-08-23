@@ -28,13 +28,21 @@ struct RootViewResolver: View {
         isAuthenticated: Bool,
         isGuestModeEnabled: Bool
     ) -> RootViewRoute {
-        if lifecycle == .launching || authStatus == .restoring {
+        if lifecycle == .launching {
             return .launching
         }
 
         if !isAuthenticated && !isGuestModeEnabled {
-            return .auth
+            // Пока сессия восстанавливается, мы ещё не знаем, залогинен ли пользователь —
+            // показываем сплэш вместо мигания экраном авторизации.
+            return authStatus == .restoring ? .launching : .auth
         }
+
+        // authStatus == .restoring НЕ откатывает уже разрешённый маршрут назад в .launching.
+        // Иначе холодный старт авторизованного пользователя мигал: cold start поднимает сессию
+        // из локального снапшота (.authenticated) и выставляет lifecycle = .ready → монтируется
+        // RootTabView, следом фоновой задачей стартует сетевой restoreSession (status = .restoring)
+        // → дерево сносилось в LaunchingView и монтировалось заново («открыл — закрыл — открыл»).
 
         switch lifecycle {
         case .launching:

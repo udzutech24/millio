@@ -107,6 +107,41 @@ struct RootViewResolverTests {
         #expect(RootViewResolver.route(for: .error(.iCloudUnavailable), authStatus: .authenticated, isAuthenticated: true, isGuestModeEnabled: false) == .error)
     }
 
+    @Test("Фоновой restoreSession не роняет готовый экран обратно в сплэш (регресс мигания при старте)")
+    func testReadyRouteSurvivesBackgroundSessionRestore() {
+        // Холодный старт авторизованного пользователя: локальный снапшот сессии → .ready,
+        // затем сетевой restoreSession выставляет authStatus = .restoring.
+        let sequence: [(AppLifecycleState, AuthManagerStatus, Bool)] = [
+            (.launching, .signedOut, false),      // старт
+            (.launching, .authenticated, true),   // снапшот сессии восстановлен
+            (.ready, .authenticated, true),       // дерево смонтировано
+            (.ready, .restoring, true),           // фоновой сетевой restoreSession
+            (.ready, .authenticated, true)        // restoreSession завершён
+        ]
+        let routes = sequence.map { lifecycle, status, isAuthenticated in
+            RootViewResolver.route(
+                for: lifecycle,
+                authStatus: status,
+                isAuthenticated: isAuthenticated,
+                isGuestModeEnabled: false
+            )
+        }
+        #expect(routes == [.launching, .launching, .ready, .ready, .ready])
+        // Ни одного перемонтирования дерева после того, как экран стал .ready.
+        #expect(!routes.drop(while: { $0 != .ready }).contains(.launching))
+    }
+
+    @Test("Гость и неавторизованный: restoring по-прежнему держит сплэш вместо мигания .auth")
+    func testUnauthenticatedRestoringKeepsSplash() {
+        #expect(RootViewResolver.route(for: .ready, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: false) == .launching)
+        // Терминальный отказ сессии — экран авторизации, как и раньше.
+        #expect(RootViewResolver.route(for: .ready, authStatus: .signedOut, isAuthenticated: false, isGuestModeEnabled: false) == .auth)
+        // Гостевой режим не зависит от статуса auth.
+        #expect(RootViewResolver.route(for: .ready, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: true) == .ready)
+        // Смена аккаунта: пока новая сессия не поднялась, гостевого режима нет → сплэш.
+        #expect(RootViewResolver.route(for: .onboarding, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: false) == .launching)
+    }
+
     @Test("RootViewResolver сбрасывает стек только при смене root-route")
     func testShouldResetNavigationPathOnRootRouteChange() {
         #expect(RootViewResolver.shouldResetNavigationPath(from: .auth, to: .ready))
