@@ -200,7 +200,53 @@ xcodebuild test -project millio.xcodeproj -scheme millio \
 - **Tests:** `BackupImportValidationTests` (оба расширения), новый `IncomingBackupRoutingTests` (URL при закрытом приложении / на любом экране / повторное открытие), интеграционный `ImportThenRestoreTests` на фикстуре 1673 моделей (пустая база и непустая + rollback), регресс `RootTabView` шитов выписок.
 - **Impact:** share-extension выписок, deep links. Риск регресса шитов — покрыт тестом.
 
-### R4 — Отличимая диагностика и RU-строки *(D8, D9)*
+### R4 — Отличимая диагностика и RU-строки *(D8, D9)* — [x] РЕАЛИЗОВАН (2026-08-23)
+- **Фактическая реализация:**
+  - **`BackupLookupOutcome`** (`millio/Core/Backup/BackupLookupOutcome.swift`): `.found([versions])` /
+    `.empty` / `.failed(reason)` / `.timedOut`. Причина (`iCloudUnavailable` / `network` / `serviceBusy` /
+    `unknown`) классифицируется по домену и коду `NSError` (`CKErrorDomain`, `NSURLErrorDomain`) —
+    без рантайма CloudKit, поэтому проверяется тестом. `BackupManager.lookupBackupVersions()` больше не
+    превращает ошибку облака в `[]`; старый `listBackupVersions()` оставлен как обёртка (совместимость
+    с BackupMonitor/автобэкапом), `SwitchingBackupManager` форвардит явно, для моков — дефолт протокола.
+  - **Таймаут** ушёл из `RestoreView` в `lookupBackupVersions(timeout:)` — «облако молчит» стало исходом,
+    а не пустым списком.
+  - **`RestoreView`**: одно состояние `lookupOutcome` вместо пары «список + флаг таймаута»; экран без версии
+    строится `BackupExperiencePresenter.restoreLookupPresentation` — разные заголовок/текст/иконка для
+    «копий нет», «поиск не удался (причина)» и «iCloud не ответил», **кнопка «Повторить» на всех трёх**
+    (раньше только pull-to-refresh + один общий текст). Исход лукапа пишется в лог
+    (`RestoreView: backup_lookup failed=network`), при неразрешённом исходе `appState.lastBackupDate`
+    НЕ перетирается — неизвестность не выглядит как «копий нет».
+  - **Тексты граничных случаев (новых типов ошибок не заводилось):** `RestoreFailureCode.message` и
+    `AppError` в UI пошли через каталог. Новый `RestoreErrorPresenter` (`millio/UI/Restore/`) —
+    единственный источник текста ошибки на экране: `AppError.localizedDescription` («Restore failed: …»)
+    в UI больше не попадает. Покрыты: неверная кодовая фраза, нет ключа в Keychain, несовместимая схема,
+    повреждённый файл, провал pre-restore снимка, провал отката (R2), пустой бэкап (R2).
+  - **Локализация:** 30 новых ключей в `Localizable.xcstrings` по образцу `backup.restore.verification.*`
+    (ru/en/de/es/fr/tr/zh-Hans). L10n-гейт `BackupLocalizationTests` расширен на `RestoreView.swift` и
+    `RestoreErrorPresenter.swift` — расширение сразу вскрыло **5 ключей экрана восстановления вообще без
+    перевода** (`backup.restore.skip.*`, `backup.restore.passphrase.toggle*`), они добавлены.
+    В `RestoreView` не осталось строковых литералов, идущих в UI (grep-чек).
+  - **Guest-scope (S10):** `LaunchRecoveryPolicy` получил `isGuestScope` и `.skip(.guestScopeBeforeSignIn)`.
+    Раньше гость с пройденным онбордингом и пустым стором получал предложение восстановить облачную копию
+    В ГОСТЕВОЙ стор (после входа она уехала бы в reconciliation guest→user). Теперь до логина recovery не
+    предлагается, облако до логина не опрашивается, исход транзиентный (после входа оценка повторяется),
+    причина видна в логе: `scope=guest … → skip(guestScopeBeforeSignIn)`.
+  - **Изменение поведения (принято осознанно):** пользователь, который никогда не входит в аккаунт, больше
+    не увидит launch-recovery; ручной путь из Профиля и «Восстановить из файла» (R3) ему доступны.
+- **Отклонение от плана:** `RestoreFailureCodeTests` менял ожидания на английские литералы — старое ожидание
+  было неверным (эта строка идёт прямо в UI и обязана быть локализованной, тест фиксировал сам баг D9);
+  вместо литералов проверяются стабильные ключи, непустой текст и различимость сообщений.
+- **Тесты (+18):** `millioTests/Core/BackupLookupOutcomeTests.swift` (9: классификация причин, ошибка ≠ `.empty`,
+  совместимость `listBackupVersions`, таймаут, **Retry делает новый запрос**, диагностика),
+  `millioTests/UI/Restore/RestoreDiagnosticsLocalizationTests.swift` (7: полнота переводов всех кодов и причин,
+  различимость экранов, Retry на всех неразрешённых исходах, тексты граничных случаев),
+  +2 в `LaunchRecoveryPolicyTests` (guest skip + транзиентность), переписан `RestoreFailureCodeTests`.
+- **Гейт:** полный прогон 2392 теста, 37 красных при фоне 34–36 (все — Finance/Cashflow/migration/
+  UI-screenshot/l10n, ни один не касается backup/recovery); **все сюиты backup/recovery/router зелёные**
+  (BackupLookupOutcome, BackupManager, BackupVerifiedRestore, BackupLocalization, RestoreDiagnostics,
+  RestoreFailureCode, LaunchRecovery×3, SwitchingBackupManager, ScopeMerge×4, AppRouter — Passed).
+
+#### Исходная формулировка
 - **Оценка:** ~1.5 ч
 - **Файлы:** `BackupManager.swift:909-916`, `RestoreView.swift` (386-393, 498, 507-525), `Localizable.xcstrings` (ru/en/zh-Hans)
 - **Changes:** `BackupLookupOutcome` = `.found(version)` / `.none` / `.failed(reason)` / `.timedOut` вместо `nil`. Разные экраны/строки для «бэкапа нет» и «CloudKit не ответил», Retry на восстановимых. Английский хардкод таймаута → L10n.
@@ -303,6 +349,8 @@ xcodebuild test -project millio.xcodeproj -scheme millio \
 
 | Date | Phase | Changes |
 |------|-------|---------|
+| 2026-08-23 | R4 | РЕАЛИЗОВАН на `feature/recovery-rework` (`8117c2d`, `cf7b2ae`, `6b6f70a`). D8: `BackupLookupOutcome` — ошибка CloudKit больше не приходит в UI как пустой список; таймаут стал исходом, а не английской строкой. Экран восстановления различает «копий нет» / «поиск не удался (причина)» / «iCloud не ответил», у каждого — кнопка «Повторить». D9: `RestoreFailureCode.message`, `AppError` в UI и 5 ключей экрана без перевода переведены через каталог (30 ключей × 7 языков); новый `RestoreErrorPresenter` — единственный источник текста ошибки. S10: guest-scope до логина = `skip(.guestScopeBeforeSignIn)` с причиной в логе (раньше гостю предлагали восстановить облачную копию в гостевой стор). +18 тестов. Гейт: 2392/37 при фоне 34–36, backup/recovery/router-сюиты зелёные |
+| 2026-08-23 | R3 | РЕАЛИЗОВАН на `feature/recovery-rework` (`3a8a6e0`, `bb87d9c`, `c4ab1b7`, `7c32398`). D5: `BackupFileFormat` — один источник расширений, `Info.plist` объявляет ОБА (экспорт писал `.milliobackup`, объявлено было только `millio-backup` — система не связывала файл владельца с приложением). D3: `IncomingBackupFileRestoreModifier` подключён в корне сцены — единственный потребитель `pendingIncomingBackupURL`, работает на любом экране и при холодном старте, URL потребляется до первого `await` на всех ветках (шиты выписок `RootTabView:187` не залипают). D2: после `importVersion` файл уходит в тот же путь → подтверждение перезаписи, отказ = версия остаётся в списке. D4: кнопка «Восстановить из файла» в `RestoreView`. Новое в Core: `inspectBackupFile` + `restoreFromFile` (путь «файл → данные» больше не требует iCloud, `importVersion` его требовал). Условие владельца: safety-снимок и `rollback(to:)` из R2 переиспользованы, провал отката = `RestoreRollbackFailure` (severity `.critical`, снимок не удаляется, локализованная инструкция). Тестов +10, включая S14. **Отклонение от плана:** подтверждение перезаписи показывается ВСЕГДА, а не только на непустой базе (SR9: неизвестный счётчик = «непустая»; отдельный подсчёт моделей в UI-слое не заводился) |
 | 2026-08-22 | — | План создан (spec + plan + сайдкар), код не писан |
 | 2026-08-22 | R2 | РЕАЛИЗОВАН на `feature/recovery-rework`. Создан `RestoreReceipt`/`RestoreModelCensus`/`RestoreVerificationFailure` (`millio/Core/Backup/RestoreReceipt.swift`); успех restore публикуется только после пересчёта стора; пустой бэкап отсекается до деструктивной фазы; провал проверки = откат + локализованная ошибка (`backup.restore.verification.*`). Порог `size >= 1024` в авто-restore удалён (отбор по содержимому). Побочно найден и исправлен блокер: `CashbackImporter.importPriority` 20 → 40 (кешбэк импортировался до `Account` и ронял весь restore реального бэкапа в `backupCorrupted`). Эталон владельца: 1673 → 1673, verified. Гейт: backup-сюиты 67/67, полный прогон 2358/36 при фоне 35 (2 лишних — order-flake Dynamics, в изоляции зелёные) |
 | 2026-08-22 | R1 | РЕАЛИЗОВАН на `feature/recovery-rework`. Доказан двойной вызов `presentRestoreFlowIfNeeded` (cold start `:328` + `onSessionChanged` от `restoreSession` `:339`). Добавлен `LaunchRecoveryGate` (идемпотентность по поколению scope + stale-guard), `LaunchRecoveryPolicy.localDataCount` → `Int?` с ветками `presentRestoreManualOnly`/`allowsAutomaticRestore`/`locksLaunchRecovery`. 11 новых тестов (вкл. блокирующий S16). Гейт: 2346 тестов, 35 красных = фон, новых нет. Миграция флагов (D10) сознательно НЕ делалась — риск SR3 без выигрыша для D1 |

@@ -1,7 +1,7 @@
 {
   "planFile": "2026-08-22__recovery-rework.md",
   "title": "Переработка backup/recovery",
-  "updated": "2026-08-22T19:00:58.756198+00:00",
+  "updated": "2026-08-23T08:37:49.077749+00:00",
   "phases": [
     {
       "name": "R0 — Stress-test и решение владельца",
@@ -25,13 +25,13 @@
     },
     {
       "name": "R3 — Путь «файл → данные» (D2–D5)",
-      "status": "pending",
-      "note": "главный сценарий A1"
+      "status": "in_progress",
+      "note": "коммиты 3a8a6e0/bb87d9c/c4ab1b7/7c32398: BackupFileFormat + Info.plist, корневой incomingBackupFileRestore, кнопка в RestoreView, 10 тестов вкл. S14; идёт полный гейт"
     },
     {
       "name": "R4 — Диагностика и RU-строки (D8, D9)",
-      "status": "pending",
-      "note": "BackupLookupOutcome + Retry"
+      "status": "done",
+      "note": "8117c2d/cf7b2ae/6b6f70a: BackupLookupOutcome (найдено/пусто/ошибка(причина)/таймаут), Retry на всех неразрешённых исходах, RestoreFailureCode и AppError через каталог (7 языков, 30 ключей), guest-scope = skip(guestScopeBeforeSignIn) с диагностикой; +18 тестов; полный прогон 2392/37 при фоне 34–36, все backup/recovery/router-сюиты зелёные"
     },
     {
       "name": "R5 — Чистка и ponytail (D11, D12)",
