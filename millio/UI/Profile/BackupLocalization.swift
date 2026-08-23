@@ -62,6 +62,51 @@ private enum BackupInlineCatalog {
     // fallback copy centralized here so missing catalog entries cannot silently fall
     // back to English on Russian or Chinese devices.
     private static let entries: [String: Entry] = [
+        "backup.incoming_file.confirm.title": .init(
+            en: "Restore from this file?",
+            ru: "Восстановить из файла?",
+            zhHans: "从此文件恢复？"
+        ),
+        "backup.incoming_file.confirm.message": .init(
+            en: "Backup of %@ · %@. Current data on this device will be replaced.",
+            ru: "Копия от %@ · %@. Текущие данные на этом устройстве будут заменены.",
+            zhHans: "备份 %@ · %@。此设备上的当前数据将被替换。"
+        ),
+        "backup.incoming_file.confirm.action": .init(
+            en: "Replace Data",
+            ru: "Заменить данные",
+            zhHans: "替换数据"
+        ),
+        "backup.incoming_file.restoring": .init(
+            en: "Restoring from file…",
+            ru: "Восстанавливаем из файла…",
+            zhHans: "正在从文件恢复…"
+        ),
+        "backup.incoming_file.success.title": .init(
+            en: "Data Restored",
+            ru: "Данные восстановлены",
+            zhHans: "数据已恢复"
+        ),
+        "backup.incoming_file.success.message": .init(
+            en: "The backup file has been restored to this device.",
+            ru: "Резервная копия из файла восстановлена на это устройство.",
+            zhHans: "备份文件已恢复到此设备。"
+        ),
+        "backup.incoming_file.failure.title": .init(
+            en: "Restore Failed",
+            ru: "Не удалось восстановить",
+            zhHans: "恢复失败"
+        ),
+        "backup.restore.from_file.action": .init(
+            en: "Restore from File",
+            ru: "Восстановить из файла",
+            zhHans: "从文件恢复"
+        ),
+        "backup.restore.failure.rollback_failed": .init(
+            en: "Failed to roll back data after a restore error. Do not delete the app: open Profile → Backup and restore from a version manually.",
+            ru: "Не удалось вернуть данные после сбоя восстановления. Не удаляйте приложение: откройте Профиль → Резервные копии и восстановите вручную из версии.",
+            zhHans: "恢复失败后无法回滚数据。请勿删除应用：打开「个人资料 → 备份」并手动从某个版本恢复。"
+        ),
         "backup.auto-restore.title": .init(
             en: "Restoring Data",
             ru: "Восстанавливаем данные",

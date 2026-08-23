@@ -33,7 +33,7 @@ struct BackupManagementView: View {
     @State private var isImportingVersion = false
     @State private var isExportingVersion = false
     @State private var exportDocument: BackupTransferFileDocument?
-    @State private var exportFilename = "millio-backup.milliobackup"
+    @State private var exportFilename = BackupFileFormat.defaultExportFilename
     @FocusState private var focusedField: PassphraseField?
 
     private enum PassphraseField {
@@ -282,11 +282,8 @@ struct BackupManagementView: View {
             }
 
             Task { await refreshStatusIfNeeded() }
-
-            if let url = appState.pendingIncomingBackupURL {
-                appState.pendingIncomingBackupURL = nil
-                Task { await importBackupFile(from: url) }
-            }
+            // Входящий файл из Files потребляет корневой `incomingBackupFileRestore` — он работает
+            // на любом экране и при холодном старте, а не только когда открыт этот экран.
         }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -307,11 +304,6 @@ struct BackupManagementView: View {
             guard !shouldIgnorePassphraseStateChange() else { return }
             isPassphraseConfirmed = false
             isPassphraseEditorExpanded = true
-        }
-        .onChange(of: appState.pendingIncomingBackupURL) { _, url in
-            guard let url else { return }
-            appState.pendingIncomingBackupURL = nil
-            Task { await importBackupFile(from: url) }
         }
     }
 
@@ -923,6 +915,10 @@ struct BackupManagementView: View {
             let importedVersion = try await backupManager.importVersion(from: data)
             selectedRestoreRecordName = importedVersion.recordName
             await refreshStatusIfNeeded(force: true)
+            // Импорт сам по себе данные не восстанавливает — версия лишь появляется в списке.
+            // Передаём файл общему recovery-пути: он предложит восстановление с подтверждением
+            // перезаписи. Отказ = версия просто остаётся в списке, локальные данные целы.
+            appState.pendingIncomingBackupURL = url
         } catch let appError as AppError {
             toastCenter.show(message: appError.localizedDescription)
         } catch {

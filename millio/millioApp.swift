@@ -224,8 +224,9 @@ struct millioApp: App {
                         await runHistoricalMaintenancePipeline()
                     }
                 }
+                .incomingBackupFileRestore(appState: appState)
                 .onOpenURL { url in
-                    if url.pathExtension == "millio-backup" {
+                    if BackupFileFormat.isBackupFile(url) {
                         appState.pendingIncomingBackupURL = url
                     } else if IncomingStatementFileKind.allCases.map(\.filenameExtension).contains(url.pathExtension.lowercased()) {
                         handleIncomingStatementURL(url)
