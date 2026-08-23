@@ -39,6 +39,7 @@ final class CashflowViewModel: ViewModelProtocol {
     private var eventSubscriptionID: UUID?
     private var restoreReloadTask: Task<Void, Never>?
     private var rateSourceObserver: NSObjectProtocol?
+    private var rateSnapshotObserver: NSObjectProtocol?
     // Опциональный — не все экземпляры VM используют экспорт (например, тесты, Preview)
     private let sheetsExportTrigger: SheetsExportTrigger?
 
@@ -233,6 +234,15 @@ final class CashflowViewModel: ViewModelProtocol {
                 self.updateChartData()
             }
         }
+        rateSnapshotObserver = NotificationCenter.default.addObserver(
+            forName: .currencyRateSnapshotDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.updateChartData()
+            }
+        }
     }
 
     deinit {
@@ -243,6 +253,9 @@ final class CashflowViewModel: ViewModelProtocol {
             }
         }
         if let observer = rateSourceObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = rateSnapshotObserver {
             NotificationCenter.default.removeObserver(observer)
         }
     }

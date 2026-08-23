@@ -127,6 +127,7 @@ final class CreditViewModel: ViewModelProtocol {
     let modelContext: ModelContext
     private let defaults = UserDefaults.standard
     private var rateSourceObserver: NSObjectProtocol?
+    private var rateSnapshotObserver: NSObjectProtocol?
 
     private var storedDisplayCurrency: String {
         get { defaults.string(forKey: "credit_display_currency") ?? SettingsManager.shared.primaryCurrencyCode }
@@ -145,10 +146,20 @@ final class CreditViewModel: ViewModelProtocol {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in await self?.refreshRates() }
         }
+        rateSnapshotObserver = NotificationCenter.default.addObserver(
+            forName: .currencyRateSnapshotDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.refreshRates() }
+        }
     }
 
     deinit {
         if let observer = rateSourceObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = rateSnapshotObserver {
             NotificationCenter.default.removeObserver(observer)
         }
     }
