@@ -164,7 +164,7 @@ struct RestoreView: View {
 
                         Button {
                             showSkipConfirmation = false
-                            appState.lifecycle = .ready
+                            declineRecovery()
                             dismiss()
                         } label: {
                             Text(BackupL10n.tr("backup.restore.skip.confirm", fallback: "Continue Without Data"))
@@ -439,6 +439,31 @@ struct RestoreView: View {
         }
     }
 
+    /// S1: новый пользователь, отказавшийся восстанавливаться, уходит в онбординг, а не в пустое
+    /// приложение — вводные экраны показываются после recovery, а не вместо него.
+    private func declineRecovery() {
+        appState.lifecycle = LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(
+            didRestore: false,
+            hasCompletedOnboarding: Self.hasCompletedOnboarding
+        )
+    }
+
+    /// Восстановленный пользователь приходит со своими данными и настройками — онбординг ему
+    /// не нужен ни сейчас, ни при следующем запуске, поэтому флаг проставляется здесь же.
+    private func finishAfterSuccessfulRestore() {
+        UserDefaults.standard.set(true, forKey: Self.onboardingCompletedKey)
+        appState.lifecycle = LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(
+            didRestore: true,
+            hasCompletedOnboarding: true
+        )
+    }
+
+    private static let onboardingCompletedKey = "hasCompletedOnboarding"
+
+    private static var hasCompletedOnboarding: Bool {
+        UserDefaults.standard.bool(forKey: onboardingCompletedKey)
+    }
+
     private func restore() {
         guard let backupManager = backupManager else {
             restoreError = .iCloudUnavailable
@@ -461,7 +486,7 @@ struct RestoreView: View {
                 }
                 await MainActor.run {
                     isRestoring = false
-                    appState.lifecycle = .ready
+                    finishAfterSuccessfulRestore()
                     dismiss()
                 }
             } catch let error as AppError {

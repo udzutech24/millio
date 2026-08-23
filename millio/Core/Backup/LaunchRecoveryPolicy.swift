@@ -40,7 +40,6 @@ struct LaunchRecoveryPolicy {
     enum BlockReason: Equatable {
         /// Пользователь ещё не вошёл: launch-recovery ждёт своего scope, а не молчит.
         case guestScopeBeforeSignIn
-        case onboardingIncomplete
         case lifecycleNotReady
         case existingLocalStore
         case localDataPresent
@@ -84,7 +83,7 @@ struct LaunchRecoveryPolicy {
                 return true
             case .skip(.existingLocalStore), .skip(.localDataPresent):
                 return true
-            case .skip(.onboardingIncomplete), .skip(.lifecycleNotReady), .skip(.noBackupAvailable),
+            case .skip(.lifecycleNotReady), .skip(.noBackupAvailable),
                  .skip(.guestScopeBeforeSignIn):
                 return false
             }
@@ -97,10 +96,11 @@ struct LaunchRecoveryPolicy {
         guard !input.isGuestScope else {
             return .skip(.guestScopeBeforeSignIn)
         }
-        guard input.hasCompletedOnboarding else {
-            return .skip(.onboardingIncomplete)
-        }
-        guard input.lifecycle == .ready else {
+        // S1 (решение владельца): после переустановки человек хочет вернуть данные, а не смотреть
+        // онбординг — непройденный онбординг больше не блокирует recovery. Но точка входа у двух
+        // состояний разная: у нового пользователя приложение стоит на .onboarding, у прошедшего —
+        // на .ready. Любой другой lifecycle — ещё не наш момент (транзиентный skip).
+        guard input.lifecycle == (input.hasCompletedOnboarding ? .ready : .onboarding) else {
             return .skip(.lifecycleNotReady)
         }
         // Счёт локальных моделей не удался: молча выходить нельзя — иначе пользователь уходит
@@ -145,5 +145,19 @@ struct LaunchRecoveryPolicy {
                 isGuestScope: isGuestScope
             )
         ).shouldPresentRestore
+    }
+
+    /// Куда уходит приложение после экрана восстановления.
+    /// Восстановившийся пользователь получает свои данные и настройки — гнать его в онбординг
+    /// незачем; отказавшийся новый пользователь обязан пройти онбординг, иначе после S1
+    /// (recovery до онбординга) вводные экраны исчезли бы совсем.
+    static func lifecycleAfterRestoreFlow(
+        didRestore: Bool,
+        hasCompletedOnboarding: Bool
+    ) -> AppLifecycleState {
+        if didRestore || hasCompletedOnboarding {
+            return .ready
+        }
+        return .onboarding
     }
 }

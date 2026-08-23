@@ -47,7 +47,6 @@ struct LaunchRecoveryPolicyTests {
     @Test("Транзиентные причины skip не блокируют повторную попытку recovery")
     func testTransientSkipsDoNotLockRecovery() {
         #expect(!LaunchRecoveryPolicy.Decision.skip(.lifecycleNotReady).locksLaunchRecovery)
-        #expect(!LaunchRecoveryPolicy.Decision.skip(.onboardingIncomplete).locksLaunchRecovery)
         #expect(!LaunchRecoveryPolicy.Decision.skip(.noBackupAvailable).locksLaunchRecovery)
         #expect(LaunchRecoveryPolicy.Decision.skip(.localDataPresent).locksLaunchRecovery)
         #expect(LaunchRecoveryPolicy.Decision.skip(.existingLocalStore).locksLaunchRecovery)
@@ -79,8 +78,62 @@ struct LaunchRecoveryPolicyTests {
         #expect(decision.shouldPresentRestore)
     }
 
-    @Test("Evaluator skips restore when onboarding is incomplete")
-    func testEvaluateSkipsRestoreForIncompleteOnboarding() {
+    // MARK: - S1: восстановление предлагается ДО онбординга
+
+    @Test("S1: свежая установка с бэкапом предлагает recovery до онбординга")
+    func testFreshInstallOffersRecoveryBeforeOnboarding() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .onboarding,
+                hasCompletedOnboarding: false,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo
+            )
+        )
+
+        #expect(decision == .presentRestore)
+        #expect(decision.shouldPresentRestore)
+    }
+
+    @Test("S1: без бэкапа новый пользователь идёт в онбординг, а не в recovery")
+    func testFreshInstallWithoutBackupKeepsOnboarding() {
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .onboarding,
+                hasCompletedOnboarding: false,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: nil
+            )
+        )
+
+        #expect(decision == .skip(.noBackupAvailable))
+        #expect(!decision.shouldPresentRestore)
+    }
+
+    @Test("S1: гостевой scope не получает recovery даже до онбординга")
+    func testGuestScopeBeforeOnboardingStillSkips() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .onboarding,
+                hasCompletedOnboarding: false,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo,
+                isGuestScope: true
+            )
+        )
+
+        #expect(decision == .skip(.guestScopeBeforeSignIn))
+    }
+
+    @Test("S1: непройденный онбординг + lifecycle .ready — не наш момент, решение откладывается")
+    func testIncompleteOnboardingWithReadyLifecycleIsTransient() {
         let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
 
         let decision = LaunchRecoveryPolicy.evaluate(
@@ -93,8 +146,36 @@ struct LaunchRecoveryPolicyTests {
             )
         )
 
-        #expect(decision == .skip(.onboardingIncomplete))
-        #expect(!decision.shouldPresentRestore)
+        #expect(decision == .skip(.lifecycleNotReady))
+        #expect(!decision.locksLaunchRecovery)
+    }
+
+    @Test("S1: пройденный онбординг + lifecycle .onboarding не показывает recovery")
+    func testCompletedOnboardingWithOnboardingLifecycleSkips() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .onboarding,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo
+            )
+        )
+
+        #expect(decision == .skip(.lifecycleNotReady))
+    }
+
+    @Test("S1: выход из экрана восстановления — восстановился в .ready, отказался в онбординг")
+    func testLifecycleAfterRestoreFlow() {
+        #expect(LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(didRestore: true, hasCompletedOnboarding: false) == .ready)
+        #expect(LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(didRestore: true, hasCompletedOnboarding: true) == .ready)
+        #expect(
+            LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(didRestore: false, hasCompletedOnboarding: false) == .onboarding,
+            "Отказ нового пользователя не должен съедать онбординг"
+        )
+        #expect(LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(didRestore: false, hasCompletedOnboarding: true) == .ready)
     }
 
     @Test("Evaluator skips restore while app lifecycle is not ready")
