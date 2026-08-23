@@ -1,7 +1,7 @@
 {
   "planFile": "2026-08-22__recovery-rework.md",
   "title": "Переработка backup/recovery",
-  "updated": "2026-08-23T00:00:00+00:00",
+  "updated": "2026-08-23T13:10:00+00:00",
   "phases": [
     {
       "name": "R0 — Stress-test и решение владельца",
@@ -40,8 +40,8 @@
     },
     {
       "name": "R6 — Интеграционный гейт",
-      "status": "pending",
-      "note": "25 регресс-файлов + security-review"
+      "status": "done",
+      "note": "5dda070: +6 интеграционных тестов на реальном DataRepository и файле владельца (файл→данные, авто-restore→receipt→EventBus, S14 и S16 на реальном сторе, импорт при непустой базе); order-flake починен в наших же сюитах (замок LanguageManager + bounded wait вместо Task.yield); security-review R1–R5: логи без PII, passphrase не логируется, валидация импорта не ослаблена, 2 замечания без фикса (tmp-снимок открытым JSON без уборки; чтение файла без границы размера). Гейт: 2400/35 при ДО 2394/36, backup/recovery/router — ноль красных"
     },
     {
       "name": "R7 — Финальная приёмка (Fable, 17 сценариев)",
