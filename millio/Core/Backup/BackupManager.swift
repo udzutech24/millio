@@ -16,6 +16,13 @@ protocol BackupManagerProtocol {
     func saveVersionNow(passphrase: String?) async throws
     func exportVersion(recordName: String) async throws -> BackupTransferPayload
     func importVersion(from data: Data) async throws -> BackupVersionInfo
+    /// Метаданные файла бэкапа без записи куда-либо. Нужны, чтобы показать пользователю
+    /// дату/размер/версию ДО деструктивного подтверждения перезаписи.
+    func inspectBackupFile(_ data: Data) async throws -> BackupInfo
+    /// Восстановление напрямую из файла, минуя CloudKit. Путь «файл → данные» обязан работать
+    /// при недоступном iCloud: `importVersion` требует облако, и на свежей установке без iCloud
+    /// пользователь иначе не может воспользоваться собственным файлом.
+    @discardableResult func restoreFromFile(_ data: Data, passphrase: String?) async throws -> RestoreReceipt
     @discardableResult func restoreLatest() async throws -> RestoreReceipt
     @discardableResult func restoreLatest(passphrase: String?) async throws -> RestoreReceipt
     @discardableResult func restoreVersion(recordName: String, passphrase: String?) async throws -> RestoreReceipt
@@ -131,6 +138,60 @@ actor BackupManager: BackupManagerProtocol {
 
         let info = try inspectPortableBackupInfo(data)
         return try await cloudStore.importBackup(data, info: info, isPinned: true)
+    }
+
+    func inspectBackupFile(_ data: Data) async throws -> BackupInfo {
+        guard !data.isEmpty else {
+            throw AppError.backupCorrupted
+        }
+        // Не-envelope (сырой JSON старых сборок) метаданных не несёт — отдаём размер и «unknown»,
+        // но НЕ отбрасываем файл: он валиден для восстановления.
+        if let info = try inspectPortableBackupInfo(data) {
+            return info
+        }
+        return BackupInfo(date: Date(), size: Int64(data.count), version: "unknown")
+    }
+
+    @discardableResult
+    func restoreFromFile(_ data: Data, passphrase: String?) async throws -> RestoreReceipt {
+        logger.info("Starting restore from file...")
+        guard !data.isEmpty else {
+            throw AppError.backupCorrupted
+        }
+
+        if let historicalValuationScopeID {
+            historicalValuationReadiness.begin(scopeID: historicalValuationScopeID, operation: .restore)
+        }
+        await MainActor.run {
+            EventBus.shared.publish(BackupEvent.restoreStarted)
+        }
+
+        do {
+            let receipt = try await restoreDownloadedBackup(
+                data,
+                passphrase: passphrase,
+                encryption: resolvedEncryption(),
+                dataRepository: dataRepository
+            )
+            if let historicalValuationScopeID {
+                historicalValuationReadiness.complete(scopeID: historicalValuationScopeID, operation: .restore)
+            }
+            logger.info("Restore from file completed: \(receipt.diagnosticSummary, privacy: .public)")
+            await MainActor.run {
+                EventBus.shared.publish(BackupEvent.restoreCompleted)
+            }
+            return receipt
+        } catch {
+            if let historicalValuationScopeID {
+                historicalValuationReadiness.complete(scopeID: historicalValuationScopeID, operation: .restore)
+            }
+            logger.error("Restore from file failed: \(error.localizedDescription, privacy: .public)")
+            let published = (error as? AppError) ?? .restoreFailed(error.localizedDescription)
+            await MainActor.run {
+                EventBus.shared.publish(BackupEvent.restoreFailed(published))
+            }
+            throw error
+        }
     }
 
     private func performBackup(passphrase: String?, isPinned: Bool) async throws {
@@ -789,7 +850,10 @@ actor BackupManager: BackupManagerProtocol {
             try await dataRepository.importAllDataAsync(snapshotData)
             try? FileManager.default.removeItem(at: snapshotURL)
         } catch {
-            throw taggedRestoreFailure(.rollbackFailed)
+            // Точка невозврата пройдена, отката нет: снимок НЕ удаляем — он остаётся последним
+            // шансом на ручное восстановление.
+            logger.critical("Rollback after failed restore did not complete: \(error.localizedDescription, privacy: .public)")
+            throw RestoreRollbackFailure(underlyingDescription: error.localizedDescription)
         }
     }
     
@@ -879,7 +943,7 @@ actor BackupManager: BackupManagerProtocol {
         formatter.dateFormat = "yyyy-MM-dd_HH-mm"
         let datePart = formatter.string(from: versionInfo.date)
         let sanitizedVersion = versionInfo.version.replacingOccurrences(of: "/", with: "-")
-        return "millio-backup-\(datePart)-v\(sanitizedVersion).milliobackup"
+        return "millio-backup-\(datePart)-v\(sanitizedVersion).\(BackupFileFormat.preferredExtension)"
     }
 
     private func resolvedEncryption() -> BackupEncryptionProtocol? {

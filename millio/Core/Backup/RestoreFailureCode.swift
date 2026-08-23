@@ -7,6 +7,33 @@
 
 import Foundation
 
+/// Тяжесть исхода восстановления. `.critical` — пользователь остался без обоих состояний данных
+/// (и старого, и нового); такие исходы нельзя глушить skip-логикой перебора кандидатов.
+enum RestoreFailureSeverity {
+    case recoverable
+    case critical
+}
+
+/// Провал отката к до-restore снимку. Отдельный тип, а не `AppError`, намеренно: перебор кандидатов
+/// в `BackupManager` ловит `AppError`/`TaggedRestoreFailure` и может «пропустить» ошибку, взяв снимок
+/// постарше. Провал отката пропускать нельзя — он обязан дойти до пользователя как есть.
+struct RestoreRollbackFailure: Error, LocalizedError {
+    let underlyingDescription: String
+    var severity: RestoreFailureSeverity { .critical }
+
+    var errorDescription: String? {
+        AppLocalization.string(
+            "backup.restore.failure.rollback_failed",
+            locale: AppLocalization.currentAppLocale,
+            fallback: "Failed to roll back data after a restore error. Do not delete the app: open Profile → Backup and restore from a version manually."
+        )
+    }
+
+    var appError: AppError {
+        .restoreFailed(errorDescription ?? underlyingDescription)
+    }
+}
+
 enum RestoreFailureCode {
     case backupNotFound
     case allCandidatesInvalid
@@ -41,6 +68,16 @@ enum RestoreFailureCode {
             return "Failed to create pre-restore snapshot"
         case .rollbackFailed:
             return "Failed to roll back data after restore error"
+        }
+    }
+
+    var severity: RestoreFailureSeverity {
+        switch self {
+        case .rollbackFailed:
+            return .critical
+        default:
+            // Провал снимка происходит ДО деструктивной фазы — локальные данные целы.
+            return .recoverable
         }
     }
 

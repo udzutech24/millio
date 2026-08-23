@@ -55,6 +55,16 @@ actor SpyBackupManager: BackupManagerProtocol {
         )
     }
     
+    func inspectBackupFile(_ data: Data) async throws -> BackupInfo {
+        BackupInfo(date: Date(timeIntervalSince1970: 0), size: Int64(data.count), version: "1.0")
+    }
+
+    @discardableResult
+    func restoreFromFile(_ data: Data, passphrase: String?) async throws -> RestoreReceipt {
+        restoreCalls += 1
+        return RestoreReceiptFixtures.verified
+    }
+
     func restoreLatest() async throws -> RestoreReceipt {
         restoreCalls += 1
         return RestoreReceiptFixtures.verified
