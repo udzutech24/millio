@@ -26,7 +26,7 @@ actor AccountSnapshotRebuilder {
     /// разового «Пересобрать кэш» без миграции старых данных.
     func rebuildAll(accountID: PersistentIdentifier, priceProvider: MarketPriceProviding? = nil) throws {
         guard let account = modelContext.model(for: accountID) as? Account else { return }
-        for snapshot in account.snapshots ?? [] {
+        for snapshot in try snapshots(for: account.id) {
             modelContext.delete(snapshot)
         }
         try modelContext.save()
@@ -49,7 +49,7 @@ actor AccountSnapshotRebuilder {
 
     private func rebuildCheckpoints(for account: Account, upTo: Date, keepExisting: Bool, priceProvider: MarketPriceProviding?) throws {
         let upToKey = AccountEvent.dayKey(for: upTo)
-        var existing = account.snapshots ?? []
+        var existing = try snapshots(for: account.id)
 
         // Архивный счёт (задача 4/Фаза 5): снапшоты СТРОГО ПОСЛЕ дня закрытия не имеют права
         // существовать — история после archivedAt не участвует в тоталах (participates(on:)),
@@ -73,7 +73,7 @@ actor AccountSnapshotRebuilder {
             return
         }
 
-        let events = account.events ?? []
+        let events = try events(for: account.id)
         guard !events.isEmpty else {
             if archivedDayKey != nil { try modelContext.save() }
             return
@@ -137,6 +137,27 @@ actor AccountSnapshotRebuilder {
         }
 
         try modelContext.save()
+    }
+
+    /// Relationship-коллекции SwiftData могут быть fault-ами, привязанными к чужому контексту
+    /// после параллельной записи или CloudKit merge. Фоновый `@ModelActor` читает только через
+    /// собственный `modelContext`, чтобы не передавать lazy relationship между контекстами.
+    private func snapshots(for accountID: UUID) throws -> [AccountDailySnapshot] {
+        let descriptor = FetchDescriptor<AccountDailySnapshot>(
+            predicate: #Predicate<AccountDailySnapshot> { $0.account?.id == accountID }
+        )
+        return try modelContext.fetch(descriptor)
+    }
+
+    private func events(for accountID: UUID) throws -> [AccountEvent] {
+        let descriptor = FetchDescriptor<AccountEvent>(
+            predicate: #Predicate<AccountEvent> { $0.account?.id == accountID },
+            sortBy: [
+                SortDescriptor(\AccountEvent.date),
+                SortDescriptor(\AccountEvent.createdAt)
+            ]
+        )
+        return try modelContext.fetch(descriptor)
     }
 
     /// Размер пачки перед промежуточным `save()` при большой пересборке (см. комментарий выше).
