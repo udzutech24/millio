@@ -811,6 +811,9 @@ actor BackupManager: BackupManagerProtocol {
         guard expected.total > 0 else {
             throw RestoreVerificationFailure.emptyBackup
         }
+        // Несовместимая схема — тоже отказ ДО деструктивной фазы: проверка внутри импорта
+        // срабатывала уже после clearAllData(), и данные спасал только откат.
+        try DataRepository.validateSchemaCompatibility(of: backupData)
 
         let previousData = try await dataRepository.exportAllDataAsync()
         let snapshotURL = FileManager.default.temporaryDirectory

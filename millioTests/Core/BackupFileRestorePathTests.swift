@@ -173,9 +173,34 @@ struct BackupFileRestorePathTests {
         }
     }
 
+    // MARK: - S13: несовместимая схема отсекается до деструктивной фазы
+
+    @Test("Несовместимая схема отвергается ДО очистки стора")
+    func testIncompatibleSchemaRejectedBeforeDestructivePhase() async throws {
+        // Регрессия S13: проверка схемы жила только внутри importAllData, то есть срабатывала
+        // ПОСЛЕ clearAllDataAsync() — данные спасал лишь откат.
+        let repository = MockDataRepository()
+        repository.exportData = try Self.makePayload(types: ["Card": 1])
+        let manager = BackupManager(cloudStore: MockCloudBackupStore(), dataRepository: repository)
+
+        await #expect(throws: AppError.incompatibleSchemaVersion) {
+            _ = try await manager.restoreFromFile(
+                try Self.makeEnvelope(types: ["Card": 2], schemaVersion: "99.0"),
+                passphrase: nil
+            )
+        }
+
+        #expect(repository.clearCalled == false, "Отказ по схеме не имеет права стирать локальные данные")
+        #expect(repository.importCalled == false)
+        #expect(try repository.exportAllData() == repository.exportData, "Данные обязаны остаться на месте")
+    }
+
     // MARK: - Helpers
 
-    private static func makePayload(types: [String: Int]) throws -> Data {
+    private static func makePayload(
+        types: [String: Int],
+        schemaVersion: String = BackupMetadata.currentSchemaVersion
+    ) throws -> Data {
         var models: [[String: Any]] = []
         for (typeName, count) in types.sorted(by: { $0.key < $1.key }) {
             for index in 0..<count {
@@ -185,7 +210,7 @@ struct BackupFileRestorePathTests {
         let metadata = BackupMetadata(
             version: .current,
             timestamp: Date(timeIntervalSince1970: 0),
-            schemaVersion: BackupMetadata.currentSchemaVersion,
+            schemaVersion: schemaVersion,
             modelCount: models.count
         )
         let dict: [String: Any] = [
@@ -195,12 +220,15 @@ struct BackupFileRestorePathTests {
         return try JSONSerialization.data(withJSONObject: dict)
     }
 
-    private static func makeEnvelope(types: [String: Int]) throws -> Data {
-        let payload = try makePayload(types: types)
+    private static func makeEnvelope(
+        types: [String: Int],
+        schemaVersion: String = BackupMetadata.currentSchemaVersion
+    ) throws -> Data {
+        let payload = try makePayload(types: types, schemaVersion: schemaVersion)
         let metadata = BackupMetadata(
             version: .current,
             timestamp: Date(timeIntervalSince1970: 0),
-            schemaVersion: BackupMetadata.currentSchemaVersion,
+            schemaVersion: schemaVersion,
             modelCount: (try RestoreModelCensus.counts(in: payload)).total
         )
         let header = BackupEnvelopeHeader(
