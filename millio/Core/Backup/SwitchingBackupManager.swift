@@ -82,6 +82,11 @@ final class SwitchingBackupManager: BackupManagerProtocol {
         await enabledManager.listBackupVersions()
     }
 
+    /// Форвардим явно: дефолт протокола потерял бы причину отказа облака.
+    func lookupBackupVersions() async -> BackupLookupOutcome {
+        await enabledManager.lookupBackupVersions()
+    }
+
     func deleteBackupVersion(recordName: String) async throws {
         try await enabledManager.deleteBackupVersion(recordName: recordName)
     }

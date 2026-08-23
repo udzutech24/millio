@@ -27,6 +27,9 @@ protocol BackupManagerProtocol {
     @discardableResult func restoreLatest(passphrase: String?) async throws -> RestoreReceipt
     @discardableResult func restoreVersion(recordName: String, passphrase: String?) async throws -> RestoreReceipt
     func listBackupVersions() async -> [BackupVersionInfo]
+    /// Тот же поиск, но с различимым исходом: найдено / пусто / ошибка(причина) / таймаут.
+    /// Дефолтная реализация — в `BackupLookupOutcome.swift` (для моков и локального менеджера).
+    func lookupBackupVersions() async -> BackupLookupOutcome
     func deleteBackupVersion(recordName: String) async throws
     func lastBackupInfo() async -> BackupInfo?
 }
@@ -436,11 +439,19 @@ actor BackupManager: BackupManagerProtocol {
     }
 
     func listBackupVersions() async -> [BackupVersionInfo] {
+        await lookupBackupVersions().versions
+    }
+
+    /// Ошибка облака больше не превращается в пустой список: причина доходит до экрана
+    /// восстановления, иначе «CloudKit не ответил» неотличимо от «бэкапов нет» (D8).
+    func lookupBackupVersions() async -> BackupLookupOutcome {
         do {
-            return try await cloudStore.listBackupVersions()
+            let versions = try await cloudStore.listBackupVersions()
+            return versions.isEmpty ? .empty : .found(versions)
         } catch {
-            logger.error("Failed to list backup versions: \(error.localizedDescription)")
-            return []
+            let reason = BackupLookupFailureReason.classify(error)
+            logger.error("Failed to list backup versions (\(reason.rawValue, privacy: .public)): \(error.localizedDescription)")
+            return .failed(reason)
         }
     }
 

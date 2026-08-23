@@ -803,6 +803,9 @@ final class MockCloudBackupStore: CloudBackupStoreProtocol {
     var importedIsPinned: Bool?
     var importResult: BackupVersionInfo?
     var listedVersions: [BackupVersionInfo] = []
+    /// Ошибка облака при перечислении версий: нужна, чтобы отличить «бэкапов нет» от отказа CloudKit.
+    var listVersionsError: Error?
+    var listVersionsCalls = 0
     var deletedRecordNames: [String] = []
     
     func isAvailable() async -> Bool {
@@ -857,7 +860,11 @@ final class MockCloudBackupStore: CloudBackupStoreProtocol {
     }
 
     func listBackupVersions() async throws -> [BackupVersionInfo] {
-        listedVersions
+        listVersionsCalls += 1
+        if let listVersionsError {
+            throw listVersionsError
+        }
+        return listedVersions
     }
 
     func deleteBackup(recordName: String) async throws {
