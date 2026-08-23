@@ -54,8 +54,14 @@ final class EventBus {
 
     #if DEBUG
     /// Отписывает всех подписчиков. Используется только в тестах для изоляции между тест-кейсами.
+    /// ⚠️ Сносит подписки ЧУЖИХ параллельных сюит — потерявший подписку наблюдатель видит
+    /// «событие не пришло». Проверять живость подписки — `containsSubscriber(_:)`.
     func removeAllSubscribers() {
         subscribers.removeAll()
+    }
+
+    func containsSubscriber(_ id: UUID) -> Bool {
+        subscribers[id] != nil
     }
     #endif
     
