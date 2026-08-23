@@ -98,7 +98,6 @@ struct millioApp: App {
     private let runtimeEnvironment: AppRuntimeEnvironment
 
     init() {
-        StartupTrace.log("App.init")
         let runtimeEnvironment = AppRuntimeEnvironment.current()
         self.runtimeEnvironment = runtimeEnvironment
         EarlyFirebaseBootstrap.ensureConfigured()
@@ -171,21 +170,6 @@ struct millioApp: App {
                     .zIndex(12)
                 }
                 .preferredColorScheme(.dark)
-                .onAppear { StartupTrace.log("Scene.onAppear identity=(lang: \(appState.languageRefreshToken), scope: \(scopeIdentityToken))") }
-                .onChange(of: appState.lifecycle) { old, new in
-                    StartupTrace.log("lifecycle: \(old) -> \(new)")
-                }
-                .onChange(of: scopeIdentityToken) { old, new in
-                    StartupTrace.log("scopeIdentityToken: \(old) -> \(new)  <<< SCENE .id CHANGE")
-                }
-                .onChange(of: appState.languageRefreshToken) { old, new in
-                    StartupTrace.log("languageRefreshToken: \(old) -> \(new)  <<< SCENE .id CHANGE")
-                }
-                .onChange(of: authManager.status) { old, new in
-                    StartupTrace.log("auth.status: \(old) -> \(new)")
-                }
-                .onChange(of: isSwitchingScope) { _, new in StartupTrace.log("isSwitchingScope=\(new)") }
-                .onChange(of: isReconciling) { _, new in StartupTrace.log("isReconciling=\(new)") }
                 .environment(appState)
                 .environment(authManager)
                 .environment(toastCenter)
@@ -315,7 +299,6 @@ struct millioApp: App {
     
     @MainActor
     private func initializeColdStart(using container: ModelContainer) async {
-        StartupTrace.log("initializeColdStart ENTER")
         let start = DispatchTime.now()
         let backendRuntime = await resolveBackendRuntimeIfNeeded()
         startBackendAvailabilityProbe()
@@ -357,11 +340,8 @@ struct millioApp: App {
             guard await self.runLegacyAccountsMigrationIfNeeded() else { return }
             await useCase.initialize()
         }
-        StartupTrace.log("coldStart: spawning network restoreSession")
         Task { @MainActor in
-            StartupTrace.log("restoreSession ENTER")
             await authManager.restoreSession()
-            StartupTrace.log("restoreSession EXIT status=\(authManager.status)")
         }
         AppLogger.log(.info, category: "App", "Active scope after sync: \(activeDataScope.storeConfigurationName), storeExisted=\(activeScopeStoreExistedBeforeBinding)")
         logger.info("AppLifecycleUseCase.initialize finished in \(Double(DispatchTime.now().uptimeNanoseconds - initStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
@@ -521,8 +501,6 @@ struct millioApp: App {
         with user: AuthUser?,
         onScopeResolved: (@MainActor () async -> Void)? = nil
     ) async {
-        StartupTrace.log("synchronizeDataScope ENTER user=\(user?.id ?? "nil") hasOnScopeResolved=\(onScopeResolved != nil) activeScope=\(activeDataScope.storeConfigurationName)")
-        defer { StartupTrace.log("synchronizeDataScope EXIT") }
         if authManager.isAuthenticated && appState.isGuestModeEnabled {
             appState.isGuestModeEnabled = false
         }
@@ -552,7 +530,6 @@ struct millioApp: App {
             resolvedScope = targetScope
         }
 
-        StartupTrace.log("synchronizeDataScope resolvedScope=\(resolvedScope.storeConfigurationName)")
         await startupCoordinator.switchScopeIfNeeded(to: resolvedScope) { resolvedScope in
             let switched = await rebindDataScope(to: resolvedScope)
             if switched, case .user = resolvedScope {
@@ -564,13 +541,11 @@ struct millioApp: App {
         // смонтируется на финальном контейнере), но ДО presentRestoreFlow — политике
         // восстановления нужен lifecycle == .ready. В рантайме (login/logout) onScopeResolved
         // == nil, порядок не меняется.
-        StartupTrace.log("synchronizeDataScope: calling onScopeResolved")
         await onScopeResolved?()
         // Track B: reconciliation guest→user ПОСЛЕ свопа контейнера и .ready, но ДО restore-флоу —
         // чтобы restore видел уже слитый (непустой) user-стор. Не блокирует .ready (идёт off-main,
         // детектор-скрининг дёшев при отсутствии расхождения).
         await reconcileScopeIfNeeded(resolvedScope: resolvedScope)
-        StartupTrace.log("synchronizeDataScope: calling presentRestoreFlowIfNeeded")
         await presentRestoreFlowIfNeeded()
     }
 
@@ -606,9 +581,7 @@ struct millioApp: App {
         )
         watchdog.cancel()
 
-        StartupTrace.log("reconcile outcome=\(outcome)")
         if case .merged(let report) = outcome {
-            StartupTrace.log("reconcile MERGED -> bumping scopeIdentityToken")
             // Пересоздаём дерево на слитых данных: FinanceViewModel/CashflowViewModel перечитают user-стор.
             scopeIdentityToken &+= 1
             if report.accountsAdded + report.transactionsAdded > 0 {
@@ -633,8 +606,7 @@ struct millioApp: App {
 
     @MainActor
     private func rebindDataScope(to targetScope: DataScope) async -> Bool {
-        StartupTrace.log("rebindDataScope ENTER target=\(targetScope.storeConfigurationName) active=\(activeDataScope.storeConfigurationName) lifecycle=\(appState.lifecycle)")
-        guard targetScope != activeDataScope else { StartupTrace.log("rebindDataScope NOOP (same scope)"); return false }
+        guard targetScope != activeDataScope else { return false }
 
         // Рантайм-смена скоупа (login/logout/force-signout) идёт с уже смонтированным
         // RootTabView — показываем переходный оверлей, пока пересоздаётся дерево (риск №7).
@@ -701,7 +673,6 @@ struct millioApp: App {
         // RootTabView и его FinanceViewModel/CashflowViewModel пересоздаются на новом
         // modelContext. Отмена in-flight задач старых VM происходит в их deinit при
         // teardown старого дерева (риск №3); старый контейнер жив по ARC до дезаллокации VM.
-        StartupTrace.log("rebindDataScope -> bumping scopeIdentityToken (scope swap done)")
         scopeIdentityToken &+= 1
         // Смена scope = новое поколение recovery: ранее выданные токены становятся stale,
         // а для нового scope решение принимается заново.
@@ -868,7 +839,6 @@ struct millioApp: App {
     }
 
     private static func makeModelContainer(for scope: DataScope) -> ModelContainer? {
-        StartupTrace.log("makeModelContainer(\(scope.storeConfigurationName))")
         let fileManager = FileManager.default
         if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             do {
@@ -1099,8 +1069,7 @@ struct millioApp: App {
 
     @MainActor
     private func presentRestoreFlowIfNeeded() async {
-        StartupTrace.log("presentRestoreFlowIfNeeded ENTER lifecycle=\(appState.lifecycle)")
-        guard let diContainer, let activeModelContainer else { StartupTrace.log("presentRestoreFlow: no container"); return }
+        guard let diContainer, let activeModelContainer else { return }
 
         // Идемпотентность (D1): synchronizeDataScope дёргается и на cold start (:328), и на
         // каждом onSessionChanged (:418) — включая тот, что приходит от restoreSession в том же
@@ -1128,7 +1097,6 @@ struct millioApp: App {
             latestBackupInfo: latestBackupInfo
         )
         let recoveryDecision = LaunchRecoveryPolicy.evaluate(input)
-        StartupTrace.log("presentRestoreFlow decision=\(recoveryDecision)")
         let countDescription = localDataCount.map(String.init) ?? "unknown"
         AppLogger.log(.info, category: "App", "LaunchRecovery: localCount=\(countDescription) storeExisted=\(activeScopeStoreExistedBeforeBinding) backup=\(latestBackupInfo != nil) lifecycle=\(appState.lifecycle) → \(recoveryDecision)")
 
