@@ -123,12 +123,17 @@ struct RestoreDiagnosticsLocalizationTests {
 
     @Test("Уже локализованное сообщение не обрастает техническим префиксом")
     func testLocalizedMessagePassesThroughWithoutPrefix() {
-        let message = RestoreFailureCode.passphraseDecryptFailed.message
+        // Обе строки берутся из ambient-бандла LanguageManager.shared. В полном прогоне соседние
+        // l10n-сюиты меняют язык параллельно, и между двумя чтениями бандл успевал переключиться —
+        // тест падал не на своём дефекте. Замок LanguageManager делает пару чтений атомарной.
+        AppLanguageTestSupport.withLockedAppLanguage {
+            let message = RestoreFailureCode.passphraseDecryptFailed.message
 
-        let presented = RestoreErrorPresenter.userMessage(for: RestoreFailureCode.passphraseDecryptFailed.appError)
+            let presented = RestoreErrorPresenter.userMessage(for: RestoreFailureCode.passphraseDecryptFailed.appError)
 
-        #expect(presented == message)
-        #expect(presented.hasPrefix("Restore failed:") == false)
+            #expect(presented == message)
+            #expect(presented.hasPrefix("Restore failed:") == false)
+        }
     }
 
     @Test("Провал отката и провал проверки доходят до пользователя своими текстами")
@@ -136,13 +141,16 @@ struct RestoreDiagnosticsLocalizationTests {
         let rollback = RestoreRollbackFailure(underlyingDescription: "sqlite error 11")
         let verification = RestoreVerificationFailure.emptyBackup
 
-        let rollbackMessage = RestoreErrorPresenter.userMessage(for: rollback as Error)
-        let verificationMessage = RestoreErrorPresenter.userMessage(for: verification as Error)
+        // Тот же cross-suite race, что и выше: сравниваются две строки из ambient-бандла.
+        AppLanguageTestSupport.withLockedAppLanguage {
+            let rollbackMessage = RestoreErrorPresenter.userMessage(for: rollback as Error)
+            let verificationMessage = RestoreErrorPresenter.userMessage(for: verification as Error)
 
-        #expect(rollbackMessage == rollback.errorDescription)
-        #expect(rollbackMessage.contains("sqlite") == false)
-        #expect(verificationMessage == verification.userMessage)
-        #expect(rollbackMessage != verificationMessage)
+            #expect(rollbackMessage == rollback.errorDescription)
+            #expect(rollbackMessage.contains("sqlite") == false)
+            #expect(verificationMessage == verification.userMessage)
+            #expect(rollbackMessage != verificationMessage)
+        }
     }
 
     // MARK: - Helpers
