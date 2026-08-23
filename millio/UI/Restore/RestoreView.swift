@@ -25,6 +25,7 @@ struct RestoreView: View {
     @State private var selectedRecordName: String?
     @State private var isVersionsExpanded = false
     @State private var backupLookupTimedOut = false
+    @State private var isImportingFile = false
 
     private var backupManager: BackupManagerProtocol? {
         diContainer?.backupManager
@@ -333,6 +334,8 @@ struct RestoreView: View {
                 restore()
             }
 
+            restoreFromFileButton
+
             Button {
                 showSkipConfirmation = true
             } label: {
@@ -379,6 +382,8 @@ struct RestoreView: View {
                 Task { await refreshBackupStatusIfNeeded() }
             }
 
+            restoreFromFileButton
+
             Button {
                 showSkipConfirmation = true
             } label: {
@@ -387,6 +392,40 @@ struct RestoreView: View {
                     .foregroundStyle(AppColors.textSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
+            }
+        }
+    }
+
+    /// Точка входа «файл → данные» на пустой базе: до этого импорт файла жил только в Профиле,
+    /// недоступном, пока пользователь не прошёл экран восстановления.
+    /// Сам разбор и подтверждение перезаписи выполняет общий `incomingBackupFileRestore` в корне
+    /// сцены — здесь только выбор файла, чтобы путь восстановления был один.
+    private var restoreFromFileButton: some View {
+        Button {
+            isImportingFile = true
+        } label: {
+            Text(BackupL10n.tr("backup.restore.from_file.action", fallback: "Restore from File"))
+                .font(.millioSubheadline)
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.m)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.textSecondary.opacity(0.4), lineWidth: 1)
+                )
+        }
+        .disabled(isRestoring)
+        .fileImporter(
+            isPresented: $isImportingFile,
+            allowedContentTypes: BackupFileFormat.importerContentTypes,
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                appState.pendingIncomingBackupURL = url
+            case .failure(let error):
+                restoreError = .backupFailed(error.localizedDescription)
             }
         }
     }
