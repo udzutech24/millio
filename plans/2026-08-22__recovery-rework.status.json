@@ -1,7 +1,7 @@
 {
   "planFile": "2026-08-22__recovery-rework.md",
   "title": "Переработка backup/recovery",
-  "updated": "2026-08-23T08:37:49.077749+00:00",
+  "updated": "2026-08-23T00:00:00+00:00",
   "phases": [
     {
       "name": "R0 — Stress-test и решение владельца",
@@ -35,8 +35,8 @@
     },
     {
       "name": "R5 — Чистка и ponytail (D11, D12)",
-      "status": "pending",
-      "note": "мёртвый код, DI вместо CloudBackupStore()"
+      "status": "done",
+      "note": "21b3b21: D12 закрыт (CloudBackupStore( вне Core/Backup = 0); D11 неприменим — мёртвого кода нет, у всех членов LaunchRecoveryGate/RestoreReceipt/BackupFileFormat/BackupLookupOutcome/RestoreErrorPresenter есть живые потребители; схлопнуты 3 дубля (-34 строки): message(for:), inline-catch в BMV, приватный withTimeout. Гейт 34 красных при фоне 34-37, новых нет; 3 красных в backup-сюитах = order-flake, в изоляции зелёные. SwiftLint не запускался: бинаря и конфига нет"
     },
     {
       "name": "R6 — Интеграционный гейт",
