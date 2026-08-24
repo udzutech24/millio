@@ -605,6 +605,65 @@ S1/S11). Дельта по красным — шум параллельных с
 - **Коммиты:** `0ebc2ed` (ядро + UI + локализация), `c91c123` (тесты).
 
 
+### R11 — Персистентность курсов и спиннер на «Счетах» — [x] РЕАЛИЗОВАН (2026-08-24)
+- **Баг (репро владельца на устройстве):** «как будто нет архива после закрытия прилы, потому
+  постоянно грузится, и там где счета когда грузится дёргается экран, тк появляется кругляшок
+  загрузки курсов».
+- **Проверено и опровергнуто:** персистентность снимка курсов РАБОТАЕТ. `RateRepository.persist(_:)`
+  пишет `rate_repo_rates_<source>` в `UserDefaults` + дублирует в `NSUbiquitousKeyValueStore`
+  (`millio/Core/Currency/RateRepository.swift:41`), а `CurrencyRateService.init` читает их
+  СИНХРОННО, до первого `await` (`millio/Core/Currency/CurrencyRateService.swift:88-97`). Курсы на
+  первом кадре есть. Проблема не в кэше, а в трёх местах поверх него.
+- **Доказанная причина №1 — индикатор завязан на факт запроса, а не на отсутствие курсов.**
+  `FinanceViewModel.refreshAll/refreshCurrencyQuotes/refreshStockPrices` безусловно поднимали
+  `state.isLoadingRates = true`, а `FinancesView.swift:831` рисует по этому флагу `ProgressView`
+  внутри `VStack` шапки — появление/исчезновение спиннера меняет высоту блока, отсюда «дёргается».
+- **Доказанная причина №2 — холодный старт всегда считался «никогда не обновлялись».**
+  `state.lastRefreshedAt` жил только в памяти (`FinanceViewModel.swift:69`), на старте = `nil`.
+  Гейт `FinancesView.swift:592` (`?? .distantPast`, порог 15 мин) при каждом `scenePhase == .active`
+  запускал принудительное `refreshAll()`. Свежесть при этом лежала на диске в `snapshot.fetchedAt`.
+- **Доказанная причина №3 — самоподдерживающийся цикл на уведомлении.** Подписка на
+  `.currencyRateSnapshotDidChange` вызывала `refreshRates()` → `forceRefreshRates()`, то есть приход
+  снимка запускал ЕЩЁ один принудительный сетевой запрос со спиннером.
+- **Доказанная причина №4 — ревизия снимка зависела от времени загрузки.**
+  `CurrencyRateSnapshotRevisionStore.revision(for:)` = `source:updatedAt:fetchedAt`, поэтому любое
+  фоновое обновление с ТЕМИ ЖЕ курсами давало новую ревизию → уведомление → перестроение UI.
+- **Фикс (минимальный, без новых сущностей):**
+  - ревизия строится по самим значениям курсов (детерминированный FNV-1a по отсортированным парам),
+    а не по `fetchedAt` — одинаковые курсы больше не будят подписчиков. `Hasher` не годится: он
+    засеян случайно на каждый запуск и не пережил бы перезапуск процесса;
+  - `currentRateSnapshot()` поднят в `CurrencyRateServiceProtocol` (с дефолтом `nil` в extension —
+    тестовые даблы не переписывались); индикатор поднимается ТОЛЬКО при отсутствии снимка
+    (`beginRateLoadingIfNothingToShow()`), обновление при живом кэше идёт молча;
+  - `state.lastRefreshedAt` гидрируется из `snapshot.fetchedAt` в `init` — свежесть переживает
+    перезапуск, холодный старт не форсирует обновление;
+  - подписка на снимок больше не форсирует сеть, а только пересчитывает тоталы
+    (`refreshGroupTotalsAndAmounts()`);
+  - `.custom`-источник тоже публикует `activeSnapshot` — иначе у пользователя с ручными курсами
+    «снимка нет» и спиннер вернулся бы;
+  - оба уведомления курсов постятся с `object: self`, `FinanceViewModel` подписан на СВОЙ экземпляр —
+    чужой сервис больше не гоняет экран в сеть (побочно убрало cross-suite течь в тестах).
+- **Связь с restore:** восстановление не трогает ключи `rate_repo_*`, поэтому после restore снимок
+  на месте и спиннера нет — закреплено тестом `testSnapshotAvailableAfterRestoreRelaunch`.
+- **Тесты (+12).** `millioTests/Core/CurrencyRateSnapshotPersistenceTests.swift` (7):
+  `testSnapshotSurvivesRelaunch` (снимок читается в `init` без сети, `repo.callCount == 0`),
+  `testNoSnapshotOnFirstEverLaunch`, `testSnapshotAvailableAfterRestoreRelaunch`,
+  `testRevisionStableForIdenticalRates`, `testRevisionChangesForDifferentRatesOrSource`,
+  `testRevisionIsDeterministic`, `testIdenticalBackgroundRefreshDoesNotNotify`.
+  `millioTests/UI/Services/Finances/FinanceViewModelRateIndicatorTests.swift` (5):
+  `testNoIndicatorWhenSnapshotCached`, `testIndicatorShownWhenNothingCached`,
+  `testLastRefreshedAtHydratedFromPersistedSnapshot`, `testLastRefreshedAtNilWithoutSnapshot`,
+  `testSnapshotNotificationDoesNotForceAnotherNetworkRefresh`.
+- **Гейт:** 2446 тестов / 38 красных при базе 2434 / 39 (+12 = ровно новые тесты). Новых красных
+  ноль: все 12 новых зелёные, в Currency/Finance/backup/recovery красных от этой работы нет.
+  Три отличия от предыдущего прогона (`FinanceViewModelTotalsRaceTests`,
+  `RecoveryEndToEndIntegrationTests`, `RestoreFailureCodeTests`) — известный cross-suite order-flake:
+  в изоляции 13/13 зелёные. Фокус-прогон Currency+Finance: 102/102.
+- **Не сделано осознанно:** `refreshRates()` при смене отображаемой валюты по-прежнему форсирует
+  сеть (курсы для этого не нужны) — вне доказанного бага, спиннера больше не даёт.
+- **Коммиты:** `3f92b49` (ядро + тесты), `d05932a` (тест-инфра), `5e5e3f8` (адресация уведомлений).
+
+
 ## Итого оценка
 
 ~12 ч работы агентов + stress-test и device-проверки владельца. Порядок обязателен: R0 → R1 → R2 → R3 → R4 → R5 → R6 → R7 (R3 зависит от R1/R2 по единому пути координатора).
@@ -655,6 +714,7 @@ S1/S11). Дельта по красным — шум параллельных с
 
 | Date | Phase | Changes |
 |------|-------|---------|
+| 2026-08-24 | R11 | **Баг с устройства:** курсы «как будто не переживают закрытие приложения» — на «Счетах» при каждом старте вспыхивал кругляшок загрузки и дёргалась шапка. Персистентность снимка при этом работала (`RateRepository.persist` → `UserDefaults` + iCloud KV, синхронное чтение в `CurrencyRateService.init:88`); причин четыре и все поверх кэша: (1) `isLoadingRates` поднимался на ФАКТ запроса, а не на отсутствие курсов, а `ProgressView` в `VStack` шапки менял высоту блока; (2) `lastRefreshedAt` жил только в памяти → на холодном старте `nil` → `.distantPast` → принудительное `refreshAll()` на каждом `scenePhase == .active`; (3) подписка на `.currencyRateSnapshotDidChange` звала `refreshRates()` → `forceRefreshRates()`, то есть приход снимка форсировал ещё один сетевой запрос; (4) ревизия снимка включала `fetchedAt`, поэтому фоновое обновление с ТЕМИ ЖЕ курсами считалось новым набором и перестраивало UI. Фикс: ревизия по значениям курсов (детерминированный FNV-1a, не `Hasher` — тот засеян случайно на запуск), `currentRateSnapshot()` в протоколе с дефолтом `nil`, индикатор только при отсутствии снимка, гидрация `lastRefreshedAt` из `snapshot.fetchedAt`, подписка на снимок пересчитывает тоталы вместо сети, `.custom`-источник тоже публикует снимок, уведомления адресуются своему экземпляру сервиса (`object: self`). После restore ключи `rate_repo_*` не трогаются — спиннера нет, закреплено тестом. +12 тестов (`CurrencyRateSnapshotPersistenceTests` 7, `FinanceViewModelRateIndicatorTests` 5). Гейт: 2446/38 при базе 2434/39, новых красных ноль (3 отличия — cross-suite order-flake, в изоляции 13/13; фокус-прогон 102/102). Коммиты `3f92b49`, `d05932a`, `5e5e3f8` |
 | 2026-08-23 | R10 | **Критический баг безопасности** (репро владельца): после logout раздел бэкапов показывал облачные копии залогиненного пользователя и восстанавливал их в ГОСТЕВОЙ стор. Причина — CloudKit Private DB привязана к iCloud устройства, а не к аккаунту Millio; в R4 был закрыт только launch-путь. Введён `BackupAccessPolicy` и гейт в `SwitchingBackupManager`: без авторизованного scope запрещены backup/save/restore(3 пути)/restoreFromFile/inspect/import/export/delete, `listBackupVersions` → `[]`, `lookupBackupVersions` → `.failed(.requiresSignIn)`, `lastBackupInfo` → `nil`. Импорт файла руками в гостевом режиме — запрещён осознанно (после входа гостевой стор уезжает в reconciliation и данные удваиваются), отказ приходит до деструктивного подтверждения. UI — второй слой: действия дизейблятся, callout «Нужен вход в аккаунт», список чистится, logout при открытом экране закрывает шиты и снимает доступ. `AppState.activeScopeKey` теперь публикуется на каждом свопе scope, а не только перед recovery. Очистка уже восстановленных гостевых данных НЕ делалась — ждёт решения владельца. +8 тестов (`BackupGuestScopeAccessTests`), 2 существующих переведены на авторизованный scope. Гейт: 2434/39 при базе 2424/35, новых красных ноль (7 отличий — order-flake, в изоляции 27/27 зелёные). Коммиты `0ebc2ed`, `c91c123` |
 | 2026-08-23 | R9 | Возвращён единый FX snapshot из `archive/phase9-broken-2026-08-22` (`2e0777e`) — независимая от recovery работа, уехавшая при откате Phase 9. `CurrencyRateSnapshotRevisionStore` + `adoptSnapshot(_:notify:)` как единственная точка замены полного matrix (revision публикуется только при реальной смене набора курсов), ограниченная цепочка `millio→erapi` без смешивания публичных провайдеров, `AccountSnapshotRebuilder` читает snapshots/events явным `FetchDescriptor` внутри актора. Дополнительно возвращены подписки потребителей (Finance, Cashflow, Cards, Credits, виджет курсов) — без них уведомление было мёртвым кодом. Не возвращены Backup/Restore/`millioApp`/`xcstrings`/`FinanceDynamicsSnapshotStore` и рефактор `ConverterViewModel` (AC «конвертер через тот же сервис» открыт). Адаптация: тест цепочки `.cbr` приведён к новому контракту. Гейт: 2424/35 при базе 2421/38, новых красных ноль (3 отличия от эталона — cross-suite flake, в изоляции зелёные). Коммиты `7f0474d`, `528a634`, `0f9756b`; чужие правки сохранены в `wip/fx-cached-rate-fallback` (`e6b4a00`) |
 | 2026-08-23 | R8 | Пустой график активов/обязательств после restore при верных списке и тотале. Причина — три источника core-счетов на экране «Счета»: список читал живое `AccountGroup.accounts`, тотал — живой fetch, а ledger-график единственный читал срез `FinanceViewModel.state.accounts`, который обновляется только по событиям (снапшот, снятый до того, как импорт довёз `Account`, оставлял график пустым навсегда). `coreAccountsSnapshot(matching:)` удалён, `buildLedgerPresentation` зовёт `orderedAccounts(for:)`, `ungroupedAccounts()` переведён на живой fetch — на экране остался один источник. Регресс-тесты на реальной фикстуре владельца (`FinanceOverviewChartAfterRestoreTests`): до фикса 0 items при 44 счетах в списке и тотале 104 075 826, после — 37 items; плюс инвариант «тотал > 0 ⇒ график не пуст». «Динамика» тем же классом не болеет (свои fetch'и). Гейт: 2421/38 при базе 2419/38, 5 подозрительных красных воспроизведены на родительском `8c2dccf` — новых нет. Коммит `a8bcea5` |
