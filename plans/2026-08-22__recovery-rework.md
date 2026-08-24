@@ -664,6 +664,58 @@ S1/S11). Дельта по красным — шум параллельных с
 - **Коммиты:** `3f92b49` (ядро + тесты), `d05932a` (тест-инфра), `5e5e3f8` (адресация уведомлений).
 
 
+### R12 — Кэш графика «Динамики» на холодном старте — [x] РЕАЛИЗОВАН (2026-08-24)
+- **Баг (репро владельца на устройстве, скриншот):** закрыть приложение и открыть заново → вкладка
+  «Динамика» показывает «0 ₽», «Нет данных для отображения», «Нет групп», и только через паузу
+  подгружаются данные.
+- **Доказанная причина:** у экрана не было НИКАКОГО долговременного результата, а пустой стартовый
+  `state` визуально неотличим от «данных нет». `loadData()` сбрасывал `isLoading` синхронно
+  (`FinanceDynamicsViewModel.swift:595`), хотя весь расчёт (историческая проекция, breakdown,
+  валютная разбивка) идёт асинхронно — до его завершения экран рисовал пустое состояние как факт.
+- **Фикс — перенос по смыслу из `archive/phase9-broken-2026-08-22` (`2e0777e`)**, откуда компонент
+  уехал при откате Phase 9; recovery/backup-часть архива НЕ бралась (переделана в R1–R10):
+  - `millio/UI/Services/Finances/FinanceDynamicsSnapshotStore.swift` (новый, 108 строк) —
+    display-cache графика/разбивки, файл на диск с `.completeUntilFirstUserAuthentication`
+    (не `UserDefaults`: внутри суммы), имя файла = SHA-256 от scopeID, ключ — data scope;
+  - `FinanceDynamicsViewModel.swift`: `state.isInitialLocalProjectionResolved` (:41),
+    `restoreSnapshotIfEligible()` и `persistSnapshotIfEligible()` (:844+), `completeLocalProjection(for:)`
+    снимает `isLoading` и пишет снимок только по завершении актуальной ревизии расчёта,
+    `state.isLoading = state.chartData.isEmpty` (:580) — спиннер только когда показывать нечего;
+  - `FinanceDynamicsView.swift`: `localProjectionLoadingView` (:2240) вместо `emptyStateView` и вместо
+    пустого графика до первого расчёта; `bindDynamicsViewModel()` (:163) пересоздаёт VM при смене
+    `FinanceViewModel` (scope swap), контекст берётся у него, а не из окружения.
+- **Адаптация под текущий код (архив писался до R1–R11):**
+  - ревизия набора курсов берётся у СВОЕГО сервиса — `currencyService.currentRateSnapshot()` +
+    `CurrencyRateSnapshotRevisionStore.revision(for:)` (R11: считается по значениям курсов), а не из
+    глобального `CurrencyRateSnapshotRevisionStore.current`, как в архиве. Иначе снимок, посчитанный
+    на курсах другого экземпляра сервиса (тесты, другой scope), считался бы валидным;
+  - подписка на `.currencyRateSnapshotDidChange` адресована своему экземпляру (`object: currencyService`)
+    по правилу R11 — дублирования подписок нет, чужой сервис экран не будит;
+  - гидратация дополнительно требует совпадения валюты и периода экрана: кэш в другой валюте показал
+    бы корректные цифры не на тот вопрос (в архиве он их перезаписывал);
+  - `DynamicsBreakdownItem` в текущем коде имеет поле `accountType` — в снимке не сохраняется
+    (иконка/тип восстанавливаются первым же расчётом), при восстановлении `nil`;
+  - `BackupEvent.restoreVerified` из архива не брался — восстановление и так публикует
+    `restoreCompleted`, на который VM подписана.
+- **Дашборд (проверено, не чинилось):** тем же классом болеет — `TotalBalanceWidget` берёт
+  `financeViewModel.state.totalAmount` (`RootTabView.swift:446`), который на холодном старте `0`,
+  поэтому вспыхивает «0 ₽»; sparkline при этом переживает перезапуск (`DashboardBalanceHistoryStore`,
+  `UserDefaults`). Механизм фикса ДРУГОЙ (кэш тотала в `FinanceViewModel`, не снимок «Динамики»), плюс
+  `DashboardBalanceHistoryStore` не разделён по data scope — после R10 это отдельный вопрос гостевого
+  режима. Тривиальным тем же механизмом не закрывается → вынесено, не делалось.
+- **Тесты (+9)** — `millioTests/UI/Services/Finances/FinanceDynamicsSnapshotStoreTests.swift`:
+  `snapshotSurvivesProcessRestart`, `snapshotIsIsolatedByScope`, `corruptSnapshotIsIgnored`,
+  `coldStartWithCacheSkipsEmptyState`, `coldStartWithoutCacheShowsLoadingNotEmptyState`,
+  `snapshotOfAnotherScopeIsNotShown` (гостевой режим после R10),
+  `snapshotWithForeignRateRevisionIsIgnored`, `snapshotWithMatchingRateRevisionHydrates`,
+  `rateRefreshRecalculatesWithoutBlinking`.
+- **Гейт:** 2455 тестов / 32 красных + 6 expected при базе 2446 / 32+6 (+9 = ровно новые тесты).
+  Новых красных ноль (сравнение множеств имён с базовым бандлом), 6 красных базы позеленели
+  (4 `FinanceDynamicsViewModelTests`, `RecoveryEndToEndIntegrationTests`, `RestoreFailureCodeTests` —
+  известный cross-suite order-flake).
+- **Коммиты:** `4587b56` (store + VM + тесты), `71b0320` (экран).
+
+
 ## Итого оценка
 
 ~12 ч работы агентов + stress-test и device-проверки владельца. Порядок обязателен: R0 → R1 → R2 → R3 → R4 → R5 → R6 → R7 (R3 зависит от R1/R2 по единому пути координатора).
@@ -714,6 +766,7 @@ S1/S11). Дельта по красным — шум параллельных с
 
 | Date | Phase | Changes |
 |------|-------|---------|
+| 2026-08-24 | R12 | **Баг с устройства:** после перезапуска вкладка «Динамика» показывала «0 ₽» / «Нет данных» / «Нет групп», данные появлялись через паузу. Причина — у экрана не было долговременного результата, а `loadData()` снимал `isLoading` синхронно, хотя расчёт асинхронный: пустой стартовый `state` рисовался как доказанный факт «данных нет». Из `archive/phase9-broken-2026-08-22` (`2e0777e`) перенесён ПО СМЫСЛУ display-cache: `FinanceDynamicsSnapshotStore` (файл на диске с `.completeUntilFirstUserAuthentication`, ключ — data scope, имя = SHA-256 scopeID), гидратация в `init` общего обзора, `isInitialLocalProjectionResolved` + `localProjectionLoadingView` (спиннер вместо ложного пустого состояния), запись снимка только по завершении актуальной ревизии расчёта, `bindDynamicsViewModel()` при scope swap. Адаптация под R11: валидность кэша проверяется ревизией курсов СВОЕГО сервиса (`currentRateSnapshot()`, ревизия по значениям), подписка адресована своему экземпляру — дублей подписок нет; дополнительно требуется совпадение валюты и периода. Recovery/backup-часть архива не бралась. Дашборд болеет тем же классом («0 ₽» из `state.totalAmount`), но механизм фикса другой — вынесено. +9 тестов (`FinanceDynamicsSnapshotStoreTests`). Гейт: 2455/32+6 при базе 2446/32+6, новых красных ноль, 6 красных базы позеленели. Коммиты `4587b56`, `71b0320` |
 | 2026-08-24 | R11 | **Баг с устройства:** курсы «как будто не переживают закрытие приложения» — на «Счетах» при каждом старте вспыхивал кругляшок загрузки и дёргалась шапка. Персистентность снимка при этом работала (`RateRepository.persist` → `UserDefaults` + iCloud KV, синхронное чтение в `CurrencyRateService.init:88`); причин четыре и все поверх кэша: (1) `isLoadingRates` поднимался на ФАКТ запроса, а не на отсутствие курсов, а `ProgressView` в `VStack` шапки менял высоту блока; (2) `lastRefreshedAt` жил только в памяти → на холодном старте `nil` → `.distantPast` → принудительное `refreshAll()` на каждом `scenePhase == .active`; (3) подписка на `.currencyRateSnapshotDidChange` звала `refreshRates()` → `forceRefreshRates()`, то есть приход снимка форсировал ещё один сетевой запрос; (4) ревизия снимка включала `fetchedAt`, поэтому фоновое обновление с ТЕМИ ЖЕ курсами считалось новым набором и перестраивало UI. Фикс: ревизия по значениям курсов (детерминированный FNV-1a, не `Hasher` — тот засеян случайно на запуск), `currentRateSnapshot()` в протоколе с дефолтом `nil`, индикатор только при отсутствии снимка, гидрация `lastRefreshedAt` из `snapshot.fetchedAt`, подписка на снимок пересчитывает тоталы вместо сети, `.custom`-источник тоже публикует снимок, уведомления адресуются своему экземпляру сервиса (`object: self`). После restore ключи `rate_repo_*` не трогаются — спиннера нет, закреплено тестом. +12 тестов (`CurrencyRateSnapshotPersistenceTests` 7, `FinanceViewModelRateIndicatorTests` 5). Гейт: 2446/38 при базе 2434/39, новых красных ноль (3 отличия — cross-suite order-flake, в изоляции 13/13; фокус-прогон 102/102). Коммиты `3f92b49`, `d05932a`, `5e5e3f8` |
 | 2026-08-23 | R10 | **Критический баг безопасности** (репро владельца): после logout раздел бэкапов показывал облачные копии залогиненного пользователя и восстанавливал их в ГОСТЕВОЙ стор. Причина — CloudKit Private DB привязана к iCloud устройства, а не к аккаунту Millio; в R4 был закрыт только launch-путь. Введён `BackupAccessPolicy` и гейт в `SwitchingBackupManager`: без авторизованного scope запрещены backup/save/restore(3 пути)/restoreFromFile/inspect/import/export/delete, `listBackupVersions` → `[]`, `lookupBackupVersions` → `.failed(.requiresSignIn)`, `lastBackupInfo` → `nil`. Импорт файла руками в гостевом режиме — запрещён осознанно (после входа гостевой стор уезжает в reconciliation и данные удваиваются), отказ приходит до деструктивного подтверждения. UI — второй слой: действия дизейблятся, callout «Нужен вход в аккаунт», список чистится, logout при открытом экране закрывает шиты и снимает доступ. `AppState.activeScopeKey` теперь публикуется на каждом свопе scope, а не только перед recovery. Очистка уже восстановленных гостевых данных НЕ делалась — ждёт решения владельца. +8 тестов (`BackupGuestScopeAccessTests`), 2 существующих переведены на авторизованный scope. Гейт: 2434/39 при базе 2424/35, новых красных ноль (7 отличий — order-flake, в изоляции 27/27 зелёные). Коммиты `0ebc2ed`, `c91c123` |
 | 2026-08-23 | R9 | Возвращён единый FX snapshot из `archive/phase9-broken-2026-08-22` (`2e0777e`) — независимая от recovery работа, уехавшая при откате Phase 9. `CurrencyRateSnapshotRevisionStore` + `adoptSnapshot(_:notify:)` как единственная точка замены полного matrix (revision публикуется только при реальной смене набора курсов), ограниченная цепочка `millio→erapi` без смешивания публичных провайдеров, `AccountSnapshotRebuilder` читает snapshots/events явным `FetchDescriptor` внутри актора. Дополнительно возвращены подписки потребителей (Finance, Cashflow, Cards, Credits, виджет курсов) — без них уведомление было мёртвым кодом. Не возвращены Backup/Restore/`millioApp`/`xcstrings`/`FinanceDynamicsSnapshotStore` и рефактор `ConverterViewModel` (AC «конвертер через тот же сервис» открыт). Адаптация: тест цепочки `.cbr` приведён к новому контракту. Гейт: 2424/35 при базе 2421/38, новых красных ноль (3 отличия от эталона — cross-suite flake, в изоляции зелёные). Коммиты `7f0474d`, `528a634`, `0f9756b`; чужие правки сохранены в `wip/fx-cached-rate-fallback` (`e6b4a00`) |

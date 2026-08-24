@@ -1,7 +1,7 @@
 {
   "planFile": "2026-08-22__recovery-rework.md",
   "title": "Переработка backup/recovery",
-  "updated": "2026-08-24T00:00:00Z",
+  "updated": "2026-08-24T09:30:00Z",
   "phases": [
     {
       "name": "R0 — Stress-test и решение владельца",
@@ -77,6 +77,11 @@
       "name": "R11 — Персистентность курсов и спиннер на «Счетах»",
       "status": "done",
       "note": "3f92b49, d05932a, 5e5e3f8 — гейт 2446/38, +12 тестов"
+    },
+    {
+      "name": "R12 — Кэш графика «Динамики» на холодном старте",
+      "status": "done",
+      "note": "4587b56/71b0320: FinanceDynamicsSnapshotStore (файл по data scope, .completeUntilFirstUserAuthentication) + гидратация в init общего обзора, isInitialLocalProjectionResolved и спиннер вместо ложного «Нет групп», валидация кэша ревизией курсов своего сервиса (R11). +9 тестов; гейт 2455/32+6 при базе 2446/32+6, новых красных ноль. Дашборд болеет тем же классом (0 ₽ из state.totalAmount) — механизм другой, вынесено"
     }
   ],
   "costUsd": null,
