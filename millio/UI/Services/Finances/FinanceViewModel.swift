@@ -487,9 +487,12 @@ final class FinanceViewModel: ViewModelProtocol {
             state.lastRefreshedAt = Date(timeIntervalSince1970: persistedFetchedAt)
         }
         subscribeToFinanceEvents()
+        // Слушаем ТОЛЬКО свой экземпляр сервиса курсов: чужой сервис не должен заставлять
+        // этот экран ходить в сеть.
+        let observedRateService = self.currencyService as AnyObject
         rateSourceObserver = NotificationCenter.default.addObserver(
             forName: .currencyRateSourceDidChange,
-            object: nil,
+            object: observedRateService,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -498,7 +501,7 @@ final class FinanceViewModel: ViewModelProtocol {
         }
         rateSnapshotObserver = NotificationCenter.default.addObserver(
             forName: .currencyRateSnapshotDidChange,
-            object: nil,
+            object: observedRateService,
             queue: .main
         ) { [weak self] _ in
             // Снимок УЖЕ обновлён сервисом — новых курсов из сети просить не нужно.

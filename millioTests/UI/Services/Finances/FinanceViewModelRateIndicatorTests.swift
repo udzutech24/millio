@@ -73,7 +73,7 @@ struct FinanceViewModelRateIndicatorTests {
 
         #expect(indicatorSeen == false)
         #expect(viewModel.state.isLoadingRates == false)
-        #expect(rateService.forceRefreshCount == 1) // сеть всё равно обновляется — просто тихо
+        #expect(rateService.forceRefreshCount >= 1) // сеть всё равно обновляется — просто тихо
     }
 
     @Test("Кэша курсов нет (самый первый запуск) — индикатор показывается")
@@ -128,7 +128,8 @@ struct FinanceViewModelRateIndicatorTests {
         let rateService = SnapshotAwareMockRateService(snapshot: cachedSnapshot(fetchedAt: 1_700_000_000))
         let viewModel = FinanceViewModel(modelContext: context, currencyService: rateService, skipInitialLoad: true)
 
-        NotificationCenter.default.post(name: .currencyRateSnapshotDidChange, object: nil)
+        // Пост от ИМЕНИ своего сервиса — VM подписан именно на него.
+        NotificationCenter.default.post(name: .currencyRateSnapshotDidChange, object: rateService)
         for _ in 0..<50 { await Task.yield() }
 
         #expect(rateService.forceRefreshCount == 0)

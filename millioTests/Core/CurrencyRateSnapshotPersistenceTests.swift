@@ -127,9 +127,10 @@ struct CurrencyRateSnapshotPersistenceTests {
         let service = CurrencyRateService(rateSource: .millio, rateRepository: repo)
 
         var notifications = 0
+        // Фильтруем по своему сервису: параллельные @Suite тоже шлют это уведомление.
         let observer = NotificationCenter.default.addObserver(
             forName: .currencyRateSnapshotDidChange,
-            object: nil,
+            object: service,
             queue: .main
         ) { _ in notifications += 1 }
         defer { NotificationCenter.default.removeObserver(observer) }

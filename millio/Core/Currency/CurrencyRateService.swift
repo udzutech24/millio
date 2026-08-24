@@ -315,7 +315,9 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
                 }
             }
         }
-        NotificationCenter.default.post(name: .currencyRateSourceDidChange, object: nil)
+        // `object` = сам сервис: подписчик может отфильтровать чужие экземпляры и не ходить
+        // в сеть из-за смены источника в не своём сервисе.
+        NotificationCenter.default.post(name: .currencyRateSourceDidChange, object: self)
     }
 
     /// Обновить курсы из выбранного источника.
@@ -413,7 +415,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         activeSnapshot = snapshot
 
         guard notify, revision != previousRevision else { return }
-        NotificationCenter.default.post(name: .currencyRateSnapshotDidChange, object: nil)
+        NotificationCenter.default.post(name: .currencyRateSnapshotDidChange, object: self)
     }
 
     nonisolated static func makeLatestURL(for source: RateSource) -> URL? {
