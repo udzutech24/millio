@@ -22,6 +22,14 @@ protocol CurrencyRateServiceProtocol {
     func getHistoricalRate(on date: Date, from: String, to: String) async -> Double?
     func convert(amount: Double, from: String, to: String) async -> Double?
     func forceRefreshRates() async
+    /// Последний известный набор курсов, доступный БЕЗ сети (прогрет с диска при инициализации).
+    /// UI использует его, чтобы не показывать индикатор загрузки поверх уже готовых цифр.
+    func currentRateSnapshot() -> RateSnapshot?
+}
+
+extension CurrencyRateServiceProtocol {
+    /// Дефолт для тестовых даблов: «кэш неизвестен» — поведение как до появления снимка.
+    func currentRateSnapshot() -> RateSnapshot? { nil }
 }
 
 // MARK: - Currency Rate Service
@@ -79,6 +87,13 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
             if !customRates.isEmpty {
                 cachedRates.merge(customRates) { _, new in new }
                 lastUpdateTS = Date().timeIntervalSince1970
+                // Ручные курсы — такой же полноценный снимок: без него UI считал бы, что курсов нет.
+                activeSnapshot = RateSnapshot(
+                    source: .custom,
+                    rates: cachedRates,
+                    updatedAt: lastUpdateTS,
+                    fetchedAt: lastUpdateTS
+                )
             }
         } else {
             let udKey = "rate_repo_rates_\(rateSource.rawValue)"
@@ -289,6 +304,15 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
             if !customRates.isEmpty {
                 cachedRates.merge(customRates) { _, new in new }
                 lastUpdateTS = Date().timeIntervalSince1970
+                activeSnapshot = RateSnapshot(
+                    source: .custom,
+                    rates: cachedRates,
+                    updatedAt: lastUpdateTS,
+                    fetchedAt: lastUpdateTS
+                )
+                if let activeSnapshot {
+                    _ = CurrencyRateSnapshotRevisionStore.save(activeSnapshot)
+                }
             }
         }
         NotificationCenter.default.post(name: .currencyRateSourceDidChange, object: nil)

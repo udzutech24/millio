@@ -481,6 +481,11 @@ final class FinanceViewModel: ViewModelProtocol {
         let storedGoalCurrency = storedSavingsGoalCurrency
         state.isAmountHidden = storedAmountHidden
         state.accountSortMode = storedAccountSortMode
+        // Свежесть курсов переживает перезапуск в снимке на диске. Без этого `lastRefreshedAt`
+        // на холодном старте всегда nil, и экран «Счета» уходил в принудительное обновление.
+        if let persistedFetchedAt = self.currencyService.currentRateSnapshot()?.fetchedAt, persistedFetchedAt > 0 {
+            state.lastRefreshedAt = Date(timeIntervalSince1970: persistedFetchedAt)
+        }
         subscribeToFinanceEvents()
         rateSourceObserver = NotificationCenter.default.addObserver(
             forName: .currencyRateSourceDidChange,
@@ -496,8 +501,11 @@ final class FinanceViewModel: ViewModelProtocol {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            // Снимок УЖЕ обновлён сервисом — новых курсов из сети просить не нужно.
+            // Раньше здесь вызывался `refreshRates()`, который форсировал повторный сетевой
+            // запрос и поднимал индикатор загрузки на каждое фоновое обновление курсов.
             Task { @MainActor [weak self] in
-                await self?.refreshRates()
+                await self?.refreshGroupTotalsAndAmounts()
             }
         }
         if !skipInitialLoad {
@@ -1458,9 +1466,22 @@ final class FinanceViewModel: ViewModelProtocol {
         )
     }
 
-    func refreshCurrencyQuotes() async {
+    /// Индикатор загрузки курсов допустим ТОЛЬКО когда показать нечего вообще (самый первый запуск).
+    /// При наличии снимка обновление идёт тихо: иначе шапка «Счетов» дёргается на каждом обновлении.
+    private var hasUsableRateSnapshot: Bool {
+        guard let snapshot = currencyService.currentRateSnapshot() else { return false }
+        return !snapshot.rates.isEmpty
+    }
+
+    private func beginRateLoadingIfNothingToShow() -> Bool {
+        guard !hasUsableRateSnapshot else { return false }
         state.isLoadingRates = true
-        defer { state.isLoadingRates = false }
+        return true
+    }
+
+    func refreshCurrencyQuotes() async {
+        let showsIndicator = beginRateLoadingIfNothingToShow()
+        defer { if showsIndicator { state.isLoadingRates = false } }
         await refreshCurrencyQuotes(forceRefresh: true)
         presentRefreshIssueIfNeeded(message: state.currencyConversionWarning)
     }
@@ -1477,8 +1498,8 @@ final class FinanceViewModel: ViewModelProtocol {
 
     /// Обновляет рыночные цены только для акций, не создавая транзакций.
     func refreshStockPrices() async {
-        state.isLoadingRates = true
-        defer { state.isLoadingRates = false }
+        let showsIndicator = beginRateLoadingIfNothingToShow()
+        defer { if showsIndicator { state.isLoadingRates = false } }
         let message = await marketDataService.refreshStockPricesManual()
         await accountMarketPriceService.refreshTodayPrices()
         presentRefreshIssueIfNeeded(message: message)
@@ -1486,8 +1507,8 @@ final class FinanceViewModel: ViewModelProtocol {
 
     /// Обновляет все котировки и акции — используется в pull-to-refresh и фоновом обновлении.
     func refreshAll() async {
-        state.isLoadingRates = true
-        defer { state.isLoadingRates = false }
+        let showsIndicator = beginRateLoadingIfNothingToShow()
+        defer { if showsIndicator { state.isLoadingRates = false } }
         await refreshCurrencyQuotes(forceRefresh: true)
         let stockMessage = await marketDataService.refreshStockPricesManual()
         await accountMarketPriceService.refreshTodayPrices()
