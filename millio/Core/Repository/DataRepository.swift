@@ -114,6 +114,21 @@ final class DataRepository: @MainActor DataRepositoryProtocol {
     /// - Parameter save: по умолчанию `true` (поведение restore не меняется). Reconciliation (Track B)
     ///   передаёт `false`: весь merge идёт в одном дочернем контексте с ЕДИНСТВЕННЫМ save в конце
     ///   (митигация B1b №5) — промежуточный save здесь сломал бы атомарность.
+    /// Пред-проверка совместимости бэкапа со схемой приложения БЕЗ записи куда-либо.
+    /// Тот же отказ есть внутри `importAllData`, но там он срабатывает уже после `clearAllData()`,
+    /// то есть после уничтожения локальных данных — restore обязан спрашивать это до деструктивной фазы.
+    nonisolated static func validateSchemaCompatibility(of data: Data) throws {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let metadataDict = json["metadata"] as? [String: Any],
+              let metadataData = try? JSONSerialization.data(withJSONObject: metadataDict),
+              let metadata = try? JSONDecoder().decode(BackupMetadata.self, from: metadataData) else {
+            throw AppError.backupCorrupted
+        }
+        if !metadata.isCompatibleWithCurrentSchema() {
+            throw AppError.incompatibleSchemaVersion
+        }
+    }
+
     nonisolated static func importAllData(_ data: Data, into context: ModelContext, save: Bool = true) throws {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let modelsData = json["models"] as? [[String: Any]] else {

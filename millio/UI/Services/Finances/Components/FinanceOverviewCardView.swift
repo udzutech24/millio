@@ -177,7 +177,10 @@ struct FinanceOverviewCardView: View {
 
         for group in groups {
             // Core-счета группы — ПЕРВИЧНЫЙ источник (было: легаси-junction + отдельный core-луп).
-            for account in sortedCoreAccounts(financeViewModel.coreAccountsSnapshot(matching: group)) {
+            // [R8] Тот же живой источник, что рисует список группы (`orderedAccounts(for:)` →
+            // `group.accounts`). Срез `state.accounts` здесь давал пустой график при заполненных
+            // списке и тотале, если снапшот не успел обновиться после restore.
+            for account in sortedCoreAccounts(financeViewModel.orderedAccounts(for: group)) {
                 if let item = await makeCoreLedgerItem(
                     account: account,
                     groupID: group.groupUniqueID,

@@ -22,6 +22,14 @@ protocol CurrencyRateServiceProtocol {
     func getHistoricalRate(on date: Date, from: String, to: String) async -> Double?
     func convert(amount: Double, from: String, to: String) async -> Double?
     func forceRefreshRates() async
+    /// Последний известный набор курсов, доступный БЕЗ сети (прогрет с диска при инициализации).
+    /// UI использует его, чтобы не показывать индикатор загрузки поверх уже готовых цифр.
+    func currentRateSnapshot() -> RateSnapshot?
+}
+
+extension CurrencyRateServiceProtocol {
+    /// Дефолт для тестовых даблов: «кэш неизвестен» — поведение как до появления снимка.
+    func currentRateSnapshot() -> RateSnapshot? { nil }
 }
 
 // MARK: - Currency Rate Service
@@ -50,6 +58,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
 
     private var cachedRates: [String: Double] = ["USD": 1.0]
     private var lastUpdateTS: Double = 0
+    private var activeSnapshot: RateSnapshot?
     private let cacheTimeout: TimeInterval = 12 * 3600 // 12 часов
     private var refreshTask: Task<Void, Never>?
     /// Инкрементируется при смене источника — защищает кэш от in-flight запросов старого источника.
@@ -78,6 +87,13 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
             if !customRates.isEmpty {
                 cachedRates.merge(customRates) { _, new in new }
                 lastUpdateTS = Date().timeIntervalSince1970
+                // Ручные курсы — такой же полноценный снимок: без него UI считал бы, что курсов нет.
+                activeSnapshot = RateSnapshot(
+                    source: .custom,
+                    rates: cachedRates,
+                    updatedAt: lastUpdateTS,
+                    fetchedAt: lastUpdateTS
+                )
             }
         } else {
             let udKey = "rate_repo_rates_\(rateSource.rawValue)"
@@ -85,8 +101,23 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
             if let saved = UserDefaults.standard.dictionary(forKey: udKey) as? [String: Double], !saved.isEmpty {
                 cachedRates = saved
                 lastUpdateTS = UserDefaults.standard.double(forKey: udFetchedKey)
+                activeSnapshot = RateSnapshot(
+                    source: rateSource,
+                    rates: saved,
+                    updatedAt: UserDefaults.standard.double(forKey: "rate_repo_updated_at_\(rateSource.rawValue)"),
+                    fetchedAt: lastUpdateTS
+                )
+                if let activeSnapshot {
+                    _ = CurrencyRateSnapshotRevisionStore.save(activeSnapshot)
+                }
             }
         }
+    }
+
+    /// Полный активный фиатный snapshot без сети.
+    /// Все UI-consumer должны читать его через этот сервис, а не из `RateRepository` напрямую.
+    func currentRateSnapshot() -> RateSnapshot? {
+        activeSnapshot
     }
     
     /// Синхронно возвращает курс из текущего in-memory кэша без сетевых запросов.
@@ -108,8 +139,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
 
     /// Первый источник из цепочки (кроме текущего) с globalFiatDaily capability.
     private func globalFiatFallbackService() -> CurrencyRateService {
-        let fallback = buildFallbackChain().dropFirst().first { $0.capability.scope == .globalFiatDaily } ?? .millio
-        return CurrencyRateService(rateSource: fallback, rateRepository: rateRepository, historicalLoader: historicalLoader)
+        CurrencyRateService(rateSource: .millio, rateRepository: rateRepository, historicalLoader: historicalLoader)
     }
 
     /// Получить курс конвертации: сколько единиц 'to' за 1 единицу 'from'
@@ -148,8 +178,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
             if cachedRates.count <= 1,
                let persisted = await rateRepository.peekCachedSnapshot(source: rateSource),
                !persisted.rates.isEmpty {
-                cachedRates = persisted.rates
-                lastUpdateTS = persisted.fetchedAt
+                adoptSnapshot(persisted, notify: false)
             }
             // A stale persisted quote is still more useful than a blocked local UI. Refresh it
             // opportunistically; waiting here made the finance graph and header spin during a
@@ -245,9 +274,18 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         rubHistoricalProvider?.resetTransientCache()
     }
 
-    /// Строит цепочку fallback-источников: preferred первым, остальные в порядке allCases.
+    /// Строит ограниченную цепочку fallback-источников без смешивания публичных провайдеров.
     func buildFallbackChain() -> [RateSource] {
-        [rateSource] + RateSource.allCases.filter { $0 != rateSource }
+        switch rateSource {
+        case .millio:
+            return [.millio, .erapi]
+        case .erapi:
+            return [.erapi, .millio]
+        case .frankfurter:
+            return [.frankfurter, .millio, .erapi]
+        case .cbr, .custom:
+            return [rateSource]
+        }
     }
 
     /// Меняет глобальный источник, сбрасывает кэш и уведомляет подписчиков.
@@ -259,14 +297,27 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         refreshTask = nil
         cachedRates = ["USD": 1.0]
         lastUpdateTS = 0
+        activeSnapshot = nil
+        CurrencyRateSnapshotRevisionStore.clear()
         if source == .custom {
             let customRates = CustomRateStore.shared.toUSDBase(currentPrimary: SettingsManager.shared.primaryCurrencyCode)
             if !customRates.isEmpty {
                 cachedRates.merge(customRates) { _, new in new }
                 lastUpdateTS = Date().timeIntervalSince1970
+                activeSnapshot = RateSnapshot(
+                    source: .custom,
+                    rates: cachedRates,
+                    updatedAt: lastUpdateTS,
+                    fetchedAt: lastUpdateTS
+                )
+                if let activeSnapshot {
+                    _ = CurrencyRateSnapshotRevisionStore.save(activeSnapshot)
+                }
             }
         }
-        NotificationCenter.default.post(name: .currencyRateSourceDidChange, object: nil)
+        // `object` = сам сервис: подписчик может отфильтровать чужие экземпляры и не ходить
+        // в сеть из-за смены источника в не своём сервисе.
+        NotificationCenter.default.post(name: .currencyRateSourceDidChange, object: self)
     }
 
     /// Обновить курсы из выбранного источника.
@@ -293,10 +344,15 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
                     let rates = try await self.cbrLatestProvider.fetchRates(loader: self.historicalLoader)
                     guard self.cacheGeneration == generation else { return }
                     if !rates.isEmpty {
-                        self.cachedRates = rates
-                        self.lastUpdateTS = Date().timeIntervalSince1970
+                        let snapshot = RateSnapshot(
+                            source: self.rateSource,
+                            rates: rates,
+                            updatedAt: Date().timeIntervalSince1970,
+                            fetchedAt: Date().timeIntervalSince1970
+                        )
+                        self.adoptSnapshot(snapshot)
                         UserDefaults.standard.set(rates, forKey: "rate_repo_rates_\(self.rateSource.rawValue)")
-                        UserDefaults.standard.set(self.lastUpdateTS, forKey: "rate_repo_fetched_at_\(self.rateSource.rawValue)")
+                        UserDefaults.standard.set(snapshot.fetchedAt, forKey: "rate_repo_fetched_at_\(self.rateSource.rawValue)")
                     }
                     return
                 } catch {
@@ -306,8 +362,15 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
                 guard self.cacheGeneration == generation else { return }
                 let udKey = "rate_repo_rates_\(self.rateSource.rawValue)"
                 if let saved = UserDefaults.standard.dictionary(forKey: udKey) as? [String: Double], !saved.isEmpty {
-                    self.cachedRates = saved
-                    self.lastUpdateTS = UserDefaults.standard.double(forKey: "rate_repo_fetched_at_\(self.rateSource.rawValue)")
+                    self.adoptSnapshot(
+                        RateSnapshot(
+                            source: self.rateSource,
+                            rates: saved,
+                            updatedAt: UserDefaults.standard.double(forKey: "rate_repo_updated_at_\(self.rateSource.rawValue)"),
+                            fetchedAt: UserDefaults.standard.double(forKey: "rate_repo_fetched_at_\(self.rateSource.rawValue)")
+                        ),
+                        notify: false
+                    )
                 }
                 return
             }
@@ -318,8 +381,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
                     let snapshot = try await self.rateRepository.getLatestRates(source: source, forceRefresh: true, allowStaleOnError: false)
                     guard self.cacheGeneration == generation else { return }
                     if !snapshot.rates.isEmpty {
-                        self.cachedRates = snapshot.rates
-                        self.lastUpdateTS = snapshot.fetchedAt
+                        self.adoptSnapshot(snapshot)
                     }
                     return
                 } catch {
@@ -333,8 +395,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
             // Это сохраняет работоспособность конвертера при полной блокировке сети (например, GFW).
             let fetchTime = Date().timeIntervalSince1970
             if let stale = await self.rateRepository.peekCachedSnapshot(source: self.rateSource), !stale.rates.isEmpty {
-                self.cachedRates = stale.rates
-                self.lastUpdateTS = fetchTime
+                self.adoptSnapshot(stale, notify: false)
                 AppLogger.log(.info, category: "CurrencyRateService", "Using stale cached rates (age: \(Int((fetchTime - stale.fetchedAt) / 3600))h)")
             } else {
                 AppLogger.log(.error, category: "CurrencyRateService", "All rate sources failed and no stale cache available")
@@ -344,6 +405,17 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         refreshTask = task
         await task.value
         refreshTask = nil
+    }
+
+    private func adoptSnapshot(_ snapshot: RateSnapshot, notify: Bool = true) {
+        let previousRevision = activeSnapshot.map(CurrencyRateSnapshotRevisionStore.revision(for:))
+        let revision = CurrencyRateSnapshotRevisionStore.save(snapshot)
+        cachedRates = snapshot.rates
+        lastUpdateTS = snapshot.fetchedAt
+        activeSnapshot = snapshot
+
+        guard notify, revision != previousRevision else { return }
+        NotificationCenter.default.post(name: .currencyRateSnapshotDidChange, object: self)
     }
 
     nonisolated static func makeLatestURL(for source: RateSource) -> URL? {

@@ -6,10 +6,12 @@ struct LaunchRecoveryHardeningTests {
 
     // MARK: - AC1: nil count skips restore (policy level)
 
-    @Test("LaunchRecoveryPolicy skips restore when lifecycle is not ready (covers nil-count early exit path)")
+    @Test("LaunchRecoveryPolicy skips restore when lifecycle is not ready")
     func nilCountSkipsRestoreViaLifecycleGuard() {
-        // presentRestoreFlowIfNeeded returns before calling the policy when count is nil.
-        // At the policy level: any non-ready lifecycle also returns .skip.
+        // R1: старое ожидание («count == nil ⇒ молчаливый выход до политики») было неверным —
+        // молчаливый пропуск уводил пользователя в онбординг поверх восстановимого бэкапа.
+        // Теперь nil обрабатывает сама политика (см. LaunchRecoveryPolicyTests, manual-only ветка),
+        // а этот тест проверяет только гард по lifecycle.
         let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
         let decision = LaunchRecoveryPolicy.evaluate(
             .init(
@@ -58,39 +60,39 @@ struct LaunchRecoveryHardeningTests {
     // MARK: - AC4: attempt counter increments and resets
 
     @Test("Auto-restore attempt counter increments on each try and resets on success")
-    func attemptCounterIncrementAndReset() {
-        let key = "test.\(#function).autoRestoreAttemptCount"
-        defer { UserDefaults.standard.removeObject(forKey: key) }
+    func attemptCounterIncrementAndReset() throws {
+        // R7-fix S8: тест вызывает продовый счётчик, а не воспроизводит его логику на UserDefaults.
+        let defaults = try #require(UserDefaults(suiteName: "test.\(UUID().uuidString)"))
+        defer { defaults.removeSuite(named: defaults.description) }
+        let counter = LaunchRecoveryStateStore(defaults: defaults)
 
-        // Fresh state
-        UserDefaults.standard.set(0, forKey: key)
-        #expect(UserDefaults.standard.integer(forKey: key) == 0)
+        #expect(counter.autoRestoreAttempts == 0)
+        #expect(!counter.hasReachedAutoRestoreLimit)
 
-        // First failed attempt
-        let attempt1 = UserDefaults.standard.integer(forKey: key)
-        UserDefaults.standard.set(attempt1 + 1, forKey: key)
-        #expect(UserDefaults.standard.integer(forKey: key) == 1)
+        counter.registerAutoRestoreAttempt()
+        #expect(counter.autoRestoreAttempts == 1)
+        #expect(!counter.hasReachedAutoRestoreLimit, "После первой неудачи авто-restore ещё разрешён")
 
-        // Second failed attempt
-        let attempt2 = UserDefaults.standard.integer(forKey: key)
-        UserDefaults.standard.set(attempt2 + 1, forKey: key)
-        #expect(UserDefaults.standard.integer(forKey: key) == 2)
+        counter.registerAutoRestoreAttempt()
+        #expect(counter.autoRestoreAttempts == 2)
+        #expect(counter.hasReachedAutoRestoreLimit)
 
-        // Limit reached
-        #expect(UserDefaults.standard.integer(forKey: key) >= 2)
-
-        // Success → reset
-        UserDefaults.standard.set(0, forKey: key)
-        #expect(UserDefaults.standard.integer(forKey: key) == 0)
+        counter.resetAutoRestoreAttempts()
+        #expect(counter.autoRestoreAttempts == 0)
+        #expect(!counter.hasReachedAutoRestoreLimit)
     }
 
     @Test("Attempt limit guard blocks auto-restore when threshold is reached")
-    func attemptLimitPreventsAutoRestore() {
-        let maxAttempts = 2
-        let currentAttempts = 2
-        // Mirrors the guard in presentRestoreFlowIfNeeded
-        let shouldBlock = currentAttempts >= maxAttempts
-        #expect(shouldBlock)
+    func attemptLimitPreventsAutoRestore() throws {
+        let defaults = try #require(UserDefaults(suiteName: "test.\(UUID().uuidString)"))
+        let counter = LaunchRecoveryStateStore(defaults: defaults)
+        for _ in 0..<LaunchRecoveryStateStore.maxAutoRestoreAttempts {
+            counter.registerAutoRestoreAttempt()
+        }
+        // Ровно этот предикат гасит деструктивный авто-путь в millioApp.presentRestoreFlowIfNeeded.
+        #expect(counter.hasReachedAutoRestoreLimit)
+        counter.registerAutoRestoreAttempt()
+        #expect(counter.hasReachedAutoRestoreLimit, "Лимит не имеет права «отпускать» при дальнейших попытках")
     }
 
     // MARK: - AC6: triggerBackgroundBackup nil guard contract

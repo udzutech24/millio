@@ -50,12 +50,26 @@ final class EventBus {
     /// Отписаться от событий
     func unsubscribe(_ id: UUID) {
         subscribers.removeValue(forKey: id)
+        #if DEBUG
+        protectedSubscribers.remove(id)
+        #endif
     }
 
     #if DEBUG
-    /// Отписывает всех подписчиков. Используется только в тестах для изоляции между тест-кейсами.
+    private var protectedSubscribers: Set<UUID> = []
+
+    /// Подписка, которую не сносит `removeAllSubscribers()`. Нужна тестам-наблюдателям: сюиты
+    /// Swift Testing идут параллельно, и чужой «сброс для изоляции» иначе съедает чужого
+    /// подписчика прямо посреди его операции — событие теряется, тест краснеет ложно.
+    func subscribeProtected(_ handler: @escaping (AppEvent) -> Void) -> UUID {
+        let id = subscribe(handler)
+        protectedSubscribers.insert(id)
+        return id
+    }
+
+    /// Отписывает всех НЕзащищённых подписчиков. Только для тестовой изоляции.
     func removeAllSubscribers() {
-        subscribers.removeAll()
+        subscribers = subscribers.filter { protectedSubscribers.contains($0.key) }
     }
     #endif
     

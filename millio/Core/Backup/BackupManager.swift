@@ -16,10 +16,20 @@ protocol BackupManagerProtocol {
     func saveVersionNow(passphrase: String?) async throws
     func exportVersion(recordName: String) async throws -> BackupTransferPayload
     func importVersion(from data: Data) async throws -> BackupVersionInfo
-    func restoreLatest() async throws
-    func restoreLatest(passphrase: String?) async throws
-    func restoreVersion(recordName: String, passphrase: String?) async throws
+    /// Метаданные файла бэкапа без записи куда-либо. Нужны, чтобы показать пользователю
+    /// дату/размер/версию ДО деструктивного подтверждения перезаписи.
+    func inspectBackupFile(_ data: Data) async throws -> BackupInfo
+    /// Восстановление напрямую из файла, минуя CloudKit. Путь «файл → данные» обязан работать
+    /// при недоступном iCloud: `importVersion` требует облако, и на свежей установке без iCloud
+    /// пользователь иначе не может воспользоваться собственным файлом.
+    @discardableResult func restoreFromFile(_ data: Data, passphrase: String?) async throws -> RestoreReceipt
+    @discardableResult func restoreLatest() async throws -> RestoreReceipt
+    @discardableResult func restoreLatest(passphrase: String?) async throws -> RestoreReceipt
+    @discardableResult func restoreVersion(recordName: String, passphrase: String?) async throws -> RestoreReceipt
     func listBackupVersions() async -> [BackupVersionInfo]
+    /// Тот же поиск, но с различимым исходом: найдено / пусто / ошибка(причина) / таймаут.
+    /// Дефолтная реализация — в `BackupLookupOutcome.swift` (для моков и локального менеджера).
+    func lookupBackupVersions() async -> BackupLookupOutcome
     func deleteBackupVersion(recordName: String) async throws
     func lastBackupInfo() async -> BackupInfo?
 }
@@ -133,6 +143,60 @@ actor BackupManager: BackupManagerProtocol {
         return try await cloudStore.importBackup(data, info: info, isPinned: true)
     }
 
+    func inspectBackupFile(_ data: Data) async throws -> BackupInfo {
+        guard !data.isEmpty else {
+            throw AppError.backupCorrupted
+        }
+        // Не-envelope (сырой JSON старых сборок) метаданных не несёт — отдаём размер и «unknown»,
+        // но НЕ отбрасываем файл: он валиден для восстановления.
+        if let info = try inspectPortableBackupInfo(data) {
+            return info
+        }
+        return BackupInfo(date: Date(), size: Int64(data.count), version: "unknown")
+    }
+
+    @discardableResult
+    func restoreFromFile(_ data: Data, passphrase: String?) async throws -> RestoreReceipt {
+        logger.info("Starting restore from file...")
+        guard !data.isEmpty else {
+            throw AppError.backupCorrupted
+        }
+
+        if let historicalValuationScopeID {
+            historicalValuationReadiness.begin(scopeID: historicalValuationScopeID, operation: .restore)
+        }
+        await MainActor.run {
+            EventBus.shared.publish(BackupEvent.restoreStarted)
+        }
+
+        do {
+            let receipt = try await restoreDownloadedBackup(
+                data,
+                passphrase: passphrase,
+                encryption: resolvedEncryption(),
+                dataRepository: dataRepository
+            )
+            if let historicalValuationScopeID {
+                historicalValuationReadiness.complete(scopeID: historicalValuationScopeID, operation: .restore)
+            }
+            logger.info("Restore from file completed: \(receipt.diagnosticSummary, privacy: .public)")
+            await MainActor.run {
+                EventBus.shared.publish(BackupEvent.restoreCompleted)
+            }
+            return receipt
+        } catch {
+            if let historicalValuationScopeID {
+                historicalValuationReadiness.complete(scopeID: historicalValuationScopeID, operation: .restore)
+            }
+            logger.error("Restore from file failed: \(error.localizedDescription, privacy: .public)")
+            let published = (error as? AppError) ?? .restoreFailed(error.localizedDescription)
+            await MainActor.run {
+                EventBus.shared.publish(BackupEvent.restoreFailed(published))
+            }
+            throw error
+        }
+    }
+
     private func performBackup(passphrase: String?, isPinned: Bool) async throws {
         logger.info("Starting backup...")
 
@@ -227,11 +291,13 @@ actor BackupManager: BackupManagerProtocol {
         try processCompressionStream(data, operation: COMPRESSION_STREAM_ENCODE)
     }
     
-    func restoreLatest() async throws {
+    @discardableResult
+    func restoreLatest() async throws -> RestoreReceipt {
         try await restoreLatest(passphrase: nil)
     }
-    
-    func restoreLatest(passphrase: String?) async throws {
+
+    @discardableResult
+    func restoreLatest(passphrase: String?) async throws -> RestoreReceipt {
         logger.info("Starting restore...")
         if let historicalValuationScopeID {
             historicalValuationReadiness.begin(
@@ -252,7 +318,7 @@ actor BackupManager: BackupManagerProtocol {
         CrashReporting.setCustomValue(passphrase != nil ? "passphrase" : (encryption != nil ? "keychain" : "none"), forKey: "backup_encryption_mode")
         
         do {
-            try await withRetry(
+            let receipt = try await withRetry(
                 policy: .default,
                 shouldRetry: { error in
                     guard let appError = error as? AppError else { return true }
@@ -265,13 +331,13 @@ actor BackupManager: BackupManagerProtocol {
                         return true
                     }
                 }
-            ) {
+            ) { () async throws -> RestoreReceipt in
                 guard await self.isAvailable() else {
                     throw AppError.iCloudUnavailable
                 }
 
                 let backupRecordNames = try await cloudStore.listBackupRecordNamesForRestore()
-                try await self.restoreFromRecordNames(
+                return try await self.restoreFromRecordNames(
                     backupRecordNames,
                     passphrase: passphrase,
                     mode: .automatic,
@@ -280,8 +346,8 @@ actor BackupManager: BackupManagerProtocol {
                     cloudStore: cloudStore
                 )
             }
-        
-            logger.info("Restore completed successfully")
+
+            logger.info("Restore completed successfully: \(receipt.diagnosticSummary, privacy: .public)")
             if let historicalValuationScopeID {
                 historicalValuationReadiness.complete(
                     scopeID: historicalValuationScopeID,
@@ -289,9 +355,12 @@ actor BackupManager: BackupManagerProtocol {
                 )
             }
             
+            // Событие успеха публикуется только после verified-receipt: до R2 сюда попадал любой
+            // импорт, не бросивший ошибку, — включая тот, что оставил стор пустым.
             await MainActor.run {
                 EventBus.shared.publish(BackupEvent.restoreCompleted)
             }
+            return receipt
         } catch {
             if let historicalValuationScopeID {
                 historicalValuationReadiness.fail(
@@ -310,7 +379,8 @@ actor BackupManager: BackupManagerProtocol {
         }
     }
 
-    func restoreVersion(recordName: String, passphrase: String?) async throws {
+    @discardableResult
+    func restoreVersion(recordName: String, passphrase: String?) async throws -> RestoreReceipt {
         logger.info("Starting restore from selected version...")
         if let historicalValuationScopeID {
             historicalValuationReadiness.begin(
@@ -331,7 +401,7 @@ actor BackupManager: BackupManagerProtocol {
             guard await self.isAvailable() else {
                 throw AppError.iCloudUnavailable
             }
-            try await self.restoreFromRecordNames(
+            let receipt = try await self.restoreFromRecordNames(
                 [recordName],
                 passphrase: passphrase,
                 mode: .explicitVersion,
@@ -345,9 +415,11 @@ actor BackupManager: BackupManagerProtocol {
                     operation: .restore
                 )
             }
+            logger.info("Restore selected version completed: \(receipt.diagnosticSummary, privacy: .public)")
             await MainActor.run {
                 EventBus.shared.publish(BackupEvent.restoreCompleted)
             }
+            return receipt
         } catch {
             if let historicalValuationScopeID {
                 historicalValuationReadiness.fail(
@@ -367,11 +439,19 @@ actor BackupManager: BackupManagerProtocol {
     }
 
     func listBackupVersions() async -> [BackupVersionInfo] {
+        await lookupBackupVersions().versions
+    }
+
+    /// Ошибка облака больше не превращается в пустой список: причина доходит до экрана
+    /// восстановления, иначе «CloudKit не ответил» неотличимо от «бэкапов нет» (D8).
+    func lookupBackupVersions() async -> BackupLookupOutcome {
         do {
-            return try await cloudStore.listBackupVersions()
+            let versions = try await cloudStore.listBackupVersions()
+            return versions.isEmpty ? .empty : .found(versions)
         } catch {
-            logger.error("Failed to list backup versions: \(error.localizedDescription)")
-            return []
+            let reason = BackupLookupFailureReason.classify(error)
+            logger.error("Failed to list backup versions (\(reason.rawValue, privacy: .public)): \(error.localizedDescription)")
+            return .failed(reason)
         }
     }
 
@@ -386,7 +466,7 @@ actor BackupManager: BackupManagerProtocol {
         encryption: BackupEncryptionProtocol?,
         dataRepository: DataRepositoryProtocol,
         cloudStore: CloudBackupStoreProtocol
-    ) async throws {
+    ) async throws -> RestoreReceipt {
         guard !backupRecordNames.isEmpty else {
             throw self.restoreFailure(.backupNotFound)
         }
@@ -441,7 +521,7 @@ actor BackupManager: BackupManagerProtocol {
             }
 
             do {
-                try await self.restoreDownloadedBackup(
+                let receipt = try await self.restoreDownloadedBackup(
                     downloadedData,
                     passphrase: passphrase,
                     encryption: encryption,
@@ -453,9 +533,27 @@ actor BackupManager: BackupManagerProtocol {
                     reason: .restored,
                     recordName: recordName,
                     candidateIndex: candidateIndex,
-                    score: 100
+                    score: 100,
+                    detail: receipt.diagnosticSummary
                 )
-                return
+                return receipt
+            } catch let verification as RestoreVerificationFailure {
+                // Кандидат распаковался, но не прошёл пересчёт (пустой/неполный бэкап). В автоматическом
+                // режиме это повод взять снимок постарше, а не показать пользователю успех на пустом сторе.
+                self.recordRestoreCandidateMetric(
+                    stage: .restore,
+                    outcome: mode == .automatic ? .skip : .block,
+                    reason: .restoreFailed,
+                    recordName: recordName,
+                    candidateIndex: candidateIndex,
+                    score: 0,
+                    detail: "verification_failed"
+                )
+                if mode == .automatic {
+                    self.logger.warning("Skipping unverified restore candidate '\(recordName, privacy: .public)'")
+                    continue
+                }
+                throw verification.appError
             } catch let tagged as TaggedRestoreFailure {
                 if self.shouldTryOlderSnapshot(after: tagged.appError, mode: mode) {
                     self.recordRestoreCandidateMetric(
@@ -622,13 +720,13 @@ actor BackupManager: BackupManagerProtocol {
         passphrase: String?,
         encryption: BackupEncryptionProtocol?,
         dataRepository: DataRepositoryProtocol
-    ) async throws {
+    ) async throws -> RestoreReceipt {
         let backupData = try decodeBackupPayload(
             downloadedData,
             passphrase: passphrase,
             encryption: encryption
         )
-        try await replaceRepositoryDataWithBackup(backupData, dataRepository: dataRepository)
+        return try await replaceRepositoryDataWithBackup(backupData, dataRepository: dataRepository)
     }
 
     private func decodeBackupPayload(
@@ -706,36 +804,106 @@ actor BackupManager: BackupManagerProtocol {
     private func replaceRepositoryDataWithBackup(
         _ backupData: Data,
         dataRepository: DataRepositoryProtocol
-    ) async throws {
+    ) async throws -> RestoreReceipt {
+        // Пустой бэкап отсекаем ДО деструктивной фазы: удалять локальные данные ради нуля моделей
+        // нельзя ни при каком исходе.
+        let expected = try RestoreModelCensus.counts(in: backupData)
+        guard expected.total > 0 else {
+            throw RestoreVerificationFailure.emptyBackup
+        }
+        // Несовместимая схема — тоже отказ ДО деструктивной фазы: проверка внутри импорта
+        // срабатывала уже после clearAllData(), и данные спасал только откат.
+        try DataRepository.validateSchemaCompatibility(of: backupData)
+
+        // Осиротевшие снимки прошлых restore (kill процесса в середине, провал отката) — это полный
+        // открытый дамп финансов в tmp/. Подметаем перед тем, как положить новый.
+        Self.sweepOrphanedPreRestoreSnapshots()
+
         let previousData = try await dataRepository.exportAllDataAsync()
         let snapshotURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("millio-pre-restore-\(UUID().uuidString).json")
+            .appendingPathComponent("\(Self.preRestoreSnapshotPrefix)\(UUID().uuidString).json")
         do {
-            try previousData.write(to: snapshotURL, options: .atomic)
+            // .completeFileProtection: снимок нечитаем, пока устройство заблокировано, — restore
+            // всегда идёт на разблокированном экране, ограничение доступа ничего не ломает.
+            try previousData.write(to: snapshotURL, options: [.atomic, .completeFileProtection])
         } catch {
             throw taggedRestoreFailure(.preRestoreSnapshotFailed)
         }
 
+        let receipt: RestoreReceipt
         do {
             try await dataRepository.clearAllDataAsync()
             try await dataRepository.importAllDataAsync(backupData)
-            try? FileManager.default.removeItem(at: snapshotURL)
-        } catch {
-            do {
-                try await dataRepository.clearAllDataAsync()
-                let snapshotData = try Data(contentsOf: snapshotURL)
-                try await dataRepository.importAllDataAsync(snapshotData)
-                try? FileManager.default.removeItem(at: snapshotURL)
-            } catch {
-                throw taggedRestoreFailure(.rollbackFailed)
+            // Успех подтверждается пересчётом СТОРА, а не отсутствием ошибки импорта:
+            // повторный экспорт имеет тот же формат, что и бэкап, и сравним с ним напрямую.
+            let actualData = try await dataRepository.exportAllDataAsync()
+            receipt = try RestoreModelCensus.makeReceipt(
+                expectedBackup: backupData,
+                actualStoreExport: actualData
+            )
+            if let failure = receipt.verificationFailure {
+                logger.error("Restore verification failed: \(receipt.diagnosticSummary, privacy: .public)")
+                throw failure
             }
-
+        } catch {
+            try await rollback(to: snapshotURL, dataRepository: dataRepository)
             throw error
         }
 
-        // Достигается только на успешном импорте (rollback-ветка выше перебрасывает ошибку). Self-heal
+        try? FileManager.default.removeItem(at: snapshotURL)
+
+        // Достигается только на verified-импорте (rollback-ветка выше перебрасывает ошибку). Self-heal
         // легаси→core сразу, а не на следующий relaunch: restore мог вернуть стор без ядра.
         await onDidReplaceStore?()
+        return receipt
+    }
+
+    static let preRestoreSnapshotPrefix = "millio-pre-restore-"
+
+    /// Снимок последнего проваленного отката — единственный шанс на ручное восстановление, поэтому
+    /// свежие файлы не трогаем: подметаем только заведомо осиротевшие, старше суток.
+    @discardableResult
+    static func sweepOrphanedPreRestoreSnapshots(
+        in directory: URL = FileManager.default.temporaryDirectory,
+        olderThan maxAge: TimeInterval = 24 * 60 * 60,
+        now: Date = Date()
+    ) -> Int {
+        let manager = FileManager.default
+        guard let entries = try? manager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+
+        var removed = 0
+        for url in entries where url.lastPathComponent.hasPrefix(preRestoreSnapshotPrefix) {
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            guard now.timeIntervalSince(modified) > maxAge else { continue }
+            if (try? manager.removeItem(at: url)) != nil {
+                removed += 1
+            }
+        }
+        return removed
+    }
+
+    /// Возврат к до-restore снимку. Провал отката — отдельный, более тяжёлый исход, чем провал restore:
+    /// пользователь остаётся без обоих состояний данных.
+    private func rollback(
+        to snapshotURL: URL,
+        dataRepository: DataRepositoryProtocol
+    ) async throws {
+        do {
+            try await dataRepository.clearAllDataAsync()
+            let snapshotData = try Data(contentsOf: snapshotURL)
+            try await dataRepository.importAllDataAsync(snapshotData)
+            try? FileManager.default.removeItem(at: snapshotURL)
+        } catch {
+            // Точка невозврата пройдена, отката нет: снимок НЕ удаляем — он остаётся последним
+            // шансом на ручное восстановление.
+            logger.critical("Rollback after failed restore did not complete: \(error.localizedDescription, privacy: .public)")
+            throw RestoreRollbackFailure(underlyingDescription: error.localizedDescription)
+        }
     }
     
     func lastBackupInfo() async -> BackupInfo? {
@@ -824,7 +992,7 @@ actor BackupManager: BackupManagerProtocol {
         formatter.dateFormat = "yyyy-MM-dd_HH-mm"
         let datePart = formatter.string(from: versionInfo.date)
         let sanitizedVersion = versionInfo.version.replacingOccurrences(of: "/", with: "-")
-        return "millio-backup-\(datePart)-v\(sanitizedVersion).milliobackup"
+        return "millio-backup-\(datePart)-v\(sanitizedVersion).\(BackupFileFormat.preferredExtension)"
     }
 
     private func resolvedEncryption() -> BackupEncryptionProtocol? {

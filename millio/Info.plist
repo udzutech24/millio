@@ -108,6 +108,7 @@
 			<dict>
 				<key>public.filename-extension</key>
 				<array>
+					<string>milliobackup</string>
 					<string>millio-backup</string>
 				</array>
 				<key>public.mime-type</key>

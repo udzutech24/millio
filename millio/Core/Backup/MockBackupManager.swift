@@ -32,17 +32,31 @@ final class MockBackupManager: BackupManagerProtocol {
     func importVersion(from data: Data) async throws -> BackupVersionInfo {
         throw AppError.iCloudUnavailable
     }
-    
-    func restoreLatest() async throws {
-        // Ничего не делаем, backup отключен
+
+    func inspectBackupFile(_ data: Data) async throws -> BackupInfo {
+        throw AppError.iCloudUnavailable
     }
 
-    func restoreLatest(passphrase: String?) async throws {
-        // Ничего не делаем, backup отключен
+    @discardableResult
+    func restoreFromFile(_ data: Data, passphrase: String?) async throws -> RestoreReceipt {
+        throw AppError.iCloudUnavailable
     }
 
-    func restoreVersion(recordName: String, passphrase: String?) async throws {
-        // Ничего не делаем, backup отключен
+    // Backup отключён — восстанавливать нечего. Возвращать «успешный» receipt нельзя:
+    // подтверждение восстановления обязано отражать реально записанные модели.
+    @discardableResult
+    func restoreLatest() async throws -> RestoreReceipt {
+        throw AppError.iCloudUnavailable
+    }
+
+    @discardableResult
+    func restoreLatest(passphrase: String?) async throws -> RestoreReceipt {
+        throw AppError.iCloudUnavailable
+    }
+
+    @discardableResult
+    func restoreVersion(recordName: String, passphrase: String?) async throws -> RestoreReceipt {
+        throw AppError.iCloudUnavailable
     }
 
     func listBackupVersions() async -> [BackupVersionInfo] {

@@ -28,6 +28,19 @@ struct BackupRestoreIntegrityTests {
         return try! ModelContainer(for: schema, configurations: [config])
     }
     
+    /// Ограниченное ожидание условия на MainActor: до 2 с, шаг 10 мс.
+    private static func waitUntil(
+        timeout: Duration = .seconds(2),
+        _ condition: () -> Bool
+    ) async -> Bool {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while ContinuousClock.now < deadline {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return condition()
+    }
+
     private func resetAll(in context: ModelContext) throws {
         try context.deleteAll(CashflowTransaction.self)
         try context.deleteAll(CashflowCustomCategory.self)
@@ -97,8 +110,13 @@ struct BackupRestoreIntegrityTests {
         try context.save()
         
         EventBus.shared.publish(BackupEvent.restoreCompleted)
-        await Task.yield()
-        
+
+        // Перезагрузка истории идёт отдельной Task на MainActor. Одного `Task.yield()` хватало
+        // на изолированном прогоне, но не в полном: под параллельной нагрузкой соседних сюит
+        // хендлер не успевал отработать и тест падал как flaky. Ждём результат, а не такт.
+        let reloaded = await Self.waitUntil { viewModel.state.transactions.count == 1 }
+
+        #expect(reloaded, "CashflowViewModel не перезагрузил историю после restoreCompleted")
         #expect(viewModel.state.transactions.count == 1)
     }
     

@@ -28,13 +28,26 @@ struct RootViewResolver: View {
         isAuthenticated: Bool,
         isGuestModeEnabled: Bool
     ) -> RootViewRoute {
-        if lifecycle == .launching || authStatus == .restoring {
+        if lifecycle == .launching {
             return .launching
         }
 
-        if !isAuthenticated && !isGuestModeEnabled {
+        // authStatus == .restoring — транзиентная фаза сетевого обновления сессии, в которой
+        // isAuthenticated временно false (isAuthenticated == status == .authenticated).
+        // Сюда мы попадаем уже ПОСЛЕ lifecycle != .launching (см. ранний return выше), то есть
+        // дерево уже смонтировано. Возврат .launching/.auth в этот момент сносил RootTabView в
+        // сплэш и монтировал его заново — тот самый «загрузился → перезагрузился → вошёл»
+        // (доказано логом с устройства: ROUTE ready -> launching -> ready за 108 мс, один PID).
+        // Терминальный выход (logout / 401) даёт .signedOut и по-прежнему уводит на .auth.
+        if !isAuthenticated && !isGuestModeEnabled && authStatus != .restoring {
             return .auth
         }
+
+        // authStatus == .restoring НЕ откатывает уже разрешённый маршрут назад в .launching.
+        // Иначе холодный старт авторизованного пользователя мигал: cold start поднимает сессию
+        // из локального снапшота (.authenticated) и выставляет lifecycle = .ready → монтируется
+        // RootTabView, следом фоновой задачей стартует сетевой restoreSession (status = .restoring)
+        // → дерево сносилось в LaunchingView и монтировалось заново («открыл — закрыл — открыл»).
 
         switch lifecycle {
         case .launching:

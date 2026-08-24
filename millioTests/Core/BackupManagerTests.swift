@@ -197,7 +197,7 @@ struct BackupManagerTests {
     func testRestoreLatestSuccess() async throws {
         let mockCloudStore = MockCloudBackupStore()
         mockCloudStore.isAvailableResult = true
-        mockCloudStore.downloadData = Data("restored data".utf8)
+        mockCloudStore.downloadData = makeRestorablePayload(marker: "restored")
         let mockDataRepository = MockDataRepository()
         mockDataRepository.exportData = Data("existing data".utf8)
         let backupManager = BackupManager(
@@ -219,7 +219,7 @@ struct BackupManagerTests {
     func testRestoreFiresStoreReplacedHookOnSuccess() async throws {
         let mockCloudStore = MockCloudBackupStore()
         mockCloudStore.isAvailableResult = true
-        mockCloudStore.downloadData = Data("restored data".utf8)
+        mockCloudStore.downloadData = makeRestorablePayload(marker: "restored")
         let mockDataRepository = MockDataRepository()
         mockDataRepository.exportData = Data("existing data".utf8)
 
@@ -240,7 +240,7 @@ struct BackupManagerTests {
     func testRestoreDoesNotFireHookOnRollback() async {
         let mockCloudStore = MockCloudBackupStore()
         mockCloudStore.isAvailableResult = true
-        mockCloudStore.downloadData = Data("new data".utf8)
+        mockCloudStore.downloadData = makeRestorablePayload(marker: "new")
         let repo = FailingImportDataRepository()
         repo.storage = Data("previous data".utf8)
         repo.failNextImport = true
@@ -264,7 +264,7 @@ struct BackupManagerTests {
     func testRestoreLatestRollbackOnImportFailure() async {
         let mockCloudStore = MockCloudBackupStore()
         mockCloudStore.isAvailableResult = true
-        mockCloudStore.downloadData = Data("new data".utf8)
+        mockCloudStore.downloadData = makeRestorablePayload(marker: "new")
         
         let repo = FailingImportDataRepository()
         repo.storage = Data("previous data".utf8)
@@ -295,7 +295,7 @@ struct BackupManagerTests {
 
         let mockCloudStore = MockCloudBackupStore()
         mockCloudStore.isAvailableResult = true
-        mockCloudStore.downloadData = Data("new data".utf8)
+        mockCloudStore.downloadData = makeRestorablePayload(marker: "new")
         let repository = FailingImportDataRepository()
         repository.storage = Data("previous data".utf8)
         repository.failNextImport = true
@@ -323,7 +323,7 @@ struct BackupManagerTests {
         let coordinator = HistoricalValuationReadinessCoordinator(defaults: defaults)
         let cloud = MockCloudBackupStore()
         cloud.isAvailableResult = true
-        cloud.downloadData = Data("restored data".utf8)
+        cloud.downloadData = makeRestorablePayload(marker: "restored")
         let repository = MockDataRepository()
         repository.exportData = Data("previous data".utf8)
         repository.onClear = {
@@ -349,7 +349,7 @@ struct BackupManagerTests {
         let mockCloudStore = MockCloudBackupStore()
         mockCloudStore.isAvailableResult = true
         
-        let plaintext = Data((0..<2048).map { _ in UInt8.random(in: 0...255) })
+        let plaintext = makeRestorablePayload(marker: "passphrase")
         let encrypted = try PassphraseBackupEncryption.encrypt(plaintext, passphrase: passphrase)
         
         let header = BackupEnvelopeHeader(
@@ -415,7 +415,7 @@ struct BackupManagerTests {
         corruptedData.append(Data("{x".utf8))
         corruptedData.append(Data("payload".utf8))
 
-        let expectedData = Data("restored-from-older-snapshot".utf8)
+        let expectedData = makeRestorablePayload(marker: "older-snapshot")
         mockCloudStore.downloadDataByRecordName = [
             "snapshot-new": corruptedData,
             "snapshot-old": expectedData
@@ -450,7 +450,7 @@ struct BackupManagerTests {
         var corruptedCandidate = try BackupEnvelope.pack(header: header, payload: Data("payload".utf8))
         corruptedCandidate[corruptedCandidate.index(before: corruptedCandidate.endIndex)] ^= 0xFF
 
-        let expectedData = Data("restored-from-older-snapshot".utf8)
+        let expectedData = makeRestorablePayload(marker: "older-snapshot")
         mockCloudStore.downloadDataByRecordName = [
             "snapshot-new": corruptedCandidate,
             "snapshot-old": expectedData
@@ -487,7 +487,7 @@ struct BackupManagerTests {
             payload: Data("compressed-payload".utf8)
         )
 
-        let expectedData = Data("fallback-restored-data".utf8)
+        let expectedData = makeRestorablePayload(marker: "fallback")
         mockCloudStore.downloadDataByRecordName = [
             "snapshot-new": unsupportedCompressedCandidate,
             "snapshot-old": expectedData
@@ -511,9 +511,10 @@ struct BackupManagerTests {
     func testRestoreSelectedVersionUsesOnlyRequestedRecord() async throws {
         let mockCloudStore = MockCloudBackupStore()
         mockCloudStore.isAvailableResult = true
+        let targetPayload = makeRestorablePayload(marker: "target")
         mockCloudStore.downloadDataByRecordName = [
-            "snapshot-target": Data("target-data".utf8),
-            "snapshot-other": Data("other-data".utf8)
+            "snapshot-target": targetPayload,
+            "snapshot-other": makeRestorablePayload(marker: "other")
         ]
 
         let mockDataRepository = MockDataRepository()
@@ -526,7 +527,7 @@ struct BackupManagerTests {
         try await backupManager.restoreVersion(recordName: "snapshot-target", passphrase: nil)
 
         #expect(mockCloudStore.requestedRecordNames == ["snapshot-target"])
-        #expect(mockDataRepository.importedData == Data("target-data".utf8))
+        #expect(mockDataRepository.importedData == targetPayload)
     }
 
     @Test("Restore latest fails with restoreFailed when all snapshot candidates are corrupted or incompatible")
@@ -640,7 +641,7 @@ struct BackupManagerTests {
             "models": [["_type": "UnknownType"]]
         ]
         let incompatibleData = try JSONSerialization.data(withJSONObject: incompatiblePayload)
-        let expectedData = Data("fallback-restored-data".utf8)
+        let expectedData = makeRestorablePayload(marker: "fallback")
 
         mockCloudStore.downloadDataByRecordName = [
             "snapshot-new": incompatibleData,
@@ -677,7 +678,7 @@ struct BackupManagerTests {
             header: keychainHeader,
             payload: Data("encrypted-payload".utf8)
         )
-        let expectedData = Data("fallback-restored-data".utf8)
+        let expectedData = makeRestorablePayload(marker: "fallback")
 
         mockCloudStore.downloadDataByRecordName = [
             "snapshot-keychain": keychainProtectedData,
@@ -771,6 +772,20 @@ actor HookCounter {
     func bump() { count += 1 }
 }
 
+
+/// Минимальный валидный снимок бэкапа: `metadata` + непустой `models`.
+/// До R2 restore принимал любые байты (мок-репозиторий не валидировал импорт), поэтому тестовые
+/// payload'ы были произвольными строками. Verified-restore подтверждает результат пересчётом моделей —
+/// «успешно восстановить» набор байт, который не является снимком, больше нельзя.
+func makeRestorablePayload(marker: String = "model") -> Data {
+    // Литеральный JSON, а не JSONSerialization: тесты сравнивают payload'ы побайтово,
+    // порядок ключей в сериализованном словаре не гарантирован.
+    let json = """
+    {"metadata":{"version":{"major":2,"minor":0,"patch":0},"timestamp":0,"schemaVersion":"2.0","modelCount":1},    "models":[{"_type":"Item","id":"\(marker)"}]}
+    """
+    return Data(json.utf8)
+}
+
 final class MockCloudBackupStore: CloudBackupStoreProtocol {
     var isAvailableResult = false
     var uploadCalled = false
@@ -788,6 +803,9 @@ final class MockCloudBackupStore: CloudBackupStoreProtocol {
     var importedIsPinned: Bool?
     var importResult: BackupVersionInfo?
     var listedVersions: [BackupVersionInfo] = []
+    /// Ошибка облака при перечислении версий: нужна, чтобы отличить «бэкапов нет» от отказа CloudKit.
+    var listVersionsError: Error?
+    var listVersionsCalls = 0
     var deletedRecordNames: [String] = []
     
     func isAvailable() async -> Bool {
@@ -842,7 +860,11 @@ final class MockCloudBackupStore: CloudBackupStoreProtocol {
     }
 
     func listBackupVersions() async throws -> [BackupVersionInfo] {
-        listedVersions
+        listVersionsCalls += 1
+        if let listVersionsError {
+            throw listVersionsError
+        }
+        return listedVersions
     }
 
     func deleteBackup(recordName: String) async throws {
@@ -872,19 +894,24 @@ final class MockDataRepository: DataRepositoryProtocol {
     var exportData = Data()
     var importedData: Data?
     var onClear: (() -> Void)?
-    
+    /// Состояние «стора»: после импорта экспорт обязан отдавать импортированные данные, иначе мок
+    /// не моделирует репозиторий и verified-restore (R2) не может пересчитать результат.
+    private var storedData: Data?
+
     func exportAllData() throws -> Data {
         exportCalled = true
-        return exportData
+        return storedData ?? exportData
     }
-    
+
     func importAllData(_ data: Data) throws {
         importCalled = true
         importedData = data
+        storedData = data
     }
-    
+
     func clearAllData() throws {
         clearCalled = true
+        storedData = nil
         onClear?()
     }
     

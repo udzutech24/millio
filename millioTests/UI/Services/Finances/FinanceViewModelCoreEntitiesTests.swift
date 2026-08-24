@@ -321,11 +321,11 @@ struct FinanceViewModelCoreEntitiesTests {
 
     // MARK: - Миграция потребителя `FinanceGroupEditorView` (Ф5c.7.4, файл №2)
 
-    /// `coreAccountsSnapshot(matching:)` — единая точка, которую теперь зовут И `FinanceRows`,
-    /// И `accountsSection` в `FinanceGroupEditorView` — обязана показать core-счёт легаси-группы
+    /// `orderedAccounts(for:)` — единая точка, которую зовут И `FinanceRows`, И `accountsSection`
+    /// в `FinanceGroupEditorView`, И ledger-график (R8) — обязана показать core-счёт группы
     /// (ровно то, что увидит пользователь в редакторе группы).
-    @Test("expand#2 FinanceGroupEditorView: coreAccountsSnapshot показывает core-счёт группы редактора")
-    func coreAccountsSnapshotVisibleInGroupEditorScenario() throws {
+    @Test("expand#2 FinanceGroupEditorView: orderedAccounts показывает core-счёт группы редактора")
+    func coreAccountsVisibleInGroupEditorScenario() throws {
         let ctx = try makeContext()
         let legacyGroup = FinanceGroup(name: "Ипотека", colorHex: "#444444", order: 0)
         ctx.insert(legacyGroup)
@@ -339,15 +339,15 @@ struct FinanceViewModelCoreEntitiesTests {
         let vm = makeViewModel(ctx)
         vm.handle(.loadGroups)
 
-        #expect(vm.coreAccountsSnapshot(matching: coreGroup).map(\.id) == [account.id])
+        #expect(vm.orderedAccounts(for: coreGroup).map(\.id) == [account.id])
     }
 
     /// Компаньон-фикс `.onDisappear { viewModel.handle(.loadGroups) }` на NavigationLink «Добавить
     /// счёт» в `FinanceGroupEditorView`: та же находка, что `.hideAddAccountSheet` у sheet-варианта —
     /// пуш-путь тоже не публикует событий, поэтому свежесозданный через push-флоу core-счёт обязан
     /// стать виден после `.loadGroups` (симулируем именно этот вызов, не сам SwiftUI-колбэк).
-    @Test("expand#2: .loadGroups после push-CREATE делает core-счёт видимым в coreAccountsSnapshot редактора")
-    func loadGroupsAfterPushedCreateRevealsAccountInEditorSnapshot() throws {
+    @Test("expand#2: core-счёт из push-CREATE виден в редакторе сразу (живой источник, R8)")
+    func pushedCreateRevealsAccountInEditorImmediately() throws {
         let ctx = try makeContext()
         let legacyGroup = FinanceGroup(name: "Авто", colorHex: "#555555", order: 0)
         ctx.insert(legacyGroup)
@@ -357,27 +357,28 @@ struct FinanceViewModelCoreEntitiesTests {
 
         let vm = makeViewModel(ctx)
         vm.handle(.loadGroups)
-        #expect(vm.coreAccountsSnapshot(matching: coreGroup).isEmpty)
+        #expect(vm.orderedAccounts(for: coreGroup).isEmpty)
 
         // Симулируем createMoneyAccountOnNewCore из пуш-флоу FinanceAddAccountView(.pushed) —
         // тот же путь, что и в sheet-варианте, событий не публикует.
         let coreService = AccountsCoreService(modelContext: ctx)
         let created = try coreService.createAccount(name: "Пуш-счёт", kind: .debitCard, currency: "RUB", openingBalance: 3_000, group: coreGroup)
 
-        #expect(!vm.coreAccountsSnapshot(matching: coreGroup).map(\.id).contains(created.id)) // до рефреша ещё не видно
+        // [R8] Живой источник: счёт виден СРАЗУ, без ожидания рефреша снапшота — ровно этой
+        // зависимости от сигнала и лишился экран (пустой график при заполненном списке).
+        #expect(vm.orderedAccounts(for: coreGroup).map(\.id).contains(created.id))
 
         vm.handle(.loadGroups) // как .onDisappear на NavigationLink в accountsSection
 
-        #expect(vm.coreAccountsSnapshot(matching: coreGroup).map(\.id).contains(created.id))
+        #expect(vm.orderedAccounts(for: coreGroup).map(\.id).contains(created.id))
     }
 
     // MARK: - Миграция потребителя `FinancesView` (Ф5c.7.4, файл №3)
 
-    /// `FinancesView.isGroupEmpty` теперь зовёт `coreAccountsSnapshot(matching:)` вместо живого
-    /// `newCoreAccounts(matching:)` — группа БЕЗ легаси-счетов, но С core-счётом (мост по имени),
-    /// обязана считаться НЕ пустой (та же семантика, что раньше давал живой fetch).
-    @Test("expand#3 FinancesView: группа без легаси-счетов, но с core-счётом — не пустая (coreAccountsSnapshot)")
-    func groupWithOnlyCoreAccountIsNotEmptyViaSnapshot() throws {
+    /// `FinancesView.isGroupEmpty` зовёт `orderedAccounts(for:)` — группа БЕЗ легаси-счетов,
+    /// но С core-счётом (мост по имени), обязана считаться НЕ пустой.
+    @Test("expand#3 FinancesView: группа без легаси-счетов, но с core-счётом — не пустая")
+    func groupWithOnlyCoreAccountIsNotEmpty() throws {
         let ctx = try makeContext()
         let legacyGroup = FinanceGroup(name: "Только core", colorHex: "#666666", order: 0)
         ctx.insert(legacyGroup) // нет ни одного FinanceAccount-junction внутри — легаси-часть пуста
@@ -392,16 +393,16 @@ struct FinanceViewModelCoreEntitiesTests {
 
         // Реплика isGroupEmpty (FinancesView.swift) — легаси-часть пуста, core-часть — нет.
         #expect(vm.legacyAccountsMatchingGroupName(legacyGroup.name).isEmpty)
-        #expect(!vm.coreAccountsSnapshot(matching: coreGroup).isEmpty)
+        #expect(!vm.orderedAccounts(for: coreGroup).isEmpty)
     }
 
     // MARK: - Миграция потребителя `FinanceOverviewCardView` (Ф5c.7.4, файл №5)
 
-    /// `buildLedgerPresentation` теперь зовёт `coreAccountsSnapshot(matching:)` вместо живого
-    /// `newCoreAccounts(matching:)` в цикле по группам — core-счёт группы обязан попасть в ledger
-    /// той же группы (та же семантика, что раньше давал живой fetch).
-    @Test("expand#5 FinanceOverviewCardView: coreAccountsSnapshot отдаёт core-счёт группы для ledger-цикла")
-    func coreAccountsSnapshotVisibleInLedgerGroupLoop() throws {
+    /// [R8] `buildLedgerPresentation` зовёт `orderedAccounts(for:)` — ТОТ ЖЕ живой источник, что
+    /// рисует список группы. Срез `state.accounts` из ledger-цикла удалён: он опустошал график
+    /// при заполненных списке и тотале, если снапшот не обновился после restore.
+    @Test("expand#5 FinanceOverviewCardView: orderedAccounts отдаёт core-счёт группы для ledger-цикла")
+    func coreAccountsVisibleInLedgerGroupLoop() throws {
         let ctx = try makeContext()
         let legacyGroup = FinanceGroup(name: "Дашборд", colorHex: "#777777", order: 0)
         ctx.insert(legacyGroup)
@@ -414,9 +415,9 @@ struct FinanceViewModelCoreEntitiesTests {
         let vm = makeViewModel(ctx)
         vm.handle(.loadGroups)
 
-        // Реплика цикла buildLedgerPresentation: `for group in state.groups { coreAccountsSnapshot(matching: group) }`.
+        // Реплика цикла buildLedgerPresentation: `for group in state.groups { orderedAccounts(for: group) }`.
         let groupInList = try #require(vm.state.groups.first(where: { $0.name == "Дашборд" }))
-        #expect(vm.coreAccountsSnapshot(matching: groupInList).map(\.id) == [account.id])
+        #expect(vm.orderedAccounts(for: groupInList).map(\.id) == [account.id])
     }
 
     /// `reloadToken` (FinanceOverviewCardView) строит дешёвый прокси-хеш из `events.count`/
@@ -506,7 +507,7 @@ struct FinanceViewModelCoreEntitiesTests {
     /// (структурно, канон `group == nil`, не сущность) — 0 совпадений по имени, не «не более одного
     /// раза». Счёт без группы встречается РОВНО один раз — в `ungroupedAccounts()`, не задвоен ни в
     /// одной именной группе (grep подтвердил: `FinancesView`/`FinanceOverviewCardView` — Ungrouped
-    /// отдельным блоком, не через `FinanceGroupRow`/`coreAccountsSnapshot` цикл по именным группам).
+    /// отдельным блоком, не через `FinanceGroupRow`/`orderedAccounts` цикл по именным группам).
     @Test("Ungrouped-фикс (г): анти-дубль — Ungrouped НЕ в state.groups, счёт без группы виден 1 раз через ungroupedAccounts()")
     func exactlyOneUngroupedBucketNoDuplicateRender() throws {
         let ctx = try makeContext()
@@ -523,11 +524,11 @@ struct FinanceViewModelCoreEntitiesTests {
         let ungroupedMatches = vm.state.groups.filter { $0.name == FinanceSystemGroups.ungroupedName }
         #expect(ungroupedMatches.isEmpty)
 
-        // Счёт без группы НЕ задвоен ни в одной именной группе (coreAccountsSnapshot по каждой),
+        // Счёт без группы НЕ задвоен ни в одной именной группе (orderedAccounts по каждой),
         // и встречается РОВНО один раз в ungroupedAccounts().
         var occurrencesInNamedGroups = 0
         for group in vm.state.groups {
-            occurrencesInNamedGroups += vm.coreAccountsSnapshot(matching: group).filter { $0.id == ungroupedAccount.id }.count
+            occurrencesInNamedGroups += vm.orderedAccounts(for: group).filter { $0.id == ungroupedAccount.id }.count
         }
         #expect(occurrencesInNamedGroups == 0)
         #expect(vm.ungroupedAccounts().filter { $0.id == ungroupedAccount.id }.count == 1)

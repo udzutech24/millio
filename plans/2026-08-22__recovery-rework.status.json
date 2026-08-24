@@ -1,7 +1,7 @@
 {
   "planFile": "2026-08-22__recovery-rework.md",
   "title": "Переработка backup/recovery",
-  "updated": "2026-08-22T16:53:20.558578+00:00",
+  "updated": "2026-08-24T09:30:00Z",
   "phases": [
     {
       "name": "R0 — Stress-test и решение владельца",
@@ -11,42 +11,77 @@
     {
       "name": "R-1 — Зелёная база (блокер)",
       "status": "in_progress",
-      "note": "краш failedDeleteIsAllOrNothing валит 359 тестов; ветка fix/baseline-green"
+      "note": "краш failedDeleteIsAllOrNothing не воспроизвёлся на прогоне R1 (35 красных); ветка fix/baseline-green"
     },
     {
-      "name": "R1 — Единый владелец состояния recovery (D1, D10)",
-      "status": "pending",
-      "note": "RecoveryDecisionStore + идемпотентный вход"
+      "name": "R1 — Единый владелец состояния recovery (D1, D8-часть)",
+      "status": "done",
+      "note": "LaunchRecoveryGate + policy localDataCount:Int?; 11 тестов вкл. S16; 2346/35 красных = фон"
     },
     {
       "name": "R2 — Верифицированный авто-restore (D6, D7)",
-      "status": "pending",
-      "note": "restoreVerified + отбор по modelCount"
+      "status": "done",
+      "note": "RestoreReceipt + verified-restore с нуля; порог 1024 удалён; фикс CashbackImporter priority 20→40; эталон владельца 1673→1673; backup-сюиты 67/67, полный 2358/36 при фоне 35"
     },
     {
       "name": "R3 — Путь «файл → данные» (D2–D5)",
-      "status": "pending",
-      "note": "главный сценарий A1"
+      "status": "done",
+      "note": "коммиты 3a8a6e0/bb87d9c/c4ab1b7/7c32398: BackupFileFormat + Info.plist, корневой incomingBackupFileRestore, кнопка в RestoreView, 10 тестов вкл. S14; гейт пройден: backup/recovery-сюиты зелёные"
     },
     {
       "name": "R4 — Диагностика и RU-строки (D8, D9)",
-      "status": "pending",
-      "note": "BackupLookupOutcome + Retry"
+      "status": "done",
+      "note": "8117c2d/cf7b2ae/6b6f70a: BackupLookupOutcome (найдено/пусто/ошибка(причина)/таймаут), Retry на всех неразрешённых исходах, RestoreFailureCode и AppError через каталог (7 языков, 30 ключей), guest-scope = skip(guestScopeBeforeSignIn) с диагностикой; +18 тестов; полный прогон 2392/37 при фоне 34–36, все backup/recovery/router-сюиты зелёные"
     },
     {
       "name": "R5 — Чистка и ponytail (D11, D12)",
-      "status": "pending",
-      "note": "мёртвый код, DI вместо CloudBackupStore()"
+      "status": "done",
+      "note": "21b3b21: D12 закрыт (CloudBackupStore( вне Core/Backup = 0); D11 неприменим — мёртвого кода нет, у всех членов LaunchRecoveryGate/RestoreReceipt/BackupFileFormat/BackupLookupOutcome/RestoreErrorPresenter есть живые потребители; схлопнуты 3 дубля (-34 строки): message(for:), inline-catch в BMV, приватный withTimeout. Гейт 34 красных при фоне 34-37, новых нет; 3 красных в backup-сюитах = order-flake, в изоляции зелёные. SwiftLint не запускался: бинаря и конфига нет"
     },
     {
       "name": "R6 — Интеграционный гейт",
-      "status": "pending",
-      "note": "25 регресс-файлов + security-review"
+      "status": "done",
+      "note": "5dda070: +6 интеграционных тестов на реальном DataRepository и файле владельца (файл→данные, авто-restore→receipt→EventBus, S14 и S16 на реальном сторе, импорт при непустой базе); order-flake починен в наших же сюитах (замок LanguageManager + bounded wait вместо Task.yield); security-review R1–R5: логи без PII, passphrase не логируется, валидация импорта не ослаблена, 2 замечания без фикса (tmp-снимок открытым JSON без уборки; чтение файла без границы размера). Гейт: 2400/35 при ДО 2394/36, backup/recovery/router — ноль красных"
     },
     {
       "name": "R7 — Финальная приёмка (Fable, 17 сценариев)",
-      "status": "pending",
-      "note": "агент без параметра model; чек-лист S1–S17 + аудит шимов/bloat"
+      "status": "done",
+      "note": "приёмка + R7-fix (S3/S13/S8/security) + R7-fix-2 (S1 c835f15, S11 d9ca867); открыт только S12"
+    },
+    {
+      "name": "R7-fix — устранение дефектов приёмки (S3, S13, S8, security)",
+      "status": "done",
+      "note": "приёмка + R7-fix (S3/S13/S8/security) + R7-fix-2 (S1 c835f15, S11 d9ca867); открыт только S12"
+    },
+    {
+      "name": "R7-fix-2 — S1 (recovery до онбординга) и S11 (отказ запоминается)",
+      "status": "done",
+      "note": "решения владельца; c835f15 + d9ca867; гейт 2419/38, изолированно 89/89"
+    },
+    {
+      "name": "R8 — Пустой график активов/обязательств после restore",
+      "status": "done",
+      "note": "a8bcea5: три источника core-счетов схлопнуты в один живой (orderedAccounts/live ungrouped), coreAccountsSnapshot удалён; регресс-тесты на фикстуре владельца (0→37 items) + инвариант «тотал > 0 ⇒ график не пуст»; гейт 2421/38 при базе 2419/38, 5 подозрительных красных воспроизведены на 8c2dccf"
+    },
+    {
+      "name": "R9 — Возврат unified FX snapshot из архива",
+      "status": "done",
+      "note": "7f0474d/528a634/0f9756b: revision-store + adoptSnapshot как единственная точка замены matrix, цепочка millio→erapi, FetchDescriptor в AccountSnapshotRebuilder, подписчики FX; гейт 2424/35 при базе 2421/38, новых красных ноль; чужие правки — ветка wip/fx-cached-rate-fallback"
+    },
+    {
+      "name": "R10 — Доступ к бэкапам в гостевом режиме",
+      "status": "done",
+      "note": "0ebc2ed/c91c123: BackupAccessPolicy + гейт в SwitchingBackupManager (все облачные пути), UI-слой в BackupManagementView, activeScopeKey на каждом свопе scope, импорт файла в гостевом режиме запрещён; +8 тестов; гейт 2434/39 при базе 2424/35, новых красных ноль; очистка гостевых данных — за владельцем"
+    },
+    {
+      "name": "R11 — Персистентность курсов и спиннер на «Счетах»",
+      "status": "done",
+      "note": "3f92b49, d05932a, 5e5e3f8 — гейт 2446/38, +12 тестов"
+    },
+    {
+      "name": "R12 — Кэш графика «Динамики» на холодном старте",
+      "status": "done",
+      "note": "4587b56/71b0320: FinanceDynamicsSnapshotStore (файл по data scope, .completeUntilFirstUserAuthentication) + гидратация в init общего обзора, isInitialLocalProjectionResolved и спиннер вместо ложного «Нет групп», валидация кэша ревизией курсов своего сервиса (R11). +9 тестов; гейт 2455/32+6 при базе 2446/32+6, новых красных ноль. Дашборд болеет тем же классом (0 ₽ из state.totalAmount) — механизм другой, вынесено; каталог снимков изолирован на процесс под тестами (21c001a)"
     }
   ],
   "costUsd": null,

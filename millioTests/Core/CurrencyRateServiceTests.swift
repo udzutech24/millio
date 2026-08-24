@@ -20,17 +20,21 @@ final class MockRateRepository: RateRepositoryProtocol, @unchecked Sendable {
     /// Предзаполненный stale-кэш, возвращаемый через peekCachedSnapshot (только если shouldFail = true).
     var stubbedStaleRates: [String: Double] = [:]
     var delayNanoseconds: UInt64 = 0
+    var failingSources: Set<RateSource> = []
+    var attemptedSources: [RateSource] = []
 
     nonisolated func getLatestRates(source: RateSource, forceRefresh: Bool, allowStaleOnError: Bool) async throws -> RateSnapshot {
         await MainActor.run {
             callCount += 1
+            attemptedSources.append(source)
         }
 
         let delay = await MainActor.run { delayNanoseconds }
         if delay > 0 { try? await Task.sleep(nanoseconds: delay) }
 
         let shouldFailValue = await MainActor.run { shouldFail }
-        if shouldFailValue {
+        let shouldFailSource = await MainActor.run { failingSources.contains(source) }
+        if shouldFailValue || shouldFailSource {
             throw URLError(.notConnectedToInternet)
         }
 
@@ -405,14 +409,13 @@ struct CurrencyRateServiceTests {
 
     // MARK: - Phase 1a: buildFallbackChain
 
-    @Test("buildFallbackChain: millio первым, без дубликатов")
+    @Test("buildFallbackChain: штатный путь — только Millio → ER-API")
     func testBuildFallbackChainMillioFirst() {
         let repo = MockRateRepository()
         let svc = CurrencyRateService(rateSource: .millio, rateRepository: repo)
         let chain = svc.buildFallbackChain()
         #expect(chain.first == .millio)
-        #expect(chain.count == RateSource.allCases.count)
-        #expect(Set(chain) == Set(RateSource.allCases))
+        #expect(chain == [.millio, .erapi])
     }
 
     @Test("buildFallbackChain: erapi первым, erapi не дублируется в хвосте")
@@ -421,8 +424,7 @@ struct CurrencyRateServiceTests {
         let svc = CurrencyRateService(rateSource: .erapi, rateRepository: repo)
         let chain = svc.buildFallbackChain()
         #expect(chain.first == .erapi)
-        #expect(chain.count == RateSource.allCases.count)
-        #expect(!chain.dropFirst().contains(.erapi))
+        #expect(chain == [.erapi, .millio])
     }
 
     @Test("buildFallbackChain: frankfurter первым")
@@ -431,7 +433,21 @@ struct CurrencyRateServiceTests {
         let svc = CurrencyRateService(rateSource: .frankfurter, rateRepository: repo)
         let chain = svc.buildFallbackChain()
         #expect(chain.first == .frankfurter)
-        #expect(chain.count == RateSource.allCases.count)
+        #expect(chain == [.frankfurter, .millio, .erapi])
+    }
+
+    @Test("Millio недоступен: сервис принимает полный ER-API snapshot")
+    func testMillioFailureFallsBackToERAPIWholeSnapshot() async {
+        let repo = MockRateRepository()
+        repo.rates = ["USD": 1, "EUR": 0.9, "RUB": 80]
+        repo.failingSources = [.millio]
+        let service = CurrencyRateService(rateSource: .millio, rateRepository: repo)
+
+        await service.forceRefreshRates()
+
+        #expect(repo.attemptedSources == [.millio, .erapi])
+        #expect(service.currentRateSnapshot()?.source == .erapi)
+        #expect(service.currentRateSnapshot()?.rates == repo.rates)
     }
 
     // MARK: - Phase 1a: setRateSource
@@ -535,13 +551,13 @@ struct CBRRateSourceTests {
         }
     }
 
-    @Test("buildFallbackChain для .cbr ставит его первым без дубликатов")
+    @Test("buildFallbackChain для .cbr: ЦБ РФ не смешивается с глобальными провайдерами")
     func testBuildFallbackChainCBR() {
         let svc = CurrencyRateService(rateSource: .cbr, rateRepository: MockRateRepository())
         let chain = svc.buildFallbackChain()
-        #expect(chain.first == .cbr)
-        #expect(Set(chain).count == chain.count)
-        #expect(chain.count == RateSource.allCases.count)
+        // Явно выбранный ЦБ РФ — не «одна из» цепочки: подмена его курсов Millio/ER-API дала бы
+        // на экране суммы из другого набора курсов, ради чего и вводился единый snapshot.
+        #expect(chain == [.cbr])
     }
 
     @Test("setRateSource(.cbr) сбрасывает кэш и инкрементирует generation")

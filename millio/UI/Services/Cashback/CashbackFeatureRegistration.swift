@@ -63,8 +63,12 @@ struct CashbackImporter: ModelImporter {
         "Cashback"
     }
     
-    static var importPriority: Int { 20 }
-    
+    // Импортер проверяет cardIDs против Card (priority 0) И Account (priority 31) — значит обязан идти
+    // ПОСЛЕ ядра счетов. При старом значении 20 кешбэк, привязанный к core-счёту (ремап Ф5b плана 6b),
+    // не находил Account и ронял весь restore в backupCorrupted: реальный бэкап не восстанавливался
+    // целиком. Доказано на эталонной фикстуре millioTests/Fixtures/owner-backup-1673-models.milliobackup.
+    static var importPriority: Int { 40 }
+
     static func `import`(from data: [String: Any], context: ModelContext) throws {
         guard let name = data["name"] as? String,
               let categoryRaw = data["categoryRaw"] as? String,

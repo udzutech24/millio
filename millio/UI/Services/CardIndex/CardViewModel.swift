@@ -104,6 +104,7 @@ final class CardViewModel: ViewModelProtocol {
     
     private let defaults = UserDefaults.standard
     private var rateSourceObserver: NSObjectProtocol?
+    private var rateSnapshotObserver: NSObjectProtocol?
 
     private var storedDisplayCurrency: String {
         get { defaults.string(forKey: "card_display_currency") ?? SettingsManager.shared.primaryCurrencyCode }
@@ -121,10 +122,20 @@ final class CardViewModel: ViewModelProtocol {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in await self?.refreshRates() }
         }
+        rateSnapshotObserver = NotificationCenter.default.addObserver(
+            forName: .currencyRateSnapshotDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.refreshRates() }
+        }
     }
 
     deinit {
         if let observer = rateSourceObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = rateSnapshotObserver {
             NotificationCenter.default.removeObserver(observer)
         }
     }

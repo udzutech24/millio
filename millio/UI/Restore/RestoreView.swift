@@ -7,24 +7,27 @@
 
 import SwiftUI
 
-private enum RestoreTimeoutError: Error {
-    case timedOut
-}
-
 struct RestoreView: View {
     @Bindable var appState: AppState
     @Bindable var router: AppRouter
     @Environment(\.diContainer) private var diContainer
     @Environment(\.dismiss) private var dismiss
+    /// Таймаут лукапа: молчание облака должно стать различимым исходом, а не бесконечным спиннером.
+    private static let lookupTimeoutSeconds: TimeInterval = 8
     @State private var isRestoring = false
+    @State private var isLookingUpBackups = false
     @State private var restoreError: AppError?
     @State private var showSkipConfirmation = false
     @State private var backupPassphrase: String = ""
     @State private var isPassphraseExpanded = false
-    @State private var backupVersions: [BackupVersionInfo] = []
+    /// Исход последнего поиска бэкапа. До R4 здесь жил просто список версий, и ошибка облака
+    /// была неотличима от «копий нет» (D8).
+    @State private var lookupOutcome: BackupLookupOutcome = .empty
     @State private var selectedRecordName: String?
     @State private var isVersionsExpanded = false
-    @State private var backupLookupTimedOut = false
+    @State private var isImportingFile = false
+
+    private var backupVersions: [BackupVersionInfo] { lookupOutcome.versions }
 
     private var backupManager: BackupManagerProtocol? {
         diContainer?.backupManager
@@ -50,11 +53,11 @@ struct RestoreView: View {
                     } else if let selectedVersion = selectedBackupVersion {
                         backupFoundView(version: selectedVersion)
                     } else {
-                        noBackupView
+                        lookupStateView
                     }
 
                     if let error = restoreError {
-                        Text(error.localizedDescription)
+                        Text(RestoreErrorPresenter.userMessage(for: error))
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(AppColors.error)
                             .multilineTextAlignment(.leading)
@@ -161,7 +164,7 @@ struct RestoreView: View {
 
                         Button {
                             showSkipConfirmation = false
-                            appState.lifecycle = .ready
+                            declineRecovery()
                             dismiss()
                         } label: {
                             Text(BackupL10n.tr("backup.restore.skip.confirm", fallback: "Continue Without Data"))
@@ -333,6 +336,8 @@ struct RestoreView: View {
                 restore()
             }
 
+            restoreFromFileButton
+
             Button {
                 showSkipConfirmation = true
             } label: {
@@ -346,38 +351,47 @@ struct RestoreView: View {
         }
     }
 
-    private var noBackupView: some View {
-        VStack(spacing: 12) {
+    /// Единственный экран для исходов «версии не выбраны»: пусто / ошибка / таймаут.
+    /// Тексты и иконка приходят из `BackupExperiencePresenter`, чтобы различие исходов
+    /// проверялось тестом, а не глазами.
+    private var lookupStateView: some View {
+        let presentation = BackupExperiencePresenter.restoreLookupPresentation(
+            outcome: lookupOutcome,
+            isICloudAvailable: appState.isICloudAvailable
+        )
+
+        return VStack(spacing: AppSpacing.m) {
             FinancesGlassCard(accentColor: AppColors.warning, cornerRadius: 22, contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: AppSpacing.s) {
                     statusPill(
-                        title: backupLookupTimedOut
-                            ? BackupL10n.tr("backup.restore.lookup.timedout", fallback: "Still Searching")
-                            : (appState.isICloudAvailable
-                                ? BackupL10n.tr("backup.restore.empty.status.not_found", fallback: "Backup Not Found")
-                                : BackupL10n.tr("backup.restore.empty.title.icloud_unavailable", fallback: "iCloud is unavailable")),
-                        icon: backupLookupTimedOut ? "hourglass.circle.fill" : (appState.isICloudAvailable ? "exclamationmark.circle.fill" : "icloud.slash.fill"),
+                        title: presentation.statusTitle,
+                        icon: presentation.statusIcon,
                         color: AppColors.warning
                     )
 
-                    Text(BackupExperiencePresenter.restoreEmptyStateTitle(isICloudAvailable: appState.isICloudAvailable))
+                    Text(presentation.title)
                         .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundStyle(AppColors.textPrimary)
 
-                    Text(BackupExperiencePresenter.restoreEmptyStateMessage(isICloudAvailable: appState.isICloudAvailable))
+                    Text(presentation.message)
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
-            ActionButton(
-                title: BackupL10n.tr("backup.restore.action.retry", fallback: "Retry Search"),
-                icon: .system("arrow.clockwise"),
-                gradientColors: AppColors.financesGradient
-            ) {
-                Task { await refreshBackupStatusIfNeeded() }
+            if presentation.showsRetry {
+                ActionButton(
+                    title: BackupL10n.tr("backup.restore.action.retry", fallback: "Retry Search"),
+                    icon: .system("arrow.clockwise"),
+                    gradientColors: AppColors.financesGradient
+                ) {
+                    Task { await refreshBackupStatusIfNeeded() }
+                }
+                .disabled(isLookingUpBackups)
             }
+
+            restoreFromFileButton
 
             Button {
                 showSkipConfirmation = true
@@ -386,9 +400,74 @@ struct RestoreView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, AppSpacing.s)
             }
         }
+    }
+
+    /// Точка входа «файл → данные» на пустой базе: до этого импорт файла жил только в Профиле,
+    /// недоступном, пока пользователь не прошёл экран восстановления.
+    /// Сам разбор и подтверждение перезаписи выполняет общий `incomingBackupFileRestore` в корне
+    /// сцены — здесь только выбор файла, чтобы путь восстановления был один.
+    private var restoreFromFileButton: some View {
+        Button {
+            isImportingFile = true
+        } label: {
+            Text(BackupL10n.tr("backup.restore.from_file.action", fallback: "Restore from File"))
+                .font(.millioSubheadline)
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.m)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.textSecondary.opacity(0.4), lineWidth: 1)
+                )
+        }
+        .disabled(isRestoring)
+        .fileImporter(
+            isPresented: $isImportingFile,
+            allowedContentTypes: BackupFileFormat.importerContentTypes,
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                appState.pendingIncomingBackupURL = url
+            case .failure(let error):
+                restoreError = .backupFailed(error.localizedDescription)
+            }
+        }
+    }
+
+    /// S11: отказ «продолжить без данных» запоминается для текущего scope — при следующем
+    /// запуске автоматическое восстановление не предлагается (ручной путь из Профиля открыт).
+    /// S1: новый пользователь, отказавшийся восстанавливаться, уходит в онбординг, а не в пустое
+    /// приложение — вводные экраны показываются после recovery, а не вместо него.
+    private func declineRecovery() {
+        LaunchRecoveryStateStore().recordRecoveryDecline(scopeKey: appState.activeScopeKey)
+        appState.lifecycle = LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(
+            didRestore: false,
+            hasCompletedOnboarding: Self.hasCompletedOnboarding
+        )
+    }
+
+    /// Восстановленный пользователь приходит со своими данными и настройками — онбординг ему
+    /// не нужен ни сейчас, ни при следующем запуске, поэтому флаг проставляется здесь же.
+    private func finishAfterSuccessfulRestore() {
+        let store = LaunchRecoveryStateStore()
+        store.clearRecoveryDecline(scopeKey: appState.activeScopeKey)
+        store.resetAutoRestoreAttempts()
+        UserDefaults.standard.set(true, forKey: Self.onboardingCompletedKey)
+        appState.lifecycle = LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(
+            didRestore: true,
+            hasCompletedOnboarding: true
+        )
+    }
+
+    private static let onboardingCompletedKey = "hasCompletedOnboarding"
+
+    private static var hasCompletedOnboarding: Bool {
+        UserDefaults.standard.bool(forKey: onboardingCompletedKey)
     }
 
     private func restore() {
@@ -413,7 +492,7 @@ struct RestoreView: View {
                 }
                 await MainActor.run {
                     isRestoring = false
-                    appState.lifecycle = .ready
+                    finishAfterSuccessfulRestore()
                     dismiss()
                 }
             } catch let error as AppError {
@@ -432,56 +511,51 @@ struct RestoreView: View {
 
     @MainActor
     private func refreshBackupStatusIfNeeded() async {
-        guard !isRestoring else { return }
-        backupLookupTimedOut = false
+        guard !isRestoring, !isLookingUpBackups else { return }
+        isLookingUpBackups = true
         restoreError = nil
+        defer { isLookingUpBackups = false }
 
-        let available = await withTimeout(seconds: 8) {
-            await CloudBackupStore().isAvailable()
+        // Доступность облака спрашиваем у DI-менеджера, а не у собственного CloudBackupStore:
+        // SwitchingBackupManager отвечает и при выключенном автобэкапе, но остаётся одним владельцем
+        // доступа к CloudKit (D12).
+        guard let backupManager else {
+            // Не «копий нет»: без менеджера облако вообще не опрашивалось.
+            applyLookupOutcome(.failed(.iCloudUnavailable))
+            return
+        }
+
+        let available = await withTimeout(seconds: Self.lookupTimeoutSeconds) {
+            await backupManager.isAvailable()
         }
         guard let available else {
-            backupLookupTimedOut = true
-            restoreError = .restoreFailed("Backup lookup timed out. iCloud may still be syncing. Try again.")
+            applyLookupOutcome(.timedOut)
             return
         }
         appState.isICloudAvailable = available
 
-        guard appState.isICloudAvailable, let backupManager else { return }
-        let versions = await withTimeout(seconds: 8) {
-            await backupManager.listBackupVersions()
-        }
-        guard let versions else {
-            backupLookupTimedOut = true
-            restoreError = .restoreFailed("Backup lookup timed out. iCloud may still be syncing. Try again.")
+        guard available else {
+            // Не «копий нет»: без доступа к iCloud список вообще не запрашивался.
+            applyLookupOutcome(.failed(.iCloudUnavailable))
             return
         }
-        backupVersions = versions
+
+        applyLookupOutcome(await backupManager.lookupBackupVersions(timeout: Self.lookupTimeoutSeconds))
+    }
+
+    @MainActor
+    private func applyLookupOutcome(_ outcome: BackupLookupOutcome) {
+        lookupOutcome = outcome
+        AppLogger.log(.info, category: "Restore", "RestoreView: \(outcome.diagnosticSummary)")
+
+        let versions = outcome.versions
         if selectedRecordName == nil || versions.contains(where: { $0.recordName == selectedRecordName }) == false {
             selectedRecordName = versions.first?.recordName
         }
-        appState.lastBackupDate = versions.first?.date
-    }
-
-    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async -> T) async -> T? {
-        do {
-            return try await withThrowingTaskGroup(of: T.self, returning: T?.self) { group in
-                group.addTask {
-                    await operation()
-                }
-
-                group.addTask {
-                    try await Task.sleep(for: .seconds(max(0, seconds)))
-                    throw RestoreTimeoutError.timedOut
-                }
-
-                let result = try await group.next()
-                group.cancelAll()
-                return result
-            }
-        } catch is RestoreTimeoutError {
-            return nil
-        } catch {
-            return nil
+        // Дату последней копии перетирать нечем, если лукап не дал ответа: неизвестность
+        // не должна выглядеть как «копий нет».
+        if outcome.isUnresolved == false {
+            appState.lastBackupDate = versions.first?.date
         }
     }
 

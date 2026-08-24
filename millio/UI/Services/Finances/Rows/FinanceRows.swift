@@ -471,7 +471,7 @@ struct FinanceGroupRow: View {
     }
 
     /// [Ф5c.7 contract] Primary-рендер группы — `orderedAccounts(for:)` читает `group.accounts`
-    /// напрямую (core, была отдельная снапшот-точка `coreAccountsSnapshot` до флипа типов).
+    /// напрямую (core) — тот же источник, что у ledger-графика и редактора группы (R8).
     private var newCoreAccounts: [Account] {
         viewModel.orderedAccounts(for: group)
     }

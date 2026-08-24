@@ -40,6 +40,8 @@ enum RestoreCandidateReason: String {
     case backupTransportFailed = "backup_transport_failed"
     case unknownError = "unknown_error"
     case networkUnavailable = "network_unavailable"
+    /// R10: облачная операция запрошена в гостевом scope и отклонена гейтом доступа.
+    case requiresSignIn = "requires_sign_in"
 
     static func skipReason(for error: AppError) -> RestoreCandidateReason {
         switch error {
@@ -70,6 +72,8 @@ enum RestoreCandidateReason: String {
             return .incompatibleSchema
         case .networkUnavailable:
             return .networkUnavailable
+        case .backupRequiresSignIn:
+            return .requiresSignIn
         }
     }
 }

@@ -7,7 +7,10 @@ struct BackupLocalizationTests {
     func testBackupMissingCatalogKeysAreCoveredInline() throws {
         let sourceFiles = [
             "millio/UI/Profile/BackupManagementView.swift",
-            "millio/UI/Profile/BackupExperienceModels.swift"
+            "millio/UI/Profile/BackupExperienceModels.swift",
+            // R4: экран восстановления — такой же пользовательский текст, ему нужен тот же гейт.
+            "millio/UI/Restore/RestoreView.swift",
+            "millio/UI/Restore/RestoreErrorPresenter.swift"
         ]
 
         let usedKeys = try Set(sourceFiles.flatMap(BackupLocalizationTests.backupLocalizationKeys(in:)))

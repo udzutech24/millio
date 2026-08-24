@@ -109,8 +109,34 @@ xcodebuild test -project millio.xcodeproj -scheme millio \
 - **Гейт:** `AskUserQuestion` владельцу с риском и вариантами (продолжить / отложить / пересмотреть). **Без явного «да» — реализация не начинается.** Правило 7 workspace CLAUDE.md; guard phrase не отменяет его.
 - **Артефакт:** раздел «Stress-test» в конце этого плана.
 
-### R1 — Единый владелец состояния recovery *(D1, D10, D8-часть)*
+### R1 — Единый владелец состояния recovery *(D1, D8-часть)* — [x] РЕАЛИЗОВАН (2026-08-22)
 - **Оценка:** ~2 ч
+- **Фактическая реализация** (переформулировано под код `develop` после отката Phase 9):
+  - **Причина двойного открытия доказана:** `presentRestoreFlowIfNeeded()` вызывается безусловно
+    в конце `synchronizeDataScope` (`millioApp.swift:544`), а сам `synchronizeDataScope` дёргается
+    дважды за старт: cold start (`:328`) и `onSessionChanged` (`:418`), который прилетает от
+    `restoreSession()` (`:339` → `AuthService.swift:1544`). `StartupCoordinator.switchScopeIfNeeded`
+    гасит только своп контейнера, но не сам вызов recovery. Второй проход при свопе guest→user
+    дополнительно бампит `scopeIdentityToken` (`:671`) → меняется `RootSceneIdentity` (`:150`) →
+    RestoreView пересоздаётся с чистым `@State` (список версий, выбранная версия, пароль).
+  - **`LaunchRecoveryGate`** (новый, `millio/Core/Backup/LaunchRecoveryGate.swift`, ~80 стр) —
+    App-level `@State`, переживает remount. Токен на поколение scope; повторный вызов = no-op;
+    `bumpGeneration()` в `rebindDataScope` после свопа; `shouldPublishRestoreOutcome` отсекает
+    stale-колбэки (S16). Транзиентные исходы (`lifecycleNotReady`, `onboardingIncomplete`,
+    `noBackupAvailable`) не фиксируются как решение (SR7).
+  - **`LaunchRecoveryPolicy`:** `localDataCount` стал `Int?`; `nil` → `.presentRestoreManualOnly(.localDataCountUnknown)`
+    (экран показывается, деструктивный авто-restore запрещён) вместо молчаливого `return`.
+    Добавлены `allowsAutomaticRestore` и `locksLaunchRecovery`.
+  - **`RecoveryDecisionStore` и миграция 3 флагов НЕ делались** (ponytail + условие владельца №2):
+    объединение глобального `autoRestoreAttemptsKey` с per-scope-флагами — это риск SR3
+    без выигрыша для D1; ключи оставлены как есть. D10 переносится в отдельную фазу, если
+    вообще понадобится.
+- **Тесты (все зелёные):** `millioTests/Core/LaunchRecoveryGateTests.swift` (7, включая блокирующий
+  S16 «Stale-колбэк не публикует успех восстановления в чужой scope»), +4 в `LaunchRecoveryPolicyTests`.
+- **Гейт:** 2346 тестов, 35 красных (фон ≈37, до правки 392 из-за краша-каскада — воспроизведён
+  не был); НИ ОДНОГО красного в backup/recovery-сюитах, новых красных нет.
+
+#### Исходная формулировка (писалась до отката Phase 9)
 - **Файлы:** `millio/millioApp.swift` (81, 110, 159, 237-241, 344, 459-461, 625, 728, 1128, 1229-1290), `millio/Core/Backup/RecoveryPromptStore.swift` → `RecoveryDecisionStore.swift`, `millio/Core/Backup/LaunchRecoveryPolicy.swift`, `millio/Core/Startup/StartupCoordinator.swift:49`
 - **Changes:**
   - `RecoveryDecisionStore` — единственный владелец: `attemptsCount`, `userDeclined`, `storeExistedBeforeBinding`, `lastEvaluatedScopeGeneration`. Миграция значений старых ключей при первом чтении.
@@ -120,8 +146,44 @@ xcodebuild test -project millio.xcodeproj -scheme millio \
 - **Grep-чек:** `autoRestoreAttemptsKey`, `RecoveryPromptStore`, `activeScopeStoreExistedBeforeBinding` — 0 вхождений вне стора и миграции.
 - **Impact:** startup-путь, guest→user переход, экран онбординга. Риск: пропуск recovery из-за слишком строгой идемпотентности — покрыть тестом «отказ → перезапуск → recovery всё ещё доступен из Профиля».
 
-### R2 — Верифицированный авто-restore *(D6, D7)*
+### R2 — Верифицированный авто-restore *(D6, D7)* — [x] РЕАЛИЗОВАН (2026-08-22)
 - **Оценка:** ~2 ч
+- **Фактическая реализация** (переформулировано: в `develop` receipt'а не было вообще — создан с нуля):
+  - **`RestoreReceipt` + `RestoreVerificationFailure` + `RestoreModelCensus`** — новый файл
+    `millio/Core/Backup/RestoreReceipt.swift`. Пересчёт моделей по типам в снимке формата backup;
+    после импорта стор экспортируется повторно (тот же формат) и сравнивается с бэкапом.
+  - **Критерий успеха** (не строгое равенство — `DataIntegrityCleaner.dedupeAll` законно схлопывает
+    дубли): бэкап непустой И стор непустой И ни один тип не потерян целиком. Иначе — типизированный
+    провал, откат к до-restore снимку, ошибка с локализованным текстом
+    (`backup.restore.verification.*`, ru/en/zh-Hans + de/es/fr/tr).
+  - **Пустой бэкап отсекается ДО деструктивной фазы** (`BackupManager.replaceRepositoryDataWithBackup`):
+    удалять локальные данные ради нуля моделей нельзя ни при каком исходе.
+  - **`.restoreCompleted` публикуется только после verified-receipt.** Отдельное событие
+    `.restoreVerified` НЕ вводилось (ponytail): у него не было бы ни одного потребителя, а
+    существующее событие теперь и означает подтверждённый успех.
+  - **Отбор кандидата по содержимому (D7):** порог `size >= 1024` и TODO в `millioApp.swift` удалены.
+    Пустой/неполный снимок теперь отбраковывает receipt, а в автоматическом режиме перебираются
+    более старые кандидаты (`RestoreVerificationFailure` ловится отдельной веткой до общих catch).
+  - **Гейт R1 задействован:** результат авто-restore публикуется через
+    `LaunchRecoveryGate.shouldPublishRestoreOutcome` (без изменений, проверено трассировкой).
+  - **Обновление UI после restore — механизм уже есть, новый не строился:** `CashflowViewModel:620`,
+    `FinanceViewModel:818`, `FinanceDynamicsViewModel:409` перезагружаются по `.restoreCompleted`;
+    Dashboard — presentational-view, данные приходят из этих же VM через `RootTabView:437`.
+  - **Найден и исправлен реальный блокирующий баг:** `CashbackImporter.importPriority` был 20, то есть
+    кешбэк импортировался ДО `Account` (31), не находил core-счёт (ремап Ф5b плана 6b) и ронял ВЕСЬ
+    restore в `backupCorrupted`. Эталонный файл владельца не восстанавливался вовсе — ровно жалоба
+    «результат пустой». Priority → 40.
+- **Тесты:** `millioTests/Core/BackupVerifiedRestoreTests.swift` (12, все зелёные), включая
+  интеграционный на реальном файле владельца — фикстура
+  `millioTests/Fixtures/owner-backup-1673-models.milliobackup` (137 КБ, MBKP/format 2, схема 2.0,
+  lzfse, без шифрования): **ожидалось 1673 → импортировано 1673, receipt verified, missingTypes пуст**.
+  Тестовые payload'ы в `BackupManagerTests` заменены на валидные снимки (`makeRestorablePayload`):
+  прежние произвольные байты «успешно восстанавливались», чего verified-restore больше не допускает.
+- **Гейт:** сборка без ошибок; backup/recovery-сюиты 67/67 зелёные; полный прогон 2358 тестов, 36
+  красных против фона 35 — оба «лишних» (`FinanceDynamicsViewModelTests`) проходят в изоляции
+  (45 тестов, 1 фоновый красный), то есть order-flake, не регрессия. Новых красных в backup/recovery — 0.
+
+#### Исходная формулировка (писалась до отката Phase 9)
 - **Файлы:** `millio/Core/Backup/BackupManager.swift` (249-320, 417-442, 909-916), `millio/Core/Backup/RecoveryCoordinator.swift`, `millio/Core/Backup/PostRestoreRefreshCoordinator.swift:21`, `millio/millioApp.swift:1276-1290`
 - **Changes:** авто-restore идёт тем же verified-путём, что и `restoreExplicit`: receipt → `.restoreVerified` → refresh-барьер. `.restoreCompleted` остаётся, но не является признаком успеха. Отбор кандидата — по `modelCount`/валидированным метаданным, порог `size >= 1024` и TODO удаляются.
 - **Tests:** `BackupVerifiedRestoreTests` (+ авто-путь), `PostRestoreRefreshCoordinatorTests` (барьер срабатывает после авто-restore), `RestoreCandidateTelemetryTests` (отбор по modelCount, кандидат без modelCount), **интеграционный тест пути** «пустая база → авто-restore → счётчики моделей на Dashboard-источниках» (правило из памяти: при знаковых/структурных фиксах инвариант-теста мало).
@@ -138,26 +200,147 @@ xcodebuild test -project millio.xcodeproj -scheme millio \
 - **Tests:** `BackupImportValidationTests` (оба расширения), новый `IncomingBackupRoutingTests` (URL при закрытом приложении / на любом экране / повторное открытие), интеграционный `ImportThenRestoreTests` на фикстуре 1673 моделей (пустая база и непустая + rollback), регресс `RootTabView` шитов выписок.
 - **Impact:** share-extension выписок, deep links. Риск регресса шитов — покрыт тестом.
 
-### R4 — Отличимая диагностика и RU-строки *(D8, D9)*
+### R4 — Отличимая диагностика и RU-строки *(D8, D9)* — [x] РЕАЛИЗОВАН (2026-08-23)
+- **Фактическая реализация:**
+  - **`BackupLookupOutcome`** (`millio/Core/Backup/BackupLookupOutcome.swift`): `.found([versions])` /
+    `.empty` / `.failed(reason)` / `.timedOut`. Причина (`iCloudUnavailable` / `network` / `serviceBusy` /
+    `unknown`) классифицируется по домену и коду `NSError` (`CKErrorDomain`, `NSURLErrorDomain`) —
+    без рантайма CloudKit, поэтому проверяется тестом. `BackupManager.lookupBackupVersions()` больше не
+    превращает ошибку облака в `[]`; старый `listBackupVersions()` оставлен как обёртка (совместимость
+    с BackupMonitor/автобэкапом), `SwitchingBackupManager` форвардит явно, для моков — дефолт протокола.
+  - **Таймаут** ушёл из `RestoreView` в `lookupBackupVersions(timeout:)` — «облако молчит» стало исходом,
+    а не пустым списком.
+  - **`RestoreView`**: одно состояние `lookupOutcome` вместо пары «список + флаг таймаута»; экран без версии
+    строится `BackupExperiencePresenter.restoreLookupPresentation` — разные заголовок/текст/иконка для
+    «копий нет», «поиск не удался (причина)» и «iCloud не ответил», **кнопка «Повторить» на всех трёх**
+    (раньше только pull-to-refresh + один общий текст). Исход лукапа пишется в лог
+    (`RestoreView: backup_lookup failed=network`), при неразрешённом исходе `appState.lastBackupDate`
+    НЕ перетирается — неизвестность не выглядит как «копий нет».
+  - **Тексты граничных случаев (новых типов ошибок не заводилось):** `RestoreFailureCode.message` и
+    `AppError` в UI пошли через каталог. Новый `RestoreErrorPresenter` (`millio/UI/Restore/`) —
+    единственный источник текста ошибки на экране: `AppError.localizedDescription` («Restore failed: …»)
+    в UI больше не попадает. Покрыты: неверная кодовая фраза, нет ключа в Keychain, несовместимая схема,
+    повреждённый файл, провал pre-restore снимка, провал отката (R2), пустой бэкап (R2).
+  - **Локализация:** 30 новых ключей в `Localizable.xcstrings` по образцу `backup.restore.verification.*`
+    (ru/en/de/es/fr/tr/zh-Hans). L10n-гейт `BackupLocalizationTests` расширен на `RestoreView.swift` и
+    `RestoreErrorPresenter.swift` — расширение сразу вскрыло **5 ключей экрана восстановления вообще без
+    перевода** (`backup.restore.skip.*`, `backup.restore.passphrase.toggle*`), они добавлены.
+    В `RestoreView` не осталось строковых литералов, идущих в UI (grep-чек).
+  - **Guest-scope (S10):** `LaunchRecoveryPolicy` получил `isGuestScope` и `.skip(.guestScopeBeforeSignIn)`.
+    Раньше гость с пройденным онбордингом и пустым стором получал предложение восстановить облачную копию
+    В ГОСТЕВОЙ стор (после входа она уехала бы в reconciliation guest→user). Теперь до логина recovery не
+    предлагается, облако до логина не опрашивается, исход транзиентный (после входа оценка повторяется),
+    причина видна в логе: `scope=guest … → skip(guestScopeBeforeSignIn)`.
+  - **Изменение поведения (принято осознанно):** пользователь, который никогда не входит в аккаунт, больше
+    не увидит launch-recovery; ручной путь из Профиля и «Восстановить из файла» (R3) ему доступны.
+- **Отклонение от плана:** `RestoreFailureCodeTests` менял ожидания на английские литералы — старое ожидание
+  было неверным (эта строка идёт прямо в UI и обязана быть локализованной, тест фиксировал сам баг D9);
+  вместо литералов проверяются стабильные ключи, непустой текст и различимость сообщений.
+- **Тесты (+18):** `millioTests/Core/BackupLookupOutcomeTests.swift` (9: классификация причин, ошибка ≠ `.empty`,
+  совместимость `listBackupVersions`, таймаут, **Retry делает новый запрос**, диагностика),
+  `millioTests/UI/Restore/RestoreDiagnosticsLocalizationTests.swift` (7: полнота переводов всех кодов и причин,
+  различимость экранов, Retry на всех неразрешённых исходах, тексты граничных случаев),
+  +2 в `LaunchRecoveryPolicyTests` (guest skip + транзиентность), переписан `RestoreFailureCodeTests`.
+- **Гейт:** полный прогон 2392 теста, 37 красных при фоне 34–36 (все — Finance/Cashflow/migration/
+  UI-screenshot/l10n, ни один не касается backup/recovery); **все сюиты backup/recovery/router зелёные**
+  (BackupLookupOutcome, BackupManager, BackupVerifiedRestore, BackupLocalization, RestoreDiagnostics,
+  RestoreFailureCode, LaunchRecovery×3, SwitchingBackupManager, ScopeMerge×4, AppRouter — Passed).
+
+#### Исходная формулировка
 - **Оценка:** ~1.5 ч
 - **Файлы:** `BackupManager.swift:909-916`, `RestoreView.swift` (386-393, 498, 507-525), `Localizable.xcstrings` (ru/en/zh-Hans)
 - **Changes:** `BackupLookupOutcome` = `.found(version)` / `.none` / `.failed(reason)` / `.timedOut` вместо `nil`. Разные экраны/строки для «бэкапа нет» и «CloudKit не ответил», Retry на восстановимых. Английский хардкод таймаута → L10n.
 - **Tests:** `RestoreFailureCodeTests`, `BackupLocalizationTests` (нет непереведённых ключей recovery), новый `BackupLookupOutcomeTests` (ошибка сети ≠ «нет бэкапа»).
 - **Grep-чек:** в `RestoreView.swift` нет строковых литералов, идущих в UI.
 
-### R5 — Чистка и ponytail-проход *(D11, D12)*
+### R5 — Чистка и ponytail-проход *(D11, D12)* — [x] РЕАЛИЗОВАН (2026-08-23)
 - **Оценка:** ~1 ч
 - **Файлы:** `RecoveryCoordinator.swift` (мёртвые `retry`/`cancel`/`reset`; `discover`/`restoreConfirmed` — подключить или удалить вместе с тестами), `RestoreView.swift:508`, `BackupManagementView.swift:791`
 - **Changes:** прямые `CloudBackupStore()` → инъекция `SwitchingBackupManager`/DI. Мёртвые ~120 строк удаляются **только** если после R1–R4 они действительно не нужны (retry может стать живым в R4 — решать по факту).
 - **Grep-чек:** `CloudBackupStore(` вне DI-слоя = 0.
 - **Tests:** `RecoveryCoordinatorTests` приведены в соответствие (тесты на удалённый код удаляются вместе с ним, не «обходятся»).
+- **Факт (2026-08-23):** D11 закрыт как *неприменимый*: `RecoveryCoordinator` в базе нет (откат Phase 9), а
+  у всех пяти файлов R1–R4 (`LaunchRecoveryGate`, `RestoreReceipt`, `BackupFileFormat`,
+  `BackupLookupOutcome`, `RestoreErrorPresenter`) каждый публичный член имеет живого потребителя —
+  удалять нечего. D12 закрыт. Вместо мёртвого кода схлопнуты три дубля (см. Changelog).
+- **SwiftLint не запускался:** бинаря нет в системе, `.swiftlint.yml` в проекте отсутствует —
+  пункт неисполним, тулинг не ставился без решения владельца.
 
-### R6 — Интеграционный гейт
+### R6 — Интеграционный гейт — [x] РЕАЛИЗОВАН (2026-08-23)
+- **Оценка:** ~1 ч
+- **Фактическая реализация:**
+  - **Новая сюита `millioTests/Core/RecoveryEndToEndIntegrationTests.swift` (+6 тестов).** Отличие
+    от юнит-сюит R1–R5: НЕТ моков репозитория — реальный `DataRepository` поверх in-memory
+    `ModelContainer` и реальный файл владельца (1673 модели). Проверяется, что данные физически
+    в сторе и читаются теми же `FetchDescriptor`, что в приложении, а не что метод не бросил:
+    1. `testOwnerFileRestoreLandsInRepository` — файл → `restoreFromFile` → 1673/1673 verified;
+       `Account`/`CashflowTransaction`/`Investment` вычитаны из стора, счётчики сходятся с receipt
+       (328 транзакций), дублей по `Account.id` и `CashflowTransaction.uniqueID` нет, поля непустые;
+    2. `testAutoRestoreOnEmptyStorePublishesRefreshSignal` — пустая база → `LaunchRecoveryPolicy`
+       даёт `allowsAutomaticRestore` → `restoreLatest` → verified receipt → `EventBus` отдаёт
+       `restoreCompleted` (та же шина, на которой сидят Cashflow/Finance/Dynamics VM);
+    3. `testUnverifiedRestoreDoesNotSignalRefresh` — пустой бэкап: `restoreFailed`, успех НЕ публикуется;
+    4. `testFailedRestoreLeavesOwnerDataIntact` (**S14 на реальном сторе**) — битый файл поверх
+       данных владельца → откат → счётчики Account/CashflowTransaction/Investment не изменились;
+    5. `testScopeSwitchDuringRestoreDoesNotPublishForeignSuccess` (**S16 на реальном сторе**) —
+       restore завершился после свопа аккаунта: verified, но `shouldPublishRestoreOutcome` = false,
+       `appState.lifecycle` чужого scope не тронут;
+    6. `testDeclinedImportOnNonEmptyStoreChangesNothing` — при непустой базе разбор файла
+       (`inspectBackupFile`) не меняет ни одной строки; подтверждение — заменяет данные целиком.
+  - **Дублей не заводилось:** S14/S16 на уровне моков и гейта уже были (R3/R1) — добавлены их
+    интеграционные двойники на реальном сторе, юнит-версии оставлены как есть.
+  - **Order-flake R5 разобран — гипотеза «чужая сюита оставила bundle в EN» не подтвердилась.**
+    Реальных источника два, оба внутри наших же сюит:
+    (а) `RestoreDiagnosticsLocalizationTests` — два теста читают ДВЕ строки из ambient-бандла
+    `LanguageManager.shared` подряд и сравнивают их между собой. Соседние l10n-сюиты
+    (`CashflowLocalizationRegressionTests`, `AppStateTests`, `ConverterViewModelTests` и др.)
+    меняют язык параллельно, и между двумя чтениями бандл успевал переключиться. Починено взятием
+    пары чтений под `AppLanguageTestSupport.withLockedAppLanguage` — это тот же `NSRecursiveLock`,
+    который держит `LanguageManager.setLanguage` (`LanguageManager.swift:85`), поэтому мутация
+    соседней сюиты честно блокируется. Чужие сюиты не трогались;
+    (б) `BackupRestoreIntegrityTests` — reload после `restoreCompleted` идёт отдельной `Task`,
+    ожидание было `await Task.yield()`: в изоляции хватало, под параллельной нагрузкой полного
+    прогона — нет. Заменено на bounded wait (до 2 с, шаг 10 мс).
+- **Security-review дифа R1–R5 (`git diff a0926c1..HEAD`):**
+  - **Логи чистые.** Всё, что печатается о restore, — `RestoreReceipt.diagnosticSummary`
+    (`RestoreReceipt.swift:87`): только счётчики и имена типов схемы, ни одного пользовательского
+    значения. Passphrase нигде не логируется и не сохраняется — проходит параметром до
+    `PassphraseBackupEncryption.decrypt` и всё. Keychain-путь не изменён.
+  - **Проверки при импорте чужого файла не ослаблены.** `restoreFromFile` идёт через тот же
+    `decodeBackupPayload` (`BackupManager.swift:731`), что и облачный путь: magic/format version,
+    алгоритм шифрования, KDF, lzfse + сверка `originalSize`, затем census и verified-receipt.
+    `preflightCandidate` пропускается осознанно — он только ранжирует кандидатов при выборе из
+    нескольких снимков, каждая его проверка повторяется в `decodeBackupPayload` и там бросает.
+    Деструктивная фаза недостижима без подтверждения пользователя (`IncomingBackupFileRestore`
+    показывает `confirmationDialog` ВСЕГДА, R3).
+  - **Найдено 2 замечания (не блокеры, фикс не делался — гейтовая фаза):**
+    - `previousData.write(to: snapshotURL)` (`BackupManager.swift:817`) кладёт **полный экспорт
+      данных пользователя открытым JSON** в `tmp/`. На успехе и на удачном откате файл удаляется,
+      но при провале отката остаётся намеренно (последний шанс) — и никем не подчищается позже.
+      Защита файла — дефолтная iOS (`CompleteUntilFirstUserAuthentication`), явного класса нет.
+      Предложение: явный `.completeFileProtectionUntilUserAuthentication` + разовая уборка
+      осиротевших `millio-pre-restore-*.json` при старте.
+    - `Data(contentsOf: url)` в `IncomingBackupFileRestore.swift:93` читает файл из Files целиком
+      без верхней границы размера — файл на несколько ГБ уронит приложение по памяти до любой
+      валидации. Ущерб ограничен своим устройством, но проверка `resourceValues(.fileSizeKey)`
+      перед чтением стоит одну строку.
+  - **Вне дифа (предсуществующее, не регресс R1–R5):** `BackupManagementView.swift:257,270,926`
+    показывают в тосте `AppError.backupFailed(error.localizedDescription).localizedDescription` —
+    сырой технический текст (это путь backup, не restore; restore-пути R4 закрыл презентером).
+- **Гейт:** полный прогон **2400 тестов, 35 красных** (ДО: 2394/36) при фоне 34–37.
+  **Ноль красных в сюитах backup/recovery/router**, все 6 новых тестов зелёные, новых красных нет.
+  Оба order-flake-теста прошли в полном прогоне. Красных стало на 1 меньше, чем в базовом прогоне
+  той же ветки. SwiftLint по-прежнему не запускался: бинаря и конфига в репо нет.
+- **Примечание:** в рабочем дереве всё время лежали чужие незакоммиченные правки
+  (`AccountsTotalsService.swift`, `CurrencyRateService.swift` + их тест) — не трогались и не
+  коммитились; 3 красных в `AccountsTotalsService` относятся к ним, а не к recovery.
+
+#### Исходная формулировка
 - **Оценка:** ~1 ч
 - **Действия:** полный прогон всех 25 регресс-файлов + новых; сверка каждого acceptance criterion A1–A11 спеки с местом в коде; `/security-review`; проверка отсутствия PII в новых логах.
 - **Гейт:** 0 новых красных, отчёт «критерий → file:line / имя теста».
 
-### R7 — Финальная приёмка (агент на модели Fable) *(A12)*
+### R7 — Финальная приёмка (агент на модели Fable) *(A12)* — [x] ПРОЙДЕНА С ОГОВОРКАМИ (2026-08-23)
 - **Оценка:** ~1.5 ч
 - **Кто:** отдельный агент **на модели Fable** — вызывать `Agent` **без параметра `model`** (наследует модель главной сессии = Fable); в брифе указать явно: «модель Fable, унаследована от родителя, не переопределять».
 - **Задача агента:** пройти ВСЕ пользовательские сценарии recovery, не только главный; по каждому — вердикт **пройден / не пройден** с доказательством: имя теста, `file:line` трассировки кода, либо отметка «требует device-проверки владельца» + что именно смотреть.
@@ -189,7 +372,353 @@ xcodebuild test -project millio.xcodeproj -scheme millio \
 
 - **Гейт фазы:** каждый из S1–S17 помечен пройден/не пройден с доказательством; непройденные — с решением владельца (чинить сейчас / принять / отложить). Device-пункты — скрин или подтверждение владельца.
 
+
+#### Результат R7 (2026-08-23, агент Fable) — ПРИЁМКА ПРОЙДЕНА С ОГОВОРКАМИ
+
+**Гейт:** `2450 тестов, 35 красных, 2415 зелёных` (`build/r7.xcresult`, iPhone 17 Pro / iOS 26.5).
+Фон совпал ровно: 35 = 3 от чужих незакоммиченных правок (`AccountsTotalsService`) + 8 `ScreenshotTests`
++ 24 прежних фоновых. **В сюитах backup / recovery / restore / launch — 223 зелёных, 0 красных**
+(2 «красных» в выборке — фоновые `ScreenshotTests/testScreenshot07Backup` и
+`DebitCardRenderBootstrapUITests`, оба UI-тесты, падают и на develop).
+
+| # | Вердикт | Доказательство |
+|---|---------|----------------|
+| S1 | ✅ закрыто (R7-fix-2) | Решение владельца: **предлагать восстановление сразу после входа в аккаунт, ДО онбординга** — после переустановки человек хочет вернуть данные, а не смотреть вводные экраны. `skip(.onboardingIncomplete)` удалён; политика ждёт «свой» lifecycle (`.onboarding` у нового пользователя, `.ready` у прошедшего). Тесты `LaunchRecoveryPolicyTests` S1-блок. **Device:** свежая установка с бэкапом в облаке |
+| S2 | ✅ | `LaunchRecoveryPolicyTests/testEvaluateSkipsRestoreWithoutBackup`; `RestoreDiagnosticsLocalizationTests/testLookupOutcomesProduceDistinctPresentations` («копий нет» ≠ ошибка ≠ таймаут) |
+| S3 | ❌ дефект | Трассировка есть (`millioApp.swift:228` → `AppState.pendingIncomingBackupURL` → `IncomingBackupFileRestore.swift:31`), но на холодном старте `.task` модификатора выполняется раньше, чем `initializeColdStart` присваивает `diContainer` (`millioApp.swift:65` — `@State … = nil`, присваивание на `:412`). `handle()` потребляет URL на `:77` ДО `guard let backupManager` (`:79`) ⇒ файл теряется, пользователь видит «iCloud недоступен». Теста на порядок нет. **Фикс (предложение):** не потреблять URL при `backupManager == nil` + `.onChange(of: diContainer)` как второй триггер |
+| S4 | ✅ | Модификатор навешен на корень сцены выше `RootViewResolver` (`millioApp.swift:227`), т.е. работает на любом маршруте; `RootTabView.swift:187` разблокирует шиты выписок после потребления. **Device:** тап по файлу с экрана «Кэшфлоу» и с открытого шита |
+| S5 | ✅ | `RestoreView.swift:412-441` (fileImporter → `pendingIncomingBackupURL`) → общий путь; `RecoveryEndToEndIntegrationTests/testOwnerFileRestoreLandsInRepository` (1673 модели через реальный `DataRepository`) |
+| S6 | ✅ | `BackupManagementView.swift:911-921` (импорт → версия в списке → передача общему пути); `RecoveryEndToEndIntegrationTests/testDeclinedImportOnNonEmptyStoreChangesNothing`; подтверждение с датой и размером — `IncomingBackupFileRestore.swift:124-136` |
+| S7 | ✅ | `RecoveryEndToEndIntegrationTests/testAutoRestoreOnEmptyStorePublishesRefreshSignal`; `BackupVerifiedRestoreTests/testOwnerBackupFixtureRestoresVerified` |
+| S8 | ⚠️ трассировка без теста | Код верен: `millioApp.swift:1122-1128` (инкремент), `:1123-1127` (лимит 2 → `.restoring`), `:1156` (сброс при успехе). Но оба «теста» тавтологичны: `LaunchRecoveryHardeningTests:62` проверяет сам UserDefaults, `:89` переписывает guard инлайном (`let shouldBlock = currentAttempts >= maxAttempts`) — production-путь не покрыт. Счётчик по-прежнему **глобальный** (`RecoveryDecisionStore` не делался, см. R1) |
+| S9 | ✅ | `BackupLookupOutcomeTests/testTimeoutOutcome`, `testCloudFailureIsNotEmptyOutcome`, `testRetryRepeatsLookup`; `RestoreDiagnosticsLocalizationTests/testRetryIsOfferedOnEveryUnresolvedOutcome`, `testFailureReasonReachesUser`; таймаут 8 с — `RestoreView.swift:15` |
+| S10 | ✅ | `LaunchRecoveryPolicyTests/testGuestScopeSkipsRecoveryWithExplicitReason` + `testGuestScopeSkipDoesNotLockRecovery`; облако в guest не опрашивается вовсе (`millioApp.swift:1094`) |
+| S11 | ✅ закрыто (R7-fix-2) | Решение владельца: **отказ запоминается**, автоматически больше не предлагаем; восстановление остаётся доступным вручную из Профиля. Флаг per-scope в `LaunchRecoveryStateStore` (бывший `AutoRestoreAttemptCounter`). Тесты `LaunchRecoveryStateStoreTests` + S11-блок политики. **Device:** «продолжить без данных» → перезапуск |
+| S12 | ✅ / ⚠️ | Различимость ошибок: `RestoreFailureCode.swift:39-49` + `RestoreDiagnosticsLocalizationTests/testBoundaryErrorsHaveDistinctMessages`; данные не тронуты — расшифровка идёт до деструктивной фазы (`BackupManager.swift:760-775` → `:803`). ⚠️ Из пути «файл из Files» пароль ввести негде: `IncomingBackupFileRestore.swift:107` жёстко `passphrase: nil`, а текст ошибки просит ввести пароль. Passphrase-бэкап из Files невосстановим |
+| S13 | ❌ не по спеке (смягчён) | Проверка схемы живёт в `DataRepository.swift:132-133`, т.е. вызывается из `importAllDataAsync` **после** `clearAllDataAsync()` (`BackupManager.swift:826-827`). Отказ происходит ПОСЛЕ деструктивной фазы, данные спасает только rollback. Тест `BackupImportValidationTests/testSchemaVersionMajorMismatchFails` подтверждает отказ, но не его позицию. **Фикс тривиален:** пред-проверка метаданных рядом с `RestoreModelCensus.counts` (`BackupManager.swift:812`) |
+| S14 | ✅ | `BackupFileRestorePathTests/testFailedImportRollsBackToSnapshot` и `testRollbackFailureIsCriticalAndUserReadable`; `RecoveryEndToEndIntegrationTests/testFailedRestoreLeavesOwnerDataIntact`; высшая severity — `RestoreFailureCode.swift:20-37` (`RestoreRollbackFailure`, `.critical`, снимок не удаляется) |
+| S15 | ✅ / device | Подписчики `.restoreCompleted`: `CashflowViewModel:620` (Кэшфлоу + Аналитика через `CashflowAnalyticsService`), `FinanceViewModel:818` (Счета), `FinanceDynamicsViewModel:409` (Динамика); Dashboard — presentational, данные из тех же VM. Публикация только после verified-receipt (`BackupManager.swift:184/361/420`). Тест `testAutoRestoreOnEmptyStorePublishesRefreshSignal`. **Device:** 4 экрана без перезапуска |
+| S16 | ✅ | `LaunchRecoveryGateTests` «Stale-колбэк не публикует успех восстановления в чужой scope» + «Новое поколение не наследует решение предыдущего аккаунта»; `RecoveryEndToEndIntegrationTests/testScopeSwitchDuringRestoreDoesNotPublishForeignSuccess`; три сверки токена — `millioApp.swift:1143`, `:1151`, `:1170` |
+| S17 | ✅ | `BackupEnvelopeTests` «unpack supports legacy format without magic bytes» + `looksLikeEnvelope(legacyPacked)`; совместимость major-версии — `BackupMetadata.swift:32-34` |
+
+**Итого после R7-fix и R7-fix-2: 15 ✅ · 1 ⚠️ (S12 — passphrase-бэкап из Files, отдельная задача) · S15 ✅ с device-подтверждением.**
+
+#### R7-fix (2026-08-23, Александр) — S3, S13, S8 и оба security-замечания ЗАКРЫТЫ
+
+| Замечание | Статус | Что сделано |
+|-----------|--------|-------------|
+| **S3** | ✅ закрыто | `IncomingBackupFileIntake` (`millio/UI/Restore/IncomingBackupFileIntake.swift`): URL потребляется ТОЛЬКО при готовом `backupManager`, иначе `.deferredUntilReady` и значение остаётся в `AppState`; второй триггер — `onChange(of: isReady)`. Побочно найден более тяжёлый дефект того же места: модификатор навешен СНАРУЖИ `.environment(\.diContainer, …)` (`millioApp.swift:177` vs `:227`), поэтому из окружения читал вечный nil — восстановление из файла отвечало «iCloud недоступен» ВСЕГДА, а не только на холодном старте. Менеджер передаётся явным параметром. Тесты: `IncomingBackupFileIntakeTests` (4) |
+| **S13** | ✅ закрыто | `DataRepository.validateSchemaCompatibility(of:)` вызывается в `BackupManager.replaceRepositoryDataWithBackup` рядом с `RestoreModelCensus.counts`, то есть до `exportAllDataAsync`/`clearAllDataAsync`. Тест `RecoveryEndToEndIntegrationTests/testIncompatibleSchemaRejectedBeforeDestructivePhase` (реальный `DataRepository`: схема 99.0 → `incompatibleSchemaVersion`, данные физически на месте) |
+| **S8** | ✅ закрыто | Логика счётчика вынесена в `AutoRestoreAttemptCounter` (`millio/Core/Backup/`), тесты `LaunchRecoveryHardeningTests:62/:89` теперь вызывают продовый код на изолированном `UserDefaults`-suite, а не воспроизводят guard инлайном |
+| **Security (средняя)** | ✅ закрыто | Pre-restore снимок пишется с `.completeFileProtection`; `BackupManager.sweepOrphanedPreRestoreSnapshots()` подметает `millio-pre-restore-*` старше суток перед каждым restore (свежий снимок проваленного отката не трогаем — он последний шанс на ручное восстановление). Тест `BackupFileRestorePathTests/testOrphanedPreRestoreSnapshotsAreSwept` |
+| **Security (низкая)** | ✅ закрыто | `IncomingBackupFileIntake.readFile(at:)` — проверка `.fileSizeKey`, потолок 256 МБ (реальный бэкап владельца 134 КБ), локализованная ошибка `backup.incoming_file.too_large` (ru/en/zh-Hans + inline-каталог). Тот же ридер на пути импорта версии в `BackupManagementView` |
+
+**Побочные находки (тест-инфра).**
+1. *Починено.* Тест S13 сначала жил в `BackupFileRestorePathTests` и публиковал `BackupEvent.restoreFailed`
+   в глобальный `EventBus.shared`; параллельная сюита `RecoveryEndToEndIntegrationTests` ловила это
+   чужое событие и краснела. Тест переехал в серийную сюиту E2E — пересечения нет, а проверка
+   стала сильнее (реальный `DataRepository`).
+2. *Починено.* `testOwnerFileRestoreLandsInRepository` брал `accounts.first` из несортированного
+   fetch, а в реальном бэкапе владельца 3 счёта из 44 БЕЗ имени — тест краснел примерно раз
+   в несколько прогонов. Теперь проверяется количество именованных счетов (41) и счёт по
+   отсортированному `id`.
+3. *Починено.* Пред-существующий хазард: тесты
+   `CashflowViewModelTests:622`, `FinanceViewModelTests:2945/2984/3078/3119` и
+   `FinanceLifecycleHarness:77` вызывают `EventBus.shared.removeAllSubscribers()` — это сносит
+   подписки ЧУЖИХ параллельных сюит, и наблюдатель E2E терял событие («провал не опубликован» —
+   ложный вердикт, краснело в 4 прогонах из 7). Подписка наблюдателя стала защищённой:
+   `EventBus.subscribeProtected` (DEBUG), `removeAllSubscribers()` сносит только незащищённых —
+   чужие сюиты не правились, их изоляция работает как раньше.
+
+**Остаются открытыми (решение владельца):** S12 (passphrase-бэкап из Files).
+
+#### R7-fix-2 (2026-08-23, Александр) — S1 и S11 ЗАКРЫТЫ по решению владельца
+
+| Сценарий | Решение владельца | Реализация |
+|----------|-------------------|------------|
+| **S1** | После переустановки человек хочет вернуть данные, а не смотреть онбординг — предлагать восстановление сразу после входа в аккаунт, ДО онбординга | `LaunchRecoveryPolicy.evaluate` (`millio/Core/Backup/LaunchRecoveryPolicy.swift:100`): `skip(.onboardingIncomplete)` удалён, вместо него `input.lifecycle == (hasCompletedOnboarding ? .ready : .onboarding)` — у нового пользователя приложение стоит на `.onboarding`, и именно там теперь показывается экран восстановления. Выход считает `LaunchRecoveryPolicy.lifecycleAfterRestoreFlow` (`:159`): восстановился → `.ready` + флаг онбординга проставлен (свои данные и настройки уже есть), отказался и онбординг не пройден → `.onboarding` — вводные экраны не исчезают. `RestoreView.declineRecovery/finishAfterSuccessfulRestore` (`millio/UI/Restore/RestoreView.swift:446/:456`). Коммит `c835f15` |
+| **S11** | Отказ запоминается, автоматически больше не предлагаем; восстановление доступно вручную из Профиля | `AutoRestoreAttemptCounter` → `LaunchRecoveryStateStore` (`millio/Core/Backup/LaunchRecoveryStateStore.swift`): третья сущность не заведена, персистентное состояние recovery в одном типе. Счётчик попыток остаётся **глобальным** (семантика R1/R7 не менялась), отказ — **per-scope** (`launchRecoveryDeclined.<storeConfigurationName>`), поэтому смена аккаунта не наследует чужой отказ (S16). Флаг читается в `millioApp.presentRestoreFlowIfNeeded:1104` и снимается, как только в scope появились данные (`:1091`). Ручной путь (`BackupManagementView`) флага не касается. Коммит `d9ca867` |
+
+**Гейт R7-fix-2:** полный прогон 2419 тестов / 38 красных (база R7-fix: 2406/34; +13 тестов — новые
+S1/S11). Дельта по красным — шум параллельных сюит вне зоны задачи: 6 «новых» (4 Dynamics-инварианта,
+`BackupRestoreIntegrityTests` restore-событие, `GroupsMigratorTests`, `MarketSymbolSearchViewModelTests`)
+и 3 «вылеченных» из базы. Изолированный прогон этих же сюит вместе со всеми recovery-сюитами —
+**89/89 зелёных**, то есть к изменению они отношения не имеют. Backup/recovery/restore/launch — ноль
+красных (62/62 в целевом прогоне).
+
+**Device-проверки для владельца:** (1) свежая установка + бэкап в облаке → после входа экран
+восстановления ДО онбординга; (2) «продолжить без данных» → перезапуск → авто-restore НЕ стартует,
+Профиль → Бэкап восстанавливает; (3) отказ под одним аккаунтом не влияет на другой.
+
+#### Аудит вне гейта (шимы / идиоматичность / bloat)
+
+**(а) Переходные слои:**
+1. `listBackupVersions()` живёт рядом с `lookupBackupVersions()` только ради обратной совместимости — тест `BackupLookupOutcomeTests/testLegacyListStaysCompatible` это и фиксирует. Дефолтная реализация протокола (`BackupLookupOutcome.swift:139`) — шим для моков и локального менеджера.
+2. Глобальный `autoRestoreAttemptCount` (`millioApp.swift:981`) остался вне какого-либо стора: `RecoveryDecisionStore` и миграция трёх флагов не делались (осознанно, R1), но условие владельца №2 в исходном виде не выполнено — семантика счётчика по-прежнему глобальная, а не per-scope.
+3. `LaunchRecoveryHardeningTests:62/89` — тавтологические тесты-заглушки, дублирующие логику вместо её вызова.
+
+**(б) Неидиоматичный Swift:**
+1. `millioApp.swift:1143/1151/1157/1170` — `await MainActor.run { … }` внутри `Task {}`, созданного в `@MainActor`-функции: замыкание и так наследует изоляцию, обёртки лишние.
+2. `BackupLookupOutcome.swift:121-135` — третья по счёту ручная реализация «гонка операция vs таймаут» через `withTaskGroup` при уже существующих `withTimeout` (`Core/Concurrency/WithTimeout.swift:7`) и `withTaskTimeout` (`Core/TaskTimeout.swift:10`). Сводится к одной строке.
+3. `RestoreView` держит `lookupOutcome`, `selectedRecordName` и вычисляемый `backupVersions` — дублирование состояния выбора; терпимо, но это источник рассинхрона при повторном лукапе.
+
+**(в) Bloat:** мёртвого кода не найдено — у всех новых типов есть живые потребители (`RestoreCandidateOutcome` → `BackupManager.swift:698`, `reducedByDeduplication` → `diagnosticSummary`, `isUnresolved` → `RestoreView.swift:526`). Единственный кандидат на удаление — два тавтологических теста из (а).3.
+
+#### Вердикт по двум замечаниям security-review R6
+
+1. **Pre-restore снимок открытым JSON в `tmp/` (`BackupManager.swift:812-821`) — средняя.** Файл лежит в песочнице приложения, `tmp/` не попадает в iCloud/iTunes-бэкап, класс защиты по умолчанию — `CompleteUntilFirstUserAuthentication`, т.е. на украденном выключенном устройстве данные защищены. Реальный вектор — доступ к ФС после первой разблокировки (jailbreak, эксплойт чтения файлов). Осиротевшие копии остаются НАВСЕГДА при kill процесса в середине restore (и намеренно — при провале отката, `:867`), то есть полный дамп финансов пользователя может годами лежать в `tmp/`. **Рекомендация (не блокер релиза, но сделать до широкого запуска):** `.completeFileProtection` в опциях записи + подметание `millio-pre-restore-*.json` старше N дней на старте, кроме файла последнего проваленного отката.
+2. **`Data(contentsOf:)` без лимита размера (`IncomingBackupFileRestore.swift:92`, тот же паттерн `BackupManagementView.swift:911`) — низкая.** Это не утечка, а self-DoS: файл из Files/AirDrop целиком грузится в память, гигабайтный «бэкап» = jetsam-kill. Данные при этом не страдают. **Рекомендация:** проверка `.fileSizeKey` с потолком (порядка 200 МБ) до чтения; `.mappedIfSafe` смысла не имеет — дальше идёт распаковка в память.
+
+**Общий вывод по мержу.** Тестовый гейт чист: ноль красных в затронутых сюитах, фон не вырос. Блокеров потери данных нет — S14/S16 подтверждены на реальном сторе. Однако **до мержа в develop нужно решение владельца по 6 пунктам:** S3 (реальный дефект холодного старта — предлагаю починить), S13 (тривиальная пред-проверка схемы — предлагаю починить), S1 и S11 (расхождение реализации со спекой сценария — принять или переделать), S8 (заменить тавтологические тесты на настоящие), S12 (passphrase из Files — отдельная задача). Правки в рамках R7 не вносились: приёмка — только чтение.
+
+**Осталось за владельцем (device):** S1 — свежая установка с бэкапом; S3 — тап по `.milliobackup` при закрытом приложении; S4 — тот же тап на произвольном экране; S11 — «продолжить без данных» → перезапуск (смотреть, не запустится ли авто-restore); S15 — Дашборд/Счета/Аналитика/Кэшфлоу сразу после restore без перезапуска.
+
 ---
+
+### R8 — Пустой график активов/обязательств после restore — [x] РЕАЛИЗОВАН (2026-08-23)
+- **Симптом (устройство владельца, после успешного restore 1673 моделей):** шапка «Счета» —
+  100 909 281 ₽, список групп заполнен (иностранные счета, вклады, акции, карты, «Старое»,
+  кредиты −8 627 500), блок графика — «Пока нет активов или обязательств».
+- **Доказанная причина:** на одном экране жили ТРИ источника core-счетов.
+  Список — живое отношение `AccountGroup.accounts` (`FinanceViewModel.orderedAccounts(for:)`),
+  тотал — живой fetch в `AccountsTotalsService.totalAt`, а ledger-график был ЕДИНСТВЕННЫМ
+  потребителем среза `state.accounts` (`coreAccountsSnapshot(matching:)` +
+  снапшотный `ungroupedAccounts()`, `FinanceOverviewCardView.swift:180/209`). Срез обновляется
+  только по событиям (`restoreCompleted`, core-мутации), поэтому его отставание (снапшот снят до
+  того, как импорт довёз `Account` — `AccountGroupImporter.importPriority = 30`,
+  `AccountImporter = 31`) навсегда опустошает график при верных списке и тотале.
+- **Что проверено и отвергнуто:** односторонняя связь `Account`↔`AccountGroup` в бэкапе — в файле
+  владельца у всех 44 `Account` заполнен `groupID`, все 6 `groupID` резолвятся, архивных/удалённых
+  нет; `isVisible(on:)`/TZ — не при чём; PRO-гейт даёт другое состояние (`blockedState`);
+  курсовой fallback — `getRate` уже читает персистентный снимок, тотал на устройстве корректен.
+- **Фикс:** `coreAccountsSnapshot(matching:)` удалён; `buildLedgerPresentation` зовёт
+  `orderedAccounts(for:)` (тот же источник, что список); `ungroupedAccounts()` переведён на живой
+  fetch `group == nil`. На экране остался один источник core-счетов.
+- **Тесты:** `millioTests/UI/Services/Finances/FinanceOverviewChartAfterRestoreTests.swift` на
+  реальной фикстуре бэкапа владельца — «устаревший срез не опустошает график» и инвариант
+  «тотал > 0 ⇒ график не пуст»; до фикса оба красные (0 items при 44 счетах в списке и тотале
+  104 075 826), после — зелёные (37 items). Мигрированы 4 теста `FinanceViewModelCoreEntitiesTests`
+  и source-guard в `FinanceLocalizationTests`.
+- **«Динамика» тем же классом НЕ болеет:** `FinanceDynamicsViewModel` читает стор своими fetch'ами
+  (`fetchGroupsFromStore`/`reloadChartDataDependencies`), срез `FinanceViewModel` не использует.
+- **Гейт:** полный прогон 2421 тест / 38 красных (база 2419/38); 5 подозрительных красных
+  (`QuickSetupApplier`, `ticker twin-пара`, `Ф7 includeInTotal`, дубли карты, `Overview chart
+  debit/credit`) воспроизведены 1:1 на родительском коммите `8c2dccf` в отдельном worktree —
+  предсуществующие, новых красных ноль. Целевые сюиты Finance/Localization/CoreEntities и
+  backup/recovery (`RecoveryEndToEndIntegrationTests`, `BackupVerifiedRestoreTests`) — зелёные.
+- **Коммит:** `a8bcea5`. Чужие незакоммиченные правки (`AccountsTotalsService`,
+  `CurrencyRateService` + тест) не тронуты и не коммитились.
+
+---
+
+### R9 — Возврат unified FX snapshot из архива — [x] РЕАЛИЗОВАН (2026-08-23)
+- **Причина фазы:** при откате Phase 9 вместе со сломанным recovery уехала независимая работа по
+  курсам (`specs/2026-08-21-unified-fx-snapshot.md`). Recovery-часть архива переделана заново в
+  R1–R8 и не возвращается; FX-часть возвращена по смыслу, не `checkout`-ом ветки.
+- **Что перенесено** (из `archive/phase9-broken-2026-08-22`, `2e0777e`):
+  - `millio/Core/Currency/CurrencyRateSnapshotRevisionStore.swift` (новый) — revision полного
+    набора курсов; хранит только метаданные, matrix остаётся у `RateRepository`.
+  - `Notification.Name.currencyRateSnapshotDidChange` (`millio/Core/Currency/RateSource.swift:12`).
+  - `CurrencyRateService`: `activeSnapshot`, `currentRateSnapshot()`,
+    `adoptSnapshot(_:notify:)` (`CurrencyRateService.swift:384`) — единственная точка замены
+    matrix вместо шести разрозненных присваиваний `cachedRates`/`lastUpdateTS`; ограниченная
+    `buildFallbackChain()` (`:262`): `millio→erapi`, `frankfurter→millio→erapi`, `cbr`/`custom` —
+    без фолбэка. Это и есть фикс класса «разные экраны показывают разные рубли».
+  - `AccountSnapshotRebuilder` (`:142`): `account.snapshots`/`account.events` заменены на явные
+    `FetchDescriptor` внутри актора — relationship-fault больше не тянется между контекстами.
+- **Что добавлено сверх списка владельца и почему:** подписки потребителей на
+  `currencyRateSnapshotDidChange` (`FinanceViewModel:494`, `CashflowViewModel:237`,
+  `CardViewModel:126`, `CreditViewModel:150`, `CurrencyRatesWidget:59`) — хунки 1:1 из архива.
+  Без них уведомление не имело ни одного слушателя, то есть цель спеки («Finance, Cashflow и
+  виджет пересчитываются после смены revision») не достигалась.
+- **Что НЕ возвращено:** `Core/Backup/*`, `UI/Restore/*`, `millioApp.swift`, `Localizable.xcstrings`,
+  `FinanceDynamicsSnapshotStore` (отдельный вопрос), а также `ConverterViewModel` —
+  в архиве это не FX-хунк, а смена DI и снос `RateSourcePreferenceStore.converterOverride`
+  (AC «конвертер берёт курсы у того же сервиса» остаётся ОТКРЫТЫМ).
+- **Адаптация под текущий код:** тест `buildFallbackChain для .cbr` (`CurrencyRateServiceTests.swift:554`)
+  в архиве не был обновлён и ожидал старый контракт «все источники» — приведён к новому
+  (`chain == [.cbr]`, ЦБ РФ не смешивается с глобальными провайдерами). Остальные файлы после
+  R1–R8 не разошлись с архивной базой — конфликтов не было.
+- **Тесты:** восстановлены `Millio недоступен → сервис принимает полный ER-API snapshot`
+  (проверяет `attemptedSources == [.millio, .erapi]` и источник активного snapshot),
+  3 теста цепочки источников, `rebuildAllReplacesPersistedSnapshotsWithoutReadingAccountRelationship`.
+- **Гейт:** 2424 теста / 35 красных при базе 2421/38 (`r7`-эталон: 2400/35). Новых красных ноль:
+  три «новых» относительно эталона (`MarketSymbolSearchViewModelTests` ×2, `FinanceDynamicsViewModelTests`
+  ×1) зелёные в изолированном прогоне — cross-suite contention. Сюиты Currency, AccountsCore,
+  backup/recovery — зелёные. `GroupsMigrator` красный только в параллельном прогоне (в изоляции
+  зелёный и на `18b8aa0`, и на текущем HEAD).
+- **Коммиты:** `7f0474d` (ядро + тесты + спека), `528a634` (подписчики), `0f9756b` (тест `.cbr`).
+- **Чужие незакоммиченные правки** (`AccountsTotalsService`, `CurrencyRateService.getCachedRate`,
+  `AccountsTotalsServiceTests`) сохранены в ветке `wip/fx-cached-rate-fallback` (`e6b4a00`) и в
+  работу не включались.
+
+
+---
+
+### R10 — Доступ к бэкапам в гостевом режиме — [x] РЕАЛИЗОВАН (2026-08-23)
+- **Баг (воспроизведён владельцем на устройстве):** logout → раздел бэкапов показывает ВСЕ облачные
+  копии залогиненного пользователя без входа → «Восстановить» выполняется в гостевой стор, чужие
+  финансовые данные оказываются в гостевом хранилище.
+- **Подтверждённая причина:** CloudKit Private DB привязана к iCloud-аккаунту УСТРОЙСТВА, а не к
+  аккаунту Millio (`millio/Core/Backup/CloudBackupStore.swift` — `CKContainer.default().privateCloudDatabase`),
+  поэтому в гостевом сторе облако честно отдаёт копии владельца устройства. В R4 закрыт был только
+  launch-путь (`LaunchRecoveryPolicy.swift:104` → `.skip(.guestScopeBeforeSignIn)`); экран управления
+  (`millio/UI/Profile/BackupManagementView.swift`) и все ручные пути остались открытыми.
+  Усугубляющий фактор: `AppState.activeScopeKey` публиковался ровно в одной точке — перед
+  launch-recovery (`millioApp.swift:1118`), — то есть после logout мог остаться user-ключом.
+- **Гейт на уровне сервиса** (`BackupAccessPolicy` + `SwitchingBackupManager`): облачные операции
+  требуют авторизованного scope (ключ активного стора ≠ `DataScope.guest`). Закрыты ВСЕ пути:
+  `backupNow`, `backupNow(passphrase:)`, `saveVersionNow`, `restoreLatest` (обе перегрузки),
+  `restoreVersion`, `restoreFromFile`, `inspectBackupFile`, `importVersion`, `exportVersion`,
+  `deleteBackupVersion` → `AppError.backupRequiresSignIn`; `listBackupVersions` → `[]`,
+  `lookupBackupVersions` → `.failed(.requiresSignIn)` (не `.empty`: «не спрашивали» ≠ «копий нет»),
+  `lastBackupInfo` → `nil` (дата чужой копии — тоже утечка). Авто-бэкап (`millioApp.swift:1061`)
+  ловит ошибку в существующем `catch` и просто логирует.
+- **Импорт файла в гостевом режиме — решение: запрещён.** Файл принесён руками, но восстанавливать
+  его некуда: гостевой стор после входа уезжает в reconciliation guest→user и данные удвоятся
+  (тот же риск, из-за которого в R4 закрыт launch-путь). Отказ приходит на `inspectBackupFile`,
+  то есть ДО деструктивного подтверждения, текстом «Войдите в аккаунт Millio…».
+- **UI (второй слой, не единственный):** `BackupManagementView` — все действия дизейблятся
+  (`isBackupOperational`/`canRestoreSelectedVersion` учитывают гейт), в карточке действий callout
+  «Нужен вход в аккаунт»; `refreshStatusIfNeeded` в гостевом scope чистит список версий, выбор и
+  `lastBackupDate` и не ходит в облако; `onChange(of: appState.activeScopeKey)` закрывает шиты
+  экспорта/импорта и перечитывает состояние — logout при открытом экране доступ не переживает.
+- **`activeScopeKey` публикуется на каждом свопе scope** (`millioApp.swift`, `rebindDataScope`),
+  а не только перед recovery — иначе гейт после logout читал бы устаревший user-ключ.
+- **Уже восстановленные гостевые данные:** автоматической очистки НЕ добавлено (нужно отдельное
+  решение владельца). Предложение: разовый sweep гостевого стора при первом запуске с фиксом —
+  либо ручной пункт «Очистить данные гостевого режима» в Профиле поверх существующего
+  `DataResetService`. Новых сущностей это не требует. Пока владельцу: войти в аккаунт и удалить
+  гостевой стор через сброс данных в гостевом режиме.
+- **Тесты** (`millioTests/Core/BackupGuestScopeAccessTests.swift`, 8): политика отклоняет гостя;
+  гостю не отдаётся ни список, ни `lookup`, ни `lastBackupInfo` (при этом облако не опрашивается —
+  `infoCalls == 0`); restore отклонён на уровне сервиса; импорт/инспекция файла отклонены;
+  create/export/delete отклонены; авторизованный scope сохраняет полный доступ; смена scope на
+  гостевой у ЖИВОГО менеджера мгновенно отзывает доступ (logout при открытом экране); текст отказа
+  локализован (не технический английский). Два существующих теста `SwitchingBackupManagerTests`
+  переведены на авторизованный scope — старый контракт и был багом.
+- **Гейт:** 2434 теста / 39 красных при базе 2424/35. Новых красных ноль: 7 отличий от базы
+  (`RestoreFailureCodeTests`, `FinanceAddAccountPreselectionTests`,
+  `FinanceDynamicsEndpointSemanticsTests` ×3, `GroupsMigratorTests`) — известный cross-suite
+  order-flake локали и общего состояния, в изоляции зелёные (27/27); одновременно 3 красных базы
+  того же кластера позеленели. Backup/recovery/restore/launch — ноль красных.
+- **Коммиты:** `0ebc2ed` (ядро + UI + локализация), `c91c123` (тесты).
+
+
+### R11 — Персистентность курсов и спиннер на «Счетах» — [x] РЕАЛИЗОВАН (2026-08-24)
+- **Баг (репро владельца на устройстве):** «как будто нет архива после закрытия прилы, потому
+  постоянно грузится, и там где счета когда грузится дёргается экран, тк появляется кругляшок
+  загрузки курсов».
+- **Проверено и опровергнуто:** персистентность снимка курсов РАБОТАЕТ. `RateRepository.persist(_:)`
+  пишет `rate_repo_rates_<source>` в `UserDefaults` + дублирует в `NSUbiquitousKeyValueStore`
+  (`millio/Core/Currency/RateRepository.swift:41`), а `CurrencyRateService.init` читает их
+  СИНХРОННО, до первого `await` (`millio/Core/Currency/CurrencyRateService.swift:88-97`). Курсы на
+  первом кадре есть. Проблема не в кэше, а в трёх местах поверх него.
+- **Доказанная причина №1 — индикатор завязан на факт запроса, а не на отсутствие курсов.**
+  `FinanceViewModel.refreshAll/refreshCurrencyQuotes/refreshStockPrices` безусловно поднимали
+  `state.isLoadingRates = true`, а `FinancesView.swift:831` рисует по этому флагу `ProgressView`
+  внутри `VStack` шапки — появление/исчезновение спиннера меняет высоту блока, отсюда «дёргается».
+- **Доказанная причина №2 — холодный старт всегда считался «никогда не обновлялись».**
+  `state.lastRefreshedAt` жил только в памяти (`FinanceViewModel.swift:69`), на старте = `nil`.
+  Гейт `FinancesView.swift:592` (`?? .distantPast`, порог 15 мин) при каждом `scenePhase == .active`
+  запускал принудительное `refreshAll()`. Свежесть при этом лежала на диске в `snapshot.fetchedAt`.
+- **Доказанная причина №3 — самоподдерживающийся цикл на уведомлении.** Подписка на
+  `.currencyRateSnapshotDidChange` вызывала `refreshRates()` → `forceRefreshRates()`, то есть приход
+  снимка запускал ЕЩЁ один принудительный сетевой запрос со спиннером.
+- **Доказанная причина №4 — ревизия снимка зависела от времени загрузки.**
+  `CurrencyRateSnapshotRevisionStore.revision(for:)` = `source:updatedAt:fetchedAt`, поэтому любое
+  фоновое обновление с ТЕМИ ЖЕ курсами давало новую ревизию → уведомление → перестроение UI.
+- **Фикс (минимальный, без новых сущностей):**
+  - ревизия строится по самим значениям курсов (детерминированный FNV-1a по отсортированным парам),
+    а не по `fetchedAt` — одинаковые курсы больше не будят подписчиков. `Hasher` не годится: он
+    засеян случайно на каждый запуск и не пережил бы перезапуск процесса;
+  - `currentRateSnapshot()` поднят в `CurrencyRateServiceProtocol` (с дефолтом `nil` в extension —
+    тестовые даблы не переписывались); индикатор поднимается ТОЛЬКО при отсутствии снимка
+    (`beginRateLoadingIfNothingToShow()`), обновление при живом кэше идёт молча;
+  - `state.lastRefreshedAt` гидрируется из `snapshot.fetchedAt` в `init` — свежесть переживает
+    перезапуск, холодный старт не форсирует обновление;
+  - подписка на снимок больше не форсирует сеть, а только пересчитывает тоталы
+    (`refreshGroupTotalsAndAmounts()`);
+  - `.custom`-источник тоже публикует `activeSnapshot` — иначе у пользователя с ручными курсами
+    «снимка нет» и спиннер вернулся бы;
+  - оба уведомления курсов постятся с `object: self`, `FinanceViewModel` подписан на СВОЙ экземпляр —
+    чужой сервис больше не гоняет экран в сеть (побочно убрало cross-suite течь в тестах).
+- **Связь с restore:** восстановление не трогает ключи `rate_repo_*`, поэтому после restore снимок
+  на месте и спиннера нет — закреплено тестом `testSnapshotAvailableAfterRestoreRelaunch`.
+- **Тесты (+12).** `millioTests/Core/CurrencyRateSnapshotPersistenceTests.swift` (7):
+  `testSnapshotSurvivesRelaunch` (снимок читается в `init` без сети, `repo.callCount == 0`),
+  `testNoSnapshotOnFirstEverLaunch`, `testSnapshotAvailableAfterRestoreRelaunch`,
+  `testRevisionStableForIdenticalRates`, `testRevisionChangesForDifferentRatesOrSource`,
+  `testRevisionIsDeterministic`, `testIdenticalBackgroundRefreshDoesNotNotify`.
+  `millioTests/UI/Services/Finances/FinanceViewModelRateIndicatorTests.swift` (5):
+  `testNoIndicatorWhenSnapshotCached`, `testIndicatorShownWhenNothingCached`,
+  `testLastRefreshedAtHydratedFromPersistedSnapshot`, `testLastRefreshedAtNilWithoutSnapshot`,
+  `testSnapshotNotificationDoesNotForceAnotherNetworkRefresh`.
+- **Гейт:** 2446 тестов / 38 красных при базе 2434 / 39 (+12 = ровно новые тесты). Новых красных
+  ноль: все 12 новых зелёные, в Currency/Finance/backup/recovery красных от этой работы нет.
+  Три отличия от предыдущего прогона (`FinanceViewModelTotalsRaceTests`,
+  `RecoveryEndToEndIntegrationTests`, `RestoreFailureCodeTests`) — известный cross-suite order-flake:
+  в изоляции 13/13 зелёные. Фокус-прогон Currency+Finance: 102/102.
+- **Не сделано осознанно:** `refreshRates()` при смене отображаемой валюты по-прежнему форсирует
+  сеть (курсы для этого не нужны) — вне доказанного бага, спиннера больше не даёт.
+- **Коммиты:** `3f92b49` (ядро + тесты), `d05932a` (тест-инфра), `5e5e3f8` (адресация уведомлений).
+
+
+### R12 — Кэш графика «Динамики» на холодном старте — [x] РЕАЛИЗОВАН (2026-08-24)
+- **Баг (репро владельца на устройстве, скриншот):** закрыть приложение и открыть заново → вкладка
+  «Динамика» показывает «0 ₽», «Нет данных для отображения», «Нет групп», и только через паузу
+  подгружаются данные.
+- **Доказанная причина:** у экрана не было НИКАКОГО долговременного результата, а пустой стартовый
+  `state` визуально неотличим от «данных нет». `loadData()` сбрасывал `isLoading` синхронно
+  (`FinanceDynamicsViewModel.swift:595`), хотя весь расчёт (историческая проекция, breakdown,
+  валютная разбивка) идёт асинхронно — до его завершения экран рисовал пустое состояние как факт.
+- **Фикс — перенос по смыслу из `archive/phase9-broken-2026-08-22` (`2e0777e`)**, откуда компонент
+  уехал при откате Phase 9; recovery/backup-часть архива НЕ бралась (переделана в R1–R10):
+  - `millio/UI/Services/Finances/FinanceDynamicsSnapshotStore.swift` (новый, 108 строк) —
+    display-cache графика/разбивки, файл на диск с `.completeUntilFirstUserAuthentication`
+    (не `UserDefaults`: внутри суммы), имя файла = SHA-256 от scopeID, ключ — data scope;
+  - `FinanceDynamicsViewModel.swift`: `state.isInitialLocalProjectionResolved` (:41),
+    `restoreSnapshotIfEligible()` и `persistSnapshotIfEligible()` (:844+), `completeLocalProjection(for:)`
+    снимает `isLoading` и пишет снимок только по завершении актуальной ревизии расчёта,
+    `state.isLoading = state.chartData.isEmpty` (:580) — спиннер только когда показывать нечего;
+  - `FinanceDynamicsView.swift`: `localProjectionLoadingView` (:2240) вместо `emptyStateView` и вместо
+    пустого графика до первого расчёта; `bindDynamicsViewModel()` (:163) пересоздаёт VM при смене
+    `FinanceViewModel` (scope swap), контекст берётся у него, а не из окружения.
+- **Адаптация под текущий код (архив писался до R1–R11):**
+  - ревизия набора курсов берётся у СВОЕГО сервиса — `currencyService.currentRateSnapshot()` +
+    `CurrencyRateSnapshotRevisionStore.revision(for:)` (R11: считается по значениям курсов), а не из
+    глобального `CurrencyRateSnapshotRevisionStore.current`, как в архиве. Иначе снимок, посчитанный
+    на курсах другого экземпляра сервиса (тесты, другой scope), считался бы валидным;
+  - подписка на `.currencyRateSnapshotDidChange` адресована своему экземпляру (`object: currencyService`)
+    по правилу R11 — дублирования подписок нет, чужой сервис экран не будит;
+  - гидратация дополнительно требует совпадения валюты и периода экрана: кэш в другой валюте показал
+    бы корректные цифры не на тот вопрос (в архиве он их перезаписывал);
+  - `DynamicsBreakdownItem` в текущем коде имеет поле `accountType` — в снимке не сохраняется
+    (иконка/тип восстанавливаются первым же расчётом), при восстановлении `nil`;
+  - `BackupEvent.restoreVerified` из архива не брался — восстановление и так публикует
+    `restoreCompleted`, на который VM подписана.
+- **Дашборд (проверено, не чинилось):** тем же классом болеет — `TotalBalanceWidget` берёт
+  `financeViewModel.state.totalAmount` (`RootTabView.swift:446`), который на холодном старте `0`,
+  поэтому вспыхивает «0 ₽»; sparkline при этом переживает перезапуск (`DashboardBalanceHistoryStore`,
+  `UserDefaults`). Механизм фикса ДРУГОЙ (кэш тотала в `FinanceViewModel`, не снимок «Динамики»), плюс
+  `DashboardBalanceHistoryStore` не разделён по data scope — после R10 это отдельный вопрос гостевого
+  режима. Тривиальным тем же механизмом не закрывается → вынесено, не делалось.
+- **Тесты (+9)** — `millioTests/UI/Services/Finances/FinanceDynamicsSnapshotStoreTests.swift`:
+  `snapshotSurvivesProcessRestart`, `snapshotIsIsolatedByScope`, `corruptSnapshotIsIgnored`,
+  `coldStartWithCacheSkipsEmptyState`, `coldStartWithoutCacheShowsLoadingNotEmptyState`,
+  `snapshotOfAnotherScopeIsNotShown` (гостевой режим после R10),
+  `snapshotWithForeignRateRevisionIsIgnored`, `snapshotWithMatchingRateRevisionHydrates`,
+  `rateRefreshRecalculatesWithoutBlinking`.
+- **Гейт:** 2455 тестов / 32 красных + 6 expected при базе 2446 / 32+6 (+9 = ровно новые тесты).
+  Новых красных ноль (сравнение множеств имён с базовым бандлом), 6 красных базы позеленели
+  (4 `FinanceDynamicsViewModelTests`, `RecoveryEndToEndIntegrationTests`, `RestoreFailureCodeTests` —
+  известный cross-suite order-flake).
+- **Изоляция тестов:** под `isAnyTesting` каталог снимков — свой на процесс (`tmp/...-<UUID>`).
+  Иначе снимок, записанный одной сюитой через дефолтный store, пережил бы её и подставился в
+  другую с тем же scopeID — порядок тестов стал бы значимым. Фокус-прогон Dynamics-сюит: 61/62,
+  единственный красный `overviewEntriesSeparateDebitAndCreditFlows` воспроизводится и на базе.
+- **Коммиты:** `4587b56` (store + VM + тесты), `71b0320` (экран), `21c001a` (изоляция каталога).
+
 
 ## Итого оценка
 
@@ -241,4 +770,17 @@ xcodebuild test -project millio.xcodeproj -scheme millio \
 
 | Date | Phase | Changes |
 |------|-------|---------|
+| 2026-08-24 | R12 | **Баг с устройства:** после перезапуска вкладка «Динамика» показывала «0 ₽» / «Нет данных» / «Нет групп», данные появлялись через паузу. Причина — у экрана не было долговременного результата, а `loadData()` снимал `isLoading` синхронно, хотя расчёт асинхронный: пустой стартовый `state` рисовался как доказанный факт «данных нет». Из `archive/phase9-broken-2026-08-22` (`2e0777e`) перенесён ПО СМЫСЛУ display-cache: `FinanceDynamicsSnapshotStore` (файл на диске с `.completeUntilFirstUserAuthentication`, ключ — data scope, имя = SHA-256 scopeID), гидратация в `init` общего обзора, `isInitialLocalProjectionResolved` + `localProjectionLoadingView` (спиннер вместо ложного пустого состояния), запись снимка только по завершении актуальной ревизии расчёта, `bindDynamicsViewModel()` при scope swap. Адаптация под R11: валидность кэша проверяется ревизией курсов СВОЕГО сервиса (`currentRateSnapshot()`, ревизия по значениям), подписка адресована своему экземпляру — дублей подписок нет; дополнительно требуется совпадение валюты и периода. Recovery/backup-часть архива не бралась. Дашборд болеет тем же классом («0 ₽» из `state.totalAmount`), но механизм фикса другой — вынесено. +9 тестов (`FinanceDynamicsSnapshotStoreTests`). Гейт: 2455/32+6 при базе 2446/32+6, новых красных ноль, 6 красных базы позеленели. Коммиты `4587b56`, `71b0320` |
+| 2026-08-24 | R11 | **Баг с устройства:** курсы «как будто не переживают закрытие приложения» — на «Счетах» при каждом старте вспыхивал кругляшок загрузки и дёргалась шапка. Персистентность снимка при этом работала (`RateRepository.persist` → `UserDefaults` + iCloud KV, синхронное чтение в `CurrencyRateService.init:88`); причин четыре и все поверх кэша: (1) `isLoadingRates` поднимался на ФАКТ запроса, а не на отсутствие курсов, а `ProgressView` в `VStack` шапки менял высоту блока; (2) `lastRefreshedAt` жил только в памяти → на холодном старте `nil` → `.distantPast` → принудительное `refreshAll()` на каждом `scenePhase == .active`; (3) подписка на `.currencyRateSnapshotDidChange` звала `refreshRates()` → `forceRefreshRates()`, то есть приход снимка форсировал ещё один сетевой запрос; (4) ревизия снимка включала `fetchedAt`, поэтому фоновое обновление с ТЕМИ ЖЕ курсами считалось новым набором и перестраивало UI. Фикс: ревизия по значениям курсов (детерминированный FNV-1a, не `Hasher` — тот засеян случайно на запуск), `currentRateSnapshot()` в протоколе с дефолтом `nil`, индикатор только при отсутствии снимка, гидрация `lastRefreshedAt` из `snapshot.fetchedAt`, подписка на снимок пересчитывает тоталы вместо сети, `.custom`-источник тоже публикует снимок, уведомления адресуются своему экземпляру сервиса (`object: self`). После restore ключи `rate_repo_*` не трогаются — спиннера нет, закреплено тестом. +12 тестов (`CurrencyRateSnapshotPersistenceTests` 7, `FinanceViewModelRateIndicatorTests` 5). Гейт: 2446/38 при базе 2434/39, новых красных ноль (3 отличия — cross-suite order-flake, в изоляции 13/13; фокус-прогон 102/102). Коммиты `3f92b49`, `d05932a`, `5e5e3f8` |
+| 2026-08-23 | R10 | **Критический баг безопасности** (репро владельца): после logout раздел бэкапов показывал облачные копии залогиненного пользователя и восстанавливал их в ГОСТЕВОЙ стор. Причина — CloudKit Private DB привязана к iCloud устройства, а не к аккаунту Millio; в R4 был закрыт только launch-путь. Введён `BackupAccessPolicy` и гейт в `SwitchingBackupManager`: без авторизованного scope запрещены backup/save/restore(3 пути)/restoreFromFile/inspect/import/export/delete, `listBackupVersions` → `[]`, `lookupBackupVersions` → `.failed(.requiresSignIn)`, `lastBackupInfo` → `nil`. Импорт файла руками в гостевом режиме — запрещён осознанно (после входа гостевой стор уезжает в reconciliation и данные удваиваются), отказ приходит до деструктивного подтверждения. UI — второй слой: действия дизейблятся, callout «Нужен вход в аккаунт», список чистится, logout при открытом экране закрывает шиты и снимает доступ. `AppState.activeScopeKey` теперь публикуется на каждом свопе scope, а не только перед recovery. Очистка уже восстановленных гостевых данных НЕ делалась — ждёт решения владельца. +8 тестов (`BackupGuestScopeAccessTests`), 2 существующих переведены на авторизованный scope. Гейт: 2434/39 при базе 2424/35, новых красных ноль (7 отличий — order-flake, в изоляции 27/27 зелёные). Коммиты `0ebc2ed`, `c91c123` |
+| 2026-08-23 | R9 | Возвращён единый FX snapshot из `archive/phase9-broken-2026-08-22` (`2e0777e`) — независимая от recovery работа, уехавшая при откате Phase 9. `CurrencyRateSnapshotRevisionStore` + `adoptSnapshot(_:notify:)` как единственная точка замены полного matrix (revision публикуется только при реальной смене набора курсов), ограниченная цепочка `millio→erapi` без смешивания публичных провайдеров, `AccountSnapshotRebuilder` читает snapshots/events явным `FetchDescriptor` внутри актора. Дополнительно возвращены подписки потребителей (Finance, Cashflow, Cards, Credits, виджет курсов) — без них уведомление было мёртвым кодом. Не возвращены Backup/Restore/`millioApp`/`xcstrings`/`FinanceDynamicsSnapshotStore` и рефактор `ConverterViewModel` (AC «конвертер через тот же сервис» открыт). Адаптация: тест цепочки `.cbr` приведён к новому контракту. Гейт: 2424/35 при базе 2421/38, новых красных ноль (3 отличия от эталона — cross-suite flake, в изоляции зелёные). Коммиты `7f0474d`, `528a634`, `0f9756b`; чужие правки сохранены в `wip/fx-cached-rate-fallback` (`e6b4a00`) |
+| 2026-08-23 | R8 | Пустой график активов/обязательств после restore при верных списке и тотале. Причина — три источника core-счетов на экране «Счета»: список читал живое `AccountGroup.accounts`, тотал — живой fetch, а ledger-график единственный читал срез `FinanceViewModel.state.accounts`, который обновляется только по событиям (снапшот, снятый до того, как импорт довёз `Account`, оставлял график пустым навсегда). `coreAccountsSnapshot(matching:)` удалён, `buildLedgerPresentation` зовёт `orderedAccounts(for:)`, `ungroupedAccounts()` переведён на живой fetch — на экране остался один источник. Регресс-тесты на реальной фикстуре владельца (`FinanceOverviewChartAfterRestoreTests`): до фикса 0 items при 44 счетах в списке и тотале 104 075 826, после — 37 items; плюс инвариант «тотал > 0 ⇒ график не пуст». «Динамика» тем же классом не болеет (свои fetch'и). Гейт: 2421/38 при базе 2419/38, 5 подозрительных красных воспроизведены на родительском `8c2dccf` — новых нет. Коммит `a8bcea5` |
+| 2026-08-23 | R7-fix | Закрыты дефекты приёмки R7 на `feature/recovery-rework` (`f635fc8`, `368063a`, `62d264a`, `26b0d10`, `e152931`, +2 тестовых). **S3:** входящий файл из Files больше не теряется при закрытом приложении — `IncomingBackupFileIntake` потребляет URL только при готовом `backupManager`, иначе оставляет его в `AppState` и добирает по `onChange(of: isReady)`. Побочно вскрыт более тяжёлый дефект: модификатор навешен снаружи `.environment(\.diContainer, …)`, из окружения читал вечный nil — восстановление из файла отвечало «iCloud недоступен» на ЛЮБОМ пути, менеджер теперь передаётся явным параметром. **S13:** `DataRepository.validateSchemaCompatibility(of:)` вызывается до `clearAllDataAsync` (рядом с census) — отказ по схеме больше не требует отката. **S8:** счётчик попыток вынесен в `AutoRestoreAttemptCounter`, тавтологические тесты заменены на вызов продового кода. **Security:** pre-restore снимок пишется с `.completeFileProtection`, осиротевшие `millio-pre-restore-*` старше суток подметаются перед каждым restore (свежий — последний шанс на ручное восстановление — не трогаем); чтение входящего файла через `readFile(at:)` с потолком 256 МБ и локализованной ошибкой. **Тест-инфра:** `RecoveryEndToEndIntegrationTests` больше не ловит restore-события чужих параллельных сюит (метка операции в task-local) и не зависит от порядка fetch (в бэкапе владельца 3 счёта из 44 без имени). Гейт: 2406 тестов, 34 красных (база 672392b без чужих правок: 2398/35); дельта к базе — только сюиты Finance/Dynamics/Cashflow, где лежат ЧУЖИЕ незакоммиченные правки (`AccountsTotalsService`, `CurrencyRateService`); backup/recovery/restore/launch — ноль красных |
+| 2026-08-23 | R7-fix-2 | **S1 и S11 закрыты решением владельца** (`c835f15`, `d9ca867`). **S1:** восстановление предлагается ДО онбординга — непройденный онбординг больше не блокирует launch-recovery, политика ждёт `.onboarding` у нового пользователя и `.ready` у прошедшего; отказ нового пользователя ведёт в онбординг, успешный restore — сразу в приложение с проставленным флагом онбординга. **S11:** отказ «продолжить без данных» запоминается per-scope в `LaunchRecoveryStateStore` (переименованный `AutoRestoreAttemptCounter`, третья сущность не заведена): авто-restore после отказа не стартует, ручной путь из Профиля работает всегда, отказ одного аккаунта не наследуется другим, флаг снимается при появлении данных в scope. Гейт: 2419 тестов / 38 красных (база 2406/34); все 6 «новых» красных зелены в изолированном прогоне (89/89) и лежат вне зоны задачи, backup/recovery/restore/launch — ноль красных |
+| 2026-08-23 | R6 | РЕАЛИЗОВАН на `feature/recovery-rework` (`5dda070`). Интеграционный гейт: новая сюита `RecoveryEndToEndIntegrationTests` (+6) без моков репозитория — реальный `DataRepository` + реальный файл владельца (1673 модели): файл→restore→данные читаются из стора (счётчики сходятся с receipt, 328 транзакций, дублей нет); авто-restore на пустой базе даёт verified receipt и `restoreCompleted` в EventBus; провал проверки успех не публикует; S14 и S16 подняты с уровня моков/гейта на реальный стор; импорт при непустой базе — разбор файла ничего не меняет, подтверждение заменяет всё. **Order-flake разобран: гипотеза «чужая сюита оставила EN» неверна.** Источника два, оба свои: (а) два теста `RestoreDiagnosticsLocalizationTests` сравнивают ДВЕ строки из ambient-бандла подряд, соседние l10n-сюиты переключают язык между чтениями — пара взята под `LanguageManager`-замок (`withLockedAppLanguage`), чужие сюиты не трогались; (б) `BackupRestoreIntegrityTests` ждал reload через `Task.yield()` — заменено на bounded wait 2 с. Security-review R1–R5: логи печатают только `diagnosticSummary` (счётчики и имена типов, без пользовательских значений), passphrase не логируется и не хранится, валидация импорта чужого файла не ослаблена (тот же `decodeBackupPayload`, подтверждение обязательно). Два замечания без фикса: pre-restore снимок — открытый JSON всех данных в `tmp/` без явного класса защиты и без уборки осиротевших файлов после провала отката (`BackupManager.swift:817`); `Data(contentsOf:)` входящего файла без границы размера (`IncomingBackupFileRestore.swift:93`). Гейт: 2400 тестов, 35 красных (ДО 2394/36) при фоне 34–37, ноль красных в backup/recovery/router, ноль новых |
+| 2026-08-23 | R5 | РЕАЛИЗОВАН на `feature/recovery-rework` (`21b3b21`). D12 закрыт: `RestoreView` и `BackupManagementView` больше не создают `CloudBackupStore()` напрямую — доступность облака спрашивается у DI-менеджера (`SwitchingBackupManager.isAvailable()` и так отвечает при выключенном автобэкапе, ради чего и был обход). Grep-чек `CloudBackupStore(` вне `Core/Backup` = 0. **D11 оказался неприменим:** `RecoveryCoordinator` откачен вместе с Phase 9, а у всех пяти новых файлов R1–R4 каждый публичный член имеет живого потребителя (проверено посимвольно, с учётом внутрифайловых вызовов) — мёртвого кода нет, удалять нечего. Ponytail-ревизия дифа R1–R4 нашла три дубля вместо: (1) `IncomingBackupFileRestore.message(for:)` — копия `RestoreErrorPresenter`, которая на generic-пути показывала технический английский `AppError.localizedDescription`, то есть тот самый D9, закрытый в R4 только для `RestoreView`; (2) путь восстановления в `BackupManagementView` мапил ошибку двумя inline-`catch` мимо презентера; (3) приватный `withTimeout` + `RestoreTimeoutError` в `RestoreView` — побайтовая копия глобального `millio/Core/Concurrency/WithTimeout.swift`. Все три схлопнуты, −34 строки, единый текст ошибки на всех трёх путях восстановления. Консистентность путей проверена: авто-restore, `RestoreView`, `BackupManagementView`, файл из Files — все идут в одну воронку `restoreDownloadedBackup` → `replaceRepositoryDataWithBackup` с verified-receipt (R2); launch-путь под `LaunchRecoveryGate` (R1). Гейт: 34 красных при фоне 34–37, новых нет; из 3 красных в backup/recovery-сюитах все 3 — cross-suite order-flake (в изоляции `RestoreDiagnosticsLocalizationTests` 9/9 и `BackupRestoreIntegrityTests` 9/9 зелёные) |
+| 2026-08-23 | R4 | РЕАЛИЗОВАН на `feature/recovery-rework` (`8117c2d`, `cf7b2ae`, `6b6f70a`). D8: `BackupLookupOutcome` — ошибка CloudKit больше не приходит в UI как пустой список; таймаут стал исходом, а не английской строкой. Экран восстановления различает «копий нет» / «поиск не удался (причина)» / «iCloud не ответил», у каждого — кнопка «Повторить». D9: `RestoreFailureCode.message`, `AppError` в UI и 5 ключей экрана без перевода переведены через каталог (30 ключей × 7 языков); новый `RestoreErrorPresenter` — единственный источник текста ошибки. S10: guest-scope до логина = `skip(.guestScopeBeforeSignIn)` с причиной в логе (раньше гостю предлагали восстановить облачную копию в гостевой стор). +18 тестов. Гейт: 2392/37 при фоне 34–36, backup/recovery/router-сюиты зелёные |
+| 2026-08-23 | R3 | РЕАЛИЗОВАН на `feature/recovery-rework` (`3a8a6e0`, `bb87d9c`, `c4ab1b7`, `7c32398`). D5: `BackupFileFormat` — один источник расширений, `Info.plist` объявляет ОБА (экспорт писал `.milliobackup`, объявлено было только `millio-backup` — система не связывала файл владельца с приложением). D3: `IncomingBackupFileRestoreModifier` подключён в корне сцены — единственный потребитель `pendingIncomingBackupURL`, работает на любом экране и при холодном старте, URL потребляется до первого `await` на всех ветках (шиты выписок `RootTabView:187` не залипают). D2: после `importVersion` файл уходит в тот же путь → подтверждение перезаписи, отказ = версия остаётся в списке. D4: кнопка «Восстановить из файла» в `RestoreView`. Новое в Core: `inspectBackupFile` + `restoreFromFile` (путь «файл → данные» больше не требует iCloud, `importVersion` его требовал). Условие владельца: safety-снимок и `rollback(to:)` из R2 переиспользованы, провал отката = `RestoreRollbackFailure` (severity `.critical`, снимок не удаляется, локализованная инструкция). Тестов +10, включая S14. **Отклонение от плана:** подтверждение перезаписи показывается ВСЕГДА, а не только на непустой базе (SR9: неизвестный счётчик = «непустая»; отдельный подсчёт моделей в UI-слое не заводился) |
 | 2026-08-22 | — | План создан (spec + plan + сайдкар), код не писан |
+| 2026-08-22 | R2 | РЕАЛИЗОВАН на `feature/recovery-rework`. Создан `RestoreReceipt`/`RestoreModelCensus`/`RestoreVerificationFailure` (`millio/Core/Backup/RestoreReceipt.swift`); успех restore публикуется только после пересчёта стора; пустой бэкап отсекается до деструктивной фазы; провал проверки = откат + локализованная ошибка (`backup.restore.verification.*`). Порог `size >= 1024` в авто-restore удалён (отбор по содержимому). Побочно найден и исправлен блокер: `CashbackImporter.importPriority` 20 → 40 (кешбэк импортировался до `Account` и ронял весь restore реального бэкапа в `backupCorrupted`). Эталон владельца: 1673 → 1673, verified. Гейт: backup-сюиты 67/67, полный прогон 2358/36 при фоне 35 (2 лишних — order-flake Dynamics, в изоляции зелёные) |
+| 2026-08-22 | R1 | РЕАЛИЗОВАН на `feature/recovery-rework`. Доказан двойной вызов `presentRestoreFlowIfNeeded` (cold start `:328` + `onSessionChanged` от `restoreSession` `:339`). Добавлен `LaunchRecoveryGate` (идемпотентность по поколению scope + stale-guard), `LaunchRecoveryPolicy.localDataCount` → `Int?` с ветками `presentRestoreManualOnly`/`allowsAutomaticRestore`/`locksLaunchRecovery`. 11 новых тестов (вкл. блокирующий S16). Гейт: 2346 тестов, 35 красных = фон, новых нет. Миграция флагов (D10) сознательно НЕ делалась — риск SR3 без выигрыша для D1 |

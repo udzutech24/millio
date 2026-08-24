@@ -14,7 +14,7 @@ struct BackupTransferPayload: Equatable {
 }
 
 struct BackupTransferFileDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.millioBackup, .data] }
+    static var readableContentTypes: [UTType] { BackupFileFormat.importerContentTypes }
 
     let data: Data
 
@@ -35,7 +35,5 @@ struct BackupTransferFileDocument: FileDocument {
 }
 
 extension UTType {
-    static var millioBackup: UTType {
-        UTType(exportedAs: "com.alekseya.millio.backup", conformingTo: .data)
-    }
+    static var millioBackup: UTType { BackupFileFormat.contentType }
 }

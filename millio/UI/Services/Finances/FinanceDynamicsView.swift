@@ -80,7 +80,6 @@ enum FinanceDynamicsDeleteLayoutPolicy {
 // MARK: - Finance Dynamics View
 
 struct FinanceDynamicsView: View {
-    @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @ObservedObject var financeViewModel: FinanceViewModel
     @State private var dynamicsViewModel: FinanceDynamicsViewModel?
@@ -122,19 +121,18 @@ struct FinanceDynamicsView: View {
         }
         .onAppear {
             if dynamicsViewModel == nil {
-                dynamicsViewModel = FinanceDynamicsViewModel(
-                    modelContext: modelContext,
-                    financeViewModel: financeViewModel,
-                    initialGroupID: initialGroupID,
-                    initialGroupCurrency: initialGroupCurrency,
-                    initialAccountID: initialAccountID,
-                    initialAccountCurrency: initialAccountCurrency
-                )
-                dynamicsViewModel?.handle(.loadData)
+                bindDynamicsViewModel()
             } else {
                 // Обновляем данные при возврате на экран
                 dynamicsViewModel?.handle(.loadData)
             }
+        }
+        // `FinanceDynamicsView` держит свою VM в `@State`. При смене data scope (гость ↔ аккаунт,
+        // restore) SwiftUI может сохранить этот state дольше, чем среду. Пересоздаём VM вместе с
+        // FinanceViewModel и берём контекст у него — иначе «Динамика» осталась бы на прошлом scope
+        // (и на его закэшированном снимке).
+        .onChange(of: ObjectIdentifier(financeViewModel)) { _, _ in
+            bindDynamicsViewModel()
         }
         .onChange(of: financeViewModel.state.availableCards.map {
             "\($0.cardUniqueID)_\($0.balance)_\($0.updatedAt.timeIntervalSince1970)"
@@ -162,6 +160,18 @@ struct FinanceDynamicsView: View {
         } else {
             content
         }
+    }
+
+    private func bindDynamicsViewModel() {
+        dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: financeViewModel.modelContext,
+            financeViewModel: financeViewModel,
+            initialGroupID: initialGroupID,
+            initialGroupCurrency: initialGroupCurrency,
+            initialAccountID: initialAccountID,
+            initialAccountCurrency: initialAccountCurrency
+        )
+        dynamicsViewModel?.handle(.loadData)
     }
 }
 
@@ -1007,6 +1017,10 @@ private struct FinanceDynamicsContentView: View {
                 // График
                 if !EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) {
                     proBlockedView(size: .regular)
+                        .frame(height: max(0, currentHeight - 64))
+                } else if !viewModel.state.isInitialLocalProjectionResolved && viewModel.state.chartData.isEmpty {
+                    localProjectionLoadingView
+                        .frame(maxWidth: .infinity)
                         .frame(height: max(0, currentHeight - 64))
                 } else if viewModel.state.isLoading {
                     ProgressView()
@@ -2139,7 +2153,13 @@ private struct FinanceDynamicsContentView: View {
 
             // Блок таблицы
             if viewModel.state.dynamicsBreakdown.isEmpty {
-                emptyStateView
+                Group {
+                    if viewModel.state.isInitialLocalProjectionResolved {
+                        emptyStateView
+                    } else {
+                        localProjectionLoadingView
+                    }
+                }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 40)
                     .background(dynamicsCardBackground)
@@ -2215,6 +2235,18 @@ private struct FinanceDynamicsContentView: View {
                         .foregroundStyle(AppColors.textSecondary)
                 }
             }
+        }
+    }
+
+    /// До первого завершённого локального расчёта пустая разбивка ничего не доказывает.
+    /// Не говорим «Нет групп», пока VM не отличила действительно пустой scope от ещё идущей гидратации.
+    private var localProjectionLoadingView: some View {
+        VStack(spacing: AppSpacing.m) {
+            ProgressView()
+                .tint(AppColors.textPrimary)
+            Text(L("loading"))
+                .font(.millioSubheadlineMedium)
+                .foregroundStyle(AppColors.textSecondary)
         }
     }
 

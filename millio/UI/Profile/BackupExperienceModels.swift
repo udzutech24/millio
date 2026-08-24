@@ -99,6 +99,15 @@ enum BackupManagementLayout {
     }
 }
 
+/// Что показать на экране восстановления, когда версия для восстановления не выбрана.
+struct RestoreLookupPresentation: Equatable {
+    let statusTitle: String
+    let statusIcon: String
+    let title: String
+    let message: String
+    let showsRetry: Bool
+}
+
 enum BackupExperiencePresenter {
     static func dashboard(
         isBackupEnabled: Bool,
@@ -182,6 +191,45 @@ enum BackupExperiencePresenter {
                 hasPinnedVersions: hasPinnedVersions
             )
         )
+    }
+
+    /// Состояние экрана восстановления по исходу поиска бэкапа. «Копий нет» и «облако не ответило» —
+    /// разные экраны: во втором случае данные могут существовать, и уход в онбординг опасен (D8).
+    static func restoreLookupPresentation(
+        outcome: BackupLookupOutcome,
+        isICloudAvailable: Bool
+    ) -> RestoreLookupPresentation {
+        switch outcome {
+        case .timedOut:
+            return RestoreLookupPresentation(
+                statusTitle: BackupL10n.tr("backup.restore.lookup.timedout", fallback: "Still Searching"),
+                statusIcon: "hourglass.circle.fill",
+                title: BackupL10n.tr("backup.restore.lookup.timedout.title", fallback: "iCloud did not respond"),
+                message: BackupL10n.tr(
+                    "backup.restore.lookup.timedout.message",
+                    fallback: "The backup list did not arrive in time. iCloud may still be syncing — try again."
+                ),
+                showsRetry: true
+            )
+        case .failed(let reason):
+            return RestoreLookupPresentation(
+                statusTitle: BackupL10n.tr("backup.restore.lookup.failed.status", fallback: "Search Failed"),
+                statusIcon: "exclamationmark.icloud.fill",
+                title: BackupL10n.tr("backup.restore.lookup.failed.title", fallback: "Could not check backups"),
+                message: reason.userMessage,
+                showsRetry: true
+            )
+        case .empty, .found:
+            return RestoreLookupPresentation(
+                statusTitle: isICloudAvailable
+                    ? BackupL10n.tr("backup.restore.empty.status.not_found", fallback: "Backup Not Found")
+                    : BackupL10n.tr("backup.restore.empty.title.icloud_unavailable", fallback: "iCloud is unavailable"),
+                statusIcon: isICloudAvailable ? "exclamationmark.circle.fill" : "icloud.slash.fill",
+                title: restoreEmptyStateTitle(isICloudAvailable: isICloudAvailable),
+                message: restoreEmptyStateMessage(isICloudAvailable: isICloudAvailable),
+                showsRetry: true
+            )
+        }
     }
 
     static func restoreEmptyStateTitle(isICloudAvailable: Bool) -> String {

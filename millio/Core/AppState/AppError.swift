@@ -9,6 +9,9 @@ import Foundation
 
 enum AppError: Error, Equatable, Hashable {
     case iCloudUnavailable
+    /// Операция с облачной копией запрошена в гостевом scope (R10): CloudKit отдал бы копии
+    /// владельца устройства, а восстановление положило бы их в чужой стор.
+    case backupRequiresSignIn
     case networkUnavailable
     case backupCorrupted
     case incompatibleSchemaVersion
@@ -21,6 +24,8 @@ enum AppError: Error, Equatable, Hashable {
         switch self {
         case .iCloudUnavailable:
             return "iCloud is unavailable"
+        case .backupRequiresSignIn:
+            return "Sign in to Millio to use cloud backups"
         case .networkUnavailable:
             return "Network is unavailable"
         case .backupCorrupted:
@@ -41,6 +46,7 @@ enum AppError: Error, Equatable, Hashable {
     static func == (lhs: AppError, rhs: AppError) -> Bool {
         switch (lhs, rhs) {
         case (.iCloudUnavailable, .iCloudUnavailable),
+             (.backupRequiresSignIn, .backupRequiresSignIn),
              (.networkUnavailable, .networkUnavailable),
              (.backupCorrupted, .backupCorrupted),
              (.incompatibleSchemaVersion, .incompatibleSchemaVersion):
@@ -75,6 +81,8 @@ enum AppError: Error, Equatable, Hashable {
         case .securityFailed(let message):
             hasher.combine(6)
             hasher.combine(message)
+        case .backupRequiresSignIn:
+            hasher.combine(8)
         case .unknown(let error):
             hasher.combine(7)
             hasher.combine(error.localizedDescription)

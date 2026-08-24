@@ -81,6 +81,9 @@ final class AppState {
     var launchSplashDisplayMode: LaunchSplashDisplayMode = .always
     var isAppLocked: Bool = false
     var isRestoreInProgress: Bool = false
+    /// Ключ активного scope данных (`DataScope.storeConfigurationName`). Публикуется на пути
+    /// launch-recovery: экран восстановления пишет per-scope отказ и не должен знать про DataScope.
+    var activeScopeKey: String = DataScope.guest.storeConfigurationName
     var isGuestModeEnabled: Bool = false {
         didSet {
             SettingsManager.shared.isGuestModeEnabled = isGuestModeEnabled

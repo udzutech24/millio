@@ -36,7 +36,11 @@ struct FinanceDynamicsState {
     
     /// Флаг загрузки данных
     var isLoading: Bool = false
-    
+
+    /// Первый локальный расчёт завершён. Пока он не готов и нет снимка, пустой результат
+    /// нельзя трактовать как «нет данных»: SwiftData и историческая проекция ещё догружаются.
+    var isInitialLocalProjectionResolved: Bool = false
+
     /// Все группы
     var groups: [FinanceGroup] = []
     
@@ -267,6 +271,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private(set) var historicalShadowDeltaBucket: HistoricalPortfolioShadowDeltaBucket?
     private let historicalReaderMode: HistoricalPortfolioReaderMode
     private let historicalSeriesLoader: ((HistoricalPortfolioSeriesQuery) async -> HistoricalPortfolioSeriesResult)?
+    private let snapshotStore: FinanceDynamicsSnapshotStoreProtocol
+    private let snapshotScopeID: String
+    private var rateSnapshotObserver: NSObjectProtocol?
     private lazy var legacyHistoricalValuator = LegacyHistoricalValuator(
         modelContext: modelContext,
         currencyService: currencyService,
@@ -295,11 +302,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         initialAccountCurrency: String? = nil,
         currencyService: CurrencyRateServiceProtocol,
         historicalReaderMode: HistoricalPortfolioReaderMode? = nil,
-        historicalSeriesLoader: ((HistoricalPortfolioSeriesQuery) async -> HistoricalPortfolioSeriesResult)? = nil
+        historicalSeriesLoader: ((HistoricalPortfolioSeriesQuery) async -> HistoricalPortfolioSeriesResult)? = nil,
+        snapshotStore: FinanceDynamicsSnapshotStoreProtocol = FinanceDynamicsSnapshotStore()
     ) {
         self.modelContext = modelContext
         self.financeViewModel = financeViewModel
         self.currencyService = currencyService
+        self.snapshotStore = snapshotStore
+        self.snapshotScopeID = financeViewModel.historicalValuationScopeID
         self.historicalReaderMode = historicalReaderMode
             ?? HistoricalPortfolioReaderConfiguration.current(defaults: UserDefaults.standard).mode
         self.historicalSeriesLoader = historicalSeriesLoader
@@ -332,8 +342,21 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         if state.period == .custom && state.customPeriod == nil {
             state.period = .month
         }
-        
+
+        restoreSnapshotIfEligible()
+
         subscribeToEvents()
+        // Слушаем ТОЛЬКО свой экземпляр сервиса курсов (правило R11): чужой сервис из тестов или
+        // другого scope не должен заставлять этот экран пересчитываться.
+        rateSnapshotObserver = NotificationCenter.default.addObserver(
+            forName: .currencyRateSnapshotDidChange,
+            object: currencyService as AnyObject,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.loadData()
+            }
+        }
     }
 
     convenience init(
@@ -361,6 +384,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             cancelBackgroundTasks()
             if let id = eventSubscriptionID {
                 EventBus.shared.unsubscribe(id)
+            }
+            if let observer = rateSnapshotObserver {
+                NotificationCenter.default.removeObserver(observer)
             }
         }
     }
@@ -562,8 +588,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     func loadData() {
-        state.isLoading = true
-        
+        // Уже показанные данные (в т.ч. восстановленные из снимка) остаются видимыми на время
+        // следующего пересчёта — иначе экран мигает пустотой на каждом обновлении курсов.
+        // Спиннер уместен только когда нет ни живой проекции, ни её сохранённого предшественника.
+        state.isLoading = state.chartData.isEmpty
+
         // При прямом открытии экрана динамики financeViewModel может еще не успеть загрузить state.
         // В этом случае читаем группы напрямую из SwiftData, чтобы breakdown не оставался пустым.
         state.groups = loadGroupsSnapshot()
@@ -589,10 +618,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         // Загружаем доступные валюты
         loadAvailableCurrencies()
         
-        // Обновляем данные графика
+        // Обновляем данные графика. Флаг загрузки снимается в `completeLocalProjection(for:)`,
+        // когда асинхронный расчёт действительно завершён.
         updateChartData()
-        
-        state.isLoading = false
     }
 
     /// [Ф5c.7 contract] `financeViewModel.state.groups` теперь `[AccountGroup]` (core primary) —
@@ -770,7 +798,122 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
             guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
             await viewModel.updateCurrencyBreakdown()
+            guard viewModel.isCurrentChartUpdateRevision(revision) else { return }
+            viewModel.completeLocalProjection(for: revision)
         }
+    }
+
+    // MARK: - Display snapshot
+
+    private func completeLocalProjection(for revision: Int) {
+        guard isCurrentChartUpdateRevision(revision) else { return }
+        state.isLoading = false
+        state.isInitialLocalProjectionResolved = true
+        persistSnapshotIfEligible()
+    }
+
+    /// Снимок относится только к общему обзору «Динамики». У детальных режимов (одна группа,
+    /// один счёт, фильтры) более узкий смысл, и портфельный кэш там показал бы чужую сумму.
+    private var isUnscopedOverview: Bool {
+        state.selectedGroupIDs.isEmpty
+            && state.selectedAccountIDs.isEmpty
+            && !state.isSingleGroupMode
+            && !state.isSingleAccountMode
+            && state.dynamicsMode == .aggregated
+    }
+
+    /// Ревизия текущего набора курсов берётся у СВОЕГО сервиса (R11: считается по значениям курсов).
+    /// `nil` = курсы неизвестны; тогда кэш валиден только для такого же «неизвестного» состояния.
+    private var currentRateSnapshotRevision: String? {
+        currencyService.currentRateSnapshot().map(CurrencyRateSnapshotRevisionStore.revision(for:))
+    }
+
+    private func restoreSnapshotIfEligible() {
+        guard isUnscopedOverview,
+              let snapshot = snapshotStore.load(scopeID: snapshotScopeID),
+              snapshot.rateSnapshotRevision == currentRateSnapshotRevision,
+              // Валюта и период экрана уже определены выше по init. Кэш, посчитанный в другой
+              // валюте или за другой период, показал бы корректные цифры не от того вопроса.
+              snapshot.displayCurrency == state.displayCurrency,
+              snapshot.periodRawValue == state.period.rawValue,
+              !snapshot.chartData.isEmpty,
+              snapshot.currentBalance.isFinite,
+              snapshot.periodDeltaAbsolute.isFinite else {
+            return
+        }
+
+        state.periodStartDate = snapshot.periodStartDate
+        state.periodEndDate = snapshot.periodEndDate
+        state.chartData = snapshot.chartData.map {
+            ChartDataPoint(date: $0.date, value: $0.value, label: $0.label)
+        }
+        state.currentBalance = snapshot.currentBalance
+        state.periodDelta = (snapshot.periodDeltaAbsolute, snapshot.periodDeltaPercent)
+        state.dynamicsBreakdown = snapshot.dynamicsBreakdown.map {
+            DynamicsBreakdownItem(
+                id: $0.id,
+                name: $0.name,
+                startValue: $0.startValue,
+                endValue: $0.endValue,
+                delta: $0.delta,
+                deltaPercent: $0.deltaPercent,
+                icon: $0.icon,
+                accountType: nil,
+                isCreditCard: $0.isCreditCard,
+                isArchived: $0.isArchived
+            )
+        }
+        state.currencyBreakdown = snapshot.currencyBreakdown.map {
+            CurrencyBreakdownItem(
+                id: $0.currency,
+                currency: $0.currency,
+                convertedValue: $0.convertedValue,
+                percentage: $0.percentage
+            )
+        }
+    }
+
+    private func persistSnapshotIfEligible() {
+        guard isUnscopedOverview,
+              !state.chartData.isEmpty,
+              state.currentBalance.isFinite,
+              state.periodDelta.absolute.isFinite,
+              state.dynamicsBreakdown.allSatisfy({ $0.startValue.isFinite && $0.endValue.isFinite && $0.delta.isFinite })
+        else {
+            return
+        }
+
+        let snapshot = FinanceDynamicsSnapshot(
+            displayCurrency: state.displayCurrency,
+            periodRawValue: state.period.rawValue,
+            periodStartDate: state.periodStartDate,
+            periodEndDate: state.periodEndDate,
+            chartData: state.chartData.map {
+                .init(date: $0.date, value: $0.value, label: $0.label)
+            },
+            currentBalance: state.currentBalance,
+            periodDeltaAbsolute: state.periodDelta.absolute,
+            periodDeltaPercent: state.periodDelta.percent,
+            dynamicsBreakdown: state.dynamicsBreakdown.map {
+                .init(
+                    id: $0.id,
+                    name: $0.name,
+                    startValue: $0.startValue,
+                    endValue: $0.endValue,
+                    delta: $0.delta,
+                    deltaPercent: $0.deltaPercent,
+                    icon: $0.icon,
+                    isCreditCard: $0.isCreditCard,
+                    isArchived: $0.isArchived
+                )
+            },
+            currencyBreakdown: state.currencyBreakdown.map {
+                .init(currency: $0.currency, convertedValue: $0.convertedValue, percentage: $0.percentage)
+            },
+            rateSnapshotRevision: currentRateSnapshotRevision,
+            savedAt: Date()
+        )
+        snapshotStore.save(snapshot, scopeID: snapshotScopeID)
     }
 
     private var shouldPrioritizeLiveSingleAccountState: Bool {

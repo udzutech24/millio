@@ -249,6 +249,7 @@ final class FinanceViewModel: ViewModelProtocol {
     private var ungroupedGroupName: String { FinanceSystemGroups.ungroupedName }
     private var financeEventsSubscriptionID: UUID?
     private var rateSourceObserver: NSObjectProtocol?
+    private var rateSnapshotObserver: NSObjectProtocol?
     private var backgroundTasks: [UUID: Task<Void, Never>] = [:]
 
     /// Монотонный счётчик поколений пересчёта тоталов. Растёт синхронно в момент старта нового
@@ -480,14 +481,34 @@ final class FinanceViewModel: ViewModelProtocol {
         let storedGoalCurrency = storedSavingsGoalCurrency
         state.isAmountHidden = storedAmountHidden
         state.accountSortMode = storedAccountSortMode
+        // Свежесть курсов переживает перезапуск в снимке на диске. Без этого `lastRefreshedAt`
+        // на холодном старте всегда nil, и экран «Счета» уходил в принудительное обновление.
+        if let persistedFetchedAt = self.currencyService.currentRateSnapshot()?.fetchedAt, persistedFetchedAt > 0 {
+            state.lastRefreshedAt = Date(timeIntervalSince1970: persistedFetchedAt)
+        }
         subscribeToFinanceEvents()
+        // Слушаем ТОЛЬКО свой экземпляр сервиса курсов: чужой сервис не должен заставлять
+        // этот экран ходить в сеть.
+        let observedRateService = self.currencyService as AnyObject
         rateSourceObserver = NotificationCenter.default.addObserver(
             forName: .currencyRateSourceDidChange,
-            object: nil,
+            object: observedRateService,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.refreshRates()
+            }
+        }
+        rateSnapshotObserver = NotificationCenter.default.addObserver(
+            forName: .currencyRateSnapshotDidChange,
+            object: observedRateService,
+            queue: .main
+        ) { [weak self] _ in
+            // Снимок УЖЕ обновлён сервисом — новых курсов из сети просить не нужно.
+            // Раньше здесь вызывался `refreshRates()`, который форсировал повторный сетевой
+            // запрос и поднимал индикатор загрузки на каждое фоновое обновление курсов.
+            Task { @MainActor [weak self] in
+                await self?.refreshGroupTotalsAndAmounts()
             }
         }
         if !skipInitialLoad {
@@ -515,6 +536,9 @@ final class FinanceViewModel: ViewModelProtocol {
                 EventBus.shared.unsubscribe(subscriptionID)
             }
             if let observer = rateSourceObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            if let observer = rateSnapshotObserver {
                 NotificationCenter.default.removeObserver(observer)
             }
         }
@@ -1129,9 +1153,14 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     /// Core-счета БЕЗ группы (канон Ungrouped — `account.group == nil`, не сущность).
+    /// [R8] Живой fetch, а НЕ срез `state.accounts`: срез обновляется только по событиям, и любой
+    /// пропущенный сигнал (снапшот снят до конца импорта restore — группы импортируются раньше
+    /// счетов) делал секцию и график пустыми при заполненных списке групп и тотале шапки.
+    /// Источник обязан совпадать с `orderedAccounts(for:)` — тот тоже читает стор напрямую.
     func ungroupedAccounts() -> [Account] {
         let today = nowProvider()
-        let accounts = state.accounts.filter { $0.group == nil && $0.isVisible(on: today) }
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.group == nil })
+        let accounts = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.isVisible(on: today) }
         return sortedAccounts(accounts, group: nil)
     }
 
@@ -1177,13 +1206,6 @@ final class FinanceViewModel: ViewModelProtocol {
             .sorted { lhs, rhs in
                 lhs.order != rhs.order ? lhs.order < rhs.order : lhs.createdAt < rhs.createdAt
             }
-    }
-
-    /// Снапшот-версия `newCoreAccounts(matching:)` без живого FetchDescriptor — читает pre-populated
-    /// `state.accounts`. Единая точка для View-потребителей (`FinanceRows`/`FinanceGroupEditorView`).
-    func coreAccountsSnapshot(matching group: AccountGroup) -> [Account] {
-        let groupID = group.id
-        return state.accounts.filter { $0.group?.id == groupID }
     }
 
     /// [Ф5c.7 contract] NAME-based мост (был единственной формой `newCoreAccounts` ДО флипа) —
@@ -1447,9 +1469,22 @@ final class FinanceViewModel: ViewModelProtocol {
         )
     }
 
-    func refreshCurrencyQuotes() async {
+    /// Индикатор загрузки курсов допустим ТОЛЬКО когда показать нечего вообще (самый первый запуск).
+    /// При наличии снимка обновление идёт тихо: иначе шапка «Счетов» дёргается на каждом обновлении.
+    private var hasUsableRateSnapshot: Bool {
+        guard let snapshot = currencyService.currentRateSnapshot() else { return false }
+        return !snapshot.rates.isEmpty
+    }
+
+    private func beginRateLoadingIfNothingToShow() -> Bool {
+        guard !hasUsableRateSnapshot else { return false }
         state.isLoadingRates = true
-        defer { state.isLoadingRates = false }
+        return true
+    }
+
+    func refreshCurrencyQuotes() async {
+        let showsIndicator = beginRateLoadingIfNothingToShow()
+        defer { if showsIndicator { state.isLoadingRates = false } }
         await refreshCurrencyQuotes(forceRefresh: true)
         presentRefreshIssueIfNeeded(message: state.currencyConversionWarning)
     }
@@ -1466,8 +1501,8 @@ final class FinanceViewModel: ViewModelProtocol {
 
     /// Обновляет рыночные цены только для акций, не создавая транзакций.
     func refreshStockPrices() async {
-        state.isLoadingRates = true
-        defer { state.isLoadingRates = false }
+        let showsIndicator = beginRateLoadingIfNothingToShow()
+        defer { if showsIndicator { state.isLoadingRates = false } }
         let message = await marketDataService.refreshStockPricesManual()
         await accountMarketPriceService.refreshTodayPrices()
         presentRefreshIssueIfNeeded(message: message)
@@ -1475,8 +1510,8 @@ final class FinanceViewModel: ViewModelProtocol {
 
     /// Обновляет все котировки и акции — используется в pull-to-refresh и фоновом обновлении.
     func refreshAll() async {
-        state.isLoadingRates = true
-        defer { state.isLoadingRates = false }
+        let showsIndicator = beginRateLoadingIfNothingToShow()
+        defer { if showsIndicator { state.isLoadingRates = false } }
         await refreshCurrencyQuotes(forceRefresh: true)
         let stockMessage = await marketDataService.refreshStockPricesManual()
         await accountMarketPriceService.refreshTodayPrices()

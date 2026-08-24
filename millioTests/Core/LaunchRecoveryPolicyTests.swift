@@ -3,6 +3,64 @@ import Testing
 @testable import millio
 
 struct LaunchRecoveryPolicyTests {
+
+    // MARK: - D8: неизвестный счётчик локальных моделей
+
+    @Test("Неизвестный localDataCount не пропускает recovery молча — ручной сценарий")
+    func testUnknownCountPresentsManualRestore() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: true,
+                localDataCount: nil,
+                latestBackupInfo: backupInfo
+            )
+        )
+
+        #expect(decision == .presentRestoreManualOnly(.localDataCountUnknown))
+        #expect(decision.shouldPresentRestore)
+        #expect(!decision.allowsAutomaticRestore, "Деструктивный авто-restore при неизвестном счётчике запрещён")
+        #expect(decision.locksLaunchRecovery)
+    }
+
+    @Test("Неизвестный localDataCount без бэкапа — обычный skip")
+    func testUnknownCountWithoutBackupSkips() {
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: true,
+                localDataCount: nil,
+                latestBackupInfo: nil
+            )
+        )
+
+        #expect(decision == .skip(.noBackupAvailable))
+        #expect(!decision.shouldPresentRestore)
+    }
+
+    // MARK: - SR7: какие исходы фиксируют решение
+
+    @Test("Транзиентные причины skip не блокируют повторную попытку recovery")
+    func testTransientSkipsDoNotLockRecovery() {
+        #expect(!LaunchRecoveryPolicy.Decision.skip(.lifecycleNotReady).locksLaunchRecovery)
+        #expect(!LaunchRecoveryPolicy.Decision.skip(.noBackupAvailable).locksLaunchRecovery)
+        #expect(LaunchRecoveryPolicy.Decision.skip(.localDataPresent).locksLaunchRecovery)
+        #expect(LaunchRecoveryPolicy.Decision.skip(.existingLocalStore).locksLaunchRecovery)
+        #expect(LaunchRecoveryPolicy.Decision.skip(.userDeclinedRecovery).locksLaunchRecovery)
+        #expect(LaunchRecoveryPolicy.Decision.presentRestore.locksLaunchRecovery)
+    }
+
+    @Test("Авто-restore разрешён только для обычного presentRestore")
+    func testAutomaticRestoreAllowance() {
+        #expect(LaunchRecoveryPolicy.Decision.presentRestore.allowsAutomaticRestore)
+        #expect(!LaunchRecoveryPolicy.Decision.presentRestoreManualOnly(.localDataCountUnknown).allowsAutomaticRestore)
+        #expect(!LaunchRecoveryPolicy.Decision.skip(.localDataPresent).allowsAutomaticRestore)
+    }
+
     @Test("Evaluator classifies fresh install with backup as launch-time recovery")
     func testEvaluateFreshInstallWithBackup() {
         let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
@@ -21,8 +79,62 @@ struct LaunchRecoveryPolicyTests {
         #expect(decision.shouldPresentRestore)
     }
 
-    @Test("Evaluator skips restore when onboarding is incomplete")
-    func testEvaluateSkipsRestoreForIncompleteOnboarding() {
+    // MARK: - S1: восстановление предлагается ДО онбординга
+
+    @Test("S1: свежая установка с бэкапом предлагает recovery до онбординга")
+    func testFreshInstallOffersRecoveryBeforeOnboarding() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .onboarding,
+                hasCompletedOnboarding: false,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo
+            )
+        )
+
+        #expect(decision == .presentRestore)
+        #expect(decision.shouldPresentRestore)
+    }
+
+    @Test("S1: без бэкапа новый пользователь идёт в онбординг, а не в recovery")
+    func testFreshInstallWithoutBackupKeepsOnboarding() {
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .onboarding,
+                hasCompletedOnboarding: false,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: nil
+            )
+        )
+
+        #expect(decision == .skip(.noBackupAvailable))
+        #expect(!decision.shouldPresentRestore)
+    }
+
+    @Test("S1: гостевой scope не получает recovery даже до онбординга")
+    func testGuestScopeBeforeOnboardingStillSkips() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .onboarding,
+                hasCompletedOnboarding: false,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo,
+                isGuestScope: true
+            )
+        )
+
+        #expect(decision == .skip(.guestScopeBeforeSignIn))
+    }
+
+    @Test("S1: непройденный онбординг + lifecycle .ready — не наш момент, решение откладывается")
+    func testIncompleteOnboardingWithReadyLifecycleIsTransient() {
         let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
 
         let decision = LaunchRecoveryPolicy.evaluate(
@@ -35,8 +147,97 @@ struct LaunchRecoveryPolicyTests {
             )
         )
 
-        #expect(decision == .skip(.onboardingIncomplete))
+        #expect(decision == .skip(.lifecycleNotReady))
+        #expect(!decision.locksLaunchRecovery)
+    }
+
+    @Test("S1: пройденный онбординг + lifecycle .onboarding не показывает recovery")
+    func testCompletedOnboardingWithOnboardingLifecycleSkips() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .onboarding,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo
+            )
+        )
+
+        #expect(decision == .skip(.lifecycleNotReady))
+    }
+
+    @Test("S1: выход из экрана восстановления — восстановился в .ready, отказался в онбординг")
+    func testLifecycleAfterRestoreFlow() {
+        #expect(LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(didRestore: true, hasCompletedOnboarding: false) == .ready)
+        #expect(LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(didRestore: true, hasCompletedOnboarding: true) == .ready)
+        #expect(
+            LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(didRestore: false, hasCompletedOnboarding: false) == .onboarding,
+            "Отказ нового пользователя не должен съедать онбординг"
+        )
+        #expect(LaunchRecoveryPolicy.lifecycleAfterRestoreFlow(didRestore: false, hasCompletedOnboarding: true) == .ready)
+    }
+
+    // MARK: - S11: отказ запоминается
+
+    @Test("S11: после отказа авто-restore на следующем запуске не предлагается")
+    func testDeclinedRecoveryBlocksNextLaunchAutoRestore() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+        // Следующий запуск после отказа: стор уже существует и пуст — раньше это был
+        // прямой путь в молчаливый авто-restore (millioApp.presentRestoreFlowIfNeeded).
+        let input = LaunchRecoveryPolicy.Input(
+            lifecycle: .ready,
+            hasCompletedOnboarding: true,
+            didLocalStoreExistBeforeLaunch: true,
+            localDataCount: 0,
+            latestBackupInfo: backupInfo,
+            hasDeclinedRecovery: true
+        )
+
+        let decision = LaunchRecoveryPolicy.evaluate(input)
+
+        #expect(decision == .skip(.userDeclinedRecovery))
         #expect(!decision.shouldPresentRestore)
+        #expect(!decision.allowsAutomaticRestore)
+        #expect(decision.locksLaunchRecovery)
+    }
+
+    @Test("S11: без отказа тот же запуск по-прежнему запускает авто-restore")
+    func testWithoutDeclineSameLaunchStillRestores() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: true,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo,
+                hasDeclinedRecovery: false
+            )
+        )
+
+        #expect(decision == .presentRestore)
+        #expect(decision.allowsAutomaticRestore)
+    }
+
+    @Test("S11: отказ до онбординга тоже переживает перезапуск")
+    func testDeclinedRecoveryBlocksBeforeOnboarding() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 10, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .onboarding,
+                hasCompletedOnboarding: false,
+                didLocalStoreExistBeforeLaunch: true,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo,
+                hasDeclinedRecovery: true
+            )
+        )
+
+        #expect(decision == .skip(.userDeclinedRecovery))
     }
 
     @Test("Evaluator skips restore while app lifecycle is not ready")
@@ -220,5 +421,56 @@ struct LaunchRecoveryPolicyTests {
 
         #expect(decision == .skip(.existingLocalStore))
         #expect(!decision.shouldPresentRestore)
+    }
+
+    // MARK: - Guest scope (R4 / S10)
+
+    @Test("Гостевой scope до логина: восстановление не предлагается, причина названа явно")
+    func testGuestScopeSkipsRecoveryWithExplicitReason() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 17_000, version: "2.0.0")
+
+        let decision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo,
+                isGuestScope: true
+            )
+        )
+
+        #expect(decision == .skip(.guestScopeBeforeSignIn))
+        #expect(!decision.shouldPresentRestore)
+        #expect(!decision.allowsAutomaticRestore)
+    }
+
+    @Test("Отказ по гостевому scope транзиентный: после входа recovery оценивается заново")
+    func testGuestScopeSkipDoesNotLockRecovery() {
+        let backupInfo = BackupInfo(date: Date(timeIntervalSince1970: 1), size: 17_000, version: "2.0.0")
+
+        let guestDecision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo,
+                isGuestScope: true
+            )
+        )
+        let userDecision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: false,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo,
+                isGuestScope: false
+            )
+        )
+
+        #expect(!guestDecision.locksLaunchRecovery)
+        #expect(userDecision == .presentRestore)
     }
 }
