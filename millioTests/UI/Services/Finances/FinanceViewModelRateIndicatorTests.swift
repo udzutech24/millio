@@ -48,9 +48,10 @@ final class SnapshotAwareMockRateService: CurrencyRateServiceProtocol {
 @Suite("FinanceViewModel — индикатор загрузки курсов", .serialized)
 struct FinanceViewModelRateIndicatorTests {
 
-    @MainActor
-    private func makeContext() throws -> ModelContext {
-        try AppMigrationPlan.makeInMemoryContainer().mainContext
+    /// Возвращаем именно контейнер: если удержать только `mainContext`, `ModelContainer`
+    /// освобождается сразу после вызова и тест падает по signal trap.
+    private func makeContainer() throws -> ModelContainer {
+        try AppMigrationPlan.makeInMemoryContainer()
     }
 
     private func cachedSnapshot(fetchedAt: Double) -> RateSnapshot {
@@ -60,7 +61,8 @@ struct FinanceViewModelRateIndicatorTests {
     @Test("Есть кэш курсов — обновление идёт молча, индикатор не поднимается")
     @MainActor
     func testNoIndicatorWhenSnapshotCached() async throws {
-        let context = try makeContext()
+        let container = try makeContainer()
+        let context = container.mainContext
         let rateService = SnapshotAwareMockRateService(snapshot: cachedSnapshot(fetchedAt: 1_700_000_000))
         let viewModel = FinanceViewModel(modelContext: context, currencyService: rateService, skipInitialLoad: true)
 
@@ -77,7 +79,8 @@ struct FinanceViewModelRateIndicatorTests {
     @Test("Кэша курсов нет (самый первый запуск) — индикатор показывается")
     @MainActor
     func testIndicatorShownWhenNothingCached() async throws {
-        let context = try makeContext()
+        let container = try makeContainer()
+        let context = container.mainContext
         let rateService = SnapshotAwareMockRateService(snapshot: nil)
         let viewModel = FinanceViewModel(modelContext: context, currencyService: rateService, skipInitialLoad: true)
 
@@ -93,7 +96,8 @@ struct FinanceViewModelRateIndicatorTests {
     @Test("Холодный старт: lastRefreshedAt берётся из снимка на диске, а не считается nil")
     @MainActor
     func testLastRefreshedAtHydratedFromPersistedSnapshot() throws {
-        let context = try makeContext()
+        let container = try makeContainer()
+        let context = container.mainContext
         let fetchedAt = Date().timeIntervalSince1970 - 300
         let rateService = SnapshotAwareMockRateService(snapshot: cachedSnapshot(fetchedAt: fetchedAt))
         let viewModel = FinanceViewModel(modelContext: context, currencyService: rateService, skipInitialLoad: true)
@@ -108,7 +112,8 @@ struct FinanceViewModelRateIndicatorTests {
     @Test("Первый в жизни запуск: снимка нет — lastRefreshedAt остаётся nil, обновление нужно")
     @MainActor
     func testLastRefreshedAtNilWithoutSnapshot() throws {
-        let context = try makeContext()
+        let container = try makeContainer()
+        let context = container.mainContext
         let rateService = SnapshotAwareMockRateService(snapshot: nil)
         let viewModel = FinanceViewModel(modelContext: context, currencyService: rateService, skipInitialLoad: true)
 
@@ -118,7 +123,8 @@ struct FinanceViewModelRateIndicatorTests {
     @Test("Приход нового снимка курсов не запускает повторный принудительный запрос в сеть")
     @MainActor
     func testSnapshotNotificationDoesNotForceAnotherNetworkRefresh() async throws {
-        let context = try makeContext()
+        let container = try makeContainer()
+        let context = container.mainContext
         let rateService = SnapshotAwareMockRateService(snapshot: cachedSnapshot(fetchedAt: 1_700_000_000))
         let viewModel = FinanceViewModel(modelContext: context, currencyService: rateService, skipInitialLoad: true)
 
