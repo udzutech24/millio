@@ -81,7 +81,7 @@
     {
       "name": "R12 — Кэш графика «Динамики» на холодном старте",
       "status": "done",
-      "note": "4587b56/71b0320: FinanceDynamicsSnapshotStore (файл по data scope, .completeUntilFirstUserAuthentication) + гидратация в init общего обзора, isInitialLocalProjectionResolved и спиннер вместо ложного «Нет групп», валидация кэша ревизией курсов своего сервиса (R11). +9 тестов; гейт 2455/32+6 при базе 2446/32+6, новых красных ноль. Дашборд болеет тем же классом (0 ₽ из state.totalAmount) — механизм другой, вынесено"
+      "note": "4587b56/71b0320: FinanceDynamicsSnapshotStore (файл по data scope, .completeUntilFirstUserAuthentication) + гидратация в init общего обзора, isInitialLocalProjectionResolved и спиннер вместо ложного «Нет групп», валидация кэша ревизией курсов своего сервиса (R11). +9 тестов; гейт 2455/32+6 при базе 2446/32+6, новых красных ноль. Дашборд болеет тем же классом (0 ₽ из state.totalAmount) — механизм другой, вынесено; каталог снимков изолирован на процесс под тестами (21c001a)"
     }
   ],
   "costUsd": null,
