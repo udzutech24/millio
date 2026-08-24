@@ -75,9 +75,7 @@ final class FinanceDynamicsSnapshotStore: FinanceDynamicsSnapshotStoreProtocol {
         directoryURL: URL? = nil
     ) {
         self.fileManager = fileManager
-        self.directoryURL = directoryURL
-            ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent(Self.directoryName, isDirectory: true)
+        self.directoryURL = directoryURL ?? Self.defaultDirectoryURL(fileManager: fileManager)
     }
 
     func load(scopeID: String) -> FinanceDynamicsSnapshot? {
@@ -100,6 +98,17 @@ final class FinanceDynamicsSnapshotStore: FinanceDynamicsSnapshotStoreProtocol {
             // Кэш — best-effort. Его сбой не должен влиять на канонический путь данных SwiftData.
         }
     }
+
+    /// Под тестами каталог свой на процесс: иначе снимок, записанный одной сюитой,
+    /// пережил бы её и подставился в другую с тем же scopeID — порядок тестов стал бы значимым.
+    private static func defaultDirectoryURL(fileManager: FileManager) -> URL {
+        let root = AppRuntimeEnvironment.current().isAnyTesting
+            ? fileManager.temporaryDirectory.appendingPathComponent(processScopedTestDirectoryName, isDirectory: true)
+            : fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return root.appendingPathComponent(directoryName, isDirectory: true)
+    }
+
+    private static let processScopedTestDirectoryName = "FinanceDynamicsSnapshots-test-\(UUID().uuidString)"
 
     /// Имя файла — хэш scopeID: сам идентификатор может содержать user id, в имени файла его быть не должно.
     private func fileURL(for scopeID: String) -> URL {
