@@ -12,20 +12,30 @@ final class ProductColumnOrderProbe {
     init(id: UUID = UUID()) { self.id = id }
 }
 
+/// Гипотетическая «следующая» схема: текущая продакшн-схема плюс одна новая таблица.
+///
+/// Привязка идёт к `AppSchemaCurrent`, а не к конкретной версии. Сьют доказывает свойство
+/// ТЕКУЩЕЙ схемы («колонки продукта переживают аддитивную миграцию в обе стороны порядка»), и
+/// зашитая версия превращала его в тревожную сигнализацию на каждый bump: после V10 фикстура
+/// продолжала бы измерять историческую V7, то есть проверяла бы уже не тот путь, ради которого
+/// написана. Намеренная фиксация версий и хешей — в `AppSchemaFrozenGraphTests`.
 private enum ProductColumnOrderFixtureSchema: VersionedSchema {
     static let versionIdentifier = Schema.Version(90, 0, 0)
-    static let models: [any PersistentModel.Type] = AppSchemaV7.models + [
+    static let models: [any PersistentModel.Type] = AppSchemaCurrent.models + [
         ProductColumnOrderProbe.self
     ]
 }
 
 private enum ProductColumnsThenTableMigrationPlan: SchemaMigrationPlan {
     static let schemas: [any VersionedSchema.Type] = [
-        AppSchemaV7.self,
+        AppSchemaCurrent.self,
         ProductColumnOrderFixtureSchema.self
     ]
     static let stages: [MigrationStage] = [
-        .lightweight(fromVersion: AppSchemaV7.self, toVersion: ProductColumnOrderFixtureSchema.self)
+        .lightweight(
+            fromVersion: AppSchemaCurrent.self,
+            toVersion: ProductColumnOrderFixtureSchema.self
+        )
     ]
 }
 
@@ -33,18 +43,29 @@ private final class ProductColumnSchemaTestsBundleToken {}
 
 @Suite("Product column schema", .serialized)
 struct ProductColumnSchemaTests {
-    @Test("Product columns are optional attributes owned by Account")
+    @Test("Product columns are optional attributes owned by Account, in V6 and in the current schema")
     func optionalAccountAttributes() throws {
-        let accountEntity = try #require(
+        // V6 — версия, в которой колонки появились. Форма заморожена: если она перестанет быть
+        // optional, реальные V6-сторы не смогут мигрировать дальше.
+        let v6Account = try #require(
             Schema(AppSchemaV6.models, version: AppSchemaV6.versionIdentifier)
                 .entities
                 .first(where: { $0.name == "Account" })
         )
-        let productType = try #require(accountEntity.attributesByName["productTypeRaw"])
-        let migrationReason = try #require(accountEntity.attributesByName["productMigrationReason"])
-        #expect(productType.isOptional)
-        #expect(migrationReason.isOptional)
-        #expect(AppSchemaCurrent.versionIdentifier == AppSchemaV7.versionIdentifier)
+        #expect(try #require(v6Account.attributesByName["productTypeRaw"]).isOptional)
+        #expect(try #require(v6Account.attributesByName["productMigrationReason"]).isOptional)
+
+        // Здесь стоял пин `AppSchemaCurrent.versionIdentifier == AppSchemaV7.versionIdentifier`.
+        // Он не выражал инвариант сьюта, а лишь фиксировал момент написания теста, поэтому падал
+        // на каждой миграции. Реальное требование — колонки продукта остаются необязательными и
+        // принадлежат Account в ТЕКУЩЕЙ схеме, какой бы номер она ни носила.
+        let currentAccount = try #require(
+            Schema(AppSchemaCurrent.models, version: AppSchemaCurrent.versionIdentifier)
+                .entities
+                .first(where: { $0.name == "Account" })
+        )
+        #expect(try #require(currentAccount.attributesByName["productTypeRaw"]).isOptional)
+        #expect(try #require(currentAccount.attributesByName["productMigrationReason"]).isOptional)
     }
 
     @Test("A current store with nil product columns survives relaunch and remains classifiable") @MainActor
@@ -122,7 +143,7 @@ struct ProductColumnSchemaTests {
         #expect(prices.first?.symbol == "AAPL")
     }
 
-    @Test("Production-style fresh store is V7 and opens through a future additive migration") @MainActor
+    @Test("Production-style fresh store is stamped current and opens through a future additive migration") @MainActor
     func productColumnsBeforeFutureTableOrder() throws {
         let storeURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("product_before_table_\(UUID().uuidString).store")
@@ -146,7 +167,10 @@ struct ProductColumnSchemaTests {
             type: .sqlite,
             at: storeURL
         )
-        #expect(metadata[NSStoreModelVersionIdentifiersKey] as? [String] == ["7.0.0"])
+        #expect(
+            metadata[NSStoreModelVersionIdentifiersKey] as? [String]
+                == [Self.currentVersionIdentifierString]
+        )
 
         let targetSchema = Schema(versionedSchema: ProductColumnOrderFixtureSchema.self)
         let readConfiguration = ModelConfiguration(
@@ -193,6 +217,13 @@ struct ProductColumnSchemaTests {
         #expect(account.productMigrationReason == nil)
         #expect(probes.count == 1)
         #expect(probe.id == UUID(uuidString: "50000000-0000-0000-0000-000000000001"))
+    }
+
+    /// Идентификатор текущей версии в том виде, в каком Core Data пишет его в метаданные стора.
+    /// Собирается из компонент, а не из `description`: формат последнего SwiftData не гарантирует.
+    private static var currentVersionIdentifierString: String {
+        let version = AppSchemaCurrent.versionIdentifier
+        return "\(version.major).\(version.minor).\(version.patch)"
     }
 
     private static func copyFixture(named fixtureName: String) throws -> (

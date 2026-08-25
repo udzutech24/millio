@@ -234,4 +234,107 @@ struct DepositInterestSchedulerTests {
         let expectedMonth3Interest = DepositInterestScheduler.round2(balanceAtMonth2 * 20 / 100 / 12)
         #expect(allInterestAfter[2].amount == expectedMonth3Interest)
     }
+
+    // MARK: - Шаговые периодичности (V10): .daily и .customDays(N)
+
+    /// Ручной расчёт: 100 000 ₽ под 12% с произвольным периодом 90 дней, ставка периода — ACT/365
+    /// (12 × 90 / 365 = 2,958904…%), база растёт на каждое начисление (компаундинг).
+    @Test
+    func customDaysCapitalizationMatchesManualCalculationAndStepsByDays() {
+        let opening = calendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+        let termEnd = calendar.date(byAdding: .year, value: 1, to: opening)!
+
+        let drafts = DepositInterestScheduler.buildInitialSchedule(
+            accountID: UUID(),
+            meta: DepositMeta(
+                rate: 12, capitalization: .customDays(90), termEnd: termEnd, payoutDay: nil,
+                allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: nil,
+                remindEnd: false, autoRollover: false
+            ),
+            openingBalance: 100_000,
+            openingDate: opening,
+            calendar: calendar
+        )
+
+        // Ровно 4 периода: 5-й (450-й день) уже за сроком.
+        #expect(drafts.count == 4)
+        let expectedDates = [90, 180, 270, 360].map {
+            calendar.date(byAdding: .day, value: $0, to: opening)!
+        }
+        #expect(drafts.map(\.date) == expectedDates)
+        #expect(drafts.map(\.amount) == [
+            Decimal(string: "2958.90")!, Decimal(string: "3046.46")!,
+            Decimal(string: "3136.60")!, Decimal(string: "3229.41")!,
+        ])
+    }
+
+    /// Ежедневная капитализация: шаг ровно сутки, первый день — 100 000 × 12% / 365 = 32,88.
+    @Test
+    func dailyCapitalizationAccruesEveryDay() {
+        let opening = calendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+        let termEnd = calendar.date(byAdding: .day, value: 10, to: opening)!
+
+        let drafts = DepositInterestScheduler.buildInitialSchedule(
+            accountID: UUID(),
+            meta: DepositMeta(
+                rate: 12, capitalization: .daily, termEnd: termEnd, payoutDay: 15,
+                allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: nil,
+                remindEnd: false, autoRollover: false
+            ),
+            openingBalance: 100_000,
+            openingDate: opening,
+            calendar: calendar
+        )
+
+        #expect(drafts.count == 10)
+        #expect(drafts.map { calendar.dateComponents([.day], from: opening, to: $0.date).day } == Array(1...10))
+        #expect(drafts.map(\.amount) == [
+            Decimal(string: "32.88")!, Decimal(string: "32.89")!, Decimal(string: "32.90")!,
+            Decimal(string: "32.91")!, Decimal(string: "32.92")!, Decimal(string: "32.93")!,
+            Decimal(string: "32.94")!, Decimal(string: "32.95")!, Decimal(string: "32.96")!,
+            Decimal(string: "32.97")!,
+        ])
+    }
+
+    /// `payoutDay` для шаговых периодичностей бессмысленен и не должен попадать в мету:
+    /// начисление считается от даты открытия, а не от числа месяца.
+    @Test
+    func stepCapitalizationsIgnorePayoutDay() {
+        #expect(AccountDepositCapitalization.daily.usesMonthlyPayoutDay == false)
+        #expect(AccountDepositCapitalization.customDays(45).usesMonthlyPayoutDay == false)
+        #expect(AccountDepositCapitalization.monthly.usesMonthlyPayoutDay)
+        #expect(AccountDepositCapitalization.quarterly.usesMonthlyPayoutDay)
+    }
+
+    /// Потолок черновиков за прогон: трёхлетний вклад с ежедневной капитализацией не должен разом
+    /// класть >1000 событий в ленту — остаток догенерирует роллинг горизонта.
+    @Test
+    func dailyCapitalizationIsCappedPerRun() {
+        let opening = calendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+        let termEnd = calendar.date(byAdding: .year, value: 3, to: opening)!
+
+        let drafts = DepositInterestScheduler.buildInitialSchedule(
+            accountID: UUID(),
+            meta: DepositMeta(
+                rate: 12, capitalization: .daily, termEnd: termEnd, payoutDay: nil,
+                allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: nil,
+                remindEnd: false, autoRollover: false
+            ),
+            openingBalance: 100_000,
+            openingDate: opening,
+            calendar: calendar
+        )
+
+        #expect(drafts.count == DepositInterestScheduler.maxFixedStepDraftsPerRun)
+    }
+
+    /// Ключевое свойство шага: `customDays(N)` — это ровно N календарных дней, без привязки к месяцу.
+    /// Заодно защита формы хранения: rawValue кодируется/декодируется без потерь.
+    @Test
+    func customDaysRawValueRoundTrips() {
+        #expect(AccountDepositCapitalization.customDays(45).rawValue == "custom_45")
+        #expect(AccountDepositCapitalization(rawValue: "custom_45") == .customDays(45))
+        #expect(AccountDepositCapitalization(rawValue: "custom_0") == nil)
+        #expect(AccountDepositCapitalization(rawValue: "monthly") == .monthly)
+    }
 }

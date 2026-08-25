@@ -12,14 +12,18 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
     @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var rateText: String = ""
     @State private var capitalization: AccountDepositCapitalization = .monthly
+    /// Вклад открывается сегодняшним днём, поэтому и выплата по умолчанию — сегодняшнее число:
+    /// тот же дефолт, что и в правке условий (`meta.payoutDay ?? день открытия`).
+    @State private var payoutDay: Int = Calendar.current.component(.day, from: Date())
     @State private var hasTerm: Bool = true
     @State private var termEnd: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
     @State private var allowsTopUp: Bool = false
     @State private var allowsEarlyClose: Bool = true
-    @State private var earlyClosePenaltyPercentText: String = "100"
+    @State private var earlyClosePenaltyPercentText: String = "0"
     @State private var remindEnd: Bool = true
     @State private var autoRollover: Bool = false
     @State private var comment: String = ""
+    @State private var isTaxable: Bool = false
     @FocusState private var inputFocused: Bool
 
     init(
@@ -55,38 +59,38 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
             rate: rate,
             capitalization: capitalization,
             termEnd: hasTerm ? termEnd : nil,
+            payoutDay: payoutDay,
             allowsTopUp: allowsTopUp,
             allowsEarlyClose: allowsEarlyClose,
             earlyClosePenaltyPercent: allowsEarlyClose ? (parseNumber(earlyClosePenaltyPercentText) ?? 0) : 0,
             remindEnd: remindEnd && hasTerm,
             autoRollover: autoRollover && hasTerm,
-            comment: comment.trimmingCharacters(in: .whitespacesAndNewlines)
+            comment: comment.trimmingCharacters(in: .whitespacesAndNewlines),
+            isTaxable: isTaxable
         )
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.l) {
-            amountSection
-            rateSection
+            DepositTermsInputCard(
+                amountText: $amountText,
+                currency: $selectedCurrency,
+                rateText: $rateText,
+                capitalization: $capitalization,
+                payoutDay: $payoutDay,
+                isTaxable: $isTaxable,
+                isFocused: $inputFocused
+            )
             termSection
             optionsSection
             previewSection
             groupSection
             commentSection
         }
-        .onChange(of: name) { _, _ in emitChange() }
-        .onChange(of: amountText) { _, _ in emitChange() }
-        .onChange(of: selectedCurrency) { _, _ in emitChange() }
-        .onChange(of: rateText) { _, _ in emitChange() }
-        .onChange(of: capitalization) { _, _ in emitChange() }
-        .onChange(of: hasTerm) { _, _ in emitChange() }
-        .onChange(of: termEnd) { _, _ in emitChange() }
-        .onChange(of: allowsTopUp) { _, _ in emitChange() }
-        .onChange(of: allowsEarlyClose) { _, _ in emitChange() }
-        .onChange(of: earlyClosePenaltyPercentText) { _, _ in emitChange() }
-        .onChange(of: remindEnd) { _, _ in emitChange() }
-        .onChange(of: autoRollover) { _, _ in emitChange() }
-        .onChange(of: comment) { _, _ in emitChange() }
+        // Наблюдаем СОБРАННЫЙ результат, а не каждое поле по отдельности: полтора десятка
+        // `.onChange` дублировали друг друга и роняли type-checker этого `body`
+        // («unable to type-check this expression in reasonable time») на 15-м поле.
+        .onChange(of: currentData()) { _, newValue in onDepositDataChanged(newValue) }
         .onAppear { emitChange() }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -115,50 +119,6 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
     }
 
     // MARK: - Секции
-
-    private var amountSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.s) {
-            FinancesSectionHeader(title: L("accounts_core.deposit_form.section.amount"))
-            FinancesGlassCard(contentPadding: EdgeInsets(top: AppSpacing.s, leading: AppSpacing.m, bottom: AppSpacing.s, trailing: AppSpacing.m)) {
-                HStack {
-                    AmountTextField(
-                        placeholder: L("accounts_core.detail.sheet.amount_placeholder"),
-                        value: $amountText
-                    )
-                    .focused($inputFocused)
-                    .font(.millioBody)
-                    Picker("", selection: $selectedCurrency) {
-                        ForEach(["RUB", "USD", "EUR"], id: \.self) { code in
-                            Text(code).tag(code)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-            }
-        }
-    }
-
-    private var rateSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.s) {
-            FinancesSectionHeader(title: L("accounts_core.deposit_form.section.rate"))
-            FinancesGlassCard(contentPadding: EdgeInsets(top: AppSpacing.s, leading: AppSpacing.m, bottom: AppSpacing.s, trailing: AppSpacing.m)) {
-                VStack(spacing: AppSpacing.s) {
-                    AmountTextField(
-                        placeholder: L("accounts_core.deposit_form.rate_placeholder"),
-                        value: $rateText
-                    )
-                    .focused($inputFocused)
-                    .font(.millioBody)
-                    Picker(L("accounts_core.deposit_form.capitalization_label"), selection: $capitalization) {
-                        Text(L("accounts_core.deposit_form.capitalization.none")).tag(AccountDepositCapitalization.none)
-                        Text(L("accounts_core.deposit_form.capitalization.monthly")).tag(AccountDepositCapitalization.monthly)
-                        Text(L("accounts_core.deposit_form.capitalization.quarterly")).tag(AccountDepositCapitalization.quarterly)
-                    }
-                    .pickerStyle(.segmented)
-                }
-            }
-        }
-    }
 
     private var termSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.s) {
@@ -226,11 +186,26 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
                 if !creationPreview.errors.isEmpty {
                     Label(L("accounts_core.deposit.creation.invalid"), systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(AppColors.warning)
-                } else if let interest = creationPreview.interest, let maturity = creationPreview.maturityAmount {
+                } else if let interest = creationPreview.interest {
                     VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                        Text(String(format: L("accounts_core.deposit.creation.interest_format"), NSDecimalNumber(decimal: interest).stringValue, selectedCurrency))
-                        Text(String(format: L("accounts_core.deposit.creation.maturity_format"), NSDecimalNumber(decimal: maturity).stringValue, selectedCurrency))
+                        Text(String(
+                            format: L("accounts_core.deposit.creation.interest_format"),
+                            AmountTextField.formatted(from: NSDecimalNumber(decimal: interest).stringValue),
+                            selectedCurrency
+                        ))
+                        // Бессрочный вклад доходность имеет, а «суммы к концу срока» — нет.
+                        if let maturity = creationPreview.maturityAmount {
+                            Text(String(
+                                format: L("accounts_core.deposit.creation.maturity_format"),
+                                AmountTextField.formatted(from: NSDecimalNumber(decimal: maturity).stringValue),
+                                selectedCurrency
+                            ))
                             .font(.millioBodySemibold)
+                        } else {
+                            Text(L("accounts_core.deposit.creation.savings_preview"))
+                                .font(.millioCaptionRegular)
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
                     }
                 } else {
                     Text(L("accounts_core.deposit.creation.savings_preview"))
@@ -249,6 +224,9 @@ struct DepositFormData: Equatable {
     let rate: Double
     let capitalization: AccountDepositCapitalization
     let termEnd: Date?
+    /// Число месяца выплаты процентов как его выбрал пользователь. Отбрасывать его для шаговых
+    /// периодичностей — работа бриджа (`AccountsCoreAdditionBridge.depositMeta`), один нормализатор.
+    let payoutDay: Int
     let allowsTopUp: Bool
     let allowsEarlyClose: Bool
     /// Ввод пользователя В ПРОЦЕНТАХ (0…100) — бридж делит на 100 при сборке `DepositMeta`.
@@ -256,4 +234,6 @@ struct DepositFormData: Equatable {
     let remindEnd: Bool
     let autoRollover: Bool
     let comment: String
+    /// Тег «доход облагается налогом» — маркировка пользователя, в расчёты не входит.
+    let isTaxable: Bool
 }

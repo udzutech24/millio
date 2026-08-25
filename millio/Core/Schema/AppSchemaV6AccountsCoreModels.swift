@@ -9,6 +9,11 @@ import SwiftData
 /// declarations frozen is mandatory: referencing the mutable production `Account` here would
 /// change the V6 checksum as soon as V7 adds valuation revision columns, making a genuine V6 store
 /// an unknown model version instead of a migration source.
+///
+/// То же правило распространяется на composite attributes (`*Meta`): их поля входят в checksum
+/// сущности `Account`. `depositMeta` уже заморожен. Остальные `*Meta` пока указывают на
+/// продакшн-типы — при добавлении поля в любой из них ЗДЕСЬ нужна такая же замороженная копия,
+/// иначе стор 6.0.0 перестанет открываться. Сторож — `AppSchemaFrozenGraphTests`.
 extension AppSchemaV6 {
     @Model
     final class Account {
@@ -27,7 +32,10 @@ extension AppSchemaV6 {
         var order: Int = 0
 
         var cardMeta: CardMeta?
-        var depositMeta: DepositMeta?
+        // Composite attribute: любое новое поле в продакшн-`DepositMeta` сдвинуло бы checksum
+        // этой исторической сущности задним числом. Форма вклада в V4–V9 одна и та же, поэтому
+        // переиспользуется единственная замороженная копия (объявлена в файле V7-графа).
+        var depositMeta: AppSchemaV7.FrozenDepositMeta?
         var loanMeta: LoanMeta?
         var debtMeta: DebtMeta?
         var marketMeta: MarketMeta?

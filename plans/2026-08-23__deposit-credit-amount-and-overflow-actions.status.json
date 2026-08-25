@@ -1,0 +1,26 @@
+{
+  "_generated": true,
+  "planFile": "2026-08-23__deposit-credit-amount-and-overflow-actions.md",
+  "title": "Plan: изменение суммы вклада/долга и overflow-действия",
+  "updated": "2026-08-24T06:18:14.709Z",
+  "phases": [
+    {
+      "name": "Phase 1 — доменная операция вклада: command, validation, atomic adjustment + forecast rebuild, unit…",
+      "status": "done"
+    },
+    {
+      "name": "Phase 2 — primary actions и денежный маршрут: Изменить сумму с датой для вклада через готовый coord…",
+      "status": "done"
+    },
+    {
+      "name": "Phase 3 — условия и переход типа: выделенный app-native экран смены типа вместо menu-popover; новая…",
+      "status": "done"
+    },
+    {
+      "name": "Phase 4 — regression gates: unit tests, iPhone/Dynamic Type render, focused build и acceptance-crit…",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

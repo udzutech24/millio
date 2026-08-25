@@ -1096,11 +1096,13 @@ struct FinanceAddAccountView: View {
             rate: Decimal(depositData.rate),
             capitalization: depositData.capitalization,
             termEnd: depositData.termEnd,
+            payoutDay: depositData.payoutDay,
             allowsTopUp: depositData.allowsTopUp,
             allowsEarlyClose: depositData.allowsEarlyClose,
             earlyClosePenaltyShare: Decimal(depositData.earlyClosePenaltyPercent / 100),
             remindEnd: depositData.remindEnd,
-            autoRollover: depositData.autoRollover
+            autoRollover: depositData.autoRollover,
+            isTaxable: depositData.isTaxable
         )
 
         do {

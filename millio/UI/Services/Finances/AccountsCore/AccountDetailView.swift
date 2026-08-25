@@ -31,6 +31,7 @@ struct AccountDetailView: View {
         case transfer
         case earlyClose
         case depositTopUp
+        case depositAdjustBalance
         case depositTerms
         case depositMaturity
         case buy
@@ -147,6 +148,40 @@ struct AccountDetailView: View {
         }
         .navigationTitle(account.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let presentation = depositPresentation, !depositOverflowActions(presentation).isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        ForEach(depositOverflowActions(presentation), id: \.self) { action in
+                            Button(
+                                depositOverflowTitle(action),
+                                systemImage: depositOverflowIcon(action),
+                                role: action == .archive ? .destructive : nil
+                            ) {
+                                handleDepositAction(action)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }
+                    .accessibilityLabel(L("accounts_core.detail.action.edit"))
+                }
+            } else if account.productType == .creditCard {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button(L("accounts_core.detail.action.edit"), systemImage: "pencil") {
+                            sheet = .editDetails
+                        }
+                        Button(archiveActionTitle, systemImage: "archivebox", role: .destructive) {
+                            requestArchiveConfirmation()
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }
+                    .accessibilityLabel(L("accounts_core.detail.action.edit"))
+                }
+            }
+        }
         .sheet(item: $sheet) { sheet in
             sheetContent(for: sheet)
         }
@@ -838,11 +873,13 @@ struct AccountDetailView: View {
                         }
                     }
                 }
-                actionButton(L("accounts_core.detail.action.edit"), icon: "pencil") {
-                    sheet = .editDetails
-                }
-                actionButton(archiveActionTitle, icon: "archivebox.fill", isDestructive: true) {
-                    requestArchiveConfirmation()
+                if account.productType != .creditCard {
+                    actionButton(L("accounts_core.detail.action.edit"), icon: "pencil") {
+                        sheet = .editDetails
+                    }
+                    actionButton(archiveActionTitle, icon: "archivebox.fill", isDestructive: true) {
+                        requestArchiveConfirmation()
+                    }
                 }
             }
         }
@@ -1246,15 +1283,63 @@ struct AccountDetailView: View {
                     )
                 }
             }
+        case .depositAdjustBalance:
+            if let currentBalance = depositPresentation?.snapshot.currentBalance.value {
+                DepositBalanceAdjustmentSheet(currentBalance: currentBalance, currency: account.currency) { amount, date, note in
+                    performDeposit {
+                        try DepositOperationCoordinator(modelContext: modelContext).adjustBalance(
+                            depositID: account.id,
+                            command: DepositBalanceAdjustmentCommand(
+                                operationID: "deposit-balance-adjustment:\(UUID().uuidString)",
+                                newBalance: amount,
+                                date: date,
+                                note: note
+                            )
+                        )
+                    }
+                }
+            }
         case .depositTerms:
             if let meta = account.depositMeta, let snapshot = depositPresentation?.snapshot {
-                DepositTermsEditSheet(meta: meta, snapshot: snapshot, openingDate: account.createdAt) { updatedMeta in
+                DepositTermsEditSheet(
+                    meta: meta,
+                    snapshot: snapshot,
+                    openingDate: account.createdAt,
+                    currentNote: account.note
+                ) { edit in
                     performDeposit {
-                        let result = try DepositOperationCoordinator(modelContext: modelContext).editTerms(
+                        // Заметка пишется ПЕРВОЙ и именно `updateAccount`: она живёт в контексте
+                        // экрана, а координатор работает в своём. Если писать её после операций
+                        // координатора, экранный `account` будет уже устаревшим снимком строки и
+                        // сохранение заметки могло бы затереть только что записанную мету.
+                        if edit.note != account.note {
+                            try service.updateAccount(
+                                account,
+                                name: account.name,
+                                group: account.group,
+                                note: edit.note,
+                                includeInTotal: account.includeInTotal
+                            )
+                            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+                        }
+                        let coordinator = DepositOperationCoordinator(modelContext: modelContext)
+                        // Порядок важен: сначала новые условия, потом коррекция суммы. Обе операции
+                        // перестраивают будущий график, и вторая должна считать его уже по новой мете.
+                        let result = try coordinator.editTerms(
                             depositID: account.id,
-                            command: DepositTermsEditCommand(meta: updatedMeta)
+                            command: DepositTermsEditCommand(meta: edit.meta)
                         )
-                        synchronizeDepositReminder(meta: updatedMeta)
+                        if let newBalance = edit.newBalance {
+                            _ = try coordinator.adjustBalance(
+                                depositID: account.id,
+                                command: DepositBalanceAdjustmentCommand(
+                                    operationID: "deposit-balance-adjustment:\(UUID().uuidString)",
+                                    newBalance: newBalance,
+                                    date: Date()
+                                )
+                            )
+                        }
+                        synchronizeDepositReminder(meta: edit.meta)
                         return result
                     }
                 }
@@ -1362,10 +1447,37 @@ struct AccountDetailView: View {
     private func handleDepositAction(_ action: DepositDetailAction) {
         switch action {
         case .topUp: sheet = .depositTopUp
+        case .adjustBalance: sheet = .depositAdjustBalance
         case .editTerms: sheet = .depositTerms
-        case .earlyClose: sheet = .earlyClose
+        case .earlyClose: showEarlyCloseConfirm = true
         case .withdrawAtMaturity: sheet = .depositMaturity
-        case .archive: showArchiveConfirm = true
+        case .archive: requestArchiveConfirmation()
+        }
+    }
+
+    private func depositOverflowActions(_ presentation: DepositDetailPresentation) -> [DepositDetailAction] {
+        presentation.actions.filter { $0 != .topUp && $0 != .adjustBalance }
+    }
+
+    private func depositOverflowTitle(_ action: DepositDetailAction) -> String {
+        switch action {
+        case .topUp: L("accounts_core.deposit.action.top_up")
+        case .adjustBalance: L("accounts_core.detail.action.adjust_balance")
+        case .editTerms: L("accounts_core.deposit.action.edit_terms")
+        case .earlyClose: L("accounts_core.detail.deposit.action.early_close")
+        case .withdrawAtMaturity: L("accounts_core.deposit.action.withdraw_maturity")
+        case .archive: archiveActionTitle
+        }
+    }
+
+    private func depositOverflowIcon(_ action: DepositDetailAction) -> String {
+        switch action {
+        case .topUp: "plus.circle"
+        case .adjustBalance: "slider.horizontal.3"
+        case .editTerms: "pencil"
+        case .earlyClose: "xmark.circle"
+        case .withdrawAtMaturity: "arrow.right.circle"
+        case .archive: "archivebox"
         }
     }
 

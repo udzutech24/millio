@@ -77,7 +77,7 @@ struct DepositDetailSection: View {
 
     private var actions: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: AppSpacing.s)], spacing: AppSpacing.s) {
-            ForEach(presentation.actions, id: \.self) { action in
+            ForEach(primaryActions, id: \.self) { action in
                 Button { onAction(action) } label: {
                     Label(actionTitle(action), systemImage: actionIcon(action))
                         .font(.millioBodySemibold)
@@ -89,6 +89,12 @@ struct DepositDetailSection: View {
                 .foregroundStyle(action == .earlyClose || action == .archive ? AppColors.error : AppColors.textPrimary)
             }
         }
+    }
+
+    /// Frequent money operations stay discoverable. Lifecycle and destructive actions live in the
+    /// detail toolbar, where `AccountDetailView` preserves their confirmations.
+    private var primaryActions: [DepositDetailAction] {
+        presentation.actions.filter { $0 == .topUp || $0 == .adjustBalance }
     }
 
     private var incompleteNotice: some View {
@@ -186,6 +192,7 @@ struct DepositDetailSection: View {
     private func actionTitle(_ action: DepositDetailAction) -> String {
         switch action {
         case .topUp: L("accounts_core.deposit.action.top_up")
+        case .adjustBalance: L("accounts_core.detail.action.adjust_balance")
         case .editTerms: L("accounts_core.deposit.action.edit_terms")
         case .earlyClose: L("accounts_core.detail.deposit.action.early_close")
         case .withdrawAtMaturity: L("accounts_core.deposit.action.withdraw_maturity")
@@ -196,6 +203,7 @@ struct DepositDetailSection: View {
     private func actionIcon(_ action: DepositDetailAction) -> String {
         switch action {
         case .topUp: "plus.circle.fill"
+        case .adjustBalance: "slider.horizontal.3"
         case .editTerms: "pencil"
         case .earlyClose: "xmark.circle.fill"
         case .withdrawAtMaturity: "arrow.right.circle.fill"

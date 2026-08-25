@@ -287,7 +287,69 @@ enum DepositInterestScheduler {
                 ))
             }
             return drafts
+
+        case .daily:
+            return buildFixedStepSchedule(
+                accountID: accountID, kind: kind, stepDays: 1, annualRate: meta.rate,
+                openingDate: openingDate, existingEvents: workingEvents,
+                after: asOf, horizon: horizon, calendar: calendar
+            )
+
+        case .customDays(let days):
+            return buildFixedStepSchedule(
+                accountID: accountID, kind: kind, stepDays: days, annualRate: meta.rate,
+                openingDate: openingDate, existingEvents: workingEvents,
+                after: asOf, horizon: horizon, calendar: calendar
+            )
         }
+    }
+
+    /// Потолок событий, генерируемых за один прогон для шаговых периодичностей.
+    /// Ежедневная капитализация на пятилетнем вкладе дала бы ~1800 событий разом: это и раздувает
+    /// стор/бэкап, и заливает Cashflow (`AccountsCoreDepositCashflowBridge` материализует due interest).
+    /// Потолок превращает горизонт в роллинговый — остаток догенерирует `extendActiveDepositHorizons`.
+    static let maxFixedStepDraftsPerRun = 400
+
+    /// Расписание с фиксированным шагом в днях: `.daily` (шаг 1) и `.customDays(N)`.
+    /// Ставка за период считается по той же конвенции /365, что и разовая выплата в `.none`,
+    /// а компаундинг возникает естественно — каждый черновик попадает в ленту и поднимает базу.
+    private static func buildFixedStepSchedule(
+        accountID: UUID,
+        kind: AccountKind,
+        stepDays: Int,
+        annualRate: Decimal,
+        openingDate: Date,
+        existingEvents: [AccountEvent],
+        after asOf: Date,
+        horizon: Date,
+        calendar: Calendar
+    ) -> [InterestEventDraft] {
+        let step = max(1, stepDays)
+        let periodRate = annualRate * Decimal(step) / 365
+        guard periodRate != 0 else { return [] }
+
+        var workingEvents = existingEvents
+        var drafts: [InterestEventDraft] = []
+        var periodIndex = 1
+        while drafts.count < maxFixedStepDraftsPerRun {
+            guard let periodEnd = calendar.date(byAdding: .day, value: periodIndex * step, to: openingDate),
+                  periodEnd <= horizon else { break }
+            periodIndex += 1
+            guard periodEnd > asOf else { continue }
+            let balanceBefore = AccountBalanceEngine.balanceAt(events: workingEvents, kind: kind, on: periodEnd)
+            let interest = round2(balanceBefore * periodRate / 100)
+            guard interest != 0 else { continue }
+            let sourceID = sourceTransactionID(accountID: accountID, dayKey: AccountEvent.dayKey(for: periodEnd))
+            drafts.append(.init(sourceTransactionID: sourceID, amount: interest, date: periodEnd))
+            workingEvents.append(AccountEvent(
+                account: nil,
+                date: periodEnd,
+                type: .interest,
+                amount: interest,
+                sourceTransactionID: sourceID
+            ))
+        }
+        return drafts
     }
 
     /// Keeps legacy schedules anchored to the opening day when `payoutDay == nil`. An explicit

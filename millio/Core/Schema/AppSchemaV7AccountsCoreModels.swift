@@ -1,26 +1,59 @@
 import Foundation
 import SwiftData
 
-// MARK: - Released pre-product AccountsCore graph
+// MARK: - Замороженный AccountsCore-граф версий V7/V8/V9
 
-/// Frozen SwiftData declarations for the AccountsCore graph that shipped under schema V4/V5.
+/// Замороженные SwiftData-декларации графа AccountsCore, принятые схемами V7, V8 и V9.
 ///
-/// Historical schemas must never reference the mutable production `Account` type. Doing so changes
-/// their runtime checksum whenever a stored property is added and makes a genuine older store an
-/// "unknown model version". These declarations intentionally contain only the persisted shape from
-/// the pre-product V5 source. Business behavior belongs to the current top-level models.
+/// Все три версии описывают ОДИН И ТОТ ЖЕ `Account` (V8 и V9 добавляли только новые таблицы —
+/// недвижимость/вложения и аудит закрытия месяца Cashflow), поэтому у них общий замороженный набор.
 ///
-/// То же правило распространяется на composite attributes (`*Meta`): их поля входят в checksum
-/// сущности `Account`. `depositMeta` уже заморожен. Остальные `*Meta` пока указывают на
-/// продакшн-типы — при добавлении поля в любой из них ЗДЕСЬ нужна такая же замороженная копия,
-/// иначе сторы 4.0.0/5.0.0 перестанут открываться. Сторож — `AppSchemaFrozenGraphTests`.
-extension AppSchemaV5 {
+/// Заморозка обязательна: `Account.depositMeta` — composite attribute, и добавление даже одного
+/// опционального поля в `DepositMeta` (V10, тег `isTaxable`) МЕНЯЕТ checksum сущности `Account`
+/// задним числом. Замерено на реальном сторе: хеш `Account` уезжал с
+/// `BDWJy0HN268pIbYHiNuawlUTybynWnG7Qmu7wnySOss=` — то есть уже существующий стор пользователя
+/// перестал бы соответствовать какой-либо версии из плана и падал бы с NSCocoaErrorDomain 134504
+/// «Cannot use staged migration with an unknown model version». Проверяется тестом
+/// `AppSchemaFrozenGraphTests`.
+///
+/// НЕ ссылаться отсюда на продакшн-типы `Account`/`DepositMeta` — только на замороженные копии.
+/// Модели без связи с `Account` (`HistoricalAssetPrice`, `HistoricalPortfolioValuation`,
+/// `RealEstateProfile`, `AccountAttachment`, `CashflowMonthClosureEvent`) остаются общими:
+/// их форма V10 не трогает, а дублирование ради дублирования только размножит расхождения.
+extension AppSchemaV7 {
+
+    /// Капитализация в том виде, в каком она лежит в сторах V7–V9: обычный String-enum.
+    /// Продакшн-тип с V10 умеет ещё `daily`/`custom_<N>`, но на форму хранения это не влияет —
+    /// в обоих случаях это одна строковая ячейка (замерено пробой checksum).
+    enum FrozenDepositCapitalization: String, Codable, Hashable {
+        case none
+        case monthly
+        case quarterly
+    }
+
+    /// `DepositMeta` без тега `isTaxable` — ровно та форма, что записана в сторах V4–V9.
+    /// Переиспользуется графами V5/V6 (`AppSchemaV5`/`AppSchemaV6`): вклад ни разу не менял форму
+    /// от V4 до V9, поэтому замороженная копия одна на все исторические версии.
+    struct FrozenDepositMeta: Codable, Equatable {
+        var rate: Decimal
+        var capitalization: FrozenDepositCapitalization
+        var termEnd: Date?
+        var payoutDay: Int?
+        var allowsTopUp: Bool
+        var allowsEarlyClose: Bool
+        var earlyClosePenalty: Decimal?
+        var remindEnd: Bool
+        var autoRollover: Bool
+    }
+
     @Model
     final class Account {
         var id: UUID = UUID()
 
         var name: String = ""
         var kindRaw: String = AccountKind.cash.rawValue
+        var productTypeRaw: String?
+        var productMigrationReason: String?
         var currency: String = "RUB"
         var createdAt: Date = Date()
         var archivedAt: Date?
@@ -29,11 +62,12 @@ extension AppSchemaV5 {
         var note: String?
         var order: Int = 0
 
+        var valuationMembershipRevision: Int64?
+        var valuationFinancialRevision: Int64?
+        var valuationEventRevision: Int64?
+
         var cardMeta: CardMeta?
-        // Composite attribute: любое новое поле в продакшн-`DepositMeta` сдвинуло бы checksum
-        // этой исторической сущности задним числом. Форма вклада в V4–V9 одна и та же, поэтому
-        // переиспользуется единственная замороженная копия (объявлена в файле V7-графа).
-        var depositMeta: AppSchemaV7.FrozenDepositMeta?
+        var depositMeta: FrozenDepositMeta?
         var loanMeta: LoanMeta?
         var debtMeta: DebtMeta?
         var marketMeta: MarketMeta?

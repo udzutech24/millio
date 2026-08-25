@@ -114,16 +114,30 @@ struct SchemaMigrationTests {
     }
 
 
-    @Test("V7 account history survives additive V8 attachment migration") @MainActor
+    @Test("V7 account history survives additive migration to the current schema") @MainActor
     func v7AccountHistorySurvivesV8Migration() throws {
         let url = tempStoreURL()
         defer { cleanup(url) }
         let v7Schema = Schema(AppSchemaV7.models, version: AppSchemaV7.versionIdentifier)
         let v7Config = ModelConfiguration("v7_fixture", schema: v7Schema, url: url, cloudKitDatabase: .none)
         let v7Container = try ModelContainer(for: v7Schema, configurations: [v7Config])
-        let account = Account(name: "Apartment", kind: .manualAsset, productType: .realEstate)
+        // Стор пишется ЗАМОРОЖЕННЫМИ декларациями V7. С заморозкой AccountsCore-графа
+        // `AppSchemaV7.models` перестала содержать продакшн-`Account`, и вставка продакшн-типа
+        // в такой контейнер роняет тест-хост (signal trap) вместо честного падения проверки.
+        let account = AppSchemaV7.Account(
+            name: "Apartment",
+            kindRaw: AccountKind.manualAsset.rawValue
+        )
+        account.productTypeRaw = AccountProductType.realEstate.rawValue
         account.manualAssetMeta = ManualAssetMeta(revalReminderMonths: 12, depreciationRatePerYear: nil, linkedLoanID: nil)
-        let event = AccountEvent(account: account, date: Date(timeIntervalSince1970: 1_700_000_000), type: .openingBalance, amount: 54_000_000)
+        let eventDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let event = AppSchemaV7.AccountEvent(
+            account: account,
+            date: eventDate,
+            dayKey: AccountEvent.dayKey(for: eventDate),
+            typeRaw: AccountEventType.openingBalance.rawValue
+        )
+        event.amount = 54_000_000
         v7Container.mainContext.insert(account)
         v7Container.mainContext.insert(event)
         try v7Container.mainContext.save()

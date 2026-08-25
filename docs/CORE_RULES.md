@@ -215,7 +215,16 @@
 ❌ Нет вызова CloudKit из Feature-модулей  
 ❌ Нет partial restore  
 ❌ Нет merge данных при restore  
-❌ Нет автоматического restore без UI
+❌ Нет автоматического restore без UI  
+❌ Нет правок уже выпущенной версии схемы (`AppSchemaV1…V{N-1}`) задним числом
+
+**Про схемы SwiftData.** Историческая версия обязана ссылаться на ЗАМОРОЖЕННЫЕ декларации моделей,
+а не на продакшн-типы. Это касается и composite attributes: поля структур `*Meta` входят в checksum
+сущности `Account`, поэтому новое поле в `DepositMeta` меняет checksum старых версий задним числом,
+и реальный стор пользователя перестаёт соответствовать любой версии плана
+(NSCocoaErrorDomain 134504 → no-plan fallback → потеря данных). Новый `@Model` или новое поле —
+только в новую версию `AppSchemaV{N+1}`. Сторож — `millioTests/Core/Schema/AppSchemaFrozenGraphTests.swift`
+(пин checksum каждой сущности V1–V9).
 
 ### UI и навигация
 
