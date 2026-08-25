@@ -39,6 +39,22 @@ struct DepositCreationPreview: Equatable {
 
     var isValid: Bool { errors.isEmpty }
 
+    /// Условное окно прогноза для БЕССРОЧНОГО вклада/накопительного счёта. Срока нет, но показывать
+    /// пустоту вместо дохода неправильно: пользователь вводит сумму и ставку и вправе сразу видеть,
+    /// сколько это приносит. `maturityAmount` при этом остаётся nil — «суммы к концу срока» тут нет.
+    static let openEndedPreviewDays = 30
+
+    /// Доход по простой схеме ACT/365 за произвольное число дней.
+    /// Отдельно от `make`, потому что live-подсказка «доход за период» под пикером периодичности
+    /// не должна зависеть от валидности остальной формы (срок, штраф, напоминания).
+    static func interest(amount: Decimal?, rate: Decimal?, days: Int) -> Decimal? {
+        guard let amount, let rate,
+              amount > 0, rate > 0,
+              !amount.isNaN, !rate.isNaN,
+              days > 0 else { return nil }
+        return DepositInterestScheduler.round2(amount * rate / 100 * Decimal(days) / 365)
+    }
+
     static func make(
         amount: Decimal?,
         rate: Decimal?,
@@ -65,7 +81,12 @@ struct DepositCreationPreview: Equatable {
             return .init(interest: nil, maturityAmount: nil, errors: errors)
         }
         guard hasTerm, let termEnd else {
-            return .init(interest: nil, maturityAmount: nil, errors: [])
+            // Бессрочный: считаем на условное окно, чтобы поле дохода не было пустым.
+            return .init(
+                interest: Self.interest(amount: amount, rate: rate, days: openEndedPreviewDays),
+                maturityAmount: nil,
+                errors: []
+            )
         }
         let days = max(0, calendar.dateComponents([.day], from: openingDate, to: termEnd).day ?? 0)
         let interest = DepositInterestScheduler.round2(amount * rate / 100 * Decimal(days) / 365)

@@ -1301,13 +1301,45 @@ struct AccountDetailView: View {
             }
         case .depositTerms:
             if let meta = account.depositMeta, let snapshot = depositPresentation?.snapshot {
-                DepositTermsEditSheet(meta: meta, snapshot: snapshot, openingDate: account.createdAt) { updatedMeta in
+                DepositTermsEditSheet(
+                    meta: meta,
+                    snapshot: snapshot,
+                    openingDate: account.createdAt,
+                    currentNote: account.note
+                ) { edit in
                     performDeposit {
-                        let result = try DepositOperationCoordinator(modelContext: modelContext).editTerms(
+                        // Заметка пишется ПЕРВОЙ и именно `updateAccount`: она живёт в контексте
+                        // экрана, а координатор работает в своём. Если писать её после операций
+                        // координатора, экранный `account` будет уже устаревшим снимком строки и
+                        // сохранение заметки могло бы затереть только что записанную мету.
+                        if edit.note != account.note {
+                            try service.updateAccount(
+                                account,
+                                name: account.name,
+                                group: account.group,
+                                note: edit.note,
+                                includeInTotal: account.includeInTotal
+                            )
+                            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+                        }
+                        let coordinator = DepositOperationCoordinator(modelContext: modelContext)
+                        // Порядок важен: сначала новые условия, потом коррекция суммы. Обе операции
+                        // перестраивают будущий график, и вторая должна считать его уже по новой мете.
+                        let result = try coordinator.editTerms(
                             depositID: account.id,
-                            command: DepositTermsEditCommand(meta: updatedMeta)
+                            command: DepositTermsEditCommand(meta: edit.meta)
                         )
-                        synchronizeDepositReminder(meta: updatedMeta)
+                        if let newBalance = edit.newBalance {
+                            _ = try coordinator.adjustBalance(
+                                depositID: account.id,
+                                command: DepositBalanceAdjustmentCommand(
+                                    operationID: "deposit-balance-adjustment:\(UUID().uuidString)",
+                                    newBalance: newBalance,
+                                    date: Date()
+                                )
+                            )
+                        }
+                        synchronizeDepositReminder(meta: edit.meta)
                         return result
                     }
                 }

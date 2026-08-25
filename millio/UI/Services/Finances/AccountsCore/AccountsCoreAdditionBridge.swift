@@ -243,7 +243,8 @@ enum AccountsCoreAdditionBridge {
         allowsEarlyClose: Bool,
         earlyClosePenaltyShare: Decimal?,
         remindEnd: Bool,
-        autoRollover: Bool
+        autoRollover: Bool,
+        isTaxable: Bool
     ) -> DepositMeta {
         DepositMeta(
             rate: rate,
@@ -254,7 +255,8 @@ enum AccountsCoreAdditionBridge {
             allowsEarlyClose: allowsEarlyClose,
             earlyClosePenalty: allowsEarlyClose ? earlyClosePenaltyShare : nil,
             remindEnd: remindEnd,
-            autoRollover: autoRollover
+            autoRollover: autoRollover,
+            isTaxable: isTaxable
         )
     }
 }

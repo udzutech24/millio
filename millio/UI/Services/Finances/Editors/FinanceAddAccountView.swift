@@ -1100,7 +1100,8 @@ struct FinanceAddAccountView: View {
             allowsEarlyClose: depositData.allowsEarlyClose,
             earlyClosePenaltyShare: Decimal(depositData.earlyClosePenaltyPercent / 100),
             remindEnd: depositData.remindEnd,
-            autoRollover: depositData.autoRollover
+            autoRollover: depositData.autoRollover,
+            isTaxable: depositData.isTaxable
         )
 
         do {
