@@ -212,7 +212,7 @@ struct DepositTermsEditSheet: View {
               !allowsEarlyClose || penalty.map({ $0 >= 0 && $0 <= 100 }) == true else { return nil }
         return DepositMeta(
             rate: rate, capitalization: capitalization, termEnd: meta.termEnd == nil ? nil : termEnd,
-            payoutDay: capitalization == .none ? nil : payoutDay,
+            payoutDay: capitalization.usesMonthlyPayoutDay ? payoutDay : nil,
             allowsTopUp: allowsTopUp, allowsEarlyClose: allowsEarlyClose,
             earlyClosePenalty: allowsEarlyClose ? penalty.map { $0 / 100 } : nil,
             remindEnd: meta.remindEnd, autoRollover: meta.autoRollover

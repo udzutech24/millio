@@ -124,19 +124,21 @@ enum AppSchemaV6: VersionedSchema {
 
 // MARK: - V7 (immutable local historical close repository, Accounts history Phase 3V)
 
-// V7 switches the frozen V6 AccountsCore declarations to the current production graph. This owns
-// only additive optional valuation-revision Account columns plus the new close table. The staged
-// transition never deletes or rewrites Account/Event/Snapshot source rows.
+// V7 adds the optional valuation-revision Account columns plus the new close table on top of V6.
+// The staged transition never deletes or rewrites Account/Event/Snapshot source rows.
+//
+// AccountsCore-граф V7 заморожен в `AppSchemaV7AccountsCoreModels.swift` и переиспользуется
+// версиями V8/V9 (они добавляли только новые таблицы, `Account` не трогали). Ссылаться отсюда на
+// продакшн-`Account` нельзя: V10 добавляет поле в `DepositMeta`, а это composite attribute —
+// checksum сущности `Account` изменился бы у всех трёх версий задним числом.
 enum AppSchemaV7: VersionedSchema {
     static var versionIdentifier = Schema.Version(7, 0, 0)
-    static var models: [any PersistentModel.Type] = AppSchemaV3.models + [
-        Account.self,
-        AccountEvent.self,
-        AccountGroup.self,
-        AccountDailySnapshot.self,
-        HistoricalAssetPrice.self,
-        HistoricalPortfolioValuation.self,
-    ]
+    static var models: [any PersistentModel.Type] = AppSchemaV3.models
+        + AppSchemaV7.frozenAccountsCoreModels
+        + [
+            HistoricalAssetPrice.self,
+            HistoricalPortfolioValuation.self,
+        ]
 }
 
 // MARK: - V8 (real-estate profile and privacy-safe photo attachments)
@@ -160,6 +162,29 @@ enum AppSchemaV9: VersionedSchema {
     ]
 }
 
+// MARK: - V10 (тег «налогооблагаемый» + шаговая капитализация вклада)
+
+/// Первая версия, где AccountsCore-граф снова указывает на продакшн-модели. Изменение ровно одно и
+/// оно аддитивное: `DepositMeta` получил опциональный `isTaxable`. Строки не переписываются —
+/// у существующих вкладов поле декодируется как `nil` («не размечен»).
+///
+/// Новые случаи капитализации (`daily`, `customDays`) в эту версию НЕ входят как изменение схемы:
+/// enum хранится строкой и до, и после (проверено замером checksum — он не сдвинулся).
+enum AppSchemaV10: VersionedSchema {
+    static var versionIdentifier = Schema.Version(10, 0, 0)
+    static var models: [any PersistentModel.Type] = AppSchemaV3.models + [
+        Account.self,
+        AccountEvent.self,
+        AccountGroup.self,
+        AccountDailySnapshot.self,
+        HistoricalAssetPrice.self,
+        HistoricalPortfolioValuation.self,
+        RealEstateProfile.self,
+        AccountAttachment.self,
+        CashflowMonthClosureEvent.self,
+    ]
+}
+
 // MARK: - Текущая схема (единственный источник правды)
 
 // При добавлении нового @Model:
@@ -170,7 +195,7 @@ enum AppSchemaV9: VersionedSchema {
 // ВАЖНО: models уже выпущенной версии (или версии, под идентификатором которой уже
 // существуют сторы на дисках — dev/sim в том числе) — не редактировать задним числом.
 // Это ломает staged migration (см. комментарий V4 выше, Находка 2).
-typealias AppSchemaCurrent = AppSchemaV9
+typealias AppSchemaCurrent = AppSchemaV10
 
 // MARK: - План миграции
 
@@ -186,6 +211,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         AppSchemaV7.self,
         AppSchemaV8.self,
         AppSchemaV9.self,
+        AppSchemaV10.self,
     ]
 
     static var stages: [MigrationStage] = [
@@ -197,6 +223,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         .lightweight(fromVersion: AppSchemaV6.self, toVersion: AppSchemaV7.self),
         .lightweight(fromVersion: AppSchemaV7.self, toVersion: AppSchemaV8.self),
         .lightweight(fromVersion: AppSchemaV8.self, toVersion: AppSchemaV9.self),
+        .lightweight(fromVersion: AppSchemaV9.self, toVersion: AppSchemaV10.self),
     ]
 }
 

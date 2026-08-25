@@ -19,10 +19,77 @@ struct CardMeta: Codable, Equatable {
 
 /// Капитализация процентов по вкладу.
 /// Префикс Account* — во избежание конфликта с `DepositCapitalization` в старом Investment.swift (то ядро не трогаем).
-enum AccountDepositCapitalization: String, Codable, Hashable, CaseIterable {
+///
+/// Тип хранится СТРОКОЙ — и в SwiftData (внутри Codable-структуры `DepositMeta`), и в backup
+/// (`DepositMeta.exportDict`). Поэтому rawValue у `none`/`monthly`/`quarterly` заморожены:
+/// переименование сделает нечитаемыми уже существующие вклады и старые бэкапы.
+/// `RawRepresentable` реализован вручную (а не через `: String`), потому что `customDays`
+/// несёт ассоциированное значение — при этом внешнее представление остаётся тем же String,
+/// то есть форма хранения не меняется.
+enum AccountDepositCapitalization: Hashable, Codable, RawRepresentable {
     case none
+    case daily
     case monthly
     case quarterly
+    /// Произвольный период начисления, в днях (минимум 1).
+    case customDays(Int)
+
+    /// Префикс rawValue произвольного периода: `custom_45` = раз в 45 дней.
+    static let customRawPrefix = "custom_"
+
+    /// Варианты для пикеров: `customDays` подставляется отдельно с выбранным пользователем N.
+    static let presetCases: [AccountDepositCapitalization] = [.none, .daily, .monthly, .quarterly]
+
+    /// Период в днях для произвольной периодичности; `nil` для календарных режимов.
+    var customDays: Int? {
+        if case .customDays(let days) = self { return max(1, days) }
+        return nil
+    }
+
+    /// Только календарные режимы привязаны к числу месяца (`DepositMeta.payoutDay`).
+    /// Шаговые (`daily`/`customDays`) считают от даты открытия, число месяца для них бессмысленно.
+    var usesMonthlyPayoutDay: Bool {
+        switch self {
+        case .monthly, .quarterly: true
+        case .none, .daily, .customDays: false
+        }
+    }
+
+    /// Длина периода начисления в днях — для live-превью дохода «за период».
+    /// Календарные режимы усредняются (365/12, 365/4), точная дата выплаты — за планировщиком.
+    var approximatePeriodDays: Int {
+        switch self {
+        case .none: 365
+        case .daily: 1
+        case .monthly: 30
+        case .quarterly: 91
+        case .customDays(let days): max(1, days)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .none: "none"
+        case .daily: "daily"
+        case .monthly: "monthly"
+        case .quarterly: "quarterly"
+        case .customDays(let days): "\(Self.customRawPrefix)\(max(1, days))"
+        }
+    }
+
+    init?(rawValue: String) {
+        switch rawValue {
+        case "none": self = .none
+        case "daily": self = .daily
+        case "monthly": self = .monthly
+        case "quarterly": self = .quarterly
+        default:
+            guard rawValue.hasPrefix(Self.customRawPrefix),
+                  let days = Int(rawValue.dropFirst(Self.customRawPrefix.count)),
+                  days >= 1 else { return nil }
+            self = .customDays(days)
+        }
+    }
 }
 
 /// Метаданные вклада. `termEnd == nil` — накопительный счёт (тот же движок B, без срока, Фаза 3):
@@ -40,6 +107,11 @@ struct DepositMeta: Codable, Equatable {
     var earlyClosePenalty: Decimal?
     var remindEnd: Bool
     var autoRollover: Bool
+    /// Пользовательская пометка «доход по вкладу облагается налогом». Это ТЕГ, а не вход расчёта:
+    /// `DepositTaxCalculator` считает НДФЛ глобально по всем вкладам владельца и этот флаг не читает.
+    /// Optional намеренно: вклады, созданные до появления тега, декодируются как `nil` (== не размечен)
+    /// — non-optional Bool сломал бы синтезированный `init(from:)` на старых записях (keyNotFound).
+    var isTaxable: Bool?
 }
 
 /// Тип графика погашения кредита.
@@ -143,6 +215,7 @@ extension DepositMeta {
         if let termEnd { dict["termEnd"] = termEnd.timeIntervalSince1970 }
         if let payoutDay { dict["payoutDay"] = payoutDay }
         if let earlyClosePenalty { dict["earlyClosePenalty"] = "\(earlyClosePenalty)" }
+        if let isTaxable { dict["isTaxable"] = isTaxable }
         return dict
     }
 
@@ -166,7 +239,8 @@ extension DepositMeta {
             allowsEarlyClose: allowsEarlyClose,
             earlyClosePenalty: (dict["earlyClosePenalty"] as? String).flatMap { Decimal(string: $0) },
             remindEnd: remindEnd,
-            autoRollover: autoRollover
+            autoRollover: autoRollover,
+            isTaxable: dict["isTaxable"] as? Bool
         )
     }
 }

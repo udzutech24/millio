@@ -201,7 +201,7 @@ struct AccountProductTransitionEditorView: View {
                 Text(L("accounts_core.deposit_form.capitalization.quarterly")).tag(AccountDepositCapitalization.quarterly)
             }
             .pickerStyle(.segmented)
-            if depositCapitalization != .none {
+            if depositCapitalization.usesMonthlyPayoutDay {
                 Stepper(value: $depositPayoutDay, in: 1...31) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L("accounts_core.deposit_form.payout_day"))
@@ -335,7 +335,7 @@ enum AccountProductTransitionFormMapper {
         guard !allowsEarlyClose || penaltyValue.map({ (0...100).contains($0) }) == true else { return nil }
         return DepositMeta(
             rate: rate, capitalization: capitalization, termEnd: hasTerm ? termEnd : nil,
-            payoutDay: capitalization == .none ? nil : payoutDay,
+            payoutDay: capitalization.usesMonthlyPayoutDay ? payoutDay : nil,
             allowsTopUp: allowsTopUp, allowsEarlyClose: allowsEarlyClose,
             earlyClosePenalty: allowsEarlyClose
                 ? penaltyValue.flatMap { Decimal(string: String($0 / 100)) }
