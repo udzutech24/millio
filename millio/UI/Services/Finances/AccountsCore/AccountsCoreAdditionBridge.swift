@@ -239,6 +239,7 @@ enum AccountsCoreAdditionBridge {
         rate: Decimal,
         capitalization: AccountDepositCapitalization,
         termEnd: Date?,
+        payoutDay: Int?,
         allowsTopUp: Bool,
         allowsEarlyClose: Bool,
         earlyClosePenaltyShare: Decimal?,
@@ -250,7 +251,7 @@ enum AccountsCoreAdditionBridge {
             rate: rate,
             capitalization: capitalization,
             termEnd: termEnd,
-            payoutDay: nil,
+            payoutDay: normalizedPayoutDay(payoutDay, capitalization: capitalization),
             allowsTopUp: allowsTopUp,
             allowsEarlyClose: allowsEarlyClose,
             earlyClosePenalty: allowsEarlyClose ? earlyClosePenaltyShare : nil,
@@ -258,5 +259,17 @@ enum AccountsCoreAdditionBridge {
             autoRollover: autoRollover,
             isTaxable: isTaxable
         )
+    }
+
+    /// День выплаты имеет смысл только у календарных периодичностей; значение вне 1…31 не
+    /// сохраняем — `AccountProductFactory` такой счёт отвергнет при создании. `nil` = расписание
+    /// якорится на дату открытия (`DepositInterestScheduler.anchoredPayoutDate`).
+    private static func normalizedPayoutDay(
+        _ day: Int?,
+        capitalization: AccountDepositCapitalization
+    ) -> Int? {
+        guard capitalization.usesMonthlyPayoutDay,
+              let day, (1...31).contains(day) else { return nil }
+        return day
     }
 }

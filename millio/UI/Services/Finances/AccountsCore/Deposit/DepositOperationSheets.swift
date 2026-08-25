@@ -279,11 +279,11 @@ struct DepositTermsEditSheet: View {
                         currency: $currency,
                         rateText: $rateText,
                         capitalization: $capitalization,
+                        payoutDay: $payoutDay,
                         isTaxable: $isTaxable,
                         isFocused: $inputFocused,
                         isCurrencyEditable: false
                     )
-                    payoutDaySection
                     optionsSection
                     previewSection
                     commentSection
@@ -307,28 +307,6 @@ struct DepositTermsEditSheet: View {
     }
 
     // MARK: - Секции
-
-    /// Число месяца выплаты есть только у календарных периодичностей: у `daily`/`customDays`
-    /// начисление считается шагом от даты открытия, и число месяца для них бессмысленно.
-    @ViewBuilder
-    private var payoutDaySection: some View {
-        if capitalization.usesMonthlyPayoutDay {
-            termsCard {
-                Stepper(value: $payoutDay, in: 1...31) {
-                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                        Text(L("accounts_core.deposit_form.payout_day"))
-                            .font(.millioCallout)
-                        Text(verbatim: "\(payoutDay)")
-                            .font(.millioHeadline)
-                            .foregroundStyle(AppColors.brandPrimary)
-                    }
-                }
-                Text(L("accounts_core.deposit_form.payout_day_hint"))
-                    .font(.millioCaptionRegular)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-        }
-    }
 
     private var optionsSection: some View {
         termsCard {

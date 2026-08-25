@@ -166,13 +166,15 @@ struct AccountsCoreAdditionBridgeTests {
     func depositMetaMapsFormFieldsAndConvertsPenaltyToShare() {
         let termEnd = Date(timeIntervalSince1970: 1_800_000_000)
         let meta = AccountsCoreAdditionBridge.depositMeta(
-            rate: 12, capitalization: .monthly, termEnd: termEnd,
+            rate: 12, capitalization: .monthly, termEnd: termEnd, payoutDay: 15,
             allowsTopUp: false, allowsEarlyClose: true, earlyClosePenaltyShare: 0.5,
             remindEnd: true, autoRollover: false, isTaxable: true
         )
         #expect(meta.rate == 12)
         #expect(meta.capitalization == .monthly)
         #expect(meta.termEnd == termEnd)
+        // День выплаты, выбранный в форме создания, доезжает до meta без изменений.
+        #expect(meta.payoutDay == 15)
         #expect(meta.allowsTopUp == false)
         #expect(meta.allowsEarlyClose == true)
         #expect(meta.earlyClosePenalty == 0.5)
@@ -185,7 +187,7 @@ struct AccountsCoreAdditionBridgeTests {
     @Test
     func depositMetaMapsStepCapitalizationWithoutLosingPeriod() {
         let meta = AccountsCoreAdditionBridge.depositMeta(
-            rate: 9, capitalization: .customDays(45), termEnd: nil,
+            rate: 9, capitalization: .customDays(45), termEnd: nil, payoutDay: 10,
             allowsTopUp: true, allowsEarlyClose: false, earlyClosePenaltyShare: nil,
             remindEnd: false, autoRollover: false, isTaxable: false
         )
@@ -198,18 +200,48 @@ struct AccountsCoreAdditionBridgeTests {
     @Test
     func depositMetaSavingsAccountHasNilTermEnd() {
         let meta = AccountsCoreAdditionBridge.depositMeta(
-            rate: 8, capitalization: .monthly, termEnd: nil,
+            rate: 8, capitalization: .monthly, termEnd: nil, payoutDay: 5,
             allowsTopUp: true, allowsEarlyClose: false, earlyClosePenaltyShare: nil,
             remindEnd: false, autoRollover: false, isTaxable: false
         )
         #expect(meta.termEnd == nil) // накопительный счёт — без срока, тот же движок B
+        #expect(meta.payoutDay == 5) // но день выплаты у него осмыслен и сохраняется
+    }
+
+    @Test
+    func depositMetaKeepsPayoutDayForQuarterlyAndDropsOutOfRangeValues() {
+        let quarterly = AccountsCoreAdditionBridge.depositMeta(
+            rate: 11, capitalization: .quarterly, termEnd: nil, payoutDay: 31,
+            allowsTopUp: false, allowsEarlyClose: false, earlyClosePenaltyShare: nil,
+            remindEnd: false, autoRollover: false, isTaxable: false
+        )
+        #expect(quarterly.payoutDay == 31)
+
+        // Значение вне 1…31 счёт бы не прошёл валидацию AccountProductFactory — бридж его гасит.
+        let invalid = AccountsCoreAdditionBridge.depositMeta(
+            rate: 11, capitalization: .monthly, termEnd: nil, payoutDay: 32,
+            allowsTopUp: false, allowsEarlyClose: false, earlyClosePenaltyShare: nil,
+            remindEnd: false, autoRollover: false, isTaxable: false
+        )
+        #expect(invalid.payoutDay == nil)
+    }
+
+    @Test
+    func depositMetaDropsPayoutDayForDailyCapitalization() {
+        // Ежедневное начисление считается шагом от даты открытия — число месяца бессмысленно.
+        let meta = AccountsCoreAdditionBridge.depositMeta(
+            rate: 7, capitalization: .daily, termEnd: nil, payoutDay: 20,
+            allowsTopUp: true, allowsEarlyClose: true, earlyClosePenaltyShare: 0.1,
+            remindEnd: false, autoRollover: false, isTaxable: false
+        )
+        #expect(meta.payoutDay == nil)
     }
 
     @Test
     func depositMetaDropsPenaltyWhenEarlyCloseNotAllowed() {
         // Если досрочное закрытие запрещено — penalty бессмысленен, даже если форма его собрала.
         let meta = AccountsCoreAdditionBridge.depositMeta(
-            rate: 10, capitalization: .none, termEnd: Date(), allowsTopUp: false,
+            rate: 10, capitalization: .none, termEnd: Date(), payoutDay: nil, allowsTopUp: false,
             allowsEarlyClose: false, earlyClosePenaltyShare: 0.3, remindEnd: false,
             autoRollover: false, isTaxable: false
         )

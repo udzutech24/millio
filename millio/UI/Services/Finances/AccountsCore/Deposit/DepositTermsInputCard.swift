@@ -10,6 +10,9 @@ struct DepositTermsInputCard: View {
     @Binding var currency: String
     @Binding var rateText: String
     @Binding var capitalization: AccountDepositCapitalization
+    /// Число месяца выплаты процентов. Живёт в общем блоке, а не в форме-хозяине: иначе создание
+    /// и правка снова разъедутся по набору полей (в правке день был, в создании — нет).
+    @Binding var payoutDay: Int
     @Binding var isTaxable: Bool
     /// Общий фокус с формой-хозяином: иначе кнопка «Готово» на клавиатуре не гасит наши поля.
     var isFocused: FocusState<Bool>.Binding
@@ -28,6 +31,15 @@ struct DepositTermsInputCard: View {
     /// Стартовое значение произвольного периода — квартал «в днях», чтобы шаг был осмысленным
     /// с первого тапа и пользователю не пришлось крутить степпер от единицы.
     private static let defaultCustomDays = 90
+
+    private enum Layout {
+        /// Колонка ставки: под ввод «18,5» + «%» (≈66pt при `millioTitle`) с запасом на подпись.
+        /// Всё, что сверх, отдано полю суммы — иначе длинное число не помещается в свою колонку.
+        static let rateColumnWidth: CGFloat = 96
+        /// Страховка поверх ступеней шрифта для самых узких экранов; основной механизм —
+        /// `MoneyFieldFontRamp` (TextField сам текст не сжимает).
+        static let amountMinimumScaleFactor: CGFloat = 0.7
+    }
 
     private var amount: Decimal? { AmountInputFormatter.parse(amountText).map { Decimal($0) } }
     private var rate: Decimal? { AmountInputFormatter.parse(rateText).map { Decimal($0) } }
@@ -76,14 +88,21 @@ struct DepositTermsInputCard: View {
     // MARK: - Сумма и ставка на одной линии
 
     private var headlineRow: some View {
-        HStack(alignment: .top, spacing: AppSpacing.l) {
+        HStack(alignment: .top, spacing: AppSpacing.m) {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 fieldCaption(L("accounts_core.deposit_form.section.amount"))
                 HStack(alignment: .firstTextBaseline, spacing: AppSpacing.s) {
-                    AmountTextField(placeholder: "0", value: $amountText)
-                        .font(.millioDisplay)
-                        .foregroundStyle(AppColors.textPrimary)
-                        .focused(isFocused)
+                    // Шрифт выбирается по длине введённого числа: без этого суммы от ~8 цифр
+                    // уезжали за границу поля (TextField прокручивает текст, а не сжимает).
+                    AmountTextField(
+                        placeholder: "0",
+                        value: $amountText,
+                        font: MoneyFieldFontRamp.font(for:)
+                    )
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(Layout.amountMinimumScaleFactor)
+                    .focused(isFocused)
                     currencyButton
                 }
             }
@@ -110,7 +129,7 @@ struct DepositTermsInputCard: View {
                     .font(.millioCaptionRegular)
                     .foregroundStyle(AppColors.textTertiary)
             }
-            .frame(width: 116)
+            .frame(width: Layout.rateColumnWidth)
         }
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -174,8 +193,34 @@ struct DepositTermsInputCard: View {
                 }
                 .transition(.opacity)
             }
+            payoutDaySelector
         }
         .animation(AppAnimation.fast, value: capitalization)
+    }
+
+    /// Число месяца выплаты есть только у календарных периодичностей: `daily`/`customDays`
+    /// считают начисление шагом от даты открытия, число месяца для них бессмысленно.
+    @ViewBuilder
+    private var payoutDaySelector: some View {
+        if capitalization.usesMonthlyPayoutDay {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Stepper(value: $payoutDay, in: 1...31) {
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                        Text(L("accounts_core.deposit_form.payout_day"))
+                            .font(.millioCallout)
+                            .foregroundStyle(AppColors.textSecondary)
+                        Text(verbatim: "\(payoutDay)")
+                            .font(.millioHeadline)
+                            .foregroundStyle(AppColors.brandPrimary)
+                    }
+                }
+                Text(L("accounts_core.deposit_form.payout_day_hint"))
+                    .font(.millioCaptionRegular)
+                    .foregroundStyle(AppColors.textTertiary)
+            }
+            .padding(.top, AppSpacing.xs)
+            .transition(.opacity)
+        }
     }
 
     private func periodChip(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

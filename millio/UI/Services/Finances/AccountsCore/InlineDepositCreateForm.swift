@@ -12,6 +12,9 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
     @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var rateText: String = ""
     @State private var capitalization: AccountDepositCapitalization = .monthly
+    /// Вклад открывается сегодняшним днём, поэтому и выплата по умолчанию — сегодняшнее число:
+    /// тот же дефолт, что и в правке условий (`meta.payoutDay ?? день открытия`).
+    @State private var payoutDay: Int = Calendar.current.component(.day, from: Date())
     @State private var hasTerm: Bool = true
     @State private var termEnd: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
     @State private var allowsTopUp: Bool = false
@@ -56,6 +59,7 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
             rate: rate,
             capitalization: capitalization,
             termEnd: hasTerm ? termEnd : nil,
+            payoutDay: payoutDay,
             allowsTopUp: allowsTopUp,
             allowsEarlyClose: allowsEarlyClose,
             earlyClosePenaltyPercent: allowsEarlyClose ? (parseNumber(earlyClosePenaltyPercentText) ?? 0) : 0,
@@ -73,6 +77,7 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
                 currency: $selectedCurrency,
                 rateText: $rateText,
                 capitalization: $capitalization,
+                payoutDay: $payoutDay,
                 isTaxable: $isTaxable,
                 isFocused: $inputFocused
             )
@@ -82,20 +87,10 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
             groupSection
             commentSection
         }
-        .onChange(of: name) { _, _ in emitChange() }
-        .onChange(of: amountText) { _, _ in emitChange() }
-        .onChange(of: selectedCurrency) { _, _ in emitChange() }
-        .onChange(of: rateText) { _, _ in emitChange() }
-        .onChange(of: capitalization) { _, _ in emitChange() }
-        .onChange(of: hasTerm) { _, _ in emitChange() }
-        .onChange(of: termEnd) { _, _ in emitChange() }
-        .onChange(of: allowsTopUp) { _, _ in emitChange() }
-        .onChange(of: allowsEarlyClose) { _, _ in emitChange() }
-        .onChange(of: earlyClosePenaltyPercentText) { _, _ in emitChange() }
-        .onChange(of: remindEnd) { _, _ in emitChange() }
-        .onChange(of: autoRollover) { _, _ in emitChange() }
-        .onChange(of: comment) { _, _ in emitChange() }
-        .onChange(of: isTaxable) { _, _ in emitChange() }
+        // Наблюдаем СОБРАННЫЙ результат, а не каждое поле по отдельности: полтора десятка
+        // `.onChange` дублировали друг друга и роняли type-checker этого `body`
+        // («unable to type-check this expression in reasonable time») на 15-м поле.
+        .onChange(of: currentData()) { _, newValue in onDepositDataChanged(newValue) }
         .onAppear { emitChange() }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -229,6 +224,9 @@ struct DepositFormData: Equatable {
     let rate: Double
     let capitalization: AccountDepositCapitalization
     let termEnd: Date?
+    /// Число месяца выплаты процентов как его выбрал пользователь. Отбрасывать его для шаговых
+    /// периодичностей — работа бриджа (`AccountsCoreAdditionBridge.depositMeta`), один нормализатор.
+    let payoutDay: Int
     let allowsTopUp: Bool
     let allowsEarlyClose: Bool
     /// Ввод пользователя В ПРОЦЕНТАХ (0…100) — бридж делит на 100 при сборке `DepositMeta`.
