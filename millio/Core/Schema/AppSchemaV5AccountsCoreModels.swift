@@ -9,6 +9,11 @@ import SwiftData
 /// their runtime checksum whenever a stored property is added and makes a genuine older store an
 /// "unknown model version". These declarations intentionally contain only the persisted shape from
 /// the pre-product V5 source. Business behavior belongs to the current top-level models.
+///
+/// То же правило распространяется на composite attributes (`*Meta`): их поля входят в checksum
+/// сущности `Account`. `depositMeta` уже заморожен. Остальные `*Meta` пока указывают на
+/// продакшн-типы — при добавлении поля в любой из них ЗДЕСЬ нужна такая же замороженная копия,
+/// иначе сторы 4.0.0/5.0.0 перестанут открываться. Сторож — `AppSchemaFrozenGraphTests`.
 extension AppSchemaV5 {
     @Model
     final class Account {
@@ -25,7 +30,10 @@ extension AppSchemaV5 {
         var order: Int = 0
 
         var cardMeta: CardMeta?
-        var depositMeta: DepositMeta?
+        // Composite attribute: любое новое поле в продакшн-`DepositMeta` сдвинуло бы checksum
+        // этой исторической сущности задним числом. Форма вклада в V4–V9 одна и та же, поэтому
+        // переиспользуется единственная замороженная копия (объявлена в файле V7-графа).
+        var depositMeta: AppSchemaV7.FrozenDepositMeta?
         var loanMeta: LoanMeta?
         var debtMeta: DebtMeta?
         var marketMeta: MarketMeta?

@@ -31,7 +31,9 @@ extension AppSchemaV7 {
         case quarterly
     }
 
-    /// `DepositMeta` без тега `isTaxable` — ровно та форма, что записана в сторах V7–V9.
+    /// `DepositMeta` без тега `isTaxable` — ровно та форма, что записана в сторах V4–V9.
+    /// Переиспользуется графами V5/V6 (`AppSchemaV5`/`AppSchemaV6`): вклад ни разу не менял форму
+    /// от V4 до V9, поэтому замороженная копия одна на все исторические версии.
     struct FrozenDepositMeta: Codable, Equatable {
         var rate: Decimal
         var capitalization: FrozenDepositCapitalization
