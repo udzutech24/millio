@@ -125,6 +125,26 @@ struct SchemaConsistencyTests {
         #expect(v8Names.subtracting(v7Names) == ["RealEstateProfile", "AccountAttachment"])
     }
 
+    /// V10 — первая версия, чей `models` собран заново, а не как `AppSchemaV9.models + [...]`.
+    /// Аддитивность больше не гарантирована конструкцией, поэтому её проверяет тест: потерянная
+    /// строка в списке = молча удалённая таблица у пользователей на V9-сторах.
+    @Test
+    func v10PreservesEveryV9Entity() {
+        let v9Names = Set(AppSchemaV9.models.map { entityName(for: $0) })
+        let v10Names = Set(AppSchemaV10.models.map { entityName(for: $0) })
+        let missing = v9Names.subtracting(v10Names)
+        #expect(missing.isEmpty,
+            Comment(rawValue:
+                "V9 содержит типы, отсутствующие в V10: \(missing). " +
+                "V10 должна сохранять все released entity names V9."
+            ))
+        #expect(v10Names.subtracting(v9Names).isEmpty,
+            Comment(rawValue:
+                "V10 добавляет таблицы \(v10Names.subtracting(v9Names)), хотя заявлена как " +
+                "изменение только атрибутов DepositMeta. Новая таблица требует своей версии схемы."
+            ))
+    }
+
     /// AppSchema.create() возвращает схему из тех же типов что и AppSchemaCurrent.
     @Test
     func appSchemaCreateMatchesSchemaCurrent() {
