@@ -16,7 +16,7 @@ struct InlineDepositCreateForm<GroupSection: View>: View {
     @State private var termEnd: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
     @State private var allowsTopUp: Bool = false
     @State private var allowsEarlyClose: Bool = true
-    @State private var earlyClosePenaltyPercentText: String = "100"
+    @State private var earlyClosePenaltyPercentText: String = "0"
     @State private var remindEnd: Bool = true
     @State private var autoRollover: Bool = false
     @State private var comment: String = ""

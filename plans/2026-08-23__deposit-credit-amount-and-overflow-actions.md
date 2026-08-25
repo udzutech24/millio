@@ -14,8 +14,8 @@
 ## Phases
 
 - [x] Phase 1 — доменная операция вклада: command, validation, atomic adjustment + forecast rebuild, unit-тесты на дельту/no-op/сохранность подтверждённого interest.
-- [ ] Phase 2 — primary actions и денежный маршрут: `Изменить сумму` с датой для вклада через готовый coordinator из фазы 1; toolbar `…` для вклада и кредитной карты; сохранение всех confirmation flows.
-- [ ] Phase 3 — условия и переход типа: выделенный app-native экран смены типа вместо menu-popover; новая форма условий вклада с днём начисления, штрафом по умолчанию `0 %`, крупным процентным вводом, крестиком в toolbar и нижней keyboard-safe CTA.
+- [x] Phase 2 — primary actions и денежный маршрут: `Изменить сумму` с датой для вклада через готовый coordinator из фазы 1; toolbar `…` для вклада и кредитной карты; сохранение всех confirmation flows.
+- [x] Phase 3 — условия и переход типа: выделенный app-native экран смены типа вместо menu-popover; новая форма условий вклада с днём начисления, штрафом по умолчанию `0 %`, крупным процентным вводом, крестиком в toolbar и нижней keyboard-safe CTA.
 - [ ] Phase 4 — regression gates: unit tests, iPhone/Dynamic Type render, focused build и acceptance-criteria audit.
 
 ## Verification
@@ -26,4 +26,4 @@
 
 ## Status
 
-`В РАБОТЕ`: фаза 1 реализована 2026-08-23. Добавлены `DepositBalanceAdjustmentCommand` и atomic `DepositOperationCoordinator.adjustBalance`: положительная/отрицательная дельта события, no-op без записи, защита от отрицательного баланса, идемпотентный retry и откат на каждом mutation stage. Проверка: `xcodebuild test ... -only-testing:millioTests/DepositOperationCoordinatorTests` — 14 тестов / 27 test runs, 0 failures. По обратной связи 2026-08-23 добавлены фазы 3–4: переход типа/условия требуют самостоятельного UI, payout day и default penalty 0%. Следующий шаг требует явной команды: `Реализуй фазу 2 по плану`.
+`В РАБОТЕ`: фазы 1–3 реализованы 2026-08-23. Фаза 3 вынесла смену типа в самостоятельный экран с видимым списком вариантов, сохранила payout day в metadata и переработала редактирование условий вклада: `0 %` по умолчанию, крупный процентный ввод, крестик в toolbar и нижняя CTA. Focused `AccountProductTransitionPresentationTests` + `DepositPresentationTests`: 16 тестов, 0 failures. Следующий шаг требует явной команды: `Реализуй фазу 4 по плану`.

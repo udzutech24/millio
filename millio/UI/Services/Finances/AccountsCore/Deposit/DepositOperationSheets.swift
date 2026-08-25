@@ -107,6 +107,70 @@ struct DepositCloseSheet: View {
     }
 }
 
+/// Sets the confirmed deposit balance on a chosen date. The caller owns the atomic writer so this
+/// view cannot accidentally combine a balance correction with a terms edit.
+struct DepositBalanceAdjustmentSheet: View {
+    let currentBalance: Decimal
+    let currency: String
+    let onSave: (Decimal, Date, String?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var amountText: String
+    @State private var date = Date()
+    @State private var note = ""
+
+    init(
+        currentBalance: Decimal,
+        currency: String,
+        onSave: @escaping (Decimal, Date, String?) -> Void
+    ) {
+        self.currentBalance = currentBalance
+        self.currency = currency
+        self.onSave = onSave
+        _amountText = State(initialValue: NSDecimalNumber(decimal: currentBalance).stringValue)
+    }
+
+    private var amount: Decimal? {
+        Decimal(string: AmountInputFormatter.sanitize(amountText))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(L("accounts_core.detail.action.adjust_balance")) {
+                    AmountTextField(
+                        placeholder: L("accounts_core.detail.sheet.adjust.new_balance"),
+                        value: $amountText
+                    )
+                    Text(currency)
+                        .font(.millioCaptionRegular)
+                        .foregroundStyle(AppColors.textSecondary)
+                    DatePicker(
+                        L("accounts_core.detail.sheet.date_label"),
+                        selection: $date,
+                        displayedComponents: .date
+                    )
+                    TextField(L("accounts_core.detail.sheet.note_placeholder"), text: $note)
+                }
+            }
+            .navigationTitle(L("accounts_core.detail.action.adjust_balance"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("accounts_core.detail.sheet.cancel")) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("accounts_core.detail.sheet.save")) {
+                        guard let amount else { return }
+                        onSave(amount, date, note.isEmpty ? nil : note)
+                    }
+                    .disabled(amount == nil || amount! < 0)
+                }
+            }
+        }
+    }
+}
+
 struct DepositTermsEditSheet: View {
     let meta: DepositMeta
     let snapshot: DepositPresentationSnapshot
@@ -157,32 +221,65 @@ struct DepositTermsEditSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section(L("accounts_core.deposit.action.edit_terms")) {
-                    AmountTextField(placeholder: L("accounts_core.deposit_form.rate_placeholder"), value: $rateText)
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppSpacing.l) {
+                    sectionTitle(L("accounts_core.deposit.action.edit_terms"))
+                    termsCard {
+                        Text(L("accounts_core.deposit_form.rate_placeholder"))
+                            .font(.millioCaptionRegular)
+                            .foregroundStyle(AppColors.textSecondary)
+                        AmountTextField(placeholder: "0", value: $rateText)
+                            .font(.millioTitle)
+                    }
+                    termsCard {
+                        Text(L("accounts_core.deposit_form.capitalization_label"))
+                            .font(.millioCaptionRegular)
+                            .foregroundStyle(AppColors.textSecondary)
                     Picker(L("accounts_core.deposit_form.capitalization_label"), selection: $capitalization) {
                         Text(L("accounts_core.deposit_form.capitalization.none")).tag(AccountDepositCapitalization.none)
                         Text(L("accounts_core.deposit_form.capitalization.monthly")).tag(AccountDepositCapitalization.monthly)
                         Text(L("accounts_core.deposit_form.capitalization.quarterly")).tag(AccountDepositCapitalization.quarterly)
                     }
+                    .pickerStyle(.segmented)
                     if capitalization != .none {
-                        Picker(L("accounts_core.deposit_form.payout_day"), selection: $payoutDay) {
-                            ForEach(1...31, id: \.self) { day in Text("\(day)").tag(day) }
+                        Stepper(value: $payoutDay, in: 1...31) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L("accounts_core.deposit_form.payout_day"))
+                                Text("\(payoutDay)")
+                                    .font(.millioHeadline)
+                                    .foregroundStyle(AppColors.brandPrimary)
+                            }
                         }
                         Text(L("accounts_core.deposit_form.payout_day_hint"))
                             .font(.millioCaptionRegular)
                             .foregroundStyle(AppColors.textSecondary)
                     }
+                    }
+                    termsCard {
                     if meta.termEnd != nil {
                         DatePicker(L("accounts_core.deposit_form.term_end"), selection: $termEnd, in: Date()..., displayedComponents: .date)
                     }
                     Toggle(L("accounts_core.deposit_form.allows_top_up"), isOn: $allowsTopUp)
+                        .tint(AppColors.toggleOnGreen)
                     Toggle(L("accounts_core.deposit_form.allows_early_close"), isOn: $allowsEarlyClose)
+                        .tint(AppColors.toggleOnGreen)
                     if allowsEarlyClose {
-                        AmountTextField(placeholder: L("accounts_core.deposit_form.early_close_penalty"), value: $penaltyText)
+                        Text(L("accounts_core.deposit_form.early_close_penalty"))
+                            .font(.millioCalloutRegular)
+                        HStack {
+                            AmountTextField(placeholder: "0", value: $penaltyText)
+                                .font(.millioTitle)
+                            Text("%")
+                                .font(.millioTitle)
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+                        Text(L("accounts_core.deposit.edit.preview_note"))
+                            .font(.millioCaptionRegular)
+                            .foregroundStyle(AppColors.textSecondary)
                     }
-                }
-                Section(L("accounts_core.deposit.edit.preview")) {
+                    }
+                    sectionTitle(L("accounts_core.deposit.edit.preview"))
+                    termsCard {
                     Text(L("accounts_core.deposit.edit.preview_note"))
                         .font(.millioCaptionRegular)
                         .foregroundStyle(AppColors.textSecondary)
@@ -191,16 +288,46 @@ struct DepositTermsEditSheet: View {
                             .font(.millioBodySemibold)
                     }
                 }
+                }
+                .padding(AppSpacing.l)
             }
             .navigationTitle(L("accounts_core.deposit.action.edit_terms"))
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(L("accounts_core.detail.sheet.cancel")) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L("accounts_core.detail.sheet.save")) { if let candidate { onSave(candidate) } }
-                        .disabled(candidate == nil)
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel(L("accounts_core.detail.sheet.cancel"))
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                Button(L("accounts_core.deposit.action.edit_terms")) {
+                    if let candidate { onSave(candidate) }
+                }
+                .font(.millioBodySemibold)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(
+                    candidate == nil ? AppColors.textTertiary : AppColors.accentDarkBlue
+                ))
+                .disabled(candidate == nil)
+                .padding(.horizontal, AppSpacing.l)
+                .padding(.vertical, AppSpacing.s)
+                .background(.ultraThinMaterial)
+            }
         }
+    }
+
+    private func termsCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.m, content: content)
+            .padding(AppSpacing.m)
+            .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.iconBackground))
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.millioCaption)
+            .foregroundStyle(AppColors.textTertiary)
+            .textCase(.uppercase)
     }
 
     private var editedMaturityAmount: Decimal? {

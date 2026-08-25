@@ -35,6 +35,34 @@ struct DepositPresentationTests {
         }
     }
 
+    @Test @MainActor
+    func termsEditorRendersAtPhoneSizeWithLargeText() {
+        let size = CGSize(width: 390, height: 844)
+        let meta = DepositMeta(
+            rate: 12.5,
+            capitalization: .monthly,
+            termEnd: Date().addingTimeInterval(365 * 86_400),
+            payoutDay: 15,
+            allowsTopUp: true,
+            allowsEarlyClose: true,
+            earlyClosePenalty: 0,
+            remindEnd: true,
+            autoRollover: false
+        )
+        let view = DepositTermsEditSheet(
+            meta: meta,
+            snapshot: renderSnapshot(state: .active),
+            openingDate: Date(),
+            onSave: { _ in }
+        )
+        .frame(width: size.width, height: size.height)
+        .environment(\.dynamicTypeSize, .accessibility3)
+        let renderer = ImageRenderer(content: view)
+        renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+
+        #expect(renderer.cgImage != nil)
+    }
+
     private func renderSnapshot(state: DepositLifecycleState) -> DepositPresentationSnapshot {
         .init(
             asOf: Date(), currency: "RUB", principal: .confirmed(100_000),
@@ -79,11 +107,11 @@ struct DepositPresentationTests {
     @Test("Actions are driven by capabilities and never expose generic writers")
     func capabilityActions() {
         #expect(DepositDetailPresentation.make(snapshot: snapshot(lifecycle: .active)).actions == [
-            .topUp, .editTerms, .earlyClose, .archive
+            .topUp, .adjustBalance, .editTerms, .earlyClose, .archive
         ])
         #expect(DepositDetailPresentation.make(
             snapshot: snapshot(lifecycle: .active, topUp: false, earlyClose: false)
-        ).actions == [.editTerms, .archive])
+        ).actions == [.adjustBalance, .editTerms, .archive])
     }
 
     @Test("Matured and archived states are explicit and archived is read only")

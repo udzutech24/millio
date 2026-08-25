@@ -3,7 +3,7 @@ import XCTest
 
 final class AccountProductTransitionPresentationTests: XCTestCase {
     func testAvailableTargetsExcludeCurrentAndUnknownLegacy() {
-        let targets = AccountProductTransitionSection.availableTargets(current: .bankAccount)
+        let targets = AccountProductTransitionPresentation.availableTargets(current: .bankAccount)
 
         XCTAssertFalse(targets.contains(.bankAccount))
         XCTAssertFalse(targets.contains(.unknownLegacy))
@@ -12,7 +12,7 @@ final class AccountProductTransitionPresentationTests: XCTestCase {
     }
 
     func testEveryKnownProductCanBeSelectedWhenCurrentTypeIsUnknown() {
-        let targets = AccountProductTransitionSection.availableTargets(current: .unknownLegacy)
+        let targets = AccountProductTransitionPresentation.availableTargets(current: .unknownLegacy)
 
         XCTAssertEqual(targets.count, AccountProductType.allCases.count - 1)
         XCTAssertFalse(targets.contains(.unknownLegacy))
@@ -87,6 +87,7 @@ final class AccountProductTransitionPresentationTests: XCTestCase {
         let meta = try XCTUnwrap(AccountProductTransitionFormMapper.depositMetadata(
             rateText: "7,5",
             capitalization: .monthly,
+            payoutDay: 15,
             hasTerm: true,
             termEnd: end,
             allowsTopUp: true,
@@ -95,6 +96,7 @@ final class AccountProductTransitionPresentationTests: XCTestCase {
         ))
 
         XCTAssertEqual(meta.rate, Decimal(string: "7.5"))
+        XCTAssertEqual(meta.payoutDay, 15)
         XCTAssertEqual(meta.termEnd, end)
         XCTAssertEqual(meta.earlyClosePenalty, Decimal(string: "0.25"))
         XCTAssertTrue(meta.remindEnd)
@@ -127,5 +129,21 @@ final class AccountProductTransitionPresentationTests: XCTestCase {
             allowsEarlyClose: arguments.allowsEarlyClose,
             penaltyPercentText: "101"
         ))
+    }
+
+    func testDepositTermsAcceptZeroPenaltyAndKeepPayoutDay() throws {
+        let meta = try XCTUnwrap(AccountProductTransitionFormMapper.depositMetadata(
+            rateText: "7",
+            capitalization: .quarterly,
+            payoutDay: 31,
+            hasTerm: false,
+            termEnd: Date(),
+            allowsTopUp: false,
+            allowsEarlyClose: true,
+            penaltyPercentText: "0"
+        ))
+
+        XCTAssertEqual(meta.earlyClosePenalty, 0)
+        XCTAssertEqual(meta.payoutDay, 31)
     }
 }

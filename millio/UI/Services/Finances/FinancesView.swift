@@ -1048,13 +1048,20 @@ struct FinancesMainTabView: View {
 
             if isUngroupedSectionExpanded {
                 VStack(spacing: 0) {
+                    // Тот же путь навигации, что у сгруппированных строк (`FinanceGroupRow`):
+                    // без NavigationLink строка «Без группы» была некликабельной.
                     ForEach(viewModel.ungroupedAccounts(), id: \.id) { account in
-                        NewCoreAccountRow(
-                            account: account,
-                            balance: viewModel.newCoreBalanceToday(account),
-                            isAmountHidden: viewModel.state.isAmountHidden
-                        )
-                        .padding(.horizontal, FinancesMainLayoutPolicy.horizontalPadding)
+                        NavigationLink {
+                            AccountDetailView(account: account, modelContext: viewModel.modelContext)
+                        } label: {
+                            NewCoreAccountRow(
+                                account: account,
+                                balance: viewModel.newCoreBalanceToday(account),
+                                isAmountHidden: viewModel.state.isAmountHidden
+                            )
+                            .padding(.horizontal, FinancesMainLayoutPolicy.horizontalPadding)
+                        }
+                        .buttonStyle(.plain)
                     }
                     // Легаси-fallback-хвост (invariant 9 §2.1) — минимальный ряд (не reuse приватного
                     // `FinanceAccountRow` из `FinanceRows.swift`, read-only: dynamics/edit доступны

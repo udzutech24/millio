@@ -11,6 +11,7 @@ enum DepositDetailState: Equatable {
 
 enum DepositDetailAction: Hashable {
     case topUp
+    case adjustBalance
     case editTerms
     case earlyClose
     case withdrawAtMaturity
@@ -96,6 +97,7 @@ struct DepositDetailPresentation: Equatable {
         case .normal, .savings, .dueSoon:
             var available: [DepositDetailAction] = []
             if snapshot.capabilities.allowsTopUp { available.append(.topUp) }
+            available.append(.adjustBalance)
             available.append(.editTerms)
             if snapshot.capabilities.allowsEarlyClose { available.append(.earlyClose) }
             available.append(.archive)
