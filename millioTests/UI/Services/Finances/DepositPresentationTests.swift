@@ -49,12 +49,17 @@ struct DepositPresentationTests {
             remindEnd: true,
             autoRollover: false
         )
+        // `DepositTermsInputCard` внутри требует AppState/AppRouter (PRO-гейт крипто-валют в пикере),
+        // как и любой экран Финансов в приложении — без них SwiftUI падает на резолве Environment.
         let view = DepositTermsEditSheet(
             meta: meta,
             snapshot: renderSnapshot(state: .active),
             openingDate: Date(),
+            currentNote: "Заметка",
             onSave: { _ in }
         )
+        .environment(AppState())
+        .environment(AppRouter())
         .frame(width: size.width, height: size.height)
         .environment(\.dynamicTypeSize, .accessibility3)
         let renderer = ImageRenderer(content: view)
@@ -168,5 +173,52 @@ struct DepositPresentationTests {
         )
         #expect(invalid.errors.contains(.invalidPenalty))
         #expect(invalid.errors.contains(.termRequiredForLifecycleOption))
+    }
+
+    /// Бессрочный вклад/накопительный счёт: срока нет, но доход показывать обязаны — иначе поле
+    /// «доход» пустое при полностью заполненной форме. Считается условное окно в 30 дней,
+    /// «суммы к концу срока» при этом по-прежнему нет.
+    @Test("Open-ended deposit still previews income but has no maturity amount")
+    func openEndedPreviewIsNotEmpty() {
+        let preview = DepositCreationPreview.make(
+            amount: 100_000, rate: 12, openingDate: Date(), termEnd: nil,
+            hasTerm: false, earlyClosePenaltyPercent: 0, allowsEarlyClose: true,
+            remindEnd: false, autoRollover: false
+        )
+
+        #expect(preview.isValid)
+        #expect(preview.maturityAmount == nil)
+        // 100 000 × 12% × 30/365 = 986,30
+        #expect(preview.interest == Decimal(string: "986.30")!)
+        #expect(DepositCreationPreview.openEndedPreviewDays == 30)
+    }
+
+    /// Живая подсказка «доход за период» не должна ни падать, ни врать на вырожденном вводе.
+    @Test("Period income hint is nil on degenerate input instead of crashing")
+    func periodIncomeGuardsDegenerateInput() {
+        #expect(DepositCreationPreview.interest(amount: 100_000, rate: 12, days: 0) == nil)
+        #expect(DepositCreationPreview.interest(amount: nil, rate: 12, days: 30) == nil)
+        #expect(DepositCreationPreview.interest(amount: 100_000, rate: nil, days: 30) == nil)
+        #expect(DepositCreationPreview.interest(amount: 0, rate: 12, days: 30) == nil)
+        #expect(DepositCreationPreview.interest(amount: -100, rate: 12, days: 30) == nil)
+        #expect(DepositCreationPreview.interest(amount: 100_000, rate: 0, days: 30) == nil)
+        #expect(DepositCreationPreview.interest(amount: 100_000, rate: 12, days: -5) == nil)
+    }
+
+    /// Длина периода для подсказки — всегда ≥ 1 дня, поэтому подсказка определена для ЛЮБОЙ
+    /// периодичности, включая вырожденный `customDays(0)` из старых/битых данных.
+    @Test("Every capitalization yields a usable preview period")
+    func everyCapitalizationHasPositivePeriod() {
+        let cases: [AccountDepositCapitalization] = [
+            .none, .daily, .monthly, .quarterly, .customDays(45), .customDays(0)
+        ]
+        for option in cases {
+            #expect(option.approximatePeriodDays >= 1)
+            #expect(
+                DepositCreationPreview.interest(
+                    amount: 100_000, rate: 12, days: option.approximatePeriodDays
+                ) != nil
+            )
+        }
     }
 }

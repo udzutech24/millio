@@ -168,7 +168,7 @@ struct AccountsCoreAdditionBridgeTests {
         let meta = AccountsCoreAdditionBridge.depositMeta(
             rate: 12, capitalization: .monthly, termEnd: termEnd,
             allowsTopUp: false, allowsEarlyClose: true, earlyClosePenaltyShare: 0.5,
-            remindEnd: true, autoRollover: false
+            remindEnd: true, autoRollover: false, isTaxable: true
         )
         #expect(meta.rate == 12)
         #expect(meta.capitalization == .monthly)
@@ -178,6 +178,21 @@ struct AccountsCoreAdditionBridgeTests {
         #expect(meta.earlyClosePenalty == 0.5)
         #expect(meta.remindEnd == true)
         #expect(meta.autoRollover == false)
+        // Тег «налогооблагаемый» проходит через бридж как есть — расчёт НДФЛ его не читает.
+        #expect(meta.isTaxable == true)
+    }
+
+    @Test
+    func depositMetaMapsStepCapitalizationWithoutLosingPeriod() {
+        let meta = AccountsCoreAdditionBridge.depositMeta(
+            rate: 9, capitalization: .customDays(45), termEnd: nil,
+            allowsTopUp: true, allowsEarlyClose: false, earlyClosePenaltyShare: nil,
+            remindEnd: false, autoRollover: false, isTaxable: false
+        )
+        #expect(meta.capitalization == .customDays(45))
+        #expect(meta.capitalization.rawValue == "custom_45")
+        #expect(meta.payoutDay == nil) // шаговая периодичность к числу месяца не привязана
+        #expect(meta.isTaxable == false)
     }
 
     @Test
@@ -185,7 +200,7 @@ struct AccountsCoreAdditionBridgeTests {
         let meta = AccountsCoreAdditionBridge.depositMeta(
             rate: 8, capitalization: .monthly, termEnd: nil,
             allowsTopUp: true, allowsEarlyClose: false, earlyClosePenaltyShare: nil,
-            remindEnd: false, autoRollover: false
+            remindEnd: false, autoRollover: false, isTaxable: false
         )
         #expect(meta.termEnd == nil) // накопительный счёт — без срока, тот же движок B
     }
@@ -195,7 +210,8 @@ struct AccountsCoreAdditionBridgeTests {
         // Если досрочное закрытие запрещено — penalty бессмысленен, даже если форма его собрала.
         let meta = AccountsCoreAdditionBridge.depositMeta(
             rate: 10, capitalization: .none, termEnd: Date(), allowsTopUp: false,
-            allowsEarlyClose: false, earlyClosePenaltyShare: 0.3, remindEnd: false, autoRollover: false
+            allowsEarlyClose: false, earlyClosePenaltyShare: 0.3, remindEnd: false,
+            autoRollover: false, isTaxable: false
         )
         #expect(meta.earlyClosePenalty == nil)
     }

@@ -484,4 +484,73 @@ struct DepositOperationCoordinatorTests {
         #expect(depositEvents.filter { $0.sourceTransactionID == "rollover-1" }.count == 1)
         #expect(depositEvents.filter { $0.type == .interest && $0.date > value.maturity }.count == 3)
     }
+
+    /// Путь записи объединённой формы правки вклада (`DepositTermsEditSheet`): условия — через
+    /// `editTerms`, сумма — через ТОТ ЖЕ `adjustBalance`, что и отдельный лист коррекции баланса.
+    /// Интеграционный, а не инвариантный: проверяется именно последовательность вызовов из
+    /// `AccountDetailView`, потому что порядок (условия → сумма) влияет на пересборку графика.
+    @Test("Terms edit followed by balance adjustment persists both without losing history")
+    func termsEditAndBalanceAdjustmentShareTheWriters() throws {
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let context = container.mainContext
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        // Вклад должен быть ЖИВЫМ на момент правки: `validateTerms` требует termEnd в будущем.
+        let now = Date()
+        let opening = calendar.date(byAdding: .day, value: -30, to: now)!
+        let termEnd = calendar.date(byAdding: .day, value: 335, to: now)!
+        let depositID = try AccountProductFactory(modelContext: context).create(CreateProductCommand(
+            productType: .deposit, name: "Deposit", currency: "RUB", openingBalance: 100_000,
+            metadata: .init(deposit: DepositMeta(
+                rate: 12, capitalization: .monthly, termEnd: termEnd, payoutDay: nil,
+                allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: nil,
+                remindEnd: false, autoRollover: false
+            )),
+            date: opening, calendar: calendar
+        ))
+
+        let coordinator = DepositOperationCoordinator(modelContext: context)
+        let editedMeta = DepositMeta(
+            rate: 15, capitalization: .customDays(30), termEnd: termEnd, payoutDay: nil,
+            allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: nil,
+            remindEnd: false, autoRollover: false, isTaxable: true
+        )
+        _ = try coordinator.editTerms(
+            depositID: depositID,
+            command: DepositTermsEditCommand(meta: editedMeta, effectiveDate: now, calendar: calendar)
+        )
+        _ = try coordinator.adjustBalance(
+            depositID: depositID,
+            command: DepositBalanceAdjustmentCommand(
+                operationID: "deposit-balance-adjustment:terms-edit",
+                newBalance: 120_000, date: now
+            ),
+            calendar: calendar
+        )
+
+        let verification = ModelContext(container)
+        let deposit = try account(depositID, in: verification)
+        #expect(deposit.depositMeta == editedMeta)
+        #expect(deposit.depositMeta?.isTaxable == true)
+
+        let all = try events(depositID, in: verification)
+        // Открытие не переписано — правка условий и коррекция суммы не трогают прошлое.
+        #expect(all.filter { $0.type == .openingBalance }.count == 1)
+        #expect(all.first { $0.type == .openingBalance }?.amount == 100_000)
+        // Сумма записана дельтой через adjustBalance, а не подменой открытия.
+        let adjustments = all.filter { $0.type == .adjustment }
+        #expect(adjustments.count == 1)
+        #expect(adjustments.first?.amount == 20_000)
+        let confirmed = all.filter {
+            !DepositDetailPresentation.isGeneratedForecastEvent($0, accountID: depositID)
+        }
+        #expect(AccountBalanceEngine.balanceAt(events: confirmed, kind: .deposit, on: now) == 120_000)
+        // График будущего пересобран уже по НОВОЙ периодичности: шаг 30 дней от даты открытия.
+        let future = all.filter { $0.type == .interest && $0.date > now }.map(\.date).sorted()
+        #expect(!future.isEmpty)
+        for date in future {
+            let days = calendar.dateComponents([.day], from: opening, to: date).day ?? 0
+            #expect(days % 30 == 0)
+        }
+    }
 }
