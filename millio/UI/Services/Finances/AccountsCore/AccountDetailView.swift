@@ -149,9 +149,17 @@ struct AccountDetailView: View {
         .navigationTitle(account.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if let presentation = depositPresentation, !depositOverflowActions(presentation).isEmpty {
+            if let presentation = depositPresentation,
+               !depositOverflowActions(presentation).isEmpty || canEditDepositDetails {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        // У вклада нет actionsRow (свои операции живут в DepositDetailSection),
+                        // поэтому правка имени/группы/учёта в тотале доступна только отсюда.
+                        if canEditDepositDetails {
+                            Button(L("accounts_core.detail.action.edit_details"), systemImage: "square.and.pencil") {
+                                sheet = .editDetails
+                            }
+                        }
                         ForEach(depositOverflowActions(presentation), id: \.self) { action in
                             Button(
                                 depositOverflowTitle(action),
@@ -1453,6 +1461,12 @@ struct AccountDetailView: View {
         case .withdrawAtMaturity: sheet = .depositMaturity
         case .archive: requestArchiveConfirmation()
         }
+    }
+
+    /// Правка реквизитов вклада (имя, группа, учёт в тотале) — те же условия, что и у actionsRow
+    /// остальных типов счетов: архивный/удалённый счёт не редактируется.
+    private var canEditDepositDetails: Bool {
+        account.archivedAt == nil && account.deletedAt == nil
     }
 
     private func depositOverflowActions(_ presentation: DepositDetailPresentation) -> [DepositDetailAction] {

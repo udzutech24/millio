@@ -43,6 +43,14 @@ final class MockCurrencyRateService: CurrencyRateServiceProtocol {
     func forceRefreshRates() async {
         forceRefreshCallCount += 1
     }
+
+    /// USD-базированная таблица для СИНХРОННЫХ потребителей (`currentRateSnapshot`).
+    /// `nil` (дефолт) = «offline-кэша нет» — поведение мока до появления снимка.
+    var usdBasedRates: [String: Double]?
+
+    func currentRateSnapshot() -> RateSnapshot? {
+        usdBasedRates.map { RateSnapshot(source: .millio, rates: $0, updatedAt: 0, fetchedAt: 0) }
+    }
 }
 
 actor MockMarketDataClient: MarketDataClientProtocol {

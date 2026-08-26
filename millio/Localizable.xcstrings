@@ -4547,6 +4547,29 @@
         }
       }
     },
+    "accounts_core.detail.action.edit_details" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account details"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Реквизиты счёта"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "账户信息"
+          }
+        }
+      }
+    },
     "accounts_core.detail.action.increase" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -123,13 +123,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     /// Синхронно возвращает курс из текущего in-memory кэша без сетевых запросов.
     /// Используется для мгновенного показа stale данных, пока идёт фоновое обновление.
     func getCachedRate(from: String, to: String) -> Double? {
-        let f = from.uppercased()
-        let t = to.uppercased()
-        if f == t { return 1.0 }
-        let rateFromUSD = f == "USD" ? 1.0 : cachedRates[f]
-        let rateToUSD = t == "USD" ? 1.0 : cachedRates[t]
-        guard let rFrom = rateFromUSD, let rTo = rateToUSD, rFrom > 0, rTo > 0 else { return nil }
-        return rTo / rFrom
+        RateSnapshot.crossRate(from: from, to: to, usdBased: cachedRates)
     }
 
     /// Возвращает true если хотя бы один из кодов — RUB.

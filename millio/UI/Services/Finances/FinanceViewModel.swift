@@ -1170,13 +1170,20 @@ final class FinanceViewModel: ViewModelProtocol {
                 lhs.order != rhs.order ? lhs.order < rhs.order : lhs.createdAt < rhs.createdAt
             }
         }
+        let mode = state.accountSortMode
+        // Сортировка по сумме сравнивает счета РАЗНЫХ валют: сырые балансы несопоставимы
+        // (1 000 USD оказывались «меньше» 5 000 RUB). Приводим к валюте отображения теми же
+        // курсами, что и тоталы, и считаем ОДИН раз на список, а не на каждое сравнение.
+        let amounts: [PersistentIdentifier: Decimal] = mode.usesAmount
+            ? displayCurrencyBalances(accounts)
+            : [:]
         return accounts.sorted { lhs, rhs in
-            switch state.accountSortMode {
+            switch mode {
             case .amountDescending:
-                let l = newCoreBalanceToday(lhs); let r = newCoreBalanceToday(rhs)
+                let l = amounts[lhs.persistentModelID] ?? 0; let r = amounts[rhs.persistentModelID] ?? 0
                 if l != r { return l > r }
             case .amountAscending:
-                let l = newCoreBalanceToday(lhs); let r = newCoreBalanceToday(rhs)
+                let l = amounts[lhs.persistentModelID] ?? 0; let r = amounts[rhs.persistentModelID] ?? 0
                 if l != r { return l < r }
             case .nameAscending:
                 let cmp = lhs.name.localizedCompare(rhs.name)
@@ -1187,6 +1194,23 @@ final class FinanceViewModel: ViewModelProtocol {
             }
             return lhs.createdAt < rhs.createdAt
         }
+    }
+
+    /// Балансы «сегодня», приведённые к валюте отображения — только для сортировки списка.
+    /// Курс берётся из синхронного offline-снимка (`currentRateSnapshot`), потому что сортировка
+    /// вызывается из тела `View`. Курса нет (пустой кэш / экзотическая пара) — счёт участвует в
+    /// сравнении со своим сырым значением: это хуже, чем конверсия, но лучше, чем выпасть из порядка.
+    private func displayCurrencyBalances(_ accounts: [Account]) -> [PersistentIdentifier: Decimal] {
+        let base = state.displayCurrency
+        let snapshot = currencyService.currentRateSnapshot()
+        var result: [PersistentIdentifier: Decimal] = [:]
+        result.reserveCapacity(accounts.count)
+        for account in accounts {
+            let raw = newCoreBalanceToday(account)
+            let rate = snapshot?.rate(from: account.currency, to: base)
+            result[account.persistentModelID] = rate.map { raw * Decimal($0) } ?? raw
+        }
+        return result
     }
 
     // MARK: - Новое ядро event-sourcing — [Ф5c.7 contract] `state.accounts`/`state.groups` теперь
