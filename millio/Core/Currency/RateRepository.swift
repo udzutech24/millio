@@ -7,6 +7,26 @@ struct RateSnapshot: Sendable {
     let fetchedAt: Double
 }
 
+extension RateSnapshot {
+    /// Кросс-курс из USD-базированной таблицы: сколько единиц `to` за 1 единицу `from`.
+    /// Единственная точка этой арифметики — её же использует `CurrencyRateService.getCachedRate`,
+    /// поэтому синхронные (offline-кэш) и асинхронные потребители не могут разойтись в счёте.
+    static func crossRate(from: String, to: String, usdBased rates: [String: Double]) -> Double? {
+        let f = from.uppercased()
+        let t = to.uppercased()
+        if f == t { return 1.0 }
+        let rateFromUSD = f == "USD" ? 1.0 : rates[f]
+        let rateToUSD = t == "USD" ? 1.0 : rates[t]
+        guard let rFrom = rateFromUSD, let rTo = rateToUSD, rFrom > 0, rTo > 0 else { return nil }
+        return rTo / rFrom
+    }
+
+    /// Кросс-курс по этому снимку — синхронно, без сети.
+    func rate(from: String, to: String) -> Double? {
+        Self.crossRate(from: from, to: to, usdBased: rates)
+    }
+}
+
 protocol RateRepositoryProtocol: Sendable {
     func getLatestRates(source: RateSource, forceRefresh: Bool, allowStaleOnError: Bool) async throws -> RateSnapshot
     /// Возвращает последний известный снимок из памяти/UserDefaults без сетевых запросов.

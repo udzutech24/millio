@@ -15,6 +15,11 @@ enum AccountSortMode: String, CaseIterable {
         }
     }
 
+    /// Режим сравнивает суммы — значит, их нужно предварительно привести к одной валюте.
+    var usesAmount: Bool {
+        self == .amountDescending || self == .amountAscending
+    }
+
     var icon: String {
         switch self {
         case .amountDescending: return "arrow.down.circle"

@@ -343,7 +343,13 @@ struct DepositTermsEditSheet: View {
                     .font(.millioCaptionRegular)
                     .foregroundStyle(AppColors.textSecondary)
                 if let estimate = editedMaturityAmount {
-                    Text(verbatim: "\(NSDecimalNumber(decimal: estimate).stringValue) \(snapshot.currency)")
+                    Text(
+                        DepositAmountTextFormatter.string(
+                            estimate,
+                            currency: snapshot.currency,
+                            locale: AppLocalization.currentAppLocale
+                        )
+                    )
                         .font(.millioBodySemibold)
                 }
             }
