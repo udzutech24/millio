@@ -49,7 +49,8 @@ struct FinanceDynamicsSnapshotStoreTests {
     private func makeSnapshot(
         rateSnapshotRevision: String? = nil,
         displayCurrency: String = "RUB",
-        period: DynamicsPeriod = .week
+        period: DynamicsPeriod = .week,
+        balanceFormulaVersion: String? = FinanceDynamicsSnapshot.currentBalanceFormulaVersion
     ) -> FinanceDynamicsSnapshot {
         FinanceDynamicsSnapshot(
             displayCurrency: displayCurrency,
@@ -75,6 +76,7 @@ struct FinanceDynamicsSnapshotStoreTests {
             ],
             currencyBreakdown: [.init(currency: "RUB", convertedValue: 150, percentage: 100)],
             rateSnapshotRevision: rateSnapshotRevision,
+            balanceFormulaVersion: balanceFormulaVersion,
             savedAt: Date(timeIntervalSince1970: 2_000)
         )
     }
@@ -277,6 +279,44 @@ struct FinanceDynamicsSnapshotStoreTests {
         )
 
         #expect(viewModel.state.chartData.map(\.value) == snapshot.chartData.map(\.value))
+    }
+
+    /// Ф1 плана `2026-08-26__deposit-confirmed-balance-unification.md`: курсы и период кэш
+    /// валидирует, но смена самой формулы баланса их не меняет — без версии-ключа первый вход
+    /// после обновления показал бы старую, завышенную сумму вклада.
+    @Test("Кэш, посчитанный предыдущей формулой баланса, не гидратируется")
+    func snapshotWithOutdatedBalanceFormulaIsIgnored() throws {
+        let rateSnapshot = RateSnapshot(
+            source: .millio,
+            rates: ["USD": 1, "RUB": 80],
+            updatedAt: 1_000,
+            fetchedAt: 2_000
+        )
+        let container = try makeContainer()
+        let context = container.mainContext
+        let currencyService = StubRateSnapshotCurrencyService(snapshot: rateSnapshot)
+        let financeViewModel = makeFinanceViewModel(
+            context: context,
+            currencyService: currencyService,
+            scopeID: "scope-user"
+        )
+        let store = InMemorySnapshotStore()
+        store.save(
+            makeSnapshot(
+                rateSnapshotRevision: CurrencyRateSnapshotRevisionStore.revision(for: rateSnapshot),
+                balanceFormulaVersion: nil // снимок, записанный до Ф1
+            ),
+            scopeID: "scope-user"
+        )
+
+        let viewModel = FinanceDynamicsViewModel(
+            modelContext: context,
+            financeViewModel: financeViewModel,
+            currencyService: currencyService,
+            snapshotStore: store
+        )
+
+        #expect(viewModel.state.chartData.isEmpty)
     }
 
     @Test("Фоновое обновление курсов не мигает пустым экраном")

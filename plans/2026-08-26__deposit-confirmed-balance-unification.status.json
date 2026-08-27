@@ -1,0 +1,35 @@
+{
+  "planFile": "2026-08-26__deposit-confirmed-balance-unification.md",
+  "title": "Вклады: единый confirmed-balance",
+  "updated": "2026-08-27T21:30:00+03:00",
+  "phases": [
+    {
+      "name": "Ф0. Дамп «Альфа 12%» (блокирующий)",
+      "status": "done",
+      "note": "2026-08-27: аномалия объяснена на бэкапе 3637 моделей; дубля нет, виновно generated-начисление 141 137.84 от 12.08"
+    },
+    {
+      "name": "Ф1.5. Авто-подтверждение % по дате выплаты",
+      "status": "done",
+      "note": "4c44117 + 83e2596: DepositInterestConfirmationSweep в проходе scheduler; прогноз, поглощённый более поздней корректировкой, вычищается (тест на кейс «Альфа»)"
+    },
+    {
+      "name": "Ф1. DepositConfirmedBalanceResolver",
+      "status": "done",
+      "note": "c323b1c: 7 потребителей переведены, прогнозы деталки помечены; флаг бэкфилла v2 + rebuildAll; balanceFormulaVersion в кэше Динамики"
+    },
+    {
+      "name": "Ф2. adjustBalance: typed error для .deposit",
+      "status": "done",
+      "note": "65d9b34: unsupportedOperationForDeposit + гейт в adjustBalance; правка 3 тест-файлов не понадобилась (ни один не использует .deposit), добавлен новый тест"
+    },
+    {
+      "name": "Ф3. Разделить lifecycle-тест",
+      "status": "done",
+      "note": "09e0aab: разделён на lifecycleFlagsAreSchedulerInert + payoutDayReshapesPeriodicSchedule; старый тест был красным на develop — закрыт"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null,
+  "notes": "Ветка feature/deposit-confirmed-balance (09e0aab), все 5 фаз done, локальные коммиты, БЕЗ merge/push. Гейт: develop e262fe0 = 2484/25, ветка после Ф2+Ф3 = 2504/18, новых красных 0, закрыт 1 предсуществующий (lifecycleFlagsAreSchedulerInert). Перед выкатом: Дашборд упадёт на RUB 232 346.17 / USD 16.38, в Cashflow разом появятся наступившие начисления (владелец принял). Осталась device-проверка."
+}

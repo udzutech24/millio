@@ -136,7 +136,6 @@ struct DepositDetailPresentation: Equatable {
     }
 
     static func isGeneratedForecastEvent(_ event: AccountEvent, accountID: UUID) -> Bool {
-        event.type == .interest
-            && event.sourceTransactionID?.hasPrefix("deposit-interest:\(accountID.uuidString):") == true
+        DepositConfirmedBalanceResolver.isGeneratedInterest(event, accountID: accountID)
     }
 }

@@ -721,8 +721,7 @@ final class DepositOperationCoordinator {
     }
 
     private func isGenerated(_ event: AccountEvent, accountID: UUID) -> Bool {
-        event.type == .interest
-            && (event.sourceTransactionID?.hasPrefix("deposit-interest:\(accountID.uuidString):") ?? false)
+        DepositConfirmedBalanceResolver.isGeneratedInterest(event, accountID: accountID)
     }
 
     private func invalidate(_ account: Account, from date: Date, in context: ModelContext) {

@@ -1269,7 +1269,11 @@ final class FinanceViewModel: ViewModelProtocol {
     /// а не как остаток лимита. Для экрана деталки счёта остаток берётся ОТДЕЛЬНО, прямым `balanceAt`.
     func newCoreBalanceToday(_ account: Account) -> Decimal {
         let rawBalance = AccountBalanceEngine.balanceAt(
-            events: account.events ?? [],
+            // Ф1: строка списка показывает ПОДТВЕРЖДЁННЫЙ баланс вклада — тот же, что деталка
+            // и тоталы. Прогнозные начисления живут в графике и расписании выплат, но не в остатке.
+            events: DepositConfirmedBalanceResolver.confirmedEvents(
+                account.events ?? [], accountID: account.id, kind: account.kind
+            ),
             kind: account.kind,
             on: nowProvider(),
             marketMeta: account.marketMeta

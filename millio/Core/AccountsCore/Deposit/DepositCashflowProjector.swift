@@ -70,7 +70,7 @@ enum DepositCashflowProjector {
     }
 
     private static func isGenerated(_ event: AccountEvent) -> Bool {
-        guard let accountID = event.account?.id.uuidString else { return false }
-        return event.sourceTransactionID?.hasPrefix("deposit-interest:\(accountID):") ?? false
+        guard let accountID = event.account?.id else { return false }
+        return DepositConfirmedBalanceResolver.isGeneratedInterest(event, accountID: accountID)
     }
 }

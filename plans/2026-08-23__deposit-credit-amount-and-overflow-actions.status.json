@@ -2,7 +2,7 @@
   "_generated": true,
   "planFile": "2026-08-23__deposit-credit-amount-and-overflow-actions.md",
   "title": "Plan: изменение суммы вклада/долга и overflow-действия",
-  "updated": "2026-08-24T06:18:14.709Z",
+  "updated": "2026-08-25T19:29:46.073Z",
   "phases": [
     {
       "name": "Phase 1 — доменная операция вклада: command, validation, atomic adjustment + forecast rebuild, unit…",

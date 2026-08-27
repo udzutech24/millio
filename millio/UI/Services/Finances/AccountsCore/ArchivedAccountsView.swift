@@ -205,8 +205,12 @@ struct ArchivedAccountsView: View {
 
     private func formattedBalanceAtClose(for account: Account) -> String {
         let closingDate = account.archivedAt ?? Date()
+        // Ф1: баланс на закрытие — подтверждённый; прогноз, не наступивший до закрытия счёта,
+        // деньгами так и не стал.
         let balance = AccountBalanceEngine.balanceAt(
-            events: account.events ?? [],
+            events: DepositConfirmedBalanceResolver.confirmedEvents(
+                account.events ?? [], accountID: account.id, kind: account.kind
+            ),
             kind: account.kind,
             on: closingDate,
             marketMeta: account.marketMeta

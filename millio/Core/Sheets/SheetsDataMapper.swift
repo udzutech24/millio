@@ -172,8 +172,11 @@ enum SheetsDataMapper {
     /// Баланс счёта на дату через движок ядра. Прайс-провайдер не передаём: рыночные счёта
     /// в Accounts-лист не попадают, а для остальных движков цена не нужна.
     private static func balanceDouble(_ account: Account, on date: Date) -> Double {
+        // Ф1: экспорт отдаёт ту же подтверждённую цифру, что видит пользователь в приложении.
         let balance = AccountBalanceEngine.balanceAt(
-            events: account.events ?? [],
+            events: DepositConfirmedBalanceResolver.confirmedEvents(
+                account.events ?? [], accountID: account.id, kind: account.kind
+            ),
             kind: account.kind,
             on: date
         )

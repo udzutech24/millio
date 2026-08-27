@@ -171,7 +171,11 @@ struct DepositProductVerticalCharacterizationTests {
         #expect(AccountBalanceEngine.balanceAt(events: destination.events ?? [], kind: .cash, on: Date()) == 150)
     }
 
-    @Test("Compatibility debt: lifecycle flags do not alter the generated schedule")
+    /// Ф3 плана `2026-08-26__deposit-confirmed-balance-unification.md`. Тест был написан
+    /// (`438689c`, 2026-08-11 10:13) ДО появления payoutDay-логики (`c1300ef`, 15:45 того же дня,
+    /// развита в V10 `3c7486f`) и с тех пор смешивал два разных утверждения. Разделён:
+    /// lifecycle-флаги к расписанию инертны · `payoutDay` расписание меняет НАМЕРЕННО.
+    @Test("Lifecycle flags do not alter the generated schedule")
     func lifecycleFlagsAreSchedulerInert() {
         let utc = calendar("UTC")
         let opening = utc.date(from: DateComponents(year: 2025, month: 1, day: 1))!
@@ -184,13 +188,42 @@ struct DepositProductVerticalCharacterizationTests {
         let enabled = DepositInterestScheduler.buildInitialSchedule(
             accountID: accountID,
             meta: depositMeta(
-                termEnd: termEnd, payoutDay: 15, allowsTopUp: true, allowsEarlyClose: true,
+                termEnd: termEnd, allowsTopUp: true, allowsEarlyClose: true,
                 remindEnd: true, autoRollover: true
             ),
             openingBalance: 100_000, openingDate: opening, calendar: utc
         )
 
         #expect(enabled == baseline)
+    }
+
+    @Test("payoutDay deliberately reshapes the monthly/quarterly schedule (V10)")
+    func payoutDayReshapesPeriodicSchedule() {
+        let utc = calendar("UTC")
+        let opening = utc.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+        // Год, а не квартал: при трёхмесячном сроке единственный quarterly-период со сдвигом
+        // на 15-е уезжает ЗА termEnd, и расписание вырождается в пустое — сравнивать было бы нечего.
+        let termEnd = utc.date(byAdding: .month, value: 12, to: opening)!
+        let accountID = UUID()
+
+        for capitalization in [AccountDepositCapitalization.monthly, .quarterly] {
+            let anchoredToOpening = DepositInterestScheduler.buildInitialSchedule(
+                accountID: accountID,
+                meta: depositMeta(capitalization: capitalization, termEnd: termEnd),
+                openingBalance: 100_000, openingDate: opening, calendar: utc
+            )
+            let withPayoutDay = DepositInterestScheduler.buildInitialSchedule(
+                accountID: accountID,
+                meta: depositMeta(capitalization: capitalization, termEnd: termEnd, payoutDay: 15),
+                openingBalance: 100_000, openingDate: opening, calendar: utc
+            )
+
+            #expect(withPayoutDay != anchoredToOpening)
+            // Без payoutDay период якорится на день открытия, с ним — на заданный день месяца.
+            #expect(anchoredToOpening.allSatisfy { utc.component(.day, from: $0.date) == 1 })
+            #expect(withPayoutDay.allSatisfy { utc.component(.day, from: $0.date) == 15 })
+            #expect(!withPayoutDay.isEmpty)
+        }
     }
 
     @Test("Compatibility debt: early close exposes no injectable save-failure stages")

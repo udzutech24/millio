@@ -23,6 +23,10 @@ enum AccountsCoreServiceError: Error {
     case invalidCreditCardAmount
     /// Archived/deleted credit cards are immutable; their event history remains readable.
     case archivedCreditCard
+    /// Вклад не обслуживается генерик-операциями баланса: у него свой контракт
+    /// (`DepositOperationCoordinator.adjustBalance` — operationID, идемпотентность, пересборка
+    /// расписания начислений). Не переадресация: этих данных у сервиса нет.
+    case unsupportedOperationForDeposit
 }
 
 /// Единственная точка записи в новое ядро счетов (event-sourcing). Любое изменение баланса —
@@ -227,6 +231,11 @@ final class AccountsCoreService {
     /// а не хранимое поле, остаются единственным источником истины).
     @discardableResult
     func adjustBalance(account: Account, to newValue: Decimal, on date: Date = Date()) throws -> AccountEvent {
+        // Ф2 плана `2026-08-26__deposit-confirmed-balance-unification.md` — hardening, не баг:
+        // из UI этот путь для вклада недостижим (`AccountDetailView.actionsRow` гейтит `kind != .deposit`).
+        // Но генерик-дельта считалась бы от СЫРОГО баланса, включая прогнозные начисления, и молча
+        // разошлась бы с confirmed-контрактом вклада.
+        guard account.kind != .deposit else { throw AccountsCoreServiceError.unsupportedOperationForDeposit }
         try requireEventAllowed(.adjustment, for: account)
         let current = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: account.kind, on: date)
         let delta = newValue - current

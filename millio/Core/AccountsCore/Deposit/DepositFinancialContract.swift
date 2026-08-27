@@ -83,8 +83,6 @@ enum DepositFinancialContract {
         case variableUnsupported
     }
 
-    private static let generatedInterestPrefix = "deposit-interest:"
-
     static func snapshot(
         accountID: UUID,
         currency: String,
@@ -164,8 +162,10 @@ enum DepositFinancialContract {
         let futureInterestValue = eligibleGenerated.reduce(Decimal.zero) { result, event in
             result + (event.date > asOf ? (event.amount ?? 0) : 0)
         }
-        let currentBalanceValue = AccountBalanceEngine.balanceAt(
-            events: actualEvents, kind: .deposit, on: asOf
+        // Ровно та же формула, что у списка/тоталов/снапшотов (Ф1 плана
+        // `2026-08-26__deposit-confirmed-balance-unification.md`) — один резолвер, одна цифра.
+        let currentBalanceValue = DepositConfirmedBalanceResolver.balanceAt(
+            events: orderedEvents, accountID: accountID, on: asOf
         )
 
         let projectionDate = meta.termEnd ?? eligibleGenerated.map(\.date).max() ?? asOf
@@ -264,8 +264,7 @@ enum DepositFinancialContract {
     }
 
     private static func isGeneratedInterest(_ event: AccountEvent, accountID: UUID) -> Bool {
-        guard event.type == .interest, let sourceID = event.sourceTransactionID else { return false }
-        return sourceID.hasPrefix("\(generatedInterestPrefix)\(accountID.uuidString):")
+        DepositConfirmedBalanceResolver.isGeneratedInterest(event, accountID: accountID)
     }
 
     private static func principalContribution(_ event: AccountEvent) -> Decimal {

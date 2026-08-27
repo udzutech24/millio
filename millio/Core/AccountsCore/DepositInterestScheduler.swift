@@ -94,6 +94,11 @@ enum DepositInterestScheduler {
         asOf: Date = Date(),
         calendar: Calendar = Calendar(identifier: .gregorian)
     ) -> Int {
+        // Ф1.5: сначала подтверждаем наступившие начисления, потом достраиваем горизонт — будущий
+        // график строится от ПОДТВЕРЖДЁННОЙ базы (`buildFutureSchedule(confirmedEvents:)`), поэтому
+        // обратный порядок занизил бы его на только что наступившую выплату.
+        DepositInterestConfirmationSweep.run(context: context, asOf: asOf)
+
         let depositKindRaw = AccountKind.deposit.rawValue
         let descriptor = FetchDescriptor<Account>(
             predicate: #Predicate<Account> { $0.kindRaw == depositKindRaw && $0.archivedAt == nil }

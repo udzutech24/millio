@@ -61,8 +61,11 @@ struct AccountDetailView: View {
 
     private var balanceToday: Decimal {
         _ = refreshToken // читаем @State, чтобы body пересчитывался после мутаций
+        // Ф1: шапка «Остаток» = подтверждённый баланс, тот же, что в строке списка и в тоталах.
         return AccountBalanceEngine.balanceAt(
-            events: account.events ?? [],
+            events: DepositConfirmedBalanceResolver.confirmedEvents(
+                account.events ?? [], accountID: account.id, kind: account.kind
+            ),
             kind: account.kind,
             on: Date(),
             priceProvider: priceProviderForThisAccount,
@@ -496,6 +499,11 @@ struct AccountDetailView: View {
 
     /// Прогноз реплеем вперёд (AC: `balanceAt(futureDate)` — та же функция, что и для истории,
     /// отдельного калькулятора прогнозов нет). `nil`, если счёт — не вклад/накопительный счёт.
+    ///
+    /// ⚠️ Единственные два вызова, которые ОСОЗНАННО остаются на сыром движке (Ф1 плана
+    /// `2026-08-26__deposit-confirmed-balance-unification.md`, acceptance criterion 3): прогноз
+    /// «через месяц/к сроку» по определению состоит из ещё не подтверждённых начислений.
+    /// Через `DepositConfirmedBalanceResolver` он дал бы тождественный ноль.
     private var monthlyForecastGross: Decimal? {
         guard account.kind == .deposit else { return nil }
         let today = Date()

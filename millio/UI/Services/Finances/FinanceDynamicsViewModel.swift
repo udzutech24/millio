@@ -832,6 +832,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         guard isUnscopedOverview,
               let snapshot = snapshotStore.load(scopeID: snapshotScopeID),
               snapshot.rateSnapshotRevision == currentRateSnapshotRevision,
+              // Кэш, посчитанный предыдущей формулой баланса, показал бы старую цифру вклада.
+              snapshot.balanceFormulaVersion == FinanceDynamicsSnapshot.currentBalanceFormulaVersion,
               // Валюта и период экрана уже определены выше по init. Кэш, посчитанный в другой
               // валюте или за другой период, показал бы корректные цифры не от того вопроса.
               snapshot.displayCurrency == state.displayCurrency,
@@ -911,6 +913,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 .init(currency: $0.currency, convertedValue: $0.convertedValue, percentage: $0.percentage)
             },
             rateSnapshotRevision: currentRateSnapshotRevision,
+            balanceFormulaVersion: FinanceDynamicsSnapshot.currentBalanceFormulaVersion,
             savedAt: Date()
         )
         snapshotStore.save(snapshot, scopeID: snapshotScopeID)

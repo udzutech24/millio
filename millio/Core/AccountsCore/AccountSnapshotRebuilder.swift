@@ -24,13 +24,17 @@ actor AccountSnapshotRebuilder {
     /// Полная пересборка «с нуля»: удаляет все снапшоты счёта и реплеит заново по всем дням событий.
     /// Результат идентичен прямому реплею на любую дату (AC8) — используется тестом и для
     /// разового «Пересобрать кэш» без миграции старых данных.
-    func rebuildAll(accountID: PersistentIdentifier, priceProvider: MarketPriceProviding? = nil) throws {
+    func rebuildAll(
+        accountID: PersistentIdentifier,
+        upTo: Date = .distantFuture,
+        priceProvider: MarketPriceProviding? = nil
+    ) throws {
         guard let account = modelContext.model(for: accountID) as? Account else { return }
         for snapshot in try snapshots(for: account.id) {
             modelContext.delete(snapshot)
         }
         try modelContext.save()
-        try rebuildCheckpoints(for: account, upTo: .distantFuture, keepExisting: false, priceProvider: priceProvider)
+        try rebuildCheckpoints(for: account, upTo: upTo, keepExisting: false, priceProvider: priceProvider)
     }
 
     /// Разовая пересборка кэша ВСЕХ счетов нового ядра (задача 6/Фаза 5, AC8 debug-ручка) — для
@@ -73,7 +77,13 @@ actor AccountSnapshotRebuilder {
             return
         }
 
-        let events = try events(for: account.id)
+        // Ф1: снапшот-кэш хранит ПОДТВЕРЖДЁННЫЙ баланс. Фильтр применяется один раз на счёт,
+        // а не внутри цикла по дням — реплей и так самая дорогая часть пересборки.
+        // Как следствие, дни, где событием был только прогноз, checkpoint-а больше не получают:
+        // баланс в такой день не менялся, и разреженный кэш обслужит их предыдущей точкой.
+        let events = DepositConfirmedBalanceResolver.confirmedEvents(
+            try events(for: account.id), accountID: account.id, kind: account.kind
+        )
         guard !events.isEmpty else {
             if archivedDayKey != nil { try modelContext.save() }
             return

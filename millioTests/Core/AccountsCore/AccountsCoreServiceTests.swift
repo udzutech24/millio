@@ -39,6 +39,30 @@ struct AccountsCoreServiceTests {
         #expect(balance == 2000)
     }
 
+    /// Ф2 плана `2026-08-26__deposit-confirmed-balance-unification.md`: у вклада свой контракт
+    /// корректировки (`DepositOperationCoordinator`), генерик-путь обязан отказать явно, а не
+    /// молча посчитать дельту от сырого баланса с прогнозными начислениями.
+    @Test
+    func adjustBalanceRejectsDeposit() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let deposit = try service.createAccount(name: "Вклад", kind: .deposit, currency: "RUB", openingBalance: 1000)
+
+        var thrown: Error?
+        do {
+            _ = try service.adjustBalance(account: deposit, to: 2000)
+        } catch {
+            thrown = error
+        }
+
+        // Типизированная ошибка, а не любая: молчаливый провал здесь исказил бы баланс вклада.
+        if case .unsupportedOperationForDeposit = try #require(thrown as? AccountsCoreServiceError) {} else {
+            Issue.record("Ожидали unsupportedOperationForDeposit, получили \(String(describing: thrown))")
+        }
+        #expect((deposit.events ?? []).allSatisfy { $0.type != .adjustment })
+    }
+
     // MARK: - AC9: отрицательный баланс не обрезается max(0,...)
 
     @Test

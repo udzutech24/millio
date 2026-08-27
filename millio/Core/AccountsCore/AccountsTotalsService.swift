@@ -278,8 +278,12 @@ final class AccountsTotalsService {
                     fxPolicy: historicalFXPolicy
                 )
             } else {
+                // Ф1: историческая серия строится на подтверждённых событиях — на любую дату,
+                // а не только на сегодня (acceptance criterion 2 плана).
                 let rawBalance = AccountBalanceEngine.balanceAt(
-                    events: events,
+                    events: DepositConfirmedBalanceResolver.confirmedEvents(
+                        events, accountID: account.id, kind: account.kind
+                    ),
                     kind: account.kind,
                     on: date
                 )
@@ -505,8 +509,13 @@ final class AccountsTotalsService {
         // and a market checkpoint embeds the wrong price for a later query day. Until the additive
         // checkpoint schema can prove those dimensions, snapshots are rebuildable diagnostics only;
         // both the structured and compatibility readers use authoritative timestamp replay.
+        // Ф1: тоталы (групповой/общий/Dashboard) и точки графика считаются по подтверждённым
+        // событиям. Фильтр отсекается по `kind` до скана строк — на 50 счетах серии за год
+        // цена префиксного сравнения платится только за вклады.
         let rawBalance = AccountBalanceEngine.balanceAt(
-            events: account.events ?? [],
+            events: DepositConfirmedBalanceResolver.confirmedEvents(
+                account.events ?? [], accountID: account.id, kind: account.kind
+            ),
             kind: account.kind,
             on: date,
             priceProvider: priceProvider,

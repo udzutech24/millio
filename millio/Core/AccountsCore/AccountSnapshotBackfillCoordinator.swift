@@ -21,7 +21,11 @@ final class AccountSnapshotBackfillCoordinator {
     /// guest-сторе (см. `DataIntegrityCleaner.archiveZeroQuantityInvestmentsIfNeeded`), и только потом
     /// второй — на реальном user-сторе через `rebindDataScope`. Общий на всё приложение флаг сгорел бы
     /// на почти пустом guest-сторе, и реальный user-стор с историей счетов никогда бы не забэкфиллился.
-    private static let flagKeyPrefix = "migration.accountSnapshotBackfill.v1."
+    /// v2 (Ф1 плана `2026-08-26__deposit-confirmed-balance-unification.md`): снапшоты, посчитанные
+    /// по старой формуле, включают прогнозные начисления вкладов. `rebuild(upTo:)` их никогда бы не
+    /// перегенерировал (`keepExisting: true` даёт ранний выход), а `rebuildAllAccounts` живёт только
+    /// в дебаг-экране — поэтому нужен новый ключ флага и полная пересборка.
+    private static let flagKeyPrefix = "migration.accountSnapshotBackfill.v2."
 
     private let modelContainer: ModelContainer
     private let defaults: UserDefaults
@@ -107,7 +111,10 @@ final class AccountSnapshotBackfillCoordinator {
         var failures = 0
         for account in accounts {
             do {
-                try await rebuilder.rebuild(accountID: account.persistentModelID, upTo: now)
+                // Именно `rebuildAll`, а не инкрементальный `rebuild(upTo:)`: у существующего
+                // пользователя кэш уже заполнен старыми значениями, и инкремент вышел бы рано,
+                // оставив завышенные балансы вкладов в снапшотах (а через них — в бэкапе).
+                try await rebuilder.rebuildAll(accountID: account.persistentModelID, upTo: now)
             } catch {
                 failures += 1
                 AppLogger.log(.error, category: "AccountsCore", "Snapshot backfill: счёт \(account.id) — \(error.localizedDescription)")

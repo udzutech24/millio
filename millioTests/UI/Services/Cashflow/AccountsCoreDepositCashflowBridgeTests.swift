@@ -242,15 +242,31 @@ struct AccountsCoreDepositCashflowBridgeTests {
         let asOf = calendar.date(byAdding: .day, value: 1, to: calendar.date(byAdding: .month, value: 13, to: opening)!)!
         let bridge = AccountsCoreDepositCashflowBridge(modelContext: ctx, now: { asOf }, calendar: calendar)
         let didMaterialize = bridge.syncDepositInterestLedger()
-        #expect(didMaterialize == false) // горизонт продлён, но estimates не стали доходом
 
         let eventsAfter = try ctx.fetch(FetchDescriptor<AccountEvent>()).filter {
             $0.account?.id == account.id && $0.type == .interest
         }
         #expect(eventsAfter.count > 12) // горизонт продлён за пределы исходных 12 периодов
 
+        // Ф1.5 плана `2026-08-26__deposit-confirmed-balance-unification.md` (вариант A владельца)
+        // меняет контракт этого теста: раньше estimates не становились доходом НИКОГДА (в проде
+        // никто не вызывал `confirmInterest`), и 12 реально выплаченных банком начислений навсегда
+        // оставались невидимыми для Cashflow. Теперь наступившие начисления подтверждаются в том же
+        // проходе и материализуются уже существующим `materializeDueInterestIncome`.
+        #expect(didMaterialize)
+        let confirmedDue = eventsAfter.filter {
+            !DepositConfirmedBalanceResolver.isGeneratedInterest($0, accountID: account.id)
+                && $0.date <= asOf
+        }
         let transactions = try fetchInterestTransactions(ctx)
-        #expect(transactions.isEmpty)
+        #expect(transactions.count == 12)
+        #expect(transactions.count == confirmedDue.count)
+
+        // Инвариант, ради которого тест и написан, сохраняется: прогноз доходом не становится.
+        let stillForecast = eventsAfter.filter {
+            DepositConfirmedBalanceResolver.isGeneratedInterest($0, accountID: account.id)
+        }
+        #expect(!stillForecast.isEmpty)
     }
 
     // MARK: - Архивный (закрытый) вклад не продлевает горизонт, но прошлые due-события материализуются
