@@ -20,7 +20,7 @@ struct CashbackCardPresentationTests {
         isFavorite: Bool = false
     ) -> CashflowSelectableAccount {
         CashflowSelectableAccount(
-            kind: .card(cardID: cardID),
+            kind: .legacyCard(cardID: cardID),
             title: title,
             currency: currency,
             isFavorite: isFavorite,

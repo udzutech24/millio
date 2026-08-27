@@ -289,6 +289,17 @@ final class CashflowPersistenceService {
         return convertedAmount <= NSDecimalNumber(decimal: available).doubleValue + 0.0001
     }
 
+    /// Валюта счёта-получателя перевода. Резолвится в обоих мирах: раньше здесь смотрели только
+    /// легаси `Card`, и для core-счёта валюта была nil — проверка «нет курса при разных валютах»
+    /// молча отключалась, а сумма перевода конвертировалась по фолбэку. Тихая порча сумм.
+    func destinationCurrency(for toCardID: String?) -> String? {
+        guard let toCardID, !toCardID.isEmpty else { return nil }
+        if let card = cardProvider(toCardID) {
+            return card.currency
+        }
+        return accountsCoreCashflowBridge.resolveNewCoreAccount(id: toCardID)?.currency
+    }
+
     // MARK: - Private: Обновление транзакции
 
     private func updateTransactionAsync(
@@ -322,7 +333,7 @@ final class CashflowPersistenceService {
         let exchangeInfo = await currencyService.resolveExchangeInfo(for: transaction)
 
         if transaction.transactionType == .transfer,
-           let targetCurrency = normalizedCurrencyCode(cardProvider(transaction.toCardID ?? "")?.currency),
+           let targetCurrency = normalizedCurrencyCode(destinationCurrency(for: transaction.toCardID)),
            normalizedCurrencyCode(transaction.currency) != targetCurrency,
            (exchangeInfo.rate ?? 0) <= 0 {
             AppLogger.log(

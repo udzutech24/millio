@@ -7,7 +7,12 @@ import Foundation
 
 struct CashflowSelectableAccount: Identifiable, Equatable {
     enum Kind: Equatable {
-        case card(cardID: String)
+        /// Легаси-карта, `Card.cardUniqueID`.
+        case legacyCard(cardID: String)
+        /// Счёт нового ядра, `Account.id.uuidString`. В транзакции лежит в том же поле `cardID`,
+        /// но это другой мир данных — поэтому у него отдельный кейс и отдельный префикс `id`:
+        /// иначе core-UUID и легаси-ID могут дать одинаковый `id` в `ForEach`.
+        case coreAccount(accountID: String)
         case investment(investmentID: String)
     }
 
@@ -24,16 +29,28 @@ struct CashflowSelectableAccount: Identifiable, Equatable {
 
     var id: String {
         switch kind {
-        case .card(let cardID):
+        case .legacyCard(let cardID):
             return "card:\(cardID)"
+        case .coreAccount(let accountID):
+            return "core:\(accountID)"
         case .investment(let investmentID):
             return "investment:\(investmentID)"
         }
     }
 
+    /// ID, который уходит в поле `CashflowTransaction.cardID` — общее для обоих миров счетов.
     var cardID: String? {
-        guard case .card(let cardID) = kind else { return nil }
-        return cardID
+        switch kind {
+        case .legacyCard(let id), .coreAccount(let id):
+            return id
+        case .investment:
+            return nil
+        }
+    }
+
+    var isCoreAccount: Bool {
+        if case .coreAccount = kind { return true }
+        return false
     }
 
     var investmentID: String? {
@@ -56,7 +73,7 @@ enum CashflowSelectableAccountResolver {
 
         let cardOptions = cards.map {
             CashflowSelectableAccount(
-                kind: .card(cardID: $0.cardUniqueID),
+                kind: .legacyCard(cardID: $0.cardUniqueID),
                 title: $0.name,
                 currency: $0.currency,
                 isFavorite: $0.isFavorite,
@@ -64,12 +81,13 @@ enum CashflowSelectableAccountResolver {
                 updatedAt: $0.updatedAt
             )
         }
-        // Счета нового ядра event-sourcing (Фаза 1a) — та же `.card`-ветка `Kind` (cardID у
-        // транзакции = account.id.uuidString, см. AccountsCoreCashflowBridge.resolveNewCoreAccount),
-        // без собственного picker-favorite/priority — сортируются по order/createdAt как остальные.
+        // Счета нового ядра event-sourcing (Фаза 1a): cardID у транзакции = account.id.uuidString
+        // (см. AccountsCoreCashflowBridge.resolveNewCoreAccount), но кейс `Kind` отдельный —
+        // чтобы `id` не сталкивался с легаси-картами. Собственного picker-favorite/priority
+        // в схеме нет — сортируются по order/createdAt как остальные.
         let newCoreOptions = newCoreAccounts.map {
             CashflowSelectableAccount(
-                kind: .card(cardID: $0.id.uuidString),
+                kind: .coreAccount(accountID: $0.id.uuidString),
                 title: $0.name,
                 currency: $0.currency,
                 isFavorite: false,
