@@ -148,4 +148,29 @@ struct SchemaMigrationTests {
         #expect(restored.events?.first?.amount == 54_000_000)
         #expect(try migrated.mainContext.fetch(FetchDescriptor<AccountAttachment>()).isEmpty)
     }
+
+    /// Главный риск Ф0 (V11): реальный V10-стор обязан открыться текущей схемой без
+    /// `NSCocoaErrorDomain 134504` — иначе срабатывает no-plan fallback и данные теряются.
+    @Test("V10 store opens under the current schema and keeps its rows") @MainActor
+    func v10StoreMigratesToV11WithoutDataLoss() throws {
+        let url = tempStoreURL()
+        defer { cleanup(url) }
+
+        let v10Schema = Schema(AppSchemaV10.models, version: AppSchemaV10.versionIdentifier)
+        let v10Config = ModelConfiguration("v10_fixture", schema: v10Schema, url: url, cloudKitDatabase: .none)
+        let v10Container = try ModelContainer(for: v10Schema, configurations: [v10Config])
+        let account = Account(name: "Счёт V10", kind: .cash, currency: "RUB")
+        v10Container.mainContext.insert(account)
+        try v10Container.mainContext.save()
+        let accountID = account.id
+
+        let migrated = try AppMigrationPlan.makeContainer(
+            configuration: ModelConfiguration("v11_fixture", url: url, cloudKitDatabase: .none)
+        )
+        let restored = try #require(migrated.mainContext.fetch(FetchDescriptor<Account>()).first)
+        #expect(restored.id == accountID)
+        #expect(restored.name == "Счёт V10")
+        // Новая таблица есть и пуста — миграция аддитивная, ничего не досочинила.
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<AccountAppearance>()).isEmpty)
+    }
 }

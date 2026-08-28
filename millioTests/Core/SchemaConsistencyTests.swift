@@ -145,6 +145,25 @@ struct SchemaConsistencyTests {
             ))
     }
 
+    /// V11 аддитивна: добавляет ровно `AccountAppearance` и не теряет ни одной таблицы V10.
+    /// Потерянная строка = молча удалённая таблица у пользователей на V10-сторах.
+    @Test
+    func v11PreservesEveryV10Entity() {
+        let v10Names = Set(AppSchemaV10.models.map { entityName(for: $0) })
+        let v11Names = Set(AppSchemaV11.models.map { entityName(for: $0) })
+        let missing = v10Names.subtracting(v11Names)
+        #expect(missing.isEmpty,
+            Comment(rawValue:
+                "V10 содержит типы, отсутствующие в V11: \(missing). " +
+                "V11 должна сохранять все released entity names V10."
+            ))
+        #expect(v11Names.subtracting(v10Names) == ["AccountAppearance"],
+            Comment(rawValue:
+                "V11 заявлена как добавление одной таблицы AccountAppearance, а добавляет " +
+                "\(v11Names.subtracting(v10Names)). Каждая новая таблица требует своей версии схемы."
+            ))
+    }
+
     /// AppSchema.create() возвращает схему из тех же типов что и AppSchemaCurrent.
     @Test
     func appSchemaCreateMatchesSchemaCurrent() {
