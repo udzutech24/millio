@@ -1,0 +1,14 @@
+{
+  "planFile": "2026-08-28__account-card-visual-redesign.md",
+  "title": "Визуальный редизайн счетов (AccountAppearance V11)",
+  "updated": "2026-08-28T00:00:00Z",
+  "phases": [
+    { "name": "Ф0 — Схема V11: AccountAppearance + isFavorite", "status": "pending", "note": "РИСКОВАННАЯ. Блокер: мерж feature/cashflow-account-picker-redesign. Требует /stress-test + AskUserQuestion" },
+    { "name": "Ф1 — Редизайн списка «Счета» (монограмма + цвет)", "status": "pending", "note": "без фото и hero; один компонент строки на 3 точки отрисовки" },
+    { "name": "Ф2 — Каталог пресетов + галерея (PRO-гейт)", "status": "pending", "note": "вкладка в AccountIconPickerSheet, гейт только через EntitlementPolicy" },
+    { "name": "Ф3 — Hero-карточка детального экрана", "status": "pending", "note": "один hero над 5 per-type секциями, confirmed-баланс" },
+    { "name": "Ф4 — Мост с легаси Card + чистка", "status": "pending", "note": "идемпотентная миграция cardColor/customIcon/isFavorite в appearance" }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}
