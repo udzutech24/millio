@@ -1,15 +1,15 @@
 {
   "planFile": "2026-08-27__cashflow-save-error-and-account-picker.md",
   "title": "Cashflow: сохранение на core-счёт + пикер",
-  "updated": "2026-08-27T00:00:00Z",
+  "updated": "2026-08-28T00:00:00Z",
   "phases": [
     { "name": "Диагноз бага сохранения", "status": "done", "note": "millio-audit, без кода" },
     { "name": "Согласование редизайна пикера", "status": "done", "note": "bottom sheet, монограммы, остатки" },
     { "name": "Стресс-тест", "status": "done", "note": "8 рисков, антипаттерн №1" },
     { "name": "Шаг 1 — фикс сохранения", "status": "done", "note": "b987341, feature/cashflow-core-account-save-fix, 4/4 теста" },
-    { "name": "Проверка Шага 1 на устройстве", "status": "pending", "note": "нужен владелец" },
-    { "name": "Шаг 2 — редизайн пикера", "status": "pending", "note": "отдельная ветка + фикс валюты трансфера" },
-    { "name": "Проверка Шага 2 на устройстве", "status": "pending", "note": null }
+    { "name": "Проверка Шага 1 на устройстве", "status": "pending", "note": "владелец поставил билд сам, результат явно не подтверждён" },
+    { "name": "Шаг 2 — редизайн пикера", "status": "done", "note": "ccae672, ветка feature/cashflow-account-picker-redesign; смержено в develop (c4be70b) 2026-08-28, gate 39→38 red без регрессии" },
+    { "name": "Проверка Шага 2 на устройстве", "status": "pending", "note": "устройство было офлайн, владелец подключил и поставил билд сам — подтверждения UI-проверки нет" }
   ],
   "costUsd": null,
   "etaMinutes": null
