@@ -22,4 +22,11 @@ extension CashflowViewModel {
         let today = now()
         return accounts.filter { cashLikeKinds.contains($0.kindRaw) && $0.participates(on: today) }
     }
+
+    /// «Избранное» core-счетов (V11). У легаси-карты источник свой — `Card.isFavorite`,
+    /// у core-счёта его в схеме `Account` нет и не будет: он живёт в `AccountAppearance`.
+    /// Один fetch на построение списка — по строке не запрашиваем.
+    func coreAccountFavoriteIDsForCashflowPicker() -> Set<UUID> {
+        (try? AccountAppearanceStore(context: modelContext).favoriteAccountIDs()) ?? []
+    }
 }

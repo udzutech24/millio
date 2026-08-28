@@ -66,7 +66,8 @@ enum CashflowSelectableAccountResolver {
         linkedInvestmentIDs: Set<String>,
         transactionType: CashflowTransactionType,
         currency: String,
-        newCoreAccounts: [Account] = []
+        newCoreAccounts: [Account] = [],
+        coreFavoriteAccountIDs: Set<UUID> = []
     ) -> [CashflowSelectableAccount] {
         let normalizedCurrency = currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let restrictInvestmentsToFinances = !linkedInvestmentIDs.isEmpty
@@ -83,14 +84,14 @@ enum CashflowSelectableAccountResolver {
         }
         // Счета нового ядра event-sourcing (Фаза 1a): cardID у транзакции = account.id.uuidString
         // (см. AccountsCoreCashflowBridge.resolveNewCoreAccount), но кейс `Kind` отдельный —
-        // чтобы `id` не сталкивался с легаси-картами. Собственного picker-favorite/priority
-        // в схеме нет — сортируются по order/createdAt как остальные.
+        // чтобы `id` не сталкивался с легаси-картами. Собственного priority в схеме нет —
+        // сортируются по order; «избранное» приходит из `AccountAppearance` (V11).
         let newCoreOptions = newCoreAccounts.map {
             CashflowSelectableAccount(
                 kind: .coreAccount(accountID: $0.id.uuidString),
                 title: $0.name,
                 currency: $0.currency,
-                isFavorite: false,
+                isFavorite: coreFavoriteAccountIDs.contains($0.id),
                 prioritySortOrder: $0.order,
                 updatedAt: $0.createdAt
             )

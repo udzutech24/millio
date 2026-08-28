@@ -1376,7 +1376,8 @@ struct CashflowTransactionEditorView: View {
             linkedInvestmentIDs: viewModel.state.linkedInvestmentIDs,
             transactionType: selectedTransactionType,
             currency: selectedCurrency,
-            newCoreAccounts: viewModel.newCoreAccountsForCashflowPicker()
+            newCoreAccounts: viewModel.newCoreAccountsForCashflowPicker(),
+            coreFavoriteAccountIDs: viewModel.coreAccountFavoriteIDsForCashflowPicker()
         )
     }
 
@@ -1398,7 +1399,8 @@ struct CashflowTransactionEditorView: View {
             linkedInvestmentIDs: [],
             transactionType: .transfer,
             currency: selectedCurrency,
-            newCoreAccounts: viewModel.newCoreAccountsForCashflowPicker()
+            newCoreAccounts: viewModel.newCoreAccountsForCashflowPicker(),
+            coreFavoriteAccountIDs: viewModel.coreAccountFavoriteIDsForCashflowPicker()
         )
     }
 
@@ -1924,7 +1926,8 @@ extension CashflowTransactionEditorView {
         linkedInvestmentIDs: Set<String> = [],
         transactionType: CashflowTransactionType,
         currency: String,
-        newCoreAccounts: [Account] = []
+        newCoreAccounts: [Account] = [],
+        coreFavoriteAccountIDs: Set<UUID> = []
     ) -> [CashflowSelectableAccount] {
         CashflowSelectableAccountResolver.options(
             cards: cards,
@@ -1932,7 +1935,8 @@ extension CashflowTransactionEditorView {
             linkedInvestmentIDs: linkedInvestmentIDs,
             transactionType: transactionType,
             currency: currency,
-            newCoreAccounts: newCoreAccounts
+            newCoreAccounts: newCoreAccounts,
+            coreFavoriteAccountIDs: coreFavoriteAccountIDs
         )
     }
 }

@@ -29,6 +29,7 @@ struct AccountsCoreFeatureRegistration {
         )
         ModelTypeRegistry.shared.register(RealEstateProfile.self, typeName: "RealEstateProfile")
         ModelTypeRegistry.shared.register(AccountAttachment.self, typeName: "AccountAttachment")
+        ModelTypeRegistry.shared.register(AccountAppearance.self, typeName: "AccountAppearance")
         ModelTypeRegistry.shared.registerBackupExporter(
             "HistoricalPortfolioValuation",
             exporter: HistoricalPortfolioValuationBackupExporter.export
@@ -42,6 +43,7 @@ struct AccountsCoreFeatureRegistration {
         ModelTypeRegistry.shared.registerImporter(HistoricalPortfolioValuationImporter.self)
         ModelTypeRegistry.shared.registerImporter(RealEstateProfileImporter.self)
         ModelTypeRegistry.shared.registerImporter(AccountAttachmentImporter.self)
+        ModelTypeRegistry.shared.registerImporter(AccountAppearanceImporter.self)
     }
 }
 
@@ -107,6 +109,51 @@ struct AccountAttachmentImporter: ModelImporter {
             isCover: isCover,
             createdAt: Date(timeIntervalSince1970: createdAtRaw),
             mediaData: mediaData
+        ))
+    }
+}
+
+// MARK: - Appearance V11 importer
+
+/// Оформление и «избранное» счёта (V11).
+///
+/// В отличие от `AccountAttachmentImporter` здесь НЕТ проверки «владелец существует и он
+/// realEstate»: `accountID` адресует оба мира счетов (core `Account.id` и легаси
+/// `Card.cardUniqueID`), а порядок импорта между ними не гарантирован. Ронять весь restore
+/// из-за декоративной строки нельзя — висячие строки подчищает `DataIntegrityCleaner`.
+struct AccountAppearanceImporter: ModelImporter {
+    static func importType() -> String { "AccountAppearance" }
+    static var importPriority: Int { 35 }
+
+    static func `import`(from data: [String: Any], context: ModelContext) throws {
+        guard let idRaw = data["id"] as? String, let id = UUID(uuidString: idRaw),
+              let accountRaw = data["accountID"] as? String, let accountID = UUID(uuidString: accountRaw) else {
+            throw AppError.backupCorrupted
+        }
+        let isFavorite = data["isFavorite"] as? Bool ?? false
+        let presetRaw = data["presetRaw"] as? String
+        let tintHex = data["tintHex"] as? String
+        let iconName = data["iconName"] as? String
+        let updatedAt = (data["updatedAt"] as? TimeInterval).map(Date.init(timeIntervalSince1970:)) ?? Date()
+
+        let descriptor = FetchDescriptor<AccountAppearance>(predicate: #Predicate { $0.id == id })
+        if let existing = try context.fetch(descriptor).first {
+            existing.accountID = accountID
+            existing.presetRaw = presetRaw
+            existing.tintHex = tintHex
+            existing.iconName = iconName
+            existing.isFavorite = isFavorite
+            existing.updatedAt = updatedAt
+            return
+        }
+        context.insert(AccountAppearance(
+            id: id,
+            accountID: accountID,
+            presetRaw: presetRaw,
+            tintHex: tintHex,
+            iconName: iconName,
+            isFavorite: isFavorite,
+            updatedAt: updatedAt
         ))
     }
 }

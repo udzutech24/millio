@@ -57,6 +57,7 @@ final class DIContainer {
             try DataIntegrityCleaner.dedupeCashflowCustomCategoriesOnLaunch(modelContext: modelContext)
             try DataIntegrityCleaner.dedupeCashbackCustomCategoriesOnLaunch(modelContext: modelContext)
             try DataIntegrityCleaner.dedupeBudgetCategoryLimitsOnLaunch(modelContext: modelContext)
+            try DataIntegrityCleaner.purgeOrphanAccountAppearancesOnLaunch(modelContext: modelContext)
         } catch {
             AppLogger.log(.error, category: "Integrity", "Data integrity cleanup failed: \(error.localizedDescription)")
         }
