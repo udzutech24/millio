@@ -1,9 +1,10 @@
 {
   "planFile": "2026-08-28__account-card-visual-redesign.md",
   "title": "Визуальный редизайн счетов (AccountAppearance V11)",
-  "updated": "2026-08-28T00:00:00Z",
+  "updated": "2026-08-28T09:00:00Z",
   "phases": [
-    { "name": "Ф0 — Схема V11: AccountAppearance + isFavorite", "status": "pending", "note": "РИСКОВАННАЯ. Блокер мержа СНЯТ (develop c4be70b, 2026-08-28). Осталось: /stress-test + AskUserQuestion (риск 134504) перед стартом" },
+    { "name": "Дизайн-мокап (пре-фаза)", "status": "done", "note": "Мокап (artifact 5dbc1acf, 4 артборда) УТВЕРЖДЁН владельцем 2026-08-28: «правок нет»" },
+    { "name": "Ф0 — Схема V11: AccountAppearance + isFavorite", "status": "pending", "note": "РИСКОВАННАЯ. Блокер мержа СНЯТ (f2870b6), дизайн утверждён. Осталось: /stress-test + AskUserQuestion (риск 134504). Новая сессия" },
     { "name": "Ф1 — Редизайн списка «Счета» (монограмма + цвет)", "status": "pending", "note": "без фото и hero; один компонент строки на 3 точки отрисовки" },
     { "name": "Ф2 — Каталог пресетов + галерея (PRO-гейт)", "status": "pending", "note": "вкладка в AccountIconPickerSheet, гейт только через EntitlementPolicy" },
     { "name": "Ф3 — Hero-карточка детального экрана", "status": "pending", "note": "один hero над 5 per-type секциями, confirmed-баланс" },
