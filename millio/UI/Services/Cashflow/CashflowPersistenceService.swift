@@ -223,6 +223,18 @@ final class CashflowPersistenceService {
         replacing existingTransaction: CashflowTransaction? = nil
     ) async throws -> Bool {
         guard let card = cardProvider(fromCardID) else {
+            // Поле `cardID` хранит ID из двух миров: легаси `Card.cardUniqueID` и `Account.id`
+            // нового ядра (см. AccountsCoreCashflowBridge.resolveNewCoreAccount). Раньше здесь
+            // безусловно возвращалось false, и любой расход/перевод с core-счёта не сохранялся.
+            if let account = accountsCoreCashflowBridge.resolveNewCoreAccount(id: fromCardID) {
+                return try await isAmountAvailableOnCoreAccount(
+                    account: account,
+                    amount: amount,
+                    currency: currency,
+                    on: date,
+                    replacing: existingTransaction
+                )
+            }
             AppLogger.log(.warning, category: "Cashflow", "isAmountAvailable: card not found for fromCardID: \(fromCardID)")
             return false
         }
@@ -242,6 +254,50 @@ final class CashflowPersistenceService {
         ))
 
         return convertedAmount <= restoredBalance + 0.0001
+    }
+
+    /// Проверка средств на счёте нового ядра: баланс там не хранится полем, а является реплеем
+    /// событий (`AccountBalanceEngine`). События редактируемой транзакции исключаются из реплея —
+    /// ровно та же семантика, что у `DebitCardOperationCoordinator.commitStagedCashflow` (там
+    /// `remaining = events.filter { $0.sourceTransactionID != operationID }`), чтобы предварительная
+    /// проверка не расходилась с итоговым валидатором контракта и не давала «прошло тут — упало там».
+    private func isAmountAvailableOnCoreAccount(
+        account: Account,
+        amount: Double,
+        currency: String,
+        on date: Date,
+        replacing existingTransaction: CashflowTransaction?
+    ) async throws -> Bool {
+        let convertedAmount = try await convertAmountForValidation(
+            amount: amount,
+            from: currency,
+            to: account.currency,
+            on: date
+        )
+
+        let excludedTransactionID = existingTransaction?.uniqueID
+        let events = (account.events ?? []).filter { event in
+            guard let excludedTransactionID else { return true }
+            return event.sourceTransactionID != excludedTransactionID
+        }
+        let available = AccountBalanceEngine.balanceAt(
+            events: events,
+            kind: account.kind,
+            on: date
+        )
+
+        return convertedAmount <= NSDecimalNumber(decimal: available).doubleValue + 0.0001
+    }
+
+    /// Валюта счёта-получателя перевода. Резолвится в обоих мирах: раньше здесь смотрели только
+    /// легаси `Card`, и для core-счёта валюта была nil — проверка «нет курса при разных валютах»
+    /// молча отключалась, а сумма перевода конвертировалась по фолбэку. Тихая порча сумм.
+    func destinationCurrency(for toCardID: String?) -> String? {
+        guard let toCardID, !toCardID.isEmpty else { return nil }
+        if let card = cardProvider(toCardID) {
+            return card.currency
+        }
+        return accountsCoreCashflowBridge.resolveNewCoreAccount(id: toCardID)?.currency
     }
 
     // MARK: - Private: Обновление транзакции
@@ -277,7 +333,7 @@ final class CashflowPersistenceService {
         let exchangeInfo = await currencyService.resolveExchangeInfo(for: transaction)
 
         if transaction.transactionType == .transfer,
-           let targetCurrency = normalizedCurrencyCode(cardProvider(transaction.toCardID ?? "")?.currency),
+           let targetCurrency = normalizedCurrencyCode(destinationCurrency(for: transaction.toCardID)),
            normalizedCurrencyCode(transaction.currency) != targetCurrency,
            (exchangeInfo.rate ?? 0) <= 0 {
             AppLogger.log(

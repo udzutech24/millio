@@ -31,5 +31,5 @@
   ],
   "costUsd": null,
   "etaMinutes": null,
-  "notes": "Ветка feature/deposit-confirmed-balance (09e0aab), все 5 фаз done, локальные коммиты, БЕЗ merge/push. Гейт: develop e262fe0 = 2484/25, ветка после Ф2+Ф3 = 2504/18, новых красных 0, закрыт 1 предсуществующий (lifecycleFlagsAreSchedulerInert). Перед выкатом: Дашборд упадёт на RUB 232 346.17 / USD 16.38, в Cashflow разом появятся наступившие начисления (владелец принял). Осталась device-проверка."
+  "notes": "✅ ЗАВЕРШЁН 2026-08-27: device-проверка владельца ок (сборка eb9f5c1 на 17 Pro Max), squash-merge в develop 2d31445. Гейт: 2504/18 против baseline 2484/25, 0 новых красных. Develop НЕ запушен (ahead 1); ветка feature/deposit-confirmed-balance не удалена (deny-лист)."
 }

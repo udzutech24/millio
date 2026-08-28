@@ -18187,6 +18187,39 @@
         }
       }
     },
+    "cashflow.account_picker.all_accounts" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Alle Konten" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All accounts" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Todas las cuentas" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tous les comptes" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Все счета" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Tüm hesaplar" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "全部账户" } }
+      }
+    },
+    "cashflow.account_picker.favorites" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Favoriten" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Favorites" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Favoritos" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Favoris" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Избранные" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Favoriler" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "收藏" } }
+      }
+    },
+    "cashflow.account_picker.other_accounts" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Weitere Konten" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Other accounts" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Otras cuentas" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Autres comptes" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Остальные счета" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Diğer hesaplar" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "其他账户" } }
+      }
+    },
     "cashflow.asset_change" : {
       "localizations" : {
         "de" : {

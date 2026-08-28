@@ -88,6 +88,8 @@ struct CashflowTransactionEditorView: View {
     @State private var isLoadingSuggestedTransferRate: Bool = false
     
     @State private var showCurrencyPicker: Bool = false
+    /// Какой именно селектор счёта открыт в шите — все три используют один компонент пикера.
+    @State private var accountPickerTarget: CashflowAccountPickerTarget?
     @State private var currencySearchText: String = ""
     @State private var showCategorySheet: Bool = false
     @State private var showRecurrenceRulePicker: Bool = false
@@ -387,6 +389,9 @@ struct CashflowTransactionEditorView: View {
             if customExchangeRateText != sanitized {
                 customExchangeRateText = sanitized
             }
+        }
+        .sheet(item: $accountPickerTarget) { target in
+            accountPickerSheet(for: target)
         }
         .sheet(isPresented: $showCategorySheet) {
             CashflowCategorySelectionSheet(
@@ -820,12 +825,8 @@ struct CashflowTransactionEditorView: View {
     }
 
     private var compactAccountSelector: some View {
-        Menu {
-            ForEach(selectableAccountsForCurrentSelection) { account in
-                Button(account.pickerTitle) {
-                    updateSelectedAccount(using: account.id)
-                }
-            }
+        Button {
+            accountPickerTarget = .main
         } label: {
             compactSelectorLabel(
                 title: compactAccountLabel,
@@ -833,9 +834,54 @@ struct CashflowTransactionEditorView: View {
                 usesPlaceholderStyle: selectableAccountsForCurrentSelection.isEmpty || selectedAccountPickerID.isEmpty
             )
         }
+        .buttonStyle(.plain)
         .disabled(selectableAccountsForCurrentSelection.isEmpty)
         .opacity(selectableAccountsForCurrentSelection.isEmpty ? 0.55 : 1)
         .frame(maxWidth: .infinity)
+    }
+
+    /// Единый пикер счёта для трёх селекторов формы (расход/доход, «откуда», «куда»).
+    @ViewBuilder
+    private func accountPickerSheet(for target: CashflowAccountPickerTarget) -> some View {
+        switch target {
+        case .main:
+            CashflowAccountPickerSheet(
+                title: compactAccountLabel,
+                accounts: selectableAccountsForCurrentSelection,
+                selectedID: selectedAccountPickerID,
+                loadDetails: { await viewModel.accountPickerDetails(for: $0) },
+                onSelect: { updateSelectedAccount(using: $0.id) }
+            )
+        case .transferFrom:
+            let options = transferOptions(excludingCardID: selectedToCardID)
+            CashflowAccountPickerSheet(
+                title: L("cashflow.editor.from_card"),
+                accounts: options,
+                selectedID: Self.pickerID(forCardID: selectedCardID, in: options),
+                loadDetails: { await viewModel.accountPickerDetails(for: $0) },
+                onSelect: { selectedCardID = $0.cardID }
+            )
+        case .transferTo:
+            let options = transferOptions(excludingCardID: selectedCardID)
+            CashflowAccountPickerSheet(
+                title: L("cashflow.editor.to_card"),
+                accounts: options,
+                selectedID: Self.pickerID(forCardID: selectedToCardID, in: options),
+                loadDetails: { await viewModel.accountPickerDetails(for: $0) },
+                onSelect: { selectedToCardID = $0.cardID }
+            )
+        }
+    }
+
+    private func transferOptions(excludingCardID: String?) -> [CashflowSelectableAccount] {
+        transferCardOptions.filter { $0.cardID != excludingCardID }
+    }
+
+    /// `id` строки пикера по `cardID` транзакции. Резолв через список опций, а не сборка строки:
+    /// у легаси-карт и core-счетов разные префиксы `id`, угадать по самому ID нельзя.
+    private static func pickerID(forCardID cardID: String?, in options: [CashflowSelectableAccount]) -> String? {
+        guard let cardID, !cardID.isEmpty else { return nil }
+        return options.first(where: { $0.cardID == cardID })?.id
     }
 
     private func compactSelectorButton(
@@ -1064,10 +1110,8 @@ struct CashflowTransactionEditorView: View {
             VStack(spacing: 12) {
                 transferCardPickerRow(
                     title: L("cashflow.editor.from_card"),
-                    selection: Binding(
-                        get: { selectedCardID ?? "" },
-                        set: { selectedCardID = $0.isEmpty ? nil : $0 }
-                    ),
+                    target: .transferFrom,
+                    selectedCardID: selectedCardID,
                     excludingCardID: selectedToCardID
                 )
 
@@ -1087,10 +1131,8 @@ struct CashflowTransactionEditorView: View {
 
                 transferCardPickerRow(
                     title: L("cashflow.editor.to_card"),
-                    selection: Binding(
-                        get: { selectedToCardID ?? "" },
-                        set: { selectedToCardID = $0.isEmpty ? nil : $0 }
-                    ),
+                    target: .transferTo,
+                    selectedCardID: selectedToCardID,
                     excludingCardID: selectedCardID
                 )
 
@@ -1206,29 +1248,23 @@ struct CashflowTransactionEditorView: View {
 
     private func transferCardPickerRow(
         title: String,
-        selection: Binding<String>,
+        target: CashflowAccountPickerTarget,
+        selectedCardID: String?,
         excludingCardID: String?
     ) -> some View {
-        let availableOptions = transferCardOptions.filter { $0.cardID != excludingCardID }
+        let availableOptions = transferOptions(excludingCardID: excludingCardID)
 
-        return Menu {
-            Button(L("cashflow.editor.select_card")) {
-                selection.wrappedValue = ""
-            }
-
-            ForEach(availableOptions) { account in
-                Button(account.pickerTitle) {
-                    selection.wrappedValue = account.cardID ?? ""
-                }
-            }
+        return Button {
+            accountPickerTarget = target
         } label: {
             compactSelectorLabel(
                 title: title,
-                value: availableOptions.first(where: { $0.cardID == selection.wrappedValue })?.pickerTitle
+                value: availableOptions.first(where: { $0.cardID == selectedCardID })?.title
                     ?? L("cashflow.editor.select_card"),
-                usesPlaceholderStyle: selection.wrappedValue.isEmpty
+                usesPlaceholderStyle: selectedCardID?.isEmpty ?? true
             )
         }
+        .buttonStyle(.plain)
         .disabled(availableOptions.isEmpty)
         .opacity(availableOptions.isEmpty ? 0.55 : 1)
     }
@@ -1346,7 +1382,8 @@ struct CashflowTransactionEditorView: View {
 
     private var selectedAccountPickerID: String {
         if let selectedCardID {
-            return "card:\(selectedCardID)"
+            // Префикс `id` зависит от мира счёта (легаси/core), поэтому резолвим через список опций.
+            return Self.pickerID(forCardID: selectedCardID, in: selectableAccountsForCurrentSelection) ?? ""
         }
         if let selectedInvestmentID {
             return "investment:\(selectedInvestmentID)"
