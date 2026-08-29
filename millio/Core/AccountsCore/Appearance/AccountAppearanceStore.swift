@@ -58,6 +58,22 @@ struct AccountAppearanceStore {
         return target
     }
 
+    /// Явный выбор пользователя (иконка/цвет). Полный сброс — обе величины nil и счёт не в
+    /// избранном — удаляет строку: счёт возвращается к ВЫЧИСЛЯЕМОМУ дефолту
+    /// (`AccountAppearanceDefaults`), а не хранит пустое оформление.
+    @discardableResult
+    func setAppearance(accountID: UUID, iconName: String?, tintHex: String?) throws -> Bool {
+        let row = try upsert(accountID: accountID) {
+            $0.iconName = iconName
+            $0.tintHex = tintHex
+        }
+        if row.isDefault {
+            context.delete(row)
+            return false
+        }
+        return true
+    }
+
     @discardableResult
     func toggleFavorite(accountID: UUID) throws -> Bool {
         let row = try upsert(accountID: accountID) { $0.isFavorite.toggle() }

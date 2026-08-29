@@ -1187,6 +1187,32 @@ final class FinanceViewModel: ViewModelProtocol {
         accountAppearances[account.id]
     }
 
+    /// Оформление легаси-счёта из ТОГО ЖЕ словаря: таблица одна на оба мира, ключ — `uniqueID`
+    /// продукта (`FinanceAccount.accountID`). Карта без UUID-совместимого `uniqueID`
+    /// (composite-fallback) оформления не получает — рисуется вычисляемым дефолтом.
+    func appearance(for account: FinanceAccount) -> AccountAppearanceSnapshot? {
+        guard let uuid = UUID(uuidString: account.accountID) else { return nil }
+        return accountAppearances[uuid]
+    }
+
+    /// Сохранение явного выбора пользователя. Один путь записи для обоих миров — `AccountAppearance`.
+    func saveAppearance(iconName: String?, tintHex: String?, forAccountID accountID: UUID) {
+        let store = AccountAppearanceStore(context: modelContext)
+        guard (try? store.setAppearance(accountID: accountID, iconName: iconName, tintHex: tintHex)) != nil else { return }
+        try? modelContext.save()
+        loadAccountAppearances()
+    }
+
+    func saveAppearance(iconName: String?, tintHex: String?, for account: Account) {
+        saveAppearance(iconName: iconName, tintHex: tintHex, forAccountID: account.id)
+    }
+
+    /// То же для легаси-счёта; счёт без UUID-совместимого `uniqueID` не редактируется (см. выше).
+    func saveAppearance(iconName: String?, tintHex: String?, for account: FinanceAccount) {
+        guard let uuid = UUID(uuidString: account.accountID) else { return }
+        saveAppearance(iconName: iconName, tintHex: tintHex, forAccountID: uuid)
+    }
+
     /// Переключение «избранного» core-счёта. Легаси-карта свой тумблер имеет в `Card.isFavorite` —
     /// сюда не заводим второй путь для неё.
     func toggleFavorite(_ account: Account) {

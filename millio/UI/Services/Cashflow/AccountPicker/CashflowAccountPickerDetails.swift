@@ -19,14 +19,47 @@ struct CashflowAccountPickerDetails: Equatable {
 /// Сборка презентационных деталей строки пикера из моделей обоих миров счетов.
 enum CashflowAccountPickerDetailsFactory {
 
+    /// Единственная точка выбора внешнего вида счёта — общая для обоих миров.
+    /// Приоритет: явный выбор пользователя (`AccountAppearance`) → легаси-поля счёта →
+    /// детерминированный дефолт (монограмма по имени + цвет из палитры по `key`).
+    /// `key` обязан быть стабильным на всю жизнь счёта (`Account.id` / `*UniqueID`), иначе цвет
+    /// «поедет» при переименовании.
+    static func resolvedAppearance(
+        key: String,
+        name: String,
+        appearance: AccountAppearanceSnapshot?,
+        legacyIconName: String? = nil,
+        legacyIconColorHex: String? = nil
+    ) -> (iconName: String?, iconColorHex: String?) {
+        // Пустое имя монограммы не даёт: `monogram:` нарисовался бы пустым бейджем — в этом случае
+        // отдаём nil, и бейдж берёт `fallbackIconName` (иконку типа продукта).
+        let monogram = AccountIconSet.normalizedMonogram(name).isEmpty
+            ? nil
+            : AccountIconSet.monogramIconName(name)
+        return (
+            appearance?.iconName ?? legacyIconName ?? monogram,
+            appearance?.tintHex ?? legacyIconColorHex ?? AccountAppearanceDefaults.tintHex(forKey: key)
+        )
+    }
+
     /// Легаси-карта: иконка и цвет свои. «Доступно к трате» = `CardSnapshot.availableAmount`
     /// — для дебетовой это остаток, для кредитки уже доступный лимит (см. `CardSnapshotFactory`).
-    static func details(for card: Card) -> CashflowAccountPickerDetails {
+    static func details(
+        for card: Card,
+        appearance: AccountAppearanceSnapshot? = nil
+    ) -> CashflowAccountPickerDetails {
         let snapshot = CardSnapshotFactory.make(from: card)
-        return CashflowAccountPickerDetails(
-            iconName: card.resolvedIconName,
+        let resolved = resolvedAppearance(
+            key: card.cardUniqueID,
+            name: snapshot.name,
+            appearance: appearance,
+            legacyIconName: card.customIconName,
             // `cardColor` хранит и hex, и текстовые имена — в бейдж отдаём только заведомо hex-поле.
-            iconColorHex: card.customIconColor,
+            legacyIconColorHex: card.customIconColor
+        )
+        return CashflowAccountPickerDetails(
+            iconName: resolved.iconName,
+            iconColorHex: resolved.iconColorHex,
             fallbackIconName: card.cardType.icon,
             availableAmount: Decimal(snapshot.availableAmount)
         )
@@ -34,25 +67,40 @@ enum CashflowAccountPickerDetailsFactory {
 
     /// Счёт нового ядра: персонализация живёт в side-таблице `AccountAppearance` (V11), а не в
     /// полях `Account` — срез приходит готовым словарём из ViewModel, из тела строки не запрашиваем.
-    /// Оформления нет → монограмма по имени, как было до V11 (регрессии внешнего вида нет).
+    /// Оформления нет → монограмма по имени + детерминированный цвет по `Account.id`.
     /// Баланс приходит извне: он не хранится полем, а является реплеем событий.
     static func details(
         for account: Account,
         appearance: AccountAppearanceSnapshot? = nil,
         balance: Decimal?
     ) -> CashflowAccountPickerDetails {
-        CashflowAccountPickerDetails(
-            iconName: appearance?.iconName ?? AccountIconSet.monogramIconName(account.name),
-            iconColorHex: appearance?.tintHex,
+        let resolved = resolvedAppearance(
+            key: account.id.uuidString,
+            name: account.name,
+            appearance: appearance
+        )
+        return CashflowAccountPickerDetails(
+            iconName: resolved.iconName,
+            iconColorHex: resolved.iconColorHex,
             fallbackIconName: account.kind.fallbackIconName,
             availableAmount: balance
         )
     }
 
-    static func details(for investment: Investment) -> CashflowAccountPickerDetails {
-        CashflowAccountPickerDetails(
-            iconName: investment.resolvedIconName,
-            iconColorHex: investment.customIconColor,
+    static func details(
+        for investment: Investment,
+        appearance: AccountAppearanceSnapshot? = nil
+    ) -> CashflowAccountPickerDetails {
+        let resolved = resolvedAppearance(
+            key: investment.investmentUniqueID,
+            name: investment.name,
+            appearance: appearance,
+            legacyIconName: investment.customIconName,
+            legacyIconColorHex: investment.customIconColor
+        )
+        return CashflowAccountPickerDetails(
+            iconName: resolved.iconName,
+            iconColorHex: resolved.iconColorHex,
             fallbackIconName: investment.category.icon,
             availableAmount: Decimal(investment.amount)
         )

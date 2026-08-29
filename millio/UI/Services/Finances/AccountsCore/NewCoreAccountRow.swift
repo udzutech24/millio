@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Единственный компонент строки счёта нового ядра: список групп, «Без группы», редактор группы и
-/// архив рисуют её, а не свою вёрстку — иначе визуал разъезжается по четырём местам.
+/// Адаптер core-счёта к единой строке `AccountRowView`: собирает презентацию и передаёт действия.
+/// Собственной вёрстки здесь НЕТ — иначе визуал снова разъедется между мирами счетов.
 ///
 /// `appearance` приходит ГОТОВЫМ значением из ViewModel (один fetch на список). Собственного
 /// запроса к `AccountAppearanceStore` здесь нет и быть не должно: `body` вызывается на каждый кадр.
@@ -9,38 +9,72 @@ struct NewCoreAccountRow: View {
     let account: Account
     let balance: Decimal
     let isAmountHidden: Bool
-    /// nil = оформления нет → дефолтный вид (монограмма по имени), как до V11.
+    /// nil = оформления нет → детерминированный дефолт (монограмма по имени + цвет по `Account.id`).
     var appearance: AccountAppearanceSnapshot?
-    /// Архивный счёт: тот же макет, приглушённый — отдельной вёрстки для архива не заводим.
+    /// Архивный счёт: тот же макет, приглушённый.
     var isDimmed: Bool = false
-    /// nil = строка read-only (редактор группы, архив): контекстное меню «избранное» не показываем.
+    /// nil = строка read-only (редактор группы, архив): контекстное меню не вешается.
     var onToggleFavorite: (() -> Void)?
+    /// Применение выбранного оформления. nil = редактирование из этого места недоступно.
+    var onSaveAppearance: ((_ iconName: String?, _ tintHex: String?) -> Void)?
 
-    /// Размер бейджа строки списка. Hero-карточка деталки (Ф3) свой размер задаёт сама.
-    private static let badgeSize: CGFloat = 36
-    private static let dimmedOpacity: Double = 0.55
-
-    private var details: CashflowAccountPickerDetails {
-        CashflowAccountPickerDetailsFactory.details(
-            for: account,
-            appearance: appearance,
-            balance: balance
-        )
-    }
-
-    private var isFavorite: Bool { appearance?.isFavorite == true }
+    @State private var isEditingAppearance = false
+    @State private var draftIconName: String?
+    @State private var draftTintHex: String?
 
     private var amountValue: Double {
         NSDecimalNumber(decimal: balance).doubleValue
     }
 
-    private var amountColor: Color {
-        amountValue < 0 ? AppColors.error : AppColors.textPrimary
+    private var presentation: AccountRowPresentation {
+        AccountRowPresentation.make(
+            key: account.id.uuidString,
+            name: account.name,
+            appearance: appearance,
+            fallbackIconName: account.kind.fallbackIconName,
+            amountText: AccountRowAmountFormatter.text(amountValue, isHidden: isAmountHidden),
+            currencySymbol: MonetaCurrency(rawValue: account.currency)?.symbol ?? account.currency,
+            isNegative: amountValue < 0
+        )
     }
 
-    private var formattedAmount: String {
-        guard !isAmountHidden else {
-            let digitCount = String(Int(amountValue.rounded())).count
+    private var editAppearanceAction: (() -> Void)? {
+        guard onSaveAppearance != nil else { return nil }
+        return { startEditingAppearance() }
+    }
+
+    var body: some View {
+        AccountRowView(
+            presentation: presentation,
+            isDimmed: isDimmed,
+            onToggleFavorite: onToggleFavorite,
+            onEditAppearance: editAppearanceAction
+        )
+        .sheet(isPresented: $isEditingAppearance) {
+            AccountIconPickerSheet(iconName: $draftIconName, iconColor: $draftTintHex)
+                .onDisappear {
+                    // Сохраняем на закрытии листа: у `AccountIconPickerSheet` нет колбэка «готово»,
+                    // он работает через биндинги, а «Отмена» их не откатывает (поведение, общее
+                    // с легаси-формами счёта — второго контракта не заводим).
+                    onSaveAppearance?(draftIconName, draftTintHex)
+                }
+        }
+    }
+
+    private func startEditingAppearance() {
+        // В пикер отдаём то, что пользователь выбрал ЯВНО, а не вычисленный дефолт: иначе первый же
+        // вход в редактор «застолбил» бы авто-цвет как ручной выбор.
+        draftIconName = appearance?.iconName
+        draftTintHex = appearance?.tintHex
+        isEditingAppearance = true
+    }
+}
+
+/// Единый формат суммы в строке счёта: разряды пробелом, скрытие — точками по числу разрядов.
+enum AccountRowAmountFormatter {
+    static func text(_ amount: Double, isHidden: Bool, maximumFractionDigits: Int = 0) -> String {
+        guard !isHidden else {
+            let digitCount = String(Int(amount.rounded())).count
             return String(repeating: "•", count: max(3, digitCount))
         }
         let formatter = NumberFormatter()
@@ -48,80 +82,14 @@ struct NewCoreAccountRow: View {
         formatter.usesGroupingSeparator = true
         formatter.groupingSeparator = " "
         formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: amountValue)) ?? "0"
-    }
-
-    private var currencySymbol: String {
-        MonetaCurrency(rawValue: account.currency)?.symbol ?? account.currency
-    }
-
-    var body: some View {
-        // Меню вешаем только там, где действие есть: пустой `contextMenu` даёт долгое нажатие
-        // без единого пункта — визуальный «мёртвый» отклик в редакторе группы и архиве.
-        if let onToggleFavorite {
-            rowContent.contextMenu { favoriteButton(onToggleFavorite) }
-        } else {
-            rowContent
-        }
-    }
-
-    private func favoriteButton(_ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            if isFavorite {
-                Label(L("finances.account.favorite.remove"), systemImage: "star.slash")
-            } else {
-                Label(L("finances.account.favorite.add"), systemImage: "star")
-            }
-        }
-    }
-
-    private var rowContent: some View {
-        HStack(spacing: AppSpacing.m) {
-            AccountIconBadgeView(
-                iconName: details.iconName,
-                iconColor: details.iconColorHex,
-                fallback: details.fallbackIconName,
-                size: Self.badgeSize,
-                isError: amountValue < 0
-            )
-
-            HStack(spacing: AppSpacing.xs) {
-                Text(account.name)
-                    .font(.millioSubheadline)
-                    .foregroundStyle(AppColors.textPrimary)
-                    .lineLimit(1)
-
-                if isFavorite {
-                    Image(systemName: "star.fill")
-                        .font(.millioCaption2)
-                        .foregroundStyle(AppColors.warning)
-                        .accessibilityLabel(L("finances.account.favorite.badge"))
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
-                Text(formattedAmount)
-                    .font(.millioSubheadline)
-                    .foregroundStyle(amountColor.opacity(0.92))
-                Text(currencySymbol)
-                    .font(.millioCallout)
-                    .foregroundStyle(amountColor.opacity(0.66))
-            }
-        }
-        .padding(.vertical, AppSpacing.s)
-        // Архив отличается только приглушением: saturation(0) гасит цвет оформления, чтобы
-        // закрытый счёт не выглядел активнее рабочих.
-        .saturation(isDimmed ? 0 : 1)
-        .opacity(isDimmed ? Self.dimmedOpacity : 1)
-        .contentShape(Rectangle())
+        formatter.maximumFractionDigits = maximumFractionDigits
+        return formatter.string(from: NSNumber(value: amount)) ?? "0"
     }
 }
 
 extension AccountKind {
-    /// SF Symbol по умолчанию для новых счетов — до появления кастомных иконок нового ядра
-    /// (та же зона ответственности, что `CardType.icon`/`Bank.icon` у старого мира).
+    /// SF Symbol по умолчанию для новых счетов — используется, когда имя счёта пустое и монограмму
+    /// собрать не из чего (та же зона ответственности, что `CardType.icon`/`Bank.icon` у старого мира).
     var fallbackIconName: String {
         switch self {
         case .cash: return "banknote.fill"
