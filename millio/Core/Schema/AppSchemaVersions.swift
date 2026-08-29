@@ -185,6 +185,18 @@ enum AppSchemaV10: VersionedSchema {
     ]
 }
 
+// MARK: - V11 (пользовательское оформление счёта + избранное для core-счетов)
+
+/// Аддитивная версия: добавляется ровно одна таблица `AccountAppearance`, декларации V10
+/// остаются byte-for-byte (образец — V8). `Account` не меняется, поэтому его checksum обязан
+/// СОВПАДАТЬ с V10 — это проверяет `AppSchemaFrozenGraphTests`.
+enum AppSchemaV11: VersionedSchema {
+    static var versionIdentifier = Schema.Version(11, 0, 0)
+    static var models: [any PersistentModel.Type] = AppSchemaV10.models + [
+        AccountAppearance.self,
+    ]
+}
+
 // MARK: - Текущая схема (единственный источник правды)
 
 // При добавлении нового @Model:
@@ -195,7 +207,7 @@ enum AppSchemaV10: VersionedSchema {
 // ВАЖНО: models уже выпущенной версии (или версии, под идентификатором которой уже
 // существуют сторы на дисках — dev/sim в том числе) — не редактировать задним числом.
 // Это ломает staged migration (см. комментарий V4 выше, Находка 2).
-typealias AppSchemaCurrent = AppSchemaV10
+typealias AppSchemaCurrent = AppSchemaV11
 
 // MARK: - План миграции
 
@@ -212,6 +224,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         AppSchemaV8.self,
         AppSchemaV9.self,
         AppSchemaV10.self,
+        AppSchemaV11.self,
     ]
 
     static var stages: [MigrationStage] = [
@@ -224,6 +237,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         .lightweight(fromVersion: AppSchemaV7.self, toVersion: AppSchemaV8.self),
         .lightweight(fromVersion: AppSchemaV8.self, toVersion: AppSchemaV9.self),
         .lightweight(fromVersion: AppSchemaV9.self, toVersion: AppSchemaV10.self),
+        .lightweight(fromVersion: AppSchemaV10.self, toVersion: AppSchemaV11.self),
     ]
 }
 

@@ -661,7 +661,8 @@ final class CashbackViewModel: ViewModelProtocol {
             linkedInvestmentIDs: [],
             transactionType: .expense,
             currency: "",
-            newCoreAccounts: cashLikeCoreAccounts()
+            newCoreAccounts: cashLikeCoreAccounts(),
+            coreFavoriteAccountIDs: (try? AccountAppearanceStore(context: modelContext).favoriteAccountIDs()) ?? []
         )
     }
 

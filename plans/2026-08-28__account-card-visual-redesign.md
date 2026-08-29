@@ -1,7 +1,7 @@
 # План: визуальный редизайн счетов (`AccountAppearance` V11 → список → галерея → hero)
 
 **Дата:** 2026-08-28
-**Статус:** НЕ НАЧАТ
+**Статус:** В РАБОТЕ (Ф0 реализована в ветке `feature/account-appearance-v11`, не смержена)
 **Размер:** L (10+ файлов, затрагивает схему SwiftData и оба мира счетов)
 **Спека:** [`specs/2026-08-28-account-card-visual-redesign.md`](../specs/2026-08-28-account-card-visual-redesign.md)
 **Автор:** Александр (iOS)
@@ -55,7 +55,7 @@
 
 ---
 
-### [ ] Ф0. Схема V11: `AccountAppearance` + `isFavorite` для core — ⚠️ РИСКОВАННАЯ
+### [~] Ф0. Схема V11: `AccountAppearance` + `isFavorite` для core — ⚠️ РИСКОВАННАЯ
 
 > **СТОП-ГЕЙТ. Перед стартом обязательны, в этом порядке:**
 > 1. Снятие блокера (мерж ветки пикера) — проверено git-командой, не на слово.
@@ -109,6 +109,20 @@ guest/user scope (appearance не должна протекать между sco
 
 **Откат:** V11 аддитивна и обратима — при проблеме удаляем стадию и таблицу, финансовые данные
 не затронуты (это главный аргумент за вариант (б)).
+
+**Факт реализации (2026-08-28, ветка `feature/account-appearance-v11`, НЕ смержена):**
+- `1de96ac` — модель `Core/AccountsCore/Appearance/AccountAppearance.swift`, `AccountAppearanceStore`,
+  `AppSchemaV11` (+ стадия `.lightweight(V10→V11)`, `AppSchemaCurrent = V11`),
+  `AccountAppearanceImporter` + регистрация, `DataIntegrityCleaner.purgeOrphanAccountAppearancesOnLaunch`
+  (вызов в `DIContainer.create`), `CashflowSelectableAccount.swift` — `isFavorite` core-счёта из стора
+  (пробрасывается из `CashflowViewModel.coreAccountFavoriteIDsForCashflowPicker()` и `CashbackViewModel`).
+- `7bf2768` — тесты: checksum-инварианты (V10 внесена в `historicalVersions`, Account 10.0.0 =
+  `yWZTWJU6/…`, форма `AccountAppearance` запинена), `v11PreservesEveryV10Entity`, миграция реального
+  V10-стора, контракт стора, backup→wipe→restore, сироты, путь создания Cashflow-пикера.
+- Известный предел: легаси-карта с пустым `uniqueID` (composite-fallback `Card.swift:272`) не
+  парсится в UUID и оформления не получает — дефолтный вид, без краша.
+- `CashflowStatementReviewPolicy.options` избранное core-счетов не получает (влияет только на
+  сортировку в импорте выписки) — сознательно вне скоупа Ф0.
 
 ---
 

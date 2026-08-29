@@ -20,7 +20,8 @@ final class AppSchemaFrozenGraphTests: XCTestCase {
 
     /// Сущности, чья форма одинакова во всех версиях, где они присутствуют.
     private static let stableEntityHashes: [String: String] = [
-        "AccountAttachment": "5wPs1AU9t2gjI9MY2HdhSuowObI3jyHjJ/2W+M0a9GA=",
+        "AccountAppearance": "bs8fkvNg/iptT9sGmJ5lJJtJSMrH/tXe6+4vK8zJOIE=",
+        "AccountAttachment":"5wPs1AU9t2gjI9MY2HdhSuowObI3jyHjJ/2W+M0a9GA=",
         "AccountDailySnapshot": "AI3BWjJIOLr0klAx1wqEJmd7q5vf75JZKxRXZm8G+UQ=",
         "AccountEvent": "EmlGFhcjmfpsopi0rUHOrE66H8gucF9tP3KeE/2xnZE=",
         "AccountGroup": "3fC1ZRhAG+Gb0X7EyZvXo09ybiIcY0uLLDL6SqSUnwk=",
@@ -55,13 +56,15 @@ final class AppSchemaFrozenGraphTests: XCTestCase {
         "6.0.0": "02wKdtQoIsrSY/+hoeRf0BQyJAGEnly56ryX8QTc2B0=",
         "7.0.0": "BDWJy0HN268pIbYHiNuawlUTybynWnG7Qmu7wnySOss=",
         "8.0.0": "BDWJy0HN268pIbYHiNuawlUTybynWnG7Qmu7wnySOss=",
-        "9.0.0": "BDWJy0HN268pIbYHiNuawlUTybynWnG7Qmu7wnySOss="
+        "9.0.0": "BDWJy0HN268pIbYHiNuawlUTybynWnG7Qmu7wnySOss=",
+        "10.0.0": "yWZTWJU6/413j5DfgWJ96vwglPg7qQGzXwjvm0SPeWg="
     ]
 
     private static let historicalVersions: [any VersionedSchema.Type] = [
         AppSchemaV1.self, AppSchemaV2.self, AppSchemaV3.self,
         AppSchemaV4.self, AppSchemaV5.self, AppSchemaV6.self,
-        AppSchemaV7.self, AppSchemaV8.self, AppSchemaV9.self
+        AppSchemaV7.self, AppSchemaV8.self, AppSchemaV9.self,
+        AppSchemaV10.self
     ]
 
     /// Checksum'ы читаются не из декларации, а из метаданных РЕАЛЬНО записанного стора —
@@ -113,13 +116,42 @@ final class AppSchemaFrozenGraphTests: XCTestCase {
         }
     }
 
-    /// Обратная сторона того же инварианта: у V10 форма `Account` ДРУГАЯ (поле `isTaxable`),
-    /// поэтому она обязана иметь свой checksum — иначе миграция была бы бессмысленной.
-    func testCurrentSchemaIntroducesNewAccountChecksum() throws {
+    /// Текущая версия (V11) — АДДИТИВНАЯ: она добавляет таблицу `AccountAppearance` и не трогает
+    /// `Account`. Для такой версии корректный инвариант обратный прежнему: checksum `Account`
+    /// обязан СОВПАДАТЬ с предыдущей версией. Расхождение означало бы незапланированную правку
+    /// продакшн-модели — ровно тот сценарий, который даёт 134504 на сторах пользователей.
+    ///
+    /// ⚠️ Если следующая версия схемы всё-таки меняет `Account` — этот тест переписывается на
+    /// «не равно предыдущей», а хеш предыдущей версии пинится в `accountHashByVersion`.
+    /// Ослаблять его до «всегда истина» нельзя: он единственный сторож формы `Account`.
+    func testCurrentAdditiveSchemaKeepsPreviousAccountChecksum() throws {
         let current = Schema(AppSchemaCurrent.models, version: AppSchemaCurrent.versionIdentifier)
         let currentHash = try accountVersionHash(for: current)
-        for historicalHash in Set(Self.accountHashByVersion.values) {
-            XCTAssertNotEqual(currentHash, historicalHash)
+        let previousHash = try XCTUnwrap(Self.accountHashByVersion["10.0.0"])
+        XCTAssertEqual(
+            currentHash,
+            previousHash,
+            "V11 заявлена как аддитивная, но форма Account изменилась — стор V10 больше не откроется"
+        )
+        // При этом от версий ДО V10 (там ещё не было `DepositMeta.isTaxable`) он по-прежнему отличается.
+        for version in ["4.0.0", "5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0"] {
+            XCTAssertNotEqual(currentHash, Self.accountHashByVersion[version])
+        }
+    }
+
+    /// Прямая проверка аддитивности текущей версии на уровне записанного стора: все сущности V10
+    /// присутствуют с теми же checksum, а разница ровно одна — новая таблица.
+    func testCurrentSchemaOnlyAddsNewEntityOnTopOfPreviousVersion() throws {
+        let previous = try entityHashes(for: Schema(AppSchemaV10.models, version: AppSchemaV10.versionIdentifier))
+        let current = try entityHashes(for: Schema(AppSchemaCurrent.models, version: AppSchemaCurrent.versionIdentifier))
+
+        XCTAssertEqual(Set(current.keys).subtracting(previous.keys), ["AccountAppearance"])
+        // Форма новой таблицы пинится сразу: со следующей версией схемы V11 станет исторической,
+        // и её checksum должен быть уже зафиксирован, а не снят задним числом.
+        XCTAssertEqual(current["AccountAppearance"], Self.stableEntityHashes["AccountAppearance"])
+        XCTAssertTrue(Set(previous.keys).subtracting(current.keys).isEmpty, "V11 потеряла таблицы V10")
+        for (entity, hash) in previous {
+            XCTAssertEqual(current[entity], hash, "V11 изменила форму сущности \(entity)")
         }
     }
 

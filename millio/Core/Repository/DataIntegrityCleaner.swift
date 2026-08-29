@@ -157,6 +157,28 @@ enum DataIntegrityCleaner {
         }
     }
 
+    /// Удаляет оформление счетов, чьих владельцев больше нет.
+    ///
+    /// `AccountAppearance.accountID` — обычное поле без `@Relationship` (ключ обслуживает и core
+    /// `Account.id`, и легаси `Card.cardUniqueID`), поэтому каскада при удалении счёта нет.
+    /// Без одноразового флага: счета удаляют регулярно, а не один раз при апдейте.
+    static func purgeOrphanAccountAppearancesOnLaunch(modelContext: ModelContext) throws {
+        let appearances = try modelContext.fetch(FetchDescriptor<AccountAppearance>())
+        guard !appearances.isEmpty else { return }
+
+        var ownerIDs = Set(try modelContext.fetch(FetchDescriptor<Account>()).map(\.id))
+        for card in try modelContext.fetch(FetchDescriptor<Card>()) {
+            if let uuid = UUID(uuidString: card.cardUniqueID) { ownerIDs.insert(uuid) }
+        }
+
+        for appearance in appearances where !ownerIDs.contains(appearance.accountID) {
+            modelContext.delete(appearance)
+        }
+        if modelContext.hasChanges {
+            try modelContext.save()
+        }
+    }
+
     static func dedupeAll(modelContext: ModelContext) throws {
         try dedupeCards(modelContext: modelContext)
         try dedupeCredits(modelContext: modelContext)
