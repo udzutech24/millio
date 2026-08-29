@@ -1,7 +1,7 @@
 {
   "planFile": "2026-08-28__account-card-visual-redesign.md",
   "title": "Визуальный редизайн счетов (AccountAppearance V11)",
-  "updated": "2026-08-29T12:00:00Z",
+  "updated": "2026-08-29T21:30:00Z",
   "phases": [
     {
       "name": "Дизайн-мокап (пре-фаза)",
@@ -25,13 +25,13 @@
     },
     {
       "name": "Ф2 — Каталог пресетов + галерея (PRO-гейт)",
-      "status": "pending",
-      "note": "вкладка в AccountIconPickerSheet, гейт только через EntitlementPolicy"
+      "status": "done",
+      "note": "Ветка feature/account-appearance-gallery-hero, коммит bfb412f, НЕ смержена. AccountAppearancePreset — 12 градиентов из палитры AppColors, в БД только rawValue. Вкладка «Дизайн» в AccountIconPickerSheet, доступна и core-, и легаси-строке (все 4 типа). Гейт только через EntitlementPolicy.canUseAccountAppearanceGallery. 17 ключей ru/en/zh-Hans. 12 тестов зелёные. Ждёт device-проверки"
     },
     {
       "name": "Ф3 — Hero-карточка детального экрана",
-      "status": "pending",
-      "note": "один hero над 5 per-type секциями, confirmed-баланс"
+      "status": "done",
+      "note": "Ветка feature/account-appearance-gallery-hero, коммит b6243d5, НЕ смержена. AccountHeroCardView — единая шапка: AccountDetailView (все типы кроме недвижимости — у неё фото-обложка) + FinanceDynamicsView (легаси-счёт, своего экрана деталки не имеет). Сумма hero = signedValue(confirmed balance) = строка списка. Сняты standardHeader/stockHero и блоки идентичности в Credit/Debit/Deposit-секциях. 9 тестов зелёные. Ждёт device-проверки владельцем по каждому типу"
     },
     {
       "name": "Ф4 — Мост с легаси Card + чистка",
