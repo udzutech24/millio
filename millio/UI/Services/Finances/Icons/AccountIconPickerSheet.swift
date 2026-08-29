@@ -5,20 +5,39 @@ import SwiftUI
 struct AccountIconPickerSheet: View {
     @Binding var iconName: String?
     @Binding var iconColor: String?
+    /// nil = вкладки «Дизайн» в этом контексте нет. Так работают иконка группы и форма создания
+    /// счёта: у них нет строки `AccountAppearance`, куда можно записать выбранный пресет.
+    var presetRaw: Binding<String?>?
 
     @Environment(\.dismiss) private var dismiss
+    // Опциональные, потому что лист открывается в том числе из превью и из контекстов без роутера:
+    // обращение к отсутствующему `@Environment(Observable)` — это краш, а не пустое значение.
+    @Environment(AppState.self) private var appState: AppState?
+    @Environment(AppRouter.self) private var router: AppRouter?
 
     @State private var mode: PickerMode = .presets
     @State private var monogramDraft: String = ""
     @State private var selectedColorHex: String? = nil
+    @State private var selectedPresetRaw: String? = nil
     @State private var customColor: Color = .blue
+    @State private var showGalleryProAlert = false
 
     private enum PickerMode: String, CaseIterable {
         case presets  = "account.icon_picker.tab.presets"
         case monogram = "account.icon_picker.tab.monogram"
+        case design   = "account.icon_picker.tab.design"
     }
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 5)
+    private let designColumns = Array(repeating: GridItem(.flexible(), spacing: AppSpacing.m), count: 3)
+
+    private var availableModes: [PickerMode] {
+        presetRaw == nil ? [.presets, .monogram] : PickerMode.allCases
+    }
+
+    private var canUseGallery: Bool {
+        EntitlementPolicy.canUseAccountAppearanceGallery(isPro: appState?.isPro ?? false)
+    }
 
     var body: some View {
         ZStack {
@@ -35,8 +54,11 @@ struct AccountIconPickerSheet: View {
                         switch mode {
                         case .presets: presetsSection
                         case .monogram: monogramSection
+                        case .design: designSection
                         }
-                        colorSection
+                        // В галерее своя палитра: отдельный выбор цвета рядом с ней означал бы
+                        // два конкурирующих источника акцента на одном экране.
+                        if mode != .design { colorSection }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
@@ -45,6 +67,17 @@ struct AccountIconPickerSheet: View {
             }
         }
         .onAppear(perform: syncStateFromBindings)
+        .premiumUpsellAlert(
+            isPresented: $showGalleryProAlert,
+            titleKey: "account.appearance.gallery.pro_title",
+            messageKey: "account.appearance.gallery.pro_message",
+            onSubscribe: {
+                // Экран подписки живёт в основном стеке — лист сначала закрываем, иначе push
+                // произойдёт под ним и пользователь его не увидит.
+                dismiss()
+                router?.push(.subscription)
+            }
+        )
     }
 
     // MARK: - Header
@@ -74,11 +107,118 @@ struct AccountIconPickerSheet: View {
 
     private var modePicker: some View {
         Picker("", selection: $mode) {
-            ForEach(PickerMode.allCases, id: \.self) { m in
+            ForEach(availableModes, id: \.self) { m in
                 Text(LocalizedStringKey(m.rawValue)).tag(m)
             }
         }
         .pickerStyle(.segmented)
+    }
+
+    // MARK: - Дизайны (галерея пресетов, PRO)
+
+    private var designSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.m) {
+            if !canUseGallery { galleryLockNotice }
+
+            LazyVGrid(columns: designColumns, spacing: AppSpacing.m) {
+                designResetCell
+                ForEach(AccountAppearancePreset.allCases) { preset in
+                    designCell(preset)
+                }
+            }
+            // Free видит саму галерею (что именно он получит по подписке), но выбор не применяется:
+            // тап ведёт на paywall. Пустой замок вместо витрины конвертирует хуже.
+            .opacity(canUseGallery ? 1 : 0.6)
+        }
+    }
+
+    private var galleryLockNotice: some View {
+        Button {
+            showGalleryProAlert = true
+        } label: {
+            Label(L("account.appearance.gallery.locked"), systemImage: "lock.fill")
+                .font(.millioCalloutSemibold)
+                .foregroundStyle(AppColors.textPrimary)
+                .padding(.horizontal, AppSpacing.m)
+                .padding(.vertical, AppSpacing.s)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                        .fill(AppColors.iconBackground)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func designCell(_ preset: AccountAppearancePreset) -> some View {
+        let isSelected = selectedPresetRaw == preset.rawValue
+        return Button {
+            selectPreset(preset.rawValue)
+        } label: {
+            VStack(spacing: AppSpacing.xs) {
+                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: preset.gradientColors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(height: 56)
+                    .overlay { if isSelected { designSelectionRing } }
+
+                Text(LocalizedStringKey(preset.titleKey))
+                    .font(.millioCaption2Medium)
+                    .foregroundStyle(AppColors.textSecondary)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// «Без дизайна» — возврат к вычисляемому дефолту оформления (`AccountAppearanceDefaults`).
+    private var designResetCell: some View {
+        let isSelected = selectedPresetRaw == nil
+        return Button {
+            selectPreset(nil)
+        } label: {
+            VStack(spacing: AppSpacing.xs) {
+                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+                    .fill(AppColors.iconBackground)
+                    .frame(height: 56)
+                    .overlay {
+                        Image(systemName: "slash.circle")
+                            .font(.millioHeadline)
+                            .foregroundStyle(AppColors.textTertiary)
+                    }
+                    .overlay { if isSelected { designSelectionRing } }
+
+                Text(L("account.appearance.preset.none"))
+                    .font(.millioCaption2Medium)
+                    .foregroundStyle(AppColors.textSecondary)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var designSelectionRing: some View {
+        RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
+            .strokeBorder(Color.white.opacity(0.9), lineWidth: 2)
+    }
+
+    private func selectPreset(_ raw: String?) {
+        guard canUseGallery else {
+            showGalleryProAlert = true
+            return
+        }
+        selectedPresetRaw = raw
+        // Дизайн и ручной цвет — взаимоисключающие источники акцента: иначе строка списка красилась
+        // бы старым цветом, а hero — новым градиентом, и «дизайн не применился» на глаз.
+        if raw != nil {
+            selectedColorHex = nil
+            iconColor = nil
+        }
     }
 
     // MARK: - Presets
@@ -191,6 +331,7 @@ struct AccountIconPickerSheet: View {
                     .onChange(of: customColor) { _, new in
                         selectedColorHex = new.hexString
                         iconColor = selectedColorHex
+                        selectedPresetRaw = nil
                     }
             }
             .padding(.top, 4)
@@ -202,6 +343,7 @@ struct AccountIconPickerSheet: View {
         return Button {
             selectedColorHex = nil
             iconColor = nil
+            selectedPresetRaw = nil
         } label: {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(
@@ -224,6 +366,8 @@ struct AccountIconPickerSheet: View {
         return Button {
             selectedColorHex = hex
             iconColor = hex
+            // Ручной цвет отменяет дизайн — обратная сторона правила из `selectPreset`.
+            selectedPresetRaw = nil
         } label: {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color(hex: hex))
@@ -243,6 +387,7 @@ struct AccountIconPickerSheet: View {
 
     private func syncStateFromBindings() {
         selectedColorHex = iconColor
+        selectedPresetRaw = presetRaw?.wrappedValue
         if let name = iconName, AccountIconSet.isMonogram(name) {
             mode = .monogram
             monogramDraft = AccountIconSet.monogramText(name)
@@ -251,13 +396,14 @@ struct AccountIconPickerSheet: View {
 
     private func applyAndDismiss() {
         switch mode {
-        case .presets:
-            break // iconName уже обновляется по тапу
+        case .presets, .design:
+            break // iconName / выбранный дизайн уже обновлены по тапу
         case .monogram:
             let text = AccountIconSet.normalizedMonogram(monogramDraft)
             iconName = text.isEmpty ? nil : AccountIconSet.monogramIconName(text)
         }
         iconColor = selectedColorHex
+        presetRaw?.wrappedValue = selectedPresetRaw
         dismiss()
     }
 }

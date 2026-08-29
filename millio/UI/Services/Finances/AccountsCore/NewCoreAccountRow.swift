@@ -16,11 +16,12 @@ struct NewCoreAccountRow: View {
     /// nil = строка read-only (редактор группы, архив): контекстное меню не вешается.
     var onToggleFavorite: (() -> Void)?
     /// Применение выбранного оформления. nil = редактирование из этого места недоступно.
-    var onSaveAppearance: ((_ iconName: String?, _ tintHex: String?) -> Void)?
+    var onSaveAppearance: ((_ iconName: String?, _ tintHex: String?, _ presetRaw: String?) -> Void)?
 
     @State private var isEditingAppearance = false
     @State private var draftIconName: String?
     @State private var draftTintHex: String?
+    @State private var draftPresetRaw: String?
 
     private var amountValue: Double {
         NSDecimalNumber(decimal: balance).doubleValue
@@ -51,13 +52,17 @@ struct NewCoreAccountRow: View {
             onEditAppearance: editAppearanceAction
         )
         .sheet(isPresented: $isEditingAppearance) {
-            AccountIconPickerSheet(iconName: $draftIconName, iconColor: $draftTintHex)
-                .onDisappear {
-                    // Сохраняем на закрытии листа: у `AccountIconPickerSheet` нет колбэка «готово»,
-                    // он работает через биндинги, а «Отмена» их не откатывает (поведение, общее
-                    // с легаси-формами счёта — второго контракта не заводим).
-                    onSaveAppearance?(draftIconName, draftTintHex)
-                }
+            AccountIconPickerSheet(
+                iconName: $draftIconName,
+                iconColor: $draftTintHex,
+                presetRaw: $draftPresetRaw
+            )
+            .onDisappear {
+                // Сохраняем на закрытии листа: у `AccountIconPickerSheet` нет колбэка «готово»,
+                // он работает через биндинги, а «Отмена» их не откатывает (поведение, общее
+                // с легаси-формами счёта — второго контракта не заводим).
+                onSaveAppearance?(draftIconName, draftTintHex, draftPresetRaw)
+            }
         }
     }
 
@@ -66,6 +71,7 @@ struct NewCoreAccountRow: View {
         // вход в редактор «застолбил» бы авто-цвет как ручной выбор.
         draftIconName = appearance?.iconName
         draftTintHex = appearance?.tintHex
+        draftPresetRaw = appearance?.presetRaw
         isEditingAppearance = true
     }
 }

@@ -20,8 +20,10 @@ struct CashflowAccountPickerDetails: Equatable {
 enum CashflowAccountPickerDetailsFactory {
 
     /// Единственная точка выбора внешнего вида счёта — общая для обоих миров.
-    /// Приоритет: явный выбор пользователя (`AccountAppearance`) → легаси-поля счёта →
-    /// детерминированный дефолт (монограмма по имени + цвет из палитры по `key`).
+    /// Приоритет цвета: ручной `tintHex` → акцент выбранного дизайна (`presetRaw`, Ф2) →
+    /// легаси-поля счёта → детерминированный дефолт из палитры по `key`.
+    /// Пикер держит `tintHex` и `presetRaw` взаимоисключающими, но порядок нужен всё равно:
+    /// бэкап чужой/будущей версии может принести оба поля сразу.
     /// `key` обязан быть стабильным на всю жизнь счёта (`Account.id` / `*UniqueID`), иначе цвет
     /// «поедет» при переименовании.
     static func resolvedAppearance(
@@ -36,9 +38,13 @@ enum CashflowAccountPickerDetailsFactory {
         let monogram = AccountIconSet.normalizedMonogram(name).isEmpty
             ? nil
             : AccountIconSet.monogramIconName(name)
+        let presetAccent = AccountAppearancePreset.resolve(appearance?.presetRaw)?.accentHex
         return (
             appearance?.iconName ?? legacyIconName ?? monogram,
-            appearance?.tintHex ?? legacyIconColorHex ?? AccountAppearanceDefaults.tintHex(forKey: key)
+            appearance?.tintHex
+                ?? presetAccent
+                ?? legacyIconColorHex
+                ?? AccountAppearanceDefaults.tintHex(forKey: key)
         )
     }
 

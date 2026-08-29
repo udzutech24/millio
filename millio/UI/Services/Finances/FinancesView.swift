@@ -1060,8 +1060,13 @@ struct FinancesMainTabView: View {
                                 isAmountHidden: viewModel.state.isAmountHidden,
                                 appearance: viewModel.appearance(for: account),
                                 onToggleFavorite: { viewModel.toggleFavorite(account) },
-                                onSaveAppearance: { iconName, tintHex in
-                                    viewModel.saveAppearance(iconName: iconName, tintHex: tintHex, for: account)
+                                onSaveAppearance: { iconName, tintHex, presetRaw in
+                                    viewModel.saveAppearance(
+                                        iconName: iconName,
+                                        tintHex: tintHex,
+                                        presetRaw: presetRaw,
+                                        for: account
+                                    )
                                 }
                             )
                             .padding(.horizontal, FinancesMainLayoutPolicy.horizontalPadding)

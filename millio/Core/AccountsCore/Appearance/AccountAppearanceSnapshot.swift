@@ -10,11 +10,20 @@ struct AccountAppearanceSnapshot: Equatable {
     let iconName: String?
     /// Только hex — сюда никогда не попадает «имя цвета» легаси-поля `Card.cardColor`.
     let tintHex: String?
+    /// `rawValue` дизайна из кодового каталога (Ф2). Хранится строкой, а не типом, чтобы значение
+    /// из бэкапа будущей версии приложения не ломало декодирование — резолв делает UI-слой.
+    let presetRaw: String?
     let isFavorite: Bool
 
-    init(iconName: String? = nil, tintHex: String? = nil, isFavorite: Bool = false) {
+    init(
+        iconName: String? = nil,
+        tintHex: String? = nil,
+        presetRaw: String? = nil,
+        isFavorite: Bool = false
+    ) {
         self.iconName = iconName
         self.tintHex = tintHex
+        self.presetRaw = presetRaw
         self.isFavorite = isFavorite
     }
 
@@ -22,6 +31,7 @@ struct AccountAppearanceSnapshot: Equatable {
         self.init(
             iconName: appearance.iconName,
             tintHex: appearance.tintHex,
+            presetRaw: appearance.presetRaw,
             isFavorite: appearance.isFavorite
         )
     }

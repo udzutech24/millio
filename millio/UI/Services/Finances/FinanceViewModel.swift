@@ -1196,21 +1196,31 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     /// Сохранение явного выбора пользователя. Один путь записи для обоих миров — `AccountAppearance`.
-    func saveAppearance(iconName: String?, tintHex: String?, forAccountID accountID: UUID) {
+    func saveAppearance(
+        iconName: String?,
+        tintHex: String?,
+        presetRaw: String? = nil,
+        forAccountID accountID: UUID
+    ) {
         let store = AccountAppearanceStore(context: modelContext)
-        guard (try? store.setAppearance(accountID: accountID, iconName: iconName, tintHex: tintHex)) != nil else { return }
+        guard (try? store.setAppearance(
+            accountID: accountID,
+            iconName: iconName,
+            tintHex: tintHex,
+            presetRaw: presetRaw
+        )) != nil else { return }
         try? modelContext.save()
         loadAccountAppearances()
     }
 
-    func saveAppearance(iconName: String?, tintHex: String?, for account: Account) {
-        saveAppearance(iconName: iconName, tintHex: tintHex, forAccountID: account.id)
+    func saveAppearance(iconName: String?, tintHex: String?, presetRaw: String? = nil, for account: Account) {
+        saveAppearance(iconName: iconName, tintHex: tintHex, presetRaw: presetRaw, forAccountID: account.id)
     }
 
     /// То же для легаси-счёта; счёт без UUID-совместимого `uniqueID` не редактируется (см. выше).
-    func saveAppearance(iconName: String?, tintHex: String?, for account: FinanceAccount) {
+    func saveAppearance(iconName: String?, tintHex: String?, presetRaw: String? = nil, for account: FinanceAccount) {
         guard let uuid = UUID(uuidString: account.accountID) else { return }
-        saveAppearance(iconName: iconName, tintHex: tintHex, forAccountID: uuid)
+        saveAppearance(iconName: iconName, tintHex: tintHex, presetRaw: presetRaw, forAccountID: uuid)
     }
 
     /// Переключение «избранного» core-счёта. Легаси-карта свой тумблер имеет в `Card.isFavorite` —

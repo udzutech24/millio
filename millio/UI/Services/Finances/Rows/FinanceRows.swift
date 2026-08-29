@@ -375,8 +375,13 @@ struct FinanceGroupRow: View {
                         isAmountHidden: viewModel.state.isAmountHidden,
                         appearance: viewModel.appearance(for: account),
                         onToggleFavorite: { viewModel.toggleFavorite(account) },
-                        onSaveAppearance: { iconName, tintHex in
-                            viewModel.saveAppearance(iconName: iconName, tintHex: tintHex, for: account)
+                        onSaveAppearance: { iconName, tintHex, presetRaw in
+                            viewModel.saveAppearance(
+                                iconName: iconName,
+                                tintHex: tintHex,
+                                presetRaw: presetRaw,
+                                for: account
+                            )
                         }
                     )
                     .padding(.leading, contentLeadingInset)
@@ -563,6 +568,7 @@ private struct FinanceAccountRow: View {
     @State private var shouldOpenAccountDetailAfterChartDismiss = false
     @State private var draftIconName: String?
     @State private var draftTintHex: String?
+    @State private var draftPresetRaw: String?
 
     // Читаем баланс из viewModel в body — @ObservedObject FinanceAccountRow сам перерисуется
     // при objectWillChange, не завися от того, перерисует ли родитель FinanceGroupRow
@@ -651,14 +657,19 @@ private struct FinanceAccountRow: View {
                     }
                 )
             case .appearance:
-                AccountIconPickerSheet(iconName: $draftIconName, iconColor: $draftTintHex)
-                    .onDisappear {
-                        viewModel.saveAppearance(
-                            iconName: draftIconName,
-                            tintHex: draftTintHex,
-                            for: account
-                        )
-                    }
+                AccountIconPickerSheet(
+                    iconName: $draftIconName,
+                    iconColor: $draftTintHex,
+                    presetRaw: $draftPresetRaw
+                )
+                .onDisappear {
+                    viewModel.saveAppearance(
+                        iconName: draftIconName,
+                        tintHex: draftTintHex,
+                        presetRaw: draftPresetRaw,
+                        for: account
+                    )
+                }
             }
         }
     }
@@ -725,6 +736,7 @@ private struct FinanceAccountRow: View {
         let appearance = viewModel.appearance(for: account)
         draftIconName = appearance?.iconName ?? customIconName
         draftTintHex = appearance?.tintHex ?? customIconColor
+        draftPresetRaw = appearance?.presetRaw
         activeSheet = .appearance
     }
 
