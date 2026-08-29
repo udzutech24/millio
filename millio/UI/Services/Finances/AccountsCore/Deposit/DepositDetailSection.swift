@@ -43,7 +43,9 @@ struct DepositDetailSection: View {
                 progressView(progress)
             }
 
-            amount(presentation.snapshot.currentBalance, label: L("accounts_core.deposit.detail.balance"), prominent: true)
+            // Ф3: подтверждённый остаток вклада показывает общий `AccountHeroCardView` над секцией
+            // (тот же confirmed-путь, что в строке списка). Здесь он был бы вторым, конкурирующим
+            // определением баланса на одном экране.
 
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: AppSpacing.s) {

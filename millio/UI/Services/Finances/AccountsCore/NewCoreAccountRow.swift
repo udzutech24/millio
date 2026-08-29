@@ -94,6 +94,25 @@ enum AccountRowAmountFormatter {
 }
 
 extension AccountKind {
+    /// Человекочитаемое название типа продукта. Общее для архива и hero-карточки деталки —
+    /// раньше тот же switch жил приватной копией в `ArchivedAccountsView`.
+    ///
+    /// НЕ через `L("accounts_core.kind.\(rawValue)")` — динамическая интерполяция внутри
+    /// `String.LocalizationValue` ломает резолвинг ключа (Foundation трактует интерполированную
+    /// часть как format-аргумент, а не как часть ключа каталога строк). Явный switch — безопасно.
+    var localizedTitle: String {
+        switch self {
+        case .cash: return L("accounts_core.kind.cash")
+        case .debitCard: return L("accounts_core.kind.debitCard")
+        case .bankAccount: return L("accounts_core.kind.bankAccount")
+        case .deposit: return L("accounts_core.kind.deposit")
+        case .loan: return L("accounts_core.kind.loan")
+        case .debt: return L("accounts_core.kind.debt")
+        case .marketInvestment: return L("accounts_core.kind.marketInvestment")
+        case .manualAsset: return L("accounts_core.kind.manualAsset")
+        }
+    }
+
     /// SF Symbol по умолчанию для новых счетов — используется, когда имя счёта пустое и монограмму
     /// собрать не из чего (та же зона ответственности, что `CardType.icon`/`Bank.icon` у старого мира).
     var fallbackIconName: String {

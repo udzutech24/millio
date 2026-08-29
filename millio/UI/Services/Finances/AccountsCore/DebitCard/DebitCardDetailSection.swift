@@ -5,29 +5,13 @@ struct DebitCardDetailSection: View {
     let snapshot: DebitCardSnapshot
 
     var body: some View {
+        // Ф3: имя, баланс и статусы «не в тотале» / «архив» рисует общий `AccountHeroCardView`
+        // над секцией. Здесь остаётся только то, чего у hero нет — сумма в валюте отображения.
         VStack(alignment: .leading, spacing: AppSpacing.m) {
-            VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                Text(account.name).font(.millioHeadline)
-                Text(amount(snapshot.actualBalance, currency: snapshot.currency))
-                    .font(.millioTitle)
-                    .foregroundStyle(AppColors.textPrimary)
-                    .accessibilityLabel(L("debit_card.balance.actual"))
-                    .accessibilityValue(amount(snapshot.actualBalance, currency: snapshot.currency))
-                Text(L("debit_card.balance.actual"))
-                    .font(.millioCaptionRegular)
-                    .foregroundStyle(AppColors.textSecondary)
-                convertedValue
-                if !snapshot.participatesInTotal {
-                    Label(L("debit_card.state.excluded"), systemImage: "sum")
-                        .font(.millioCaptionRegular).foregroundStyle(AppColors.textSecondary)
-                }
-                if snapshot.lifecycle != .active {
-                    Label(L("debit_card.state.archived"), systemImage: "archivebox")
-                        .font(.millioCaptionRegular).foregroundStyle(AppColors.textSecondary)
-                }
-            }
-            .padding(AppSpacing.m)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppSpacing.m))
+            convertedValue
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(AppSpacing.m)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppSpacing.m))
 
             if snapshot.incompleteReason != nil {
                 VStack(spacing: AppSpacing.s) {

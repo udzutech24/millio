@@ -214,20 +214,8 @@ struct ArchivedAccountsView: View {
         return "\(kindTitle) · \(String(format: L("accounts_core.archive.closed_on_format"), dateString))"
     }
 
-    /// НЕ через `L("accounts_core.kind.\(kind.rawValue)")` — динамическая интерполяция внутри
-    /// `String.LocalizationValue` ломает резолвинг ключа (Foundation трактует интерполированную
-    /// часть как format-аргумент, а не как часть ключа каталога строк). Явный switch — безопасно.
     private func accountKindTitle(_ kind: AccountKind) -> String {
-        switch kind {
-        case .cash: return L("accounts_core.kind.cash")
-        case .debitCard: return L("accounts_core.kind.debitCard")
-        case .bankAccount: return L("accounts_core.kind.bankAccount")
-        case .deposit: return L("accounts_core.kind.deposit")
-        case .loan: return L("accounts_core.kind.loan")
-        case .debt: return L("accounts_core.kind.debt")
-        case .marketInvestment: return L("accounts_core.kind.marketInvestment")
-        case .manualAsset: return L("accounts_core.kind.manualAsset")
-        }
+        kind.localizedTitle
     }
 
     private func formattedBalanceAtClose(for account: Account) -> String {
