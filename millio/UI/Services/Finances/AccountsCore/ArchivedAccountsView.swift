@@ -11,6 +11,10 @@ struct ArchivedAccountsView: View {
     @State private var pendingPhysicalDeletion: Account?
     @State private var errorMessage: String?
 
+    /// Совпадает с бейджем живой строки (`NewCoreAccountRow`) — архив отличается только приглушением.
+    private static let badgeSize: CGFloat = 36
+    private static let dimmedOpacity: Double = 0.55
+
     private var service: AccountsCoreService {
         AccountsCoreService(modelContext: modelContext)
     }
@@ -22,6 +26,12 @@ struct ArchivedAccountsView: View {
         )
         let accounts = (try? modelContext.fetch(descriptor)) ?? []
         return accounts.sorted { ($0.archivedAt ?? .distantPast) > ($1.archivedAt ?? .distantPast) }
+    }
+
+    /// Один fetch оформлений на весь список — как в `FinanceViewModel`, не по строке.
+    private var appearances: [UUID: AccountAppearanceSnapshot] {
+        _ = refreshToken
+        return (try? AccountAppearanceStore(context: modelContext).loadSnapshots()) ?? [:]
     }
 
     var body: some View {
@@ -39,8 +49,9 @@ struct ArchivedAccountsView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, AppSpacing.xs)
 
+                        let appearances = appearances
                         ForEach(archivedAccounts, id: \.id) { account in
-                            row(for: account)
+                            row(for: account, appearance: appearances[account.id])
                         }
                     }
                     .padding(AppSpacing.l)
@@ -86,12 +97,28 @@ struct ArchivedAccountsView: View {
         }
     }
 
-    private func row(for account: Account) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.s) {
+    private func row(for account: Account, appearance: AccountAppearanceSnapshot?) -> some View {
+        // Оформление то же, что в живом списке, но обесцвеченное: закрытый счёт не должен
+        // выглядеть активнее рабочих. Резолвер — общая фабрика, второго здесь не заводим.
+        let details = CashflowAccountPickerDetailsFactory.details(
+            for: account,
+            appearance: appearance,
+            balance: nil
+        )
+        return VStack(alignment: .leading, spacing: AppSpacing.s) {
             NavigationLink {
                 AccountDetailView(account: account, modelContext: modelContext)
             } label: {
-                HStack {
+                HStack(spacing: AppSpacing.m) {
+                    AccountIconBadgeView(
+                        iconName: details.iconName,
+                        iconColor: details.iconColorHex,
+                        fallback: details.fallbackIconName,
+                        size: Self.badgeSize
+                    )
+                    .saturation(0)
+                    .opacity(Self.dimmedOpacity)
+
                     VStack(alignment: .leading, spacing: AppSpacing.xs) {
                         Text(account.name)
                             .font(.millioSubheadline)

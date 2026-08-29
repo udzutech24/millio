@@ -273,6 +273,12 @@ final class FinanceViewModel: ViewModelProtocol {
     @Published private(set) var cardByID: [String: Card] = [:]
     @Published private(set) var creditByID: [String: Credit] = [:]
     @Published private(set) var investmentByID: [String: Investment] = [:]
+
+    /// Оформление core-счетов (`AccountAppearance`, V11) — ОДИН fetch на цикл `loadGroups()`.
+    /// Список рисует десятки строк на кадр; запрос из тела строки дал бы N обращений к стору
+    /// вместо одного, поэтому строки получают готовое значение отсюда.
+    @Published private(set) var accountAppearances: [UUID: AccountAppearanceSnapshot] = [:]
+
     private var lastManualStockRefreshAt: Date?
 
     private static let manualStockRefreshCooldown: TimeInterval = 15
@@ -776,6 +782,10 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private func loadGroups() {
+        // Оформление — ДО populate списка: сортировка «избранные наверху» читает этот срез,
+        // а не стор, и на устаревшем словаре звёзды бы разъехались с порядком строк.
+        loadAccountAppearances()
+
         // [Ф5c.7 core-aware Ungrouped фикс] loadCoreEntities() ПЕРЕД fetch/filter легаси-групп, не
         // в конце: фильтр ниже обязан видеть АКТУАЛЬНОЕ state.coreAccounts (core-счета без группы),
         // иначе он схлопывает Ungrouped по устаревшему срезу с предыдущего цикла (или пустому на
@@ -1164,10 +1174,39 @@ final class FinanceViewModel: ViewModelProtocol {
         return sortedAccounts(accounts, group: nil)
     }
 
+    // MARK: - Оформление счетов (AccountAppearance, V11)
+
+    /// Срез оформлений одним fetch. Ошибка стора не должна ронять список: без словаря счета
+    /// рисуются дефолтным видом — ровно как до V11.
+    func loadAccountAppearances() {
+        accountAppearances = (try? AccountAppearanceStore(context: modelContext).loadSnapshots()) ?? [:]
+    }
+
+    /// Готовое значение для строки списка. Читает КЭШ, а не стор — см. `accountAppearances`.
+    func appearance(for account: Account) -> AccountAppearanceSnapshot? {
+        accountAppearances[account.id]
+    }
+
+    /// Переключение «избранного» core-счёта. Легаси-карта свой тумблер имеет в `Card.isFavorite` —
+    /// сюда не заводим второй путь для неё.
+    func toggleFavorite(_ account: Account) {
+        let store = AccountAppearanceStore(context: modelContext)
+        guard (try? store.toggleFavorite(accountID: account.id)) != nil else { return }
+        try? modelContext.save()
+        // Порядок строк зависит от «избранного» — перечитываем список целиком, а не только словарь.
+        loadGroups()
+    }
+
     private func sortedAccounts(_ accounts: [Account], group: AccountGroup?) -> [Account] {
+        // «Избранное» — верхний приоритет в ЛЮБОМ режиме, включая ручной порядок: звезда так же
+        // явно выражена пользователем, как перетаскивание, и это единственная точка сортировки
+        // списка (её же зовут `orderedAccounts(for:)` и `ungroupedAccounts()`).
+        let isFavorite: (Account) -> Bool = { self.accountAppearances[$0.id]?.isFavorite == true }
+
         if group?.usesManualAccountOrdering == true {
             return accounts.sorted { lhs, rhs in
-                lhs.order != rhs.order ? lhs.order < rhs.order : lhs.createdAt < rhs.createdAt
+                if isFavorite(lhs) != isFavorite(rhs) { return isFavorite(lhs) }
+                return lhs.order != rhs.order ? lhs.order < rhs.order : lhs.createdAt < rhs.createdAt
             }
         }
         let mode = state.accountSortMode
@@ -1178,6 +1217,7 @@ final class FinanceViewModel: ViewModelProtocol {
             ? displayCurrencyBalances(accounts)
             : [:]
         return accounts.sorted { lhs, rhs in
+            if isFavorite(lhs) != isFavorite(rhs) { return isFavorite(lhs) }
             switch mode {
             case .amountDescending:
                 let l = amounts[lhs.persistentModelID] ?? 0; let r = amounts[rhs.persistentModelID] ?? 0

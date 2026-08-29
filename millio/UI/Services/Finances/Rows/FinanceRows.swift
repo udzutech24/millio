@@ -452,7 +452,9 @@ struct FinanceGroupRow: View {
                     NewCoreAccountRow(
                         account: account,
                         balance: viewModel.newCoreBalanceToday(account),
-                        isAmountHidden: viewModel.state.isAmountHidden
+                        isAmountHidden: viewModel.state.isAmountHidden,
+                        appearance: viewModel.appearance(for: account),
+                        onToggleFavorite: { viewModel.toggleFavorite(account) }
                     )
                     .padding(.leading, contentLeadingInset)
                     .padding(.trailing, contentTrailingInset)

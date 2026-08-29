@@ -32,13 +32,18 @@ enum CashflowAccountPickerDetailsFactory {
         )
     }
 
-    /// Счёт нового ядра: полей иконки/цвета/избранного в схеме нет (миграция отложена,
-    /// см. `millio-schema-frozen-types-trap`) — рисуем монограмму по имени.
+    /// Счёт нового ядра: персонализация живёт в side-таблице `AccountAppearance` (V11), а не в
+    /// полях `Account` — срез приходит готовым словарём из ViewModel, из тела строки не запрашиваем.
+    /// Оформления нет → монограмма по имени, как было до V11 (регрессии внешнего вида нет).
     /// Баланс приходит извне: он не хранится полем, а является реплеем событий.
-    static func details(for account: Account, balance: Decimal?) -> CashflowAccountPickerDetails {
+    static func details(
+        for account: Account,
+        appearance: AccountAppearanceSnapshot? = nil,
+        balance: Decimal?
+    ) -> CashflowAccountPickerDetails {
         CashflowAccountPickerDetails(
-            iconName: AccountIconSet.monogramIconName(account.name),
-            iconColorHex: nil,
+            iconName: appearance?.iconName ?? AccountIconSet.monogramIconName(account.name),
+            iconColorHex: appearance?.tintHex,
             fallbackIconName: account.kind.fallbackIconName,
             availableAmount: balance
         )

@@ -1,7 +1,7 @@
 # План: визуальный редизайн счетов (`AccountAppearance` V11 → список → галерея → hero)
 
 **Дата:** 2026-08-28
-**Статус:** В РАБОТЕ (Ф0 реализована в ветке `feature/account-appearance-v11`, не смержена)
+**Статус:** В РАБОТЕ (Ф0 смержена в `develop` 1ba9c2e; Ф1 в ветке `feature/account-card-row-redesign`, не смержена)
 **Размер:** L (10+ файлов, затрагивает схему SwiftData и оба мира счетов)
 **Спека:** [`specs/2026-08-28-account-card-visual-redesign.md`](../specs/2026-08-28-account-card-visual-redesign.md)
 **Автор:** Александр (iOS)
@@ -55,7 +55,7 @@
 
 ---
 
-### [~] Ф0. Схема V11: `AccountAppearance` + `isFavorite` для core — ⚠️ РИСКОВАННАЯ
+### [x] Ф0. Схема V11: `AccountAppearance` + `isFavorite` для core — ⚠️ РИСКОВАННАЯ
 
 > **СТОП-ГЕЙТ. Перед стартом обязательны, в этом порядке:**
 > 1. Снятие блокера (мерж ветки пикера) — проверено git-командой, не на слово.
@@ -119,6 +119,8 @@ guest/user scope (appearance не должна протекать между sco
 - `7bf2768` — тесты: checksum-инварианты (V10 внесена в `historicalVersions`, Account 10.0.0 =
   `yWZTWJU6/…`, форма `AccountAppearance` запинена), `v11PreservesEveryV10Entity`, миграция реального
   V10-стора, контракт стора, backup→wipe→restore, сироты, путь создания Cashflow-пикера.
+- **СМЕРЖЕНО в `develop` 2026-08-29** по явному разрешению владельца: `1ba9c2e` (merge --no-ff).
+  Гейт мержа: baseline `develop` 38 red → после мержа 33 red, **0 новых красных**. Не запушено.
 - Известный предел: легаси-карта с пустым `uniqueID` (composite-fallback `Card.swift:272`) не
   парсится в UUID и оформления не получает — дефолтный вид, без краша.
 - `CashflowStatementReviewPolicy.options` избранное core-счетов не получает (влияет только на
@@ -126,7 +128,7 @@ guest/user scope (appearance не должна протекать между sco
 
 ---
 
-### [ ] Ф1. Редизайн списка «Счета»: монограмма + цвет + избранное
+### [x] Ф1. Редизайн списка «Счета»: монограмма + цвет + избранное
 
 Без фото, без hero, без галереи. Только то, что даёт Ф0.
 
@@ -160,6 +162,32 @@ API не меняем; ⚠️ внутри `Font.system(size:)` — при до�
 **Что тестировать:** резолв иконки (appearance → монограмма → fallback) · санитайзер цвета
 (hex, имя, мусор, nil) · сортировка с избранными · архивные · пустой список · длинное имя ·
 одноимённые счета (монограммы совпадают — не баг, зафиксировать ожидание).
+
+**Факт реализации (2026-08-29, ветка `feature/account-card-row-redesign`, НЕ смержена):**
+- `Core/AccountsCore/Appearance/AccountAppearanceSnapshot.swift` — value-срез для UI (`@Model` в
+  кэше VM опасен: `DataIntegrityCleaner` сносит сирот на старте) + `AccountAppearanceStore.loadSnapshots()`.
+- `CashflowAccountPickerDetailsFactory.details(for:appearance:balance:)` — appearance добавлен
+  параметром со значением по умолчанию: резолвер остался ОДИН, второго не заведено.
+- `NewCoreAccountRow` — единственный компонент строки: бейдж из резолвера, звезда избранного,
+  `isDimmed` для архива, `onToggleFavorite` (nil = read-only, контекстное меню не вешается).
+  Все три точки отрисовки (`FinancesView:1057`, `Rows/FinanceRows:452`, `Editors/FinanceGroupEditorView:592`)
+  только передают данные.
+- `FinanceViewModel` — `accountAppearances: [UUID: AccountAppearanceSnapshot]`, заполняется
+  `loadAccountAppearances()` ПЕРВОЙ строкой `loadGroups()` (один fetch на цикл),
+  `appearance(for:)` читает кэш, `toggleFavorite(_:)` пишет через стор и перезагружает список.
+- Сортировка «избранные наверх» — в `sortedAccounts` (единственная точка, её зовут и
+  `orderedAccounts(for:)`, и `ungroupedAccounts()`), в ОБОИХ ветках, включая ручной порядок.
+- `ArchivedAccountsView` — тот же резолвер и бейдж, `saturation(0)` + opacity; собственная
+  вёрстка строки сохранена, потому что архив показывает «дата закрытия» и «баланс на закрытии»,
+  которых у `NewCoreAccountRow` нет (отступление от буквы плана, зафиксировано осознанно).
+- 3 ключа локализации (`finances.account.favorite.add/remove/badge`) — 7 языков, вставлены
+  точечно (диф 141 строка, файл целиком не переписан).
+- Тесты: `millioTests/UI/Services/Finances/FinanceAccountAppearanceRowTests.swift` — 10 кейсов,
+  все зелёные. Гейт: baseline develop 38 red → после Ф1 36 red, **0 новых красных**.
+- ⚠️ **Открыто:** «секция Избранные» отдельным блоком наверху списка НЕ делалась — выбран
+  вариант «звезда + подъём наверх». Отдельная секция дублировала бы строку счёта (он остаётся
+  и в своей группе) → знакомый проекту класс багов «двойник». Нужен вердикт владельца.
+- ⚠️ Device-проверка владельцем не выполнена.
 
 ---
 

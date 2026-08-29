@@ -24,6 +24,13 @@ struct AccountAppearanceStore {
         }
     }
 
+    /// Тот же один fetch, что `loadAll`, но наружу отдаются значения, а не `@Model`.
+    /// Это единственный способ снабдить список счетов оформлением: точечный запрос из тела строки
+    /// дал бы N обращений к стору на каждый кадр при 60+ счетах.
+    func loadSnapshots() throws -> [UUID: AccountAppearanceSnapshot] {
+        try loadAll().mapValues(AccountAppearanceSnapshot.init)
+    }
+
     func favoriteAccountIDs() throws -> Set<UUID> {
         Set(try loadAll().filter { $0.value.isFavorite }.keys)
     }

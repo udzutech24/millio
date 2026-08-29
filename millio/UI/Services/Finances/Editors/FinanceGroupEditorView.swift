@@ -589,10 +589,13 @@ struct FinanceGroupEditorView: View {
                     // каскад ради этого шага (см. отчёт).
                     ForEach(coreAccounts, id: \.id) { account in
                         HStack(spacing: 12) {
+                            // Read-only: `onToggleFavorite` не передаём — редактор группы правит
+                            // состав группы, а не персонализацию счёта.
                             NewCoreAccountRow(
                                 account: account,
                                 balance: viewModel.newCoreBalanceToday(account),
-                                isAmountHidden: viewModel.state.isAmountHidden
+                                isAmountHidden: viewModel.state.isAmountHidden,
+                                appearance: viewModel.appearance(for: account)
                             )
                         }
                         .padding(.horizontal, 16)

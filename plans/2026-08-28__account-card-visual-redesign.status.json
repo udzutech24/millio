@@ -1,11 +1,11 @@
 {
   "planFile": "2026-08-28__account-card-visual-redesign.md",
   "title": "Визуальный редизайн счетов (AccountAppearance V11)",
-  "updated": "2026-08-28T16:40:00Z",
+  "updated": "2026-08-29T00:00:00Z",
   "phases": [
     { "name": "Дизайн-мокап (пре-фаза)", "status": "done", "note": "Мокап (artifact 5dbc1acf, 4 артборда) УТВЕРЖДЁН владельцем 2026-08-28: «правок нет»" },
-    { "name": "Ф0 — Схема V11: AccountAppearance + isFavorite", "status": "in_progress", "note": "Реализована в ветке feature/account-appearance-v11 (1de96ac код, 7bf2768 тесты). Гейт: целевые сьюты зелёные, полный прогон сверяется с baseline develop. Мерж — за владельцем" },
-    { "name": "Ф1 — Редизайн списка «Счета» (монограмма + цвет)", "status": "pending", "note": "без фото и hero; один компонент строки на 3 точки отрисовки" },
+    { "name": "Ф0 — Схема V11: AccountAppearance + isFavorite", "status": "done", "note": "СМЕРЖЕНО в develop 2026-08-29 (1ba9c2e, no-ff). Гейт: baseline develop 38 red → после мержа 33 red, 0 новых красных. Не запушено" },
+    { "name": "Ф1 — Редизайн списка «Счета» (монограмма + цвет)", "status": "done", "note": "Ветка feature/account-card-row-redesign, НЕ смержена. NewCoreAccountRow = единственный компонент на 3 точки + архив; словарь appearance одним fetch в loadGroups(); избранное = звезда + сортировка наверх + contextMenu; 10 новых тестов зелёные, 0 новых красных vs baseline. Ждёт device-проверки" },
     { "name": "Ф2 — Каталог пресетов + галерея (PRO-гейт)", "status": "pending", "note": "вкладка в AccountIconPickerSheet, гейт только через EntitlementPolicy" },
     { "name": "Ф3 — Hero-карточка детального экрана", "status": "pending", "note": "один hero над 5 per-type секциями, confirmed-баланс" },
     { "name": "Ф4 — Мост с легаси Card + чистка", "status": "pending", "note": "идемпотентная миграция cardColor/customIcon/isFavorite в appearance" }
