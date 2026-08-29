@@ -40,7 +40,10 @@ struct FinanceAccountAppearanceRowTests {
 
     // MARK: - Резолв визуала строки
 
-    @Test("Без оформления строка рисует монограмму по имени — вид как до V11")
+    /// Обновлено вместе с фиксом «нового дизайна не видно»: без оформления строка теперь получает
+    /// не только монограмму, но и детерминированный цвет из палитры — иначе счета пользователя
+    /// оставались на старом градиенте до ручной настройки каждого.
+    @Test("Без оформления строка рисует монограмму + детерминированный цвет по id счёта")
     func missingAppearanceKeepsMonogramDefault() throws {
         let ctx = try makeContext()
         let account = try makeAccount(ctx, name: "Сбербанк")
@@ -50,7 +53,8 @@ struct FinanceAccountAppearanceRowTests {
         )
 
         #expect(details.iconName == AccountIconSet.monogramIconName("Сбербанк"))
-        #expect(details.iconColorHex == nil)
+        #expect(details.iconColorHex == AccountAppearanceDefaults.tintHex(for: account.id))
+        #expect(details.iconColorHex != nil)
         #expect(details.fallbackIconName == AccountKind.debitCard.fallbackIconName)
     }
 
