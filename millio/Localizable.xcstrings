@@ -6614,6 +6614,30 @@
         }
       }
     },
+    "accounts_core.detail.market.action.more" : {
+      "extractionState" : "manual",
+      "comment" : "Круглая кнопка «···» в hero-редизайне деталки инвестиции",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ещё"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更多"
+          }
+        }
+      }
+    },
     "accounts_core.detail.market.action.sell" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6633,6 +6657,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "卖出"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.all_time_suffix" : {
+      "extractionState" : "manual",
+      "comment" : "Суффикс капсулы прибыли hero: «+3 751,44 $ · +11,05% за всё время»",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "all time"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "за всё время"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "历史至今"
           }
         }
       }
@@ -6932,6 +6980,283 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未实现盈亏"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.position_value_label" : {
+      "extractionState" : "manual",
+      "comment" : "Метка суммы hero-карточки инвестиции: «Стоимость позиции»",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Position value"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Стоимость позиции"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "持仓市值"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.in_portfolio_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In portfolio"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В портфеле"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "持仓数量"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.bought_at_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bought at"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Куплено по"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "买入均价"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.quantity_unit" : {
+      "extractionState" : "manual",
+      "comment" : "Единица измерения количества акций/лотов: «49 шт»",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pcs"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "шт"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "股"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.chart_period_months %lld" : {
+      "extractionState" : "manual",
+      "comment" : "Подпись под графиком цены hero: «за N месяцев»",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "over %lld month"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "over %lld months"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "за %lld месяц"
+                }
+              },
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "за %lld месяца"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "за %lld месяцев"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "за %lld месяца"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "过去 %lld 个月"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.price_as_of_format" : {
+      "extractionState" : "manual",
+      "comment" : "Подпись под графиком цены hero справа: «цена на 28 авг, 18:04»",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "price as of %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "цена на %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "价格更新于 %@"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.invested_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invested"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вложено"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已投入"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.dividends_received_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dividends received"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дивиденды получено"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已获股息"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.portfolio_share_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Portfolio share"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доля в портфеле"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "组合占比"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.market.event_price_format" : {
+      "extractionState" : "manual",
+      "comment" : "Мелкая подпись под количеством в строке истории buy/sell: «по 769,35»",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "at %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "по %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "价格 %@"
           }
         }
       }

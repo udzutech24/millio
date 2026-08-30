@@ -235,7 +235,14 @@ struct AccountDetailView: View {
                         // баланс/статус/метрики вклада вместо имени/бейджа/иконки счёта (см.
                         // `DepositHeroContent`). Второй, отдельной карточки статуса вклада после
                         // этого существовать не должно — вся её начинка переехала сюда.
-                        if let depositPresentation {
+                        if let investmentPresentation {
+                            // Рыночная позиция: та же логика замены standardContent, что у вклада —
+                            // hero несёт стоимость/прибыль/график позиции вместо identity-строки
+                            // счёта (имя уже в navigation title, тикер отдельно не дублируем).
+                            AccountHeroCardView(presentation: heroPresentation) {
+                                InvestmentHeroContent(presentation: investmentPresentation)
+                            }
+                        } else if let depositPresentation {
                             AccountHeroCardView(presentation: heroPresentation) {
                                 DepositHeroContent(
                                     presentation: depositPresentation,
@@ -269,9 +276,6 @@ struct AccountDetailView: View {
                     if account.kind != .deposit && account.archivedAt == nil && account.deletedAt == nil
                         && (debitSnapshot?.canWrite ?? true) {
                         actionsRow
-                    }
-                    if account.kind == .marketInvestment {
-                        marketInfoSection
                     }
                     historySection
                 }
@@ -647,148 +651,109 @@ struct AccountDetailView: View {
         todayQuote == nil
     }
 
-    private var marketInfoSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.m) {
-            Text(L("accounts_core.detail.market.info_title"))
-                .font(.millioCaption)
-                .foregroundStyle(AppColors.textTertiary)
-                .textCase(.uppercase)
-
-            HStack(spacing: AppSpacing.s) {
-                stockHighlightCard(
-                    title: L("stock.detail.market_value"),
-                    value: "\(formattedBalance) \(account.currency)",
-                    icon: "chart.line.uptrend.xyaxis",
-                    tint: AppColors.brandPrimary
-                )
-                stockHighlightCard(
-                    title: L("stock.detail.total_return"),
-                    value: "\(signedAmountText(stockTotalReturn, type: .adjustment)) \(account.currency)",
-                    icon: stockTotalReturn < 0 ? "arrow.down.right" : "arrow.up.right",
-                    tint: stockTotalReturn < 0 ? AppColors.negativeColor : AppColors.positiveColor
-                )
-            }
-
-            VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                HStack {
-                    Text(L("accounts_core.detail.market.quantity_label"))
-                        .font(.millioCalloutRegular)
-                        .foregroundStyle(AppColors.textSecondary)
-                    Spacer()
-                    Text(formattedAmount(currentQuantity))
-                        .font(.millioBodySemibold)
-                        .foregroundStyle(AppColors.textPrimary)
-                }
-                HStack {
-                    Text(L("accounts_core.detail.market.price_label"))
-                        .font(.millioCalloutRegular)
-                        .foregroundStyle(AppColors.textSecondary)
-                    Spacer()
-                    HStack(spacing: AppSpacing.xs) {
-                        Text("\(formattedAmount(currentUnitPrice)) \(account.currency)")
-                            .font(.millioBodySemibold)
-                            .foregroundStyle(AppColors.textPrimary)
-                        if isPriceStale {
-                            Text(L("accounts_core.detail.market.price_stale_badge"))
-                                .font(.millioCaptionRegular)
-                                .foregroundStyle(AppColors.textTertiary)
-                        }
-                    }
-                }
-                marketMetricRow(
-                    L("accounts_core.detail.market.average_cost_label"),
-                    value: stockSnapshot?.averageUnitCost.map { "\(formattedAmount($0)) \(account.currency)" } ?? "—"
-                )
-                marketMetricRow(
-                    L("accounts_core.detail.market.cost_basis_label"),
-                    value: "\(formattedAmount(stockSnapshot?.openCostBasis ?? 0)) \(account.currency)"
-                )
-                marketMetricRow(
-                    L("accounts_core.detail.market.unrealized_label"),
-                    value: "\(signedAmountText(unrealizedPL, type: .adjustment)) \(account.currency)",
-                    tone: unrealizedPL
-                )
-                marketMetricRow(
-                    L("accounts_core.detail.market.realized_label"),
-                    value: "\(signedAmountText(stockSnapshot?.realizedProfitLoss ?? 0, type: .adjustment)) \(account.currency)",
-                    tone: stockSnapshot?.realizedProfitLoss
-                )
-                marketMetricRow(
-                    L("accounts_core.detail.market.dividends_label"),
-                    value: "\(formattedAmount(stockSnapshot?.dividends ?? 0)) \(account.currency)"
-                )
-                marketMetricRow(
-                    L("accounts_core.detail.market.fees_label"),
-                    value: "\(formattedAmount(stockSnapshot?.totalFees ?? 0)) \(account.currency)"
-                )
-            }
-            .padding(AppSpacing.m)
-            .background(
-                LinearGradient(
-                    colors: [Color(hex: "14233A"), Color(hex: "102D35")],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                    .stroke(AppColors.brandPrimary.opacity(0.18), lineWidth: 1)
-            )
-        }
-    }
-
-    private func stockHighlightCard(title: String, value: String, icon: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.s) {
-            Image(systemName: icon)
-                .font(.millioHeadline)
-                .foregroundStyle(tint)
-            Text(title)
-                .font(.millioCaptionRegular)
-                .foregroundStyle(AppColors.textSecondary)
-            Text(value)
-                .font(.millioBodySemibold)
-                .foregroundStyle(AppColors.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.m)
-        .background(
-            RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                .fill(tint.opacity(0.12))
+    /// Данные hero-карточки рыночной позиции (единая карточка вместо hero + плашка «ПОЗИЦИЯ» +
+    /// таблица на 8 строк). `nil`, если реплей событий упал — тогда hero молча падает на
+    /// стандартную начинку счёта вместо падения экрана целиком (см. `AccountDetailView.body`).
+    private var investmentPresentation: InvestmentHeroPresentation? {
+        guard account.kind == .marketInvestment, let snapshot = stockSnapshot else { return nil }
+        _ = refreshToken
+        let invested = snapshot.openCostBasis
+        // Знаменатель доходности — себестоимость ОТКРЫТОЙ позиции, а не сумма всех покупок за
+        // историю: снапшот не хранит второе число, а плодить его ради процента не стоит (KISS).
+        let returnPercent: Decimal? = invested > 0 ? (stockTotalReturn / invested) * 100 : nil
+        return InvestmentHeroPresentation(
+            currency: account.currency,
+            currencySymbol: MonetaCurrency(rawValue: account.currency)?.symbol ?? account.currency,
+            positionValue: balanceToday,
+            totalReturn: stockTotalReturn,
+            returnPercent: returnPercent,
+            quantity: snapshot.quantity,
+            currentUnitPrice: currentUnitPrice,
+            averageUnitCost: snapshot.averageUnitCost,
+            invested: invested,
+            dividends: snapshot.dividends,
+            realizedProfitLoss: snapshot.realizedProfitLoss,
+            fees: snapshot.totalFees,
+            portfolioSharePercent: portfolioSharePercent,
+            sparkline: priceHistoryPoints,
+            sparklineMonths: sparklineMonths,
+            latestPriceAsOf: latestPriceAsOf
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                .stroke(tint.opacity(0.25), lineWidth: 1)
+    }
+
+    /// Реальные точки цены символа из append-only кэша `HistoricalAssetPrice` — ничего не
+    /// синтезируем. Меньше 2 точек (нет истории или только сегодняшняя live-цена) — график не
+    /// строим вовсе, а не рисуем плоскую линию из одной точки.
+    private var priceHistoryPoints: [InvestmentPricePoint] {
+        guard let symbol = account.marketMeta?.symbol, !symbol.isEmpty else { return [] }
+        let upper = symbol.uppercased()
+        let descriptor = FetchDescriptor<HistoricalAssetPrice>(
+            predicate: #Predicate<HistoricalAssetPrice> { $0.symbol == upper },
+            sortBy: [SortDescriptor(\.dayKey, order: .forward)]
         )
-        .accessibilityElement(children: .combine)
-    }
-
-    private func marketMetricRow(_ title: String, value: String, tone: Decimal? = nil) -> some View {
-        HStack {
-            Text(title)
-                .font(.millioCalloutRegular)
-                .foregroundStyle(AppColors.textSecondary)
-            Spacer()
-            Text(value)
-                .font(.millioBodySemibold)
-                .foregroundStyle(
-                    tone.map { $0 < 0 ? AppColors.negativeColor : ($0 > 0 ? AppColors.positiveColor : AppColors.textPrimary) }
-                        ?? AppColors.textPrimary
-                )
+        guard let rows = try? modelContext.fetch(descriptor), rows.count >= 2 else { return [] }
+        // ~6 месяцев — дальше линия на sparkline-высоте карточки становится нечитаемой.
+        return rows.suffix(183).compactMap { row in
+            guard let date = Self.dayKeyFormatter.date(from: row.dayKey) else { return nil }
+            return InvestmentPricePoint(date: date, price: NSDecimalNumber(decimal: row.price).doubleValue)
         }
-        .accessibilityElement(children: .combine)
     }
 
-    private var formattedBalance: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.usesGroupingSeparator = true
-        formatter.groupingSeparator = " "
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSDecimalNumber(decimal: balanceToday)) ?? "0"
+    private var sparklineMonths: Int {
+        guard let first = priceHistoryPoints.first?.date, let last = priceHistoryPoints.last?.date else { return 0 }
+        let months = Calendar.current.dateComponents([.month], from: first, to: last).month ?? 0
+        return max(months, 1)
+    }
+
+    private var latestPriceAsOf: Date? {
+        guard !priceHistoryPoints.isEmpty else { return nil }
+        return todayQuote?.fetchedAt ?? latestCachedQuote?.fetchedAt
+    }
+
+    private static let dayKeyFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter
+    }()
+
+    /// Та же цепочка фолбэков, что у `currentUnitPrice`, но параметризованная — нужна для чужих
+    /// позиций в `portfolioSharePercent` (там не годится завязка на `account.marketMeta`).
+    private func liveOrCachedPrice(symbol: String, events: [AccountEvent]) -> Decimal {
+        let upper = symbol.uppercased()
+        let dayKey = AccountEvent.dayKey(for: Date())
+        let todayDescriptor = FetchDescriptor<HistoricalAssetPrice>(
+            predicate: #Predicate<HistoricalAssetPrice> { $0.symbol == upper && $0.dayKey == dayKey }
+        )
+        if let today = try? modelContext.fetch(todayDescriptor).first { return today.price }
+        let cachedDescriptor = FetchDescriptor<HistoricalAssetPrice>(
+            predicate: #Predicate<HistoricalAssetPrice> { $0.symbol == upper },
+            sortBy: [SortDescriptor(\.dayKey, order: .reverse)]
+        )
+        if let cached = try? modelContext.fetch(cachedDescriptor).first { return cached.price }
+        return events
+            .sorted { $0.date < $1.date }
+            .last(where: { ($0.type == .buy || $0.type == .sell) && $0.unitPrice != nil })?
+            .unitPrice ?? 0
+    }
+
+    /// Доля позиции в общей стоимости открытых рыночных счетов ТОЙ ЖЕ валюты. Кросс-валютные
+    /// позиции сюда не подмешиваем без конвертации — это была бы неверная цифра, а не «примерная»
+    /// (см. брифинг: «если источника нет — не выдумывай»). `nil`, если сравнивать не с чем.
+    private var portfolioSharePercent: Decimal? {
+        guard account.kind == .marketInvestment else { return nil }
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.kindRaw == "marketInvestment" })
+        guard let candidates = try? modelContext.fetch(descriptor) else { return nil }
+        let currency = account.currency
+        let peers = candidates.filter { $0.currency == currency && $0.archivedAt == nil && $0.deletedAt == nil }
+        let total = peers.reduce(Decimal.zero) { sum, acc in
+            guard let symbol = acc.marketMeta?.symbol, !symbol.isEmpty,
+                  let snapshot = try? StockLotEngine.replay(events: acc.events ?? [], on: Date()) else { return sum }
+            return sum + snapshot.quantity * liveOrCachedPrice(symbol: symbol, events: acc.events ?? [])
+        }
+        guard total > 0 else { return nil }
+        return (balanceToday / total) * 100
     }
 
     // MARK: - Actions
@@ -802,15 +767,18 @@ struct AccountDetailView: View {
         }
     }
 
+    /// Круглые действия (вариант A, утверждён): только «Купить» окрашена акцентом — это основной
+    /// путь пользователя на этом экране. «Продать»/«Дивиденд»/«Ещё» — одинаковый тёмный нейтральный
+    /// круг, чтобы не читаться как три равнозначных предупреждения (был баг: жёлтый/оранжевый).
     private var marketActions: some View {
-        HStack(spacing: AppSpacing.s) {
-            compactMarketAction(L("accounts_core.detail.market.action.buy"), icon: "plus.circle.fill", tint: AppColors.positiveColor, prominent: true) {
+        HStack(spacing: AppSpacing.m) {
+            circularMarketAction(L("accounts_core.detail.market.action.buy"), icon: "plus", prominent: true) {
                 sheet = .buy
             }
-            compactMarketAction(L("accounts_core.detail.market.action.sell"), icon: "minus.circle.fill", tint: AppColors.warning) {
+            circularMarketAction(L("accounts_core.detail.market.action.sell"), icon: "minus") {
                 sheet = .sell
             }
-            compactMarketAction(L("accounts_core.detail.market.action.dividend"), icon: "banknote.fill", tint: Color(hex: "FFD166")) {
+            circularMarketAction(L("accounts_core.detail.market.action.dividend"), icon: "banknote") {
                 sheet = .dividend
             }
             Menu {
@@ -818,43 +786,38 @@ struct AccountDetailView: View {
                 Button(L("accounts_core.detail.action.edit"), systemImage: "pencil") { sheet = .editDetails }
                 Button(archiveActionTitle, systemImage: "archivebox", role: .destructive) { requestArchiveConfirmation() }
             } label: {
-                Image(systemName: "ellipsis")
-                    .font(.millioHeadline)
-                    .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 48, height: 64)
-                    .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.iconBackground))
+                circularActionLabel(icon: "ellipsis", prominent: false, title: L("accounts_core.detail.market.action.more"))
             }
             .accessibilityLabel(L("accounts_core.detail.action.edit"))
+            Spacer(minLength: 0)
         }
     }
 
-    private func compactMarketAction(
-        _ title: String,
-        icon: String,
-        tint: Color,
-        prominent: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
+    private func circularMarketAction(_ title: String, icon: String, prominent: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: AppSpacing.xs) {
-                Image(systemName: icon).font(.millioHeadline)
-                Text(title)
-                    .font(.millioCaptionRegular)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .foregroundStyle(prominent ? Color.white : tint)
-            .frame(maxWidth: .infinity, minHeight: 64)
-            .background(
-                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                    .fill(prominent ? tint : tint.opacity(0.14))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                    .stroke(tint.opacity(0.28), lineWidth: 1)
-            )
+            circularActionLabel(icon: icon, prominent: prominent, title: title)
         }
         .buttonStyle(.plain)
+    }
+
+    /// Круг 46pt + подпись 11,5pt под ним. `#1C1C1E` — тот же ad-hoc hex, что уже использует этот
+    /// экран для рыночных акцентов (`Color(hex: "FFD166")` было здесь же) — токена под точный
+    /// нейтральный круг из мока в `AppColors` нет.
+    private func circularActionLabel(icon: String, prominent: Bool, title: String? = nil) -> some View {
+        VStack(spacing: AppSpacing.xs) {
+            Image(systemName: icon)
+                .font(.millioBodySemibold)
+                .foregroundStyle(prominent ? Color.white : AppColors.textPrimary)
+                .frame(width: 46, height: 46)
+                .background(Circle().fill(prominent ? AppColors.positiveColor : Color(hex: "1C1C1E")))
+            if let title {
+                Text(title)
+                    .font(.millioCaption2Medium)
+                    .foregroundStyle(AppColors.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
     }
 
     private var genericActions: some View {
@@ -1063,10 +1026,17 @@ struct AccountDetailView: View {
             if (event.type == .buy || event.type == .sell || event.type == .adjustment),
                let quantity = event.quantity {
                 // buy/sell не имеют `amount` (движок E считает по quantity×price, не по денежной сумме) —
-                // показываем позицию явно, а не пустую строку.
-                Text(event.unitPrice.map { "\(formattedAmount(quantity)) × \(formattedAmount($0))" } ?? formattedAmount(quantity))
-                    .font(.millioBodySemibold)
-                    .foregroundStyle(AppColors.textPrimary)
+                // показываем количество и цену отдельными строками, а не одной «49 × 769,35».
+                VStack(alignment: .trailing, spacing: AppSpacing.xs) {
+                    Text(formattedAmount(quantity))
+                        .font(.millioBodySemibold)
+                        .foregroundStyle(AppColors.textPrimary)
+                    if let unitPrice = event.unitPrice {
+                        Text(String(format: L("accounts_core.detail.market.event_price_format"), formattedAmount(unitPrice)))
+                            .font(.millioCaptionRegular)
+                            .foregroundStyle(AppColors.textTertiary)
+                    }
+                }
             } else if let amount = event.amount {
                 Text(signedAmountText(amount, type: event.type))
                     .font(.millioBodySemibold)
