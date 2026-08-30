@@ -5120,29 +5120,6 @@
         }
       }
     },
-    "accounts_core.deposit.tax.empty.action" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Set up an FX rate source ›"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Настроить источник курсов ›"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "设置汇率来源 ›"
-          }
-        }
-      }
-    },
     "accounts_core.deposit.tax.empty.message" : {
       "extractionState" : "manual",
       "localizations" : {

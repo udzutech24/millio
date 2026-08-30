@@ -275,12 +275,6 @@ struct DepositDetailSection: View {
                     Text(L("accounts_core.deposit.tax.empty.message"))
                         .font(.millioCalloutRegular)
                         .foregroundStyle(AppColors.textSecondary)
-                    // TODO: экрана настройки источника валютных курсов в приложении пока нет
-                    // (historicalFX всегда пуст — см. AccountDetailView.depositTaxPresentation).
-                    // Когда появится — заменить Text на NavigationLink/Button с переходом туда.
-                    Text(L("accounts_core.deposit.tax.empty.action"))
-                        .font(.millioCalloutRegular)
-                        .foregroundStyle(AppColors.brandPrimary)
                 }
             }
         }
