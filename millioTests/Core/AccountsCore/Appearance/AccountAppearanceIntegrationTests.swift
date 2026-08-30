@@ -130,6 +130,41 @@ struct AccountAppearanceIntegrationTests {
         #expect(remaining[orphanID] == nil)
     }
 
+    /// Регрессия: владельцами оформления считались только `Account` и `Card`, поэтому оформление
+    /// кредита и инвестиции признавалось сиротой и стиралось на КАЖДОМ запуске приложения.
+    @Test("Чистка сирот: оформление кредита и инвестиции переживает старт")
+    func cleanerKeepsCreditAndInvestmentAppearance() throws {
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let context = container.mainContext
+        let credit = Credit(
+            name: "Ипотека",
+            amount: 1_000_000,
+            interestRate: 10,
+            monthlyPayment: 20_000,
+            startDate: Date(),
+            termMonths: 120,
+            currency: "RUB"
+        )
+        let investment = Investment(name: "Портфель", amount: 500, currency: "USD")
+        context.insert(credit)
+        context.insert(investment)
+        let creditUUID = try #require(UUID(uuidString: credit.creditUniqueID))
+        let investmentUUID = try #require(UUID(uuidString: investment.investmentUniqueID))
+
+        let store = AccountAppearanceStore(context: context)
+        try store.upsert(accountID: creditUUID) { $0.tintHex = "#123456" }
+        try store.upsert(accountID: investmentUUID) { $0.iconName = "monogram:ПФ" }
+        try context.save()
+
+        // Два «старта» подряд: стирание проявлялось не разово, а на каждом запуске.
+        try DataIntegrityCleaner.purgeOrphanAccountAppearancesOnLaunch(modelContext: context)
+        try DataIntegrityCleaner.purgeOrphanAccountAppearancesOnLaunch(modelContext: context)
+
+        let remaining = try store.loadAll()
+        #expect(remaining[creditUUID]?.tintHex == "#123456")
+        #expect(remaining[investmentUUID]?.iconName == "monogram:ПФ")
+    }
+
     /// Путь создания: ViewModel читает избранное из стора и отдаёт его фабрике опций пикера
     /// ровно так же, как это делает `CashflowTransactionEditorView`.
     @Test("Cashflow-пикер: core-счёт отдаёт реальный isFavorite, а не константу false")

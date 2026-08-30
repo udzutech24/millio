@@ -32,6 +32,8 @@ extension Font {
     static let millioCaption: Font = .system(size: 12, weight: .medium)
     static let millioCaptionRegular: Font = .system(size: 12, weight: .regular)
     static let millioCaption2: Font = .system(size: 11, weight: .semibold)
+    static let millioCaption2Medium: Font = .system(size: 11, weight: .medium)
+    static let millioCaption2Regular: Font = .system(size: 11, weight: .regular)
 
     // MARK: - Micro
     static let millioMicro: Font = .system(size: 10, weight: .medium)

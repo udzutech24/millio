@@ -40,25 +40,13 @@ struct CreditCardDetailSection: View {
     }
 
     var body: some View {
+        // Ф3: имя, долг, `•• last4` и статус «не в тотале» рисует общий `AccountHeroCardView`
+        // над секцией — здесь остались только метрики, специфичные для кредитки.
         VStack(alignment: .leading, spacing: AppSpacing.m) {
-            VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                Text(account.name).font(.millioHeadline)
-                if let identityLine { Text(identityLine).font(.millioCalloutRegular).foregroundStyle(AppColors.textSecondary) }
-                Text(displayAmount(snapshot?.debt ?? 0))
-                    .font(.millioTitle)
-                    .foregroundStyle((snapshot?.debt ?? 0) > 0 ? AppColors.error : AppColors.textPrimary)
-                    .accessibilityLabel("Current debt \(displayAmount(snapshot?.debt ?? 0))")
-                if let overpayment = snapshot?.overpayment, overpayment > 0 {
-                    Label("Overpayment \(displayAmount(overpayment))", systemImage: "checkmark.circle.fill")
-                        .font(.millioCalloutRegular).foregroundStyle(AppColors.toggleOnGreen)
-                }
-                if !account.includeInTotal {
-                    Label(L("accounts_core.detail.total.excluded"), systemImage: "sum")
-                        .font(.millioCaptionRegular).foregroundStyle(AppColors.textSecondary)
-                }
+            if let overpayment = snapshot?.overpayment, overpayment > 0 {
+                Label("Overpayment \(displayAmount(overpayment))", systemImage: "checkmark.circle.fill")
+                    .font(.millioCalloutRegular).foregroundStyle(AppColors.toggleOnGreen)
             }
-            .padding(AppSpacing.m)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppSpacing.m))
 
             if let snapshot {
                 VStack(alignment: .leading, spacing: AppSpacing.s) {
@@ -184,13 +172,6 @@ struct CreditCardDetailSection: View {
                 ))
             }
         }
-    }
-
-    private var identityLine: String? {
-        var parts: [String] = []
-        if let bank = account.cardMeta?.bank, !bank.isEmpty { parts.append(Bank(rawValue: bank)?.displayName ?? bank) }
-        if let last4 = account.cardMeta?.last4, !last4.isEmpty { parts.append("•••• \(last4)") }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private func adaptiveRow(_ title: String, value: String) -> some View {

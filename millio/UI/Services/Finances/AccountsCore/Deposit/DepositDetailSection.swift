@@ -1,66 +1,19 @@
 import SwiftUI
 
-struct DepositDetailSection: View {
+/// Содержимое единой hero-карточки вклада (баланс → статус+прогресс → метрики → условия).
+/// Рисуется ВНУТРИ `AccountHeroCardView` как `customContent` — карточка-носитель (градиент,
+/// скругления, паддинги) остаётся общей для всех типов счетов, у вклада меняется только начинка:
+/// identity-строка (имя/бейдж/иконка) вклада не нужна — оно уже в navigation title.
+struct DepositHeroContent: View {
     let presentation: DepositDetailPresentation
-    let accountName: String
     /// Дата открытия вклада — нужна только для строки под шкалой срока («начало · окончание»);
     /// в `DepositPresentationSnapshot` её нет (снапшот — чистый расчёт, а не карточка счёта).
     let openingDate: Date
     /// Условия вклада для итоговой строки («3,6 % годовых · пополняемый · капитализация…»).
     /// `nil` у `incomplete`-вклада — условия ещё не заполнены.
     let meta: DepositMeta?
-    var taxPresentation: DepositTaxPresentation? = nil
-    let onAction: (DepositDetailAction) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.l) {
-            hero
-            if !presentation.actions.isEmpty { actions }
-            if presentation.state == .incomplete { incompleteNotice }
-            if let taxPresentation { taxSection(taxPresentation) }
-        }
-        .accessibilityElement(children: .contain)
-    }
-
-    // MARK: - Налог
-
-    private func taxSection(_ tax: DepositTaxPresentation) -> some View {
-        AccountDetailPlaqueSection(
-            title: String(format: L("accounts_core.deposit.tax.title"), tax.year),
-            caption: tax.isComplete ? L("accounts_core.deposit.tax.caption_estimate") : nil
-        ) {
-            VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                if let result = tax.result, tax.isComplete {
-                    Text(String(format: L("accounts_core.deposit.tax.estimate"), NSDecimalNumber(decimal: result.totalTaxRUB).stringValue))
-                        .font(.millioBodySemibold)
-                        .foregroundStyle(AppColors.textPrimary)
-                    // Дисклеймер уместен только рядом с реально посчитанной суммой — иначе он звучит
-                    // как предупреждение о несуществующей цифре.
-                    Text(L("accounts_core.deposit.tax.disclaimer"))
-                        .font(.millioCaptionRegular)
-                        .foregroundStyle(AppColors.textSecondary)
-                } else {
-                    Text(L("accounts_core.deposit.tax.empty.title"))
-                        .font(.millioBodySemibold)
-                        .foregroundStyle(AppColors.textPrimary)
-                    Text(L("accounts_core.deposit.tax.empty.message"))
-                        .font(.millioCalloutRegular)
-                        .foregroundStyle(AppColors.textSecondary)
-                    // TODO: экрана настройки источника валютных курсов в приложении пока нет
-                    // (historicalFX всегда пуст — см. AccountDetailView.depositTaxPresentation).
-                    // Когда появится — заменить Text на NavigationLink/Button с переходом туда.
-                    Text(L("accounts_core.deposit.tax.empty.action"))
-                        .font(.millioCalloutRegular)
-                        .foregroundStyle(AppColors.brandPrimary)
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - Hero
-
-    private var hero: some View {
         VStack(alignment: .leading, spacing: AppSpacing.m) {
             balanceBlock
             hairline
@@ -74,17 +27,6 @@ struct DepositDetailSection: View {
                     .foregroundStyle(.white.opacity(0.62))
             }
         }
-        .padding(AppSpacing.l)
-        .background(
-            LinearGradient(
-                colors: AppColors.coursesGradient,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .overlay(Color.black.opacity(0.28))
-            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.xl, style: .continuous))
-        )
-        .accessibilityLabel("\(accountName), \(stateTitle)")
     }
 
     private var hairline: some View {
@@ -264,6 +206,87 @@ struct DepositDetailSection: View {
         }
     }
 
+    private func amountText(_ amount: DepositAmount) -> String {
+        guard let value = amount.value else { return L("accounts_core.deposit.detail.unavailable") }
+        return DepositAmountTextFormatter.string(
+            value,
+            currency: presentation.snapshot.currency,
+            symbol: currencySymbol,
+            locale: AppLocalization.currentAppLocale
+        )
+    }
+
+    /// Один символ валюты везде на карточке ($, не "$" и "USD" вперемешку) — тот же резолвер,
+    /// что использует общий hero счетов (`AccountHeroPresentation`).
+    private var currencySymbol: String {
+        MonetaCurrency(rawValue: presentation.snapshot.currency)?.symbol ?? presentation.snapshot.currency
+    }
+
+    private var stateTitle: String {
+        switch presentation.state {
+        case .normal: L("accounts_core.deposit.state.active")
+        case .savings: L("accounts_core.deposit.state.savings")
+        case .dueSoon: L("accounts_core.deposit.state.due_soon")
+        case .maturedNeedsAction: L("accounts_core.deposit.state.matured")
+        case .archived: L("accounts_core.deposit.state.archived")
+        case .incomplete: L("accounts_core.deposit.state.incomplete")
+        }
+    }
+}
+
+/// То, что раньше жило ПОД hero-карточкой вклада: быстрые действия, предупреждение о неполных
+/// данных и налоговая плашка. Сам hero (баланс/статус/метрики) теперь рисует `DepositHeroContent`
+/// внутри общего `AccountHeroCardView` — см. `AccountDetailView.body`.
+struct DepositDetailSection: View {
+    let presentation: DepositDetailPresentation
+    var taxPresentation: DepositTaxPresentation? = nil
+    let onAction: (DepositDetailAction) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.l) {
+            if !presentation.actions.isEmpty { actions }
+            if presentation.state == .incomplete { incompleteNotice }
+            if let taxPresentation { taxSection(taxPresentation) }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    // MARK: - Налог
+
+    private func taxSection(_ tax: DepositTaxPresentation) -> some View {
+        AccountDetailPlaqueSection(
+            title: String(format: L("accounts_core.deposit.tax.title"), tax.year),
+            caption: tax.isComplete ? L("accounts_core.deposit.tax.caption_estimate") : nil
+        ) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                if let result = tax.result, tax.isComplete {
+                    Text(String(format: L("accounts_core.deposit.tax.estimate"), NSDecimalNumber(decimal: result.totalTaxRUB).stringValue))
+                        .font(.millioBodySemibold)
+                        .foregroundStyle(AppColors.textPrimary)
+                    // Дисклеймер уместен только рядом с реально посчитанной суммой — иначе он звучит
+                    // как предупреждение о несуществующей цифре.
+                    Text(L("accounts_core.deposit.tax.disclaimer"))
+                        .font(.millioCaptionRegular)
+                        .foregroundStyle(AppColors.textSecondary)
+                } else {
+                    Text(L("accounts_core.deposit.tax.empty.title"))
+                        .font(.millioBodySemibold)
+                        .foregroundStyle(AppColors.textPrimary)
+                    Text(L("accounts_core.deposit.tax.empty.message"))
+                        .font(.millioCalloutRegular)
+                        .foregroundStyle(AppColors.textSecondary)
+                    // TODO: экрана настройки источника валютных курсов в приложении пока нет
+                    // (historicalFX всегда пуст — см. AccountDetailView.depositTaxPresentation).
+                    // Когда появится — заменить Text на NavigationLink/Button с переходом туда.
+                    Text(L("accounts_core.deposit.tax.empty.action"))
+                        .font(.millioCalloutRegular)
+                        .foregroundStyle(AppColors.brandPrimary)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     // MARK: - Действия
 
     private var actions: some View {
@@ -304,33 +327,6 @@ struct DepositDetailSection: View {
         Label(L("accounts_core.deposit.detail.incomplete"), systemImage: "exclamationmark.triangle.fill")
             .font(.millioCalloutRegular)
             .foregroundStyle(AppColors.warning)
-    }
-
-    private func amountText(_ amount: DepositAmount) -> String {
-        guard let value = amount.value else { return L("accounts_core.deposit.detail.unavailable") }
-        return DepositAmountTextFormatter.string(
-            value,
-            currency: presentation.snapshot.currency,
-            symbol: currencySymbol,
-            locale: AppLocalization.currentAppLocale
-        )
-    }
-
-    /// Один символ валюты везде на карточке ($, не "$" и "USD" вперемешку) — тот же резолвер,
-    /// что использует общий hero счетов (`AccountHeroPresentation`).
-    private var currencySymbol: String {
-        MonetaCurrency(rawValue: presentation.snapshot.currency)?.symbol ?? presentation.snapshot.currency
-    }
-
-    private var stateTitle: String {
-        switch presentation.state {
-        case .normal: L("accounts_core.deposit.state.active")
-        case .savings: L("accounts_core.deposit.state.savings")
-        case .dueSoon: L("accounts_core.deposit.state.due_soon")
-        case .maturedNeedsAction: L("accounts_core.deposit.state.matured")
-        case .archived: L("accounts_core.deposit.state.archived")
-        case .incomplete: L("accounts_core.deposit.state.incomplete")
-        }
     }
 
     private func actionTitle(_ action: DepositDetailAction) -> String {

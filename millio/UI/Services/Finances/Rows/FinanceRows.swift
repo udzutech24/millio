@@ -6,88 +6,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-private struct OverflowFadeWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-private struct AvailableFadeWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-private struct OverflowFadeText: View {
-    let text: String
-    let font: Font
-    let color: Color
-    let fadeStart: CGFloat
-    let fadeEnd: CGFloat
-
-    @State private var intrinsicWidth: CGFloat = 0
-    @State private var availableWidth: CGFloat = 0
-
-    private var shouldFade: Bool {
-        intrinsicWidth > availableWidth + 1
-    }
-
-    var body: some View {
-        displayedText
-            .mask(
-                Group {
-                    if shouldFade {
-                        LinearGradient(
-                            stops: [
-                                .init(color: .white, location: 0),
-                                .init(color: .white, location: fadeStart),
-                                .init(color: .clear, location: fadeEnd)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    } else {
-                        Color.white
-                    }
-                }
-            )
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .preference(key: AvailableFadeWidthKey.self, value: proxy.size.width)
-                }
-            )
-            .background(intrinsicWidthProbe)
-            .onPreferenceChange(AvailableFadeWidthKey.self) { availableWidth = $0 }
-            .onPreferenceChange(OverflowFadeWidthKey.self) { intrinsicWidth = $0 }
-    }
-
-    private var displayedText: some View {
-        Text(text)
-            .font(font)
-            .foregroundStyle(color)
-            .lineLimit(1)
-            .clipped()
-    }
-
-    private var intrinsicWidthProbe: some View {
-        Text(text)
-            .font(font)
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .hidden()
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .preference(key: OverflowFadeWidthKey.self, value: proxy.size.width)
-                }
-            )
-    }
-}
+// `OverflowFadeText` и его preference-ключи переехали в `AccountRowView.swift`:
+// их использует единая строка счёта, а не только легаси-строки этого файла.
 
 private func financeAmountLabel(
     amountText: String,
@@ -452,7 +372,17 @@ struct FinanceGroupRow: View {
                     NewCoreAccountRow(
                         account: account,
                         balance: viewModel.newCoreBalanceToday(account),
-                        isAmountHidden: viewModel.state.isAmountHidden
+                        isAmountHidden: viewModel.state.isAmountHidden,
+                        appearance: viewModel.appearance(for: account),
+                        onToggleFavorite: { viewModel.toggleFavorite(account) },
+                        onSaveAppearance: { iconName, tintHex, presetRaw in
+                            viewModel.saveAppearance(
+                                iconName: iconName,
+                                tintHex: tintHex,
+                                presetRaw: presetRaw,
+                                for: account
+                            )
+                        }
                     )
                     .padding(.leading, contentLeadingInset)
                     .padding(.trailing, contentTrailingInset)
@@ -608,6 +538,9 @@ private struct GroupRowModifiers: ViewModifier {
 
 // MARK: - Finance Account Row
 
+/// Строка легаси-счёта (`Card`/`Credit`/`Investment`). Своей вёрстки НЕ имеет — собирает
+/// презентацию и отдаёт её единой `AccountRowView`; собственными остаются только подстроки
+/// старого мира (позиция инвестиции, остаток лимита, sparkline) и переходы.
 private struct FinanceAccountRow: View {
     @ObservedObject var viewModel: FinanceViewModel
     let account: FinanceAccount
@@ -622,10 +555,20 @@ private struct FinanceAccountRow: View {
     let onEdit: () -> Void
     let onQuickEditAmount: () -> Void
 
-    @State private var showBalanceChart = false
+    /// Один sheet-слот на строку: два независимых `.sheet` на одной вьюхе дают гонку presentation.
+    private enum ActiveSheet: Int, Identifiable {
+        case balanceChart
+        case appearance
+        var id: Int { rawValue }
+    }
+
+    @State private var activeSheet: ActiveSheet?
     // Sheet-в-sheet напрямую SwiftUI не поддерживает (гонка presentation).
     // Поэтому переход в деталку счёта откладываем до onDismiss текущего sheet.
     @State private var shouldOpenAccountDetailAfterChartDismiss = false
+    @State private var draftIconName: String?
+    @State private var draftTintHex: String?
+    @State private var draftPresetRaw: String?
 
     // Читаем баланс из viewModel в body — @ObservedObject FinanceAccountRow сам перерисуется
     // при objectWillChange, не завися от того, перерисует ли родитель FinanceGroupRow
@@ -633,210 +576,168 @@ private struct FinanceAccountRow: View {
         viewModel.getAccountInfo(account: account)?.amount ?? amount
     }
 
-    private var sparklineColor: Color {
-        if let hex = customIconColor, !hex.isEmpty {
-            return Color(hex: hex)
-        }
-        return AppColors.brandPrimary
-    }
-
-    private let contentLeadingInset: CGFloat = 28
-    private let contentTrailingInset: CGFloat = 16
-    
-    var body: some View {
-        if viewModel.getMarketInvestment(account: account) != nil {
-            marketInvestmentRow
-        } else {
-            defaultRow
-        }
-    }
-
-    private var defaultRow: some View {
-        HStack(spacing: 12) {
-            AccountIconBadgeView(
-                iconName: customIconName,
-                iconColor: customIconColor,
-                fallback: icon,
-                size: 36,
-                isError: isDebtHighlighted
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                OverflowFadeText(
-                    text: name,
-                    font: .system(size: 15, weight: .semibold),
-                    color: AppColors.textPrimary,
-                    fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
-                    fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
-                )
-
-                if let subtitle = viewModel.getInvestmentPositionSubtitle(account: account) {
-                    OverflowFadeText(
-                        text: subtitle,
-                        font: .system(size: 11, weight: .regular),
-                        color: AppColors.textSecondary,
-                        fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
-                        fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
-                    )
-                }
-
-                if let limitSubtitle = creditLimitSubtitle {
-                    Text(limitSubtitle)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(AppColors.textTertiary.opacity(0.9))
-                        .lineLimit(1)
-                }
-
-                // Sparkline истории баланса
-                let sparkPoints = AccountBalanceHistoryStore.dailyAmounts(
-                    accountID: account.accountID,
-                    currency: currency,
-                    daysCount: 14
-                ).compactMap { $0 }
-                if sparkPoints.count >= 2 {
-                    Button {
-                        showBalanceChart = true
-                    } label: {
-                        AccountBalanceSparklineView(
-                            accountID: account.accountID,
-                            currency: currency,
-                            color: sparklineColor
-                        )
-                        .frame(width: 56, height: 22)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            trailingAmountSection(
-                amountFontSize: 15,
-                maximumFractionDigits: 0
-            )
-        }
-        .padding(.leading, contentLeadingInset)
-        .padding(.trailing, contentTrailingInset)
-        .padding(.vertical, 11)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onEdit()
-        }
-        .sheet(isPresented: $showBalanceChart, onDismiss: {
-            if shouldOpenAccountDetailAfterChartDismiss {
-                shouldOpenAccountDetailAfterChartDismiss = false
-                onEdit()
-            }
-        }) {
-            AccountBalanceChartView(
-                accountID: account.accountID,
-                accountName: name,
-                currency: currency,
-                accentColor: sparklineColor,
-                onOpenAccountDetail: {
-                    shouldOpenAccountDetailAfterChartDismiss = true
-                    showBalanceChart = false
-                }
-            )
-        }
-    }
-
-    private var marketInvestmentRow: some View {
-        HStack(spacing: 12) {
-            AccountIconBadgeView(
-                iconName: customIconName,
-                iconColor: customIconColor,
-                fallback: icon,
-                size: 36,
-                isError: isDebtHighlighted
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                OverflowFadeText(
-                    text: name,
-                    font: .system(size: 15, weight: .semibold),
-                    color: AppColors.textPrimary,
-                    fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
-                    fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
-                )
-
-                if let subtitle = viewModel.getInvestmentPositionSubtitle(account: account) {
-                    OverflowFadeText(
-                        text: subtitle,
-                        font: .system(size: 11, weight: .regular),
-                        color: AppColors.textSecondary,
-                        fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
-                        fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
-                    )
-                }
-
-                if let performance = viewModel.getInvestmentPurchaseGrowthSubtitle(account: account) {
-                    OverflowFadeText(
-                        text: performance.text,
-                        font: .system(size: 11, weight: .medium),
-                        color: performance.isPositive ? Color.green : AppColors.error,
-                        fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
-                        fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
-                    )
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            trailingAmountSection(
-                amountFontSize: 15,
-                maximumFractionDigits: 2
-            )
-        }
-        .padding(.leading, contentLeadingInset)
-        .padding(.trailing, contentTrailingInset)
-        .padding(.vertical, 11)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onEdit()
-        }
+    private var isMarketInvestment: Bool {
+        viewModel.getMarketInvestment(account: account) != nil
     }
 
     private var isDebtHighlighted: Bool {
         viewModel.isAccountLiabilityForTotals(account: account) || isCreditCardDebt
     }
 
-    @ViewBuilder
-    private func iconBadge(colors: [Color]) -> some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(Color.white.opacity(0.05))
-            .overlay {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: colors,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+    /// Рыночная позиция показывает копейки — у остальных продуктов в списке их нет.
+    private var maximumFractionDigits: Int { isMarketInvestment ? 2 : 0 }
+
+    private var presentation: AccountRowPresentation {
+        AccountRowPresentation.make(
+            key: account.accountID,
+            name: name,
+            appearance: viewModel.appearance(for: account),
+            legacyIconName: customIconName,
+            legacyIconColorHex: customIconColor,
+            fallbackIconName: icon,
+            amountText: formatBalance(
+                resolvedAmount,
+                isHidden: viewModel.state.isAmountHidden,
+                maximumFractionDigits: maximumFractionDigits
+            ),
+            currencySymbol: MonetaCurrency(rawValue: currency)?.symbol ?? currency,
+            isNegative: isDebtHighlighted || resolvedAmount < 0
+        )
+    }
+
+    private var sparklineColor: Color {
+        if let hex = presentation.iconColorHex, !hex.isEmpty {
+            return Color(hex: hex)
+        }
+        return AppColors.brandPrimary
+    }
+
+    /// Счёт со «старым» composite-идентификатором в UUID не парсится, а `AccountAppearance`
+    /// ключуется UUID — редактировать оформление такому счёту негде (рисуется дефолтом).
+    private var appearanceAccountID: UUID? {
+        UUID(uuidString: account.accountID)
+    }
+
+    private let contentLeadingInset: CGFloat = 28
+    private let contentTrailingInset: CGFloat = 16
+
+    private var editAppearanceAction: (() -> Void)? {
+        guard appearanceAccountID != nil else { return nil }
+        return { startEditingAppearance() }
+    }
+
+    var body: some View {
+        AccountRowView(
+            presentation: presentation,
+            onEditAppearance: editAppearanceAction,
+            accessory: { accessory }
+        )
+        .padding(.leading, contentLeadingInset)
+        .padding(.trailing, contentTrailingInset)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onEdit()
+        }
+        .sheet(item: $activeSheet, onDismiss: {
+            if shouldOpenAccountDetailAfterChartDismiss {
+                shouldOpenAccountDetailAfterChartDismiss = false
+                onEdit()
             }
-            .frame(width: 32, height: 32)
+        }) { sheet in
+            switch sheet {
+            case .balanceChart:
+                AccountBalanceChartView(
+                    accountID: account.accountID,
+                    accountName: name,
+                    currency: currency,
+                    accentColor: sparklineColor,
+                    onOpenAccountDetail: {
+                        shouldOpenAccountDetailAfterChartDismiss = true
+                        activeSheet = nil
+                    }
+                )
+            case .appearance:
+                AccountIconPickerSheet(
+                    iconName: $draftIconName,
+                    iconColor: $draftTintHex,
+                    presetRaw: $draftPresetRaw
+                )
+                .onDisappear {
+                    viewModel.saveAppearance(
+                        iconName: draftIconName,
+                        tintHex: draftTintHex,
+                        presetRaw: draftPresetRaw,
+                        for: account
+                    )
+                }
+            }
+        }
+    }
+
+    /// Подстроки старого мира. Единственное, чем строка легаси-счёта отличается от core-строки.
+    @ViewBuilder
+    private var accessory: some View {
+        if let subtitle = viewModel.getInvestmentPositionSubtitle(account: account) {
+            OverflowFadeText(
+                text: subtitle,
+                font: .millioCaption2Regular,
+                color: AppColors.textSecondary,
+                fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
+                fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
+            )
+        }
+
+        if isMarketInvestment {
+            if let performance = viewModel.getInvestmentPurchaseGrowthSubtitle(account: account) {
+                OverflowFadeText(
+                    text: performance.text,
+                    font: .millioCaption2Medium,
+                    color: performance.isPositive ? Color.green : AppColors.error,
+                    fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
+                    fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
+                )
+            }
+        } else {
+            if let limitSubtitle = creditLimitSubtitle {
+                Text(limitSubtitle)
+                    .font(.millioCaption2Medium)
+                    .foregroundStyle(AppColors.textTertiary.opacity(0.9))
+                    .lineLimit(1)
+            }
+            sparkline
+        }
     }
 
     @ViewBuilder
-    private func trailingAmountSection(
-        amountFontSize: CGFloat,
-        maximumFractionDigits: Int
-    ) -> some View {
-        let amountColor = isDebtHighlighted ? AppColors.error : (resolvedAmount >= 0 ? AppColors.textPrimary : AppColors.error)
-        Button {
-            onQuickEditAmount()
-        } label: {
-            VStack(alignment: .trailing, spacing: 2) {
-                financeAmountLabel(
-                    amountText: formatBalance(resolvedAmount, isHidden: viewModel.state.isAmountHidden, maximumFractionDigits: maximumFractionDigits),
-                    currencySymbol: MonetaCurrency(rawValue: currency)?.symbol ?? currency,
-                    amountFontSize: amountFontSize,
-                    amountColor: amountColor.opacity(0.92),
-                    currencyColor: amountColor.opacity(0.66)
+    private var sparkline: some View {
+        let sparkPoints = AccountBalanceHistoryStore.dailyAmounts(
+            accountID: account.accountID,
+            currency: currency,
+            daysCount: 14
+        ).compactMap { $0 }
+        if sparkPoints.count >= 2 {
+            Button {
+                activeSheet = .balanceChart
+            } label: {
+                AccountBalanceSparklineView(
+                    accountID: account.accountID,
+                    currency: currency,
+                    color: sparklineColor
                 )
+                .frame(width: 56, height: 22)
             }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+    }
+
+    private func startEditingAppearance() {
+        // В пикер отдаём ЯВНЫЙ выбор пользователя (оформление или легаси-поля счёта), но не
+        // вычисленный дефолт: иначе первый же вход в редактор «застолбил» бы авто-цвет как ручной.
+        let appearance = viewModel.appearance(for: account)
+        draftIconName = appearance?.iconName ?? customIconName
+        draftTintHex = appearance?.tintHex ?? customIconColor
+        draftPresetRaw = appearance?.presetRaw
+        activeSheet = .appearance
     }
 
     private var creditLimitSubtitle: String? {
@@ -847,25 +748,14 @@ private struct FinanceAccountRow: View {
         let currencySymbol = MonetaCurrency(rawValue: remaining.currency)?.symbol ?? remaining.currency
         return FinancesL10n.format("finances.account.credit_limit_remaining", amountText, currencySymbol)
     }
-    
-    private func formatBalance(_ balance: Double, isHidden: Bool = false, maximumFractionDigits: Int = 0) -> String {
-        if isHidden {
-            // Подсчитываем количество цифр в числе
-            let digits = Int(balance.rounded())
-            let digitCount = String(digits).count
-            // Возвращаем точки вместо цифр
-            return String(repeating: "•", count: max(3, digitCount))
-        }
-        
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = maximumFractionDigits
-        return formatter.string(from: NSNumber(value: balance)) ?? "0"
-    }
 
+    private func formatBalance(_ balance: Double, isHidden: Bool = false, maximumFractionDigits: Int = 0) -> String {
+        AccountRowAmountFormatter.text(
+            balance,
+            isHidden: isHidden,
+            maximumFractionDigits: maximumFractionDigits
+        )
+    }
 }
 
 struct FinanceGroupIndexDropDelegate: DropDelegate {

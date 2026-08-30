@@ -22,6 +22,9 @@ struct AccountDetailView: View {
     /// Вместо прямого архивирования — выбор «перевести остаток» (тогда ступеньки не будет)
     /// или «закрыть с остатком» (архивировать как есть, осознанно).
     @State private var showNonZeroBalanceArchiveWarning = false
+    /// Оформление счёта грузится ОДИН раз на открытие экрана, а не из тела `body`: `body`
+    /// пересчитывается на каждую мутацию, а редактора оформления на этом экране нет.
+    @State private var appearance: AccountAppearanceSnapshot?
 
     private enum ActiveSheet: Identifiable {
         case income
@@ -104,6 +107,115 @@ struct AccountDetailView: View {
         return DepositDetailPresentation.make(snapshot: snapshot)
     }
 
+    /// Сумма hero — ровно то же число, что в строке списка «Счета» и в тоталах: у кредитки это
+    /// долг со знаком минус, а не доступный лимит. Второго определения баланса не заводим.
+    private var heroAmount: Decimal {
+        AccountTotalsContribution.signedValue(
+            rawBalance: balanceToday,
+            kind: account.kind,
+            creditLimit: account.cardMeta?.creditLimit
+        )
+    }
+
+    private var heroPresentation: AccountHeroPresentation {
+        AccountHeroPresentation.make(
+            key: account.id.uuidString,
+            name: account.name,
+            appearance: appearance,
+            fallbackIconName: account.kind.fallbackIconName,
+            subtitle: heroSubtitle,
+            typeTitle: heroTypeTitle,
+            amountText: AccountRowAmountFormatter.text(
+                NSDecimalNumber(decimal: heroAmount).doubleValue,
+                isHidden: false,
+                maximumFractionDigits: account.kind == .marketInvestment ? 2 : 0
+            ),
+            currencySymbol: MonetaCurrency(rawValue: account.currency)?.symbol ?? account.currency,
+            isNegative: heroAmount < 0,
+            detailLines: heroDetailLines,
+            badges: heroBadges
+        )
+    }
+
+    /// Тип продукта на hero. Кредитка — не отдельный `AccountKind` (это `debitCard` с лимитом),
+    /// поэтому её название разрешается по `productType`, а не по `kind`.
+    private var heroTypeTitle: String {
+        account.productType == .creditCard
+            ? L("accounts_core.detail.type.credit_card")
+            : account.kind.localizedTitle
+    }
+
+    /// Вторая строка идентичности: у рыночной позиции — тикер, у карты — банк и `•• last4`.
+    private var heroSubtitle: String? {
+        if account.kind == .marketInvestment, let symbol = account.marketMeta?.symbol, !symbol.isEmpty {
+            return symbol.uppercased()
+        }
+        return bankLine
+    }
+
+    private var heroDetailLines: [String] {
+        var lines: [String] = []
+        lines.append(contentsOf: loanInfoLines ?? [])
+        lines.append(contentsOf: debtInfoLines ?? [])
+        lines.append(contentsOf: depositInfoLines ?? [])
+        if let creditHeroLine { lines.append(creditHeroLine) }
+        if account.kind == .marketInvestment {
+            // Нереализованный P/L был на прежнем `stockHero` — теряться при переезде он не должен.
+            lines.append("\(signedAmountText(unrealizedPL, type: .adjustment)) \(account.currency)")
+        }
+        if let note = account.note, !note.isEmpty { lines.append(note) }
+        return lines
+    }
+
+    /// Кредитка на hero: доступный лимит и дата ближайшего платежа. Подробные метрики (утилизация,
+    /// проценты, комиссии) остаются в `CreditCardDetailSection` — hero их не дублирует.
+    private var creditHeroLine: String? {
+        guard account.productType == .creditCard, let limit = account.cardMeta?.creditLimit else { return nil }
+        guard let snapshot = CreditCardFinancialContract.snapshot(
+            rawAvailableBalance: balanceToday,
+            creditLimit: limit,
+            events: account.events ?? []
+        ) else { return nil }
+        var parts = [String(
+            format: L("accounts_core.detail.credit.available_format"),
+            NSDecimalNumber(decimal: snapshot.availableLimit).doubleValue,
+            account.currency
+        )]
+        if let settings = CreditCardPaymentSettingsStore().load(accountID: account.id),
+           let status = CreditCardPaymentPolicy.status(
+               settings: settings,
+               graceDays: account.cardMeta?.graceDays,
+               now: Date(),
+               calendar: .current
+           ) {
+            parts.append(String(
+                format: L("accounts_core.detail.credit.payment_due_format"),
+                status.dueDate.formatted(date: .abbreviated, time: .omitted)
+            ))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private var heroBadges: [AccountHeroPresentation.Badge] {
+        var badges: [AccountHeroPresentation.Badge] = []
+        if account.archivedAt != nil {
+            badges.append(.init(text: L("accounts_core.detail.badge.archived"), systemImage: "archivebox"))
+        }
+        if !account.includeInTotal {
+            badges.append(.init(text: L("accounts_core.detail.total.excluded"), systemImage: "sum"))
+        }
+        if account.kind == .marketInvestment {
+            badges.append(.init(
+                text: isPriceStale
+                    ? L("accounts_core.detail.market.price_stale_badge")
+                    : L("accounts_core.detail.market.price_today_badge"),
+                systemImage: isPriceStale ? "clock.badge.exclamationmark" : "bolt.fill",
+                isWarning: isPriceStale
+            ))
+        }
+        return badges
+    }
+
     private var debitSnapshot: DebitCardSnapshot? {
         guard isDebitProduct else { return nil }
         _ = refreshToken
@@ -115,6 +227,26 @@ struct AccountDetailView: View {
             GradientBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.xl) {
+                    // Ф3: идентичность счёта рисует ТОЛЬКО hero — для всех типов сразу.
+                    // Исключение — недвижимость: её шапка это фото-обложка объекта (баланса на ней
+                    // нет), заменить её градиентом означало бы удалить фотографии пользователя.
+                    if AccountDetailDescriptor.resolve(for: account).kind != .realEstate {
+                        // Вклад — единственное исключение из стандартной начинки hero: несёт
+                        // баланс/статус/метрики вклада вместо имени/бейджа/иконки счёта (см.
+                        // `DepositHeroContent`). Второй, отдельной карточки статуса вклада после
+                        // этого существовать не должно — вся её начинка переехала сюда.
+                        if let depositPresentation {
+                            AccountHeroCardView(presentation: heroPresentation) {
+                                DepositHeroContent(
+                                    presentation: depositPresentation,
+                                    openingDate: account.createdAt,
+                                    meta: account.depositMeta
+                                )
+                            }
+                        } else {
+                            AccountHeroCardView(presentation: heroPresentation)
+                        }
+                    }
                     if AccountDetailDescriptor.resolve(for: account).kind == .realEstate {
                         RealEstateDetailSection(
                             account: account,
@@ -126,9 +258,6 @@ struct AccountDetailView: View {
                     if let depositPresentation {
                         DepositDetailSection(
                             presentation: depositPresentation,
-                            accountName: account.name,
-                            openingDate: account.createdAt,
-                            meta: account.depositMeta,
                             taxPresentation: depositTaxPresentation,
                             onAction: handleDepositAction
                         )
@@ -136,8 +265,6 @@ struct AccountDetailView: View {
                         CreditCardDetailSection(account: account, rawBalance: balanceToday)
                     } else if let snapshot = debitSnapshot {
                         DebitCardDetailSection(account: account, snapshot: snapshot)
-                    } else if AccountDetailDescriptor.resolve(for: account).showsGenericHeader {
-                        header
                     }
                     if account.kind != .deposit && account.archivedAt == nil && account.deletedAt == nil
                         && (debitSnapshot?.canWrite ?? true) {
@@ -257,6 +384,8 @@ struct AccountDetailView: View {
             Text(errorMessage ?? "")
         }
         .task(id: account.id) {
+            appearance = try? AccountAppearanceStore(context: modelContext)
+                .loadSnapshots()[account.id]
             guard account.kind == .marketInvestment else { return }
             await AccountMarketPriceService(modelContext: modelContext).refreshTodayPrices()
             refreshToken = UUID()
@@ -265,136 +394,8 @@ struct AccountDetailView: View {
 
     // MARK: - Header
 
-    @ViewBuilder
-    private var header: some View {
-        if account.kind == .marketInvestment {
-            stockHero
-        } else {
-            standardHeader
-        }
-    }
-
-    private var standardHeader: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.s) {
-            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
-                Text(formattedBalance)
-                    .font(.millioTitle)
-                    .foregroundStyle(balanceToday < 0 ? AppColors.error : AppColors.textPrimary)
-                Text(account.currency)
-                    .font(.millioBody)
-                    .foregroundStyle(AppColors.textTertiary)
-            }
-
-            if let bankLine {
-                Text(bankLine)
-                    .font(.millioCalloutRegular)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-
-            ForEach(loanInfoLines ?? [], id: \.self) { line in
-                Text(line)
-                    .font(.millioCalloutRegular)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-
-            ForEach(debtInfoLines ?? [], id: \.self) { line in
-                Text(line)
-                    .font(.millioCalloutRegular)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-
-            ForEach(depositInfoLines ?? [], id: \.self) { line in
-                Text(line)
-                    .font(.millioCalloutRegular)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-
-            if let note = account.note, !note.isEmpty {
-                Text(note)
-                    .font(.millioCalloutRegular)
-                    .foregroundStyle(AppColors.textTertiary)
-            }
-
-            if !account.includeInTotal {
-                Label(
-                    L("accounts_core.detail.total.excluded"),
-                    systemImage: "sum"
-                )
-                .font(.millioCaptionRegular)
-                .foregroundStyle(AppColors.textSecondary)
-                .padding(.horizontal, AppSpacing.s)
-                .padding(.vertical, AppSpacing.xs)
-                .background(
-                    Capsule().fill(AppColors.iconBackground)
-                )
-            }
-        }
-    }
-
-    private var stockHero: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.m) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                    Text(account.marketMeta?.symbol.uppercased() ?? account.name)
-                        .font(.millioHeadline)
-                        .foregroundStyle(.white)
-                    if account.name.caseInsensitiveCompare(account.marketMeta?.symbol ?? "") != .orderedSame {
-                        Text(account.name)
-                            .font(.millioCalloutRegular)
-                            .foregroundStyle(.white.opacity(0.72))
-                    }
-                }
-                Spacer()
-                Label(
-                    isPriceStale ? L("accounts_core.detail.market.price_stale_badge") : L("accounts_core.detail.market.price_today_badge"),
-                    systemImage: isPriceStale ? "clock.badge.exclamationmark" : "bolt.fill"
-                )
-                .font(.millioCaptionRegular)
-                .foregroundStyle(isPriceStale ? AppColors.warning : AppColors.positiveColor)
-                .padding(.horizontal, AppSpacing.s)
-                .padding(.vertical, AppSpacing.xs)
-                .background(Capsule().fill(Color.black.opacity(0.22)))
-            }
-
-            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
-                Text(formattedBalance)
-                    .font(.millioTitle)
-                    .foregroundStyle(.white)
-                    .minimumScaleFactor(0.65)
-                Text(account.currency)
-                    .font(.millioBody)
-                    .foregroundStyle(.white.opacity(0.72))
-            }
-
-            Label(
-                "\(signedAmountText(unrealizedPL, type: .adjustment)) \(account.currency)",
-                systemImage: unrealizedPL < 0 ? "arrow.down.right" : "arrow.up.right"
-            )
-            .font(.millioBodySemibold)
-            .foregroundStyle(unrealizedPL < 0 ? AppColors.negativeColor : AppColors.positiveColor)
-        }
-        .padding(AppSpacing.l)
-        .background(
-            ZStack {
-                LinearGradient(
-                    colors: [Color(hex: "102A56"), Color(hex: "123F7A"), Color(hex: "0D6B78")],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                Circle()
-                    .fill(AppColors.brandPrimary.opacity(0.28))
-                    .frame(width: 180, height: 180)
-                    .offset(x: 130, y: -80)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.xl, style: .continuous))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppSpacing.xl, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-    }
-
+    /// Прежние `standardHeader` и `stockHero` сняты в Ф3: их содержимое переехало в
+    /// `AccountHeroCardView` (`heroDetailLines` / `heroBadges` / `heroSubtitle`).
     private var bankLine: String? {
         guard let cardMeta = account.cardMeta else { return nil }
         var parts: [String] = []

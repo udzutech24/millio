@@ -227,6 +227,10 @@ enum EntitlementPolicy {
     static let isFinanceChartsProOnly = true
     /// Feature flag: график cashflow доступен только при PRO-подписке.
     static let isCashflowChartProOnly = true
+    /// Feature flag: галерея готовых дизайнов счёта доступна только при PRO-подписке.
+    /// Гейт стоит ИМЕННО на галерее пресетов: иконка и цвет счёта были бесплатны до V11 и такими
+    /// остаются, иначе это отъём уже работающей функции у бесплатных пользователей.
+    static let isAccountAppearanceGalleryProOnly = true
 
     static func canUseConverterCrypto(isPro: Bool) -> Bool {
         guard isConverterCryptoProOnly else { return true }
@@ -308,6 +312,11 @@ enum EntitlementPolicy {
 
     static func canUseCashflowChart(isPro: Bool) -> Bool {
         guard isCashflowChartProOnly else { return true }
+        return isPro
+    }
+
+    static func canUseAccountAppearanceGallery(isPro: Bool) -> Bool {
+        guard isAccountAppearanceGalleryProOnly else { return true }
         return isPro
     }
 

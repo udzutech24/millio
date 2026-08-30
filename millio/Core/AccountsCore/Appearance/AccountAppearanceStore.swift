@@ -24,6 +24,13 @@ struct AccountAppearanceStore {
         }
     }
 
+    /// Тот же один fetch, что `loadAll`, но наружу отдаются значения, а не `@Model`.
+    /// Это единственный способ снабдить список счетов оформлением: точечный запрос из тела строки
+    /// дал бы N обращений к стору на каждый кадр при 60+ счетах.
+    func loadSnapshots() throws -> [UUID: AccountAppearanceSnapshot] {
+        try loadAll().mapValues(AccountAppearanceSnapshot.init)
+    }
+
     func favoriteAccountIDs() throws -> Set<UUID> {
         Set(try loadAll().filter { $0.value.isFavorite }.keys)
     }
@@ -49,6 +56,33 @@ struct AccountAppearanceStore {
         mutate(target)
         target.updatedAt = Date()
         return target
+    }
+
+    /// Явный выбор пользователя (иконка/цвет). Полный сброс — обе величины nil и счёт не в
+    /// избранном — удаляет строку: счёт возвращается к ВЫЧИСЛЯЕМОМУ дефолту
+    /// (`AccountAppearanceDefaults`), а не хранит пустое оформление.
+    ///
+    /// `presetRaw` и `tintHex` взаимоисключающи по контракту вызывающей стороны
+    /// (`AccountIconPickerSheet`): дизайн задаёт свой акцент, ручной цвет его перебивает. Стор
+    /// пишет то, что дали, а порядок разрешения при обоих заполненных полях один и описан в
+    /// `CashflowAccountPickerDetailsFactory.resolvedAppearance`.
+    @discardableResult
+    func setAppearance(
+        accountID: UUID,
+        iconName: String?,
+        tintHex: String?,
+        presetRaw: String? = nil
+    ) throws -> Bool {
+        let row = try upsert(accountID: accountID) {
+            $0.iconName = iconName
+            $0.tintHex = tintHex
+            $0.presetRaw = presetRaw
+        }
+        if row.isDefault {
+            context.delete(row)
+            return false
+        }
+        return true
     }
 
     @discardableResult
