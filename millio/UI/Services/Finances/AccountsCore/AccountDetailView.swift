@@ -127,6 +127,8 @@ struct AccountDetailView: View {
                         DepositDetailSection(
                             presentation: depositPresentation,
                             accountName: account.name,
+                            openingDate: account.createdAt,
+                            meta: account.depositMeta,
                             taxPresentation: depositTaxPresentation,
                             onAction: handleDepositAction
                         )
@@ -1020,12 +1022,10 @@ struct AccountDetailView: View {
     // MARK: - History
 
     private var historySection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.m) {
-            Text(L("accounts_core.detail.history_title"))
-                .font(.millioCaption)
-                .foregroundStyle(AppColors.textTertiary)
-                .textCase(.uppercase)
-
+        AccountDetailPlaqueSection(
+            title: L("accounts_core.detail.history_title"),
+            caption: sortedEvents.isEmpty ? nil : L("cashflow.month_workspace.transaction_count \(sortedEvents.count)")
+        ) {
             if sortedEvents.isEmpty {
                 Text(L("accounts_core.detail.no_events"))
                     .font(.millioCalloutRegular)

@@ -3,6 +3,12 @@ import SwiftUI
 struct DepositDetailSection: View {
     let presentation: DepositDetailPresentation
     let accountName: String
+    /// Дата открытия вклада — нужна только для строки под шкалой срока («начало · окончание»);
+    /// в `DepositPresentationSnapshot` её нет (снапшот — чистый расчёт, а не карточка счёта).
+    let openingDate: Date
+    /// Условия вклада для итоговой строки («3,6 % годовых · пополняемый · капитализация…»).
+    /// `nil` у `incomplete`-вклада — условия ещё не заполнены.
+    let meta: DepositMeta?
     var taxPresentation: DepositTaxPresentation? = nil
     let onAction: (DepositDetailAction) -> Void
 
@@ -16,64 +22,249 @@ struct DepositDetailSection: View {
         .accessibilityElement(children: .contain)
     }
 
+    // MARK: - Налог
+
     private func taxSection(_ tax: DepositTaxPresentation) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text(String(format: L("accounts_core.deposit.tax.title"), tax.year)).font(.millioBodySemibold)
-            if let result = tax.result, tax.isComplete {
-                Text(String(format: L("accounts_core.deposit.tax.estimate"), NSDecimalNumber(decimal: result.totalTaxRUB).stringValue))
-            } else {
-                Text(L("accounts_core.deposit.tax.unavailable"))
+        AccountDetailPlaqueSection(
+            title: String(format: L("accounts_core.deposit.tax.title"), tax.year),
+            caption: tax.isComplete ? L("accounts_core.deposit.tax.caption_estimate") : nil
+        ) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                if let result = tax.result, tax.isComplete {
+                    Text(String(format: L("accounts_core.deposit.tax.estimate"), NSDecimalNumber(decimal: result.totalTaxRUB).stringValue))
+                        .font(.millioBodySemibold)
+                        .foregroundStyle(AppColors.textPrimary)
+                    // Дисклеймер уместен только рядом с реально посчитанной суммой — иначе он звучит
+                    // как предупреждение о несуществующей цифре.
+                    Text(L("accounts_core.deposit.tax.disclaimer"))
+                        .font(.millioCaptionRegular)
+                        .foregroundStyle(AppColors.textSecondary)
+                } else {
+                    Text(L("accounts_core.deposit.tax.empty.title"))
+                        .font(.millioBodySemibold)
+                        .foregroundStyle(AppColors.textPrimary)
+                    Text(L("accounts_core.deposit.tax.empty.message"))
+                        .font(.millioCalloutRegular)
+                        .foregroundStyle(AppColors.textSecondary)
+                    // TODO: экрана настройки источника валютных курсов в приложении пока нет
+                    // (historicalFX всегда пуст — см. AccountDetailView.depositTaxPresentation).
+                    // Когда появится — заменить Text на NavigationLink/Button с переходом туда.
+                    Text(L("accounts_core.deposit.tax.empty.action"))
+                        .font(.millioCalloutRegular)
+                        .foregroundStyle(AppColors.brandPrimary)
+                }
             }
-            Text(L("accounts_core.deposit.tax.disclaimer"))
-                .font(.millioCaptionRegular).foregroundStyle(AppColors.textSecondary)
         }
         .accessibilityElement(children: .combine)
     }
 
+    // MARK: - Hero
+
     private var hero: some View {
         VStack(alignment: .leading, spacing: AppSpacing.m) {
-            HStack {
-                Label(stateTitle, systemImage: stateIcon)
-                    .font(.millioHeadline)
-                Spacer(minLength: AppSpacing.s)
-            }
-            .foregroundStyle(.white.opacity(0.82))
-
-            if let progress = presentation.snapshot.progress {
-                progressView(progress)
-            }
-
-            amount(presentation.snapshot.currentBalance, label: L("accounts_core.deposit.detail.balance"), prominent: true)
-
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: AppSpacing.s) {
-                    metricCard(presentation.snapshot.confirmedInterest, label: L("accounts_core.deposit.detail.earned"))
-                    metricCard(presentation.snapshot.futureInterest, label: L("accounts_core.deposit.detail.estimated"))
-                }
-                VStack(spacing: AppSpacing.s) {
-                    metricCard(presentation.snapshot.confirmedInterest, label: L("accounts_core.deposit.detail.earned"))
-                    metricCard(presentation.snapshot.futureInterest, label: L("accounts_core.deposit.detail.estimated"))
-                }
-            }
-
-            if let accrual = presentation.snapshot.nextAccrual {
-                infoRow(L("accounts_core.deposit.detail.next_accrual"), value: dateAmount(accrual))
-            }
-            if let maturity = presentation.snapshot.maturityDate {
-                infoRow(L("accounts_core.deposit.detail.maturity"), value: "\(maturity.formatted(date: .abbreviated, time: .omitted)) · \(amountText(presentation.snapshot.maturityAmount))")
+            balanceBlock
+            hairline
+            statusBlock
+            hairline
+            metricsRow
+            if let summaryLine {
+                hairline
+                Text(summaryLine)
+                    .font(.millioCaptionRegular)
+                    .foregroundStyle(.white.opacity(0.62))
             }
         }
         .padding(AppSpacing.l)
         .background(
             LinearGradient(
-                colors: [Color(hex: "123F7A"), Color(hex: "0D6B78")],
+                colors: AppColors.coursesGradient,
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
+            .overlay(Color.black.opacity(0.28))
             .clipShape(RoundedRectangle(cornerRadius: AppSpacing.xl, style: .continuous))
         )
         .accessibilityLabel("\(accountName), \(stateTitle)")
     }
+
+    private var hairline: some View {
+        Rectangle().fill(.white.opacity(0.16)).frame(height: 1)
+    }
+
+    private var balanceBlock: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text(L("accounts_core.deposit.detail.balance"))
+                .font(.millioCaptionRegular)
+                .foregroundStyle(.white.opacity(0.68))
+            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
+                Text(amountText(presentation.snapshot.currentBalance))
+                    .font(.millioTitle)
+                    .foregroundStyle(.white)
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+            }
+            if let confirmed = presentation.snapshot.confirmedInterest.value, confirmed > 0 {
+                Text(String(
+                    format: L("accounts_core.deposit.detail.balance_includes_accrued_format"),
+                    amountText(presentation.snapshot.confirmedInterest)
+                ))
+                .font(.millioCaptionRegular)
+                .foregroundStyle(.white.opacity(0.62))
+            }
+        }
+    }
+
+    private var statusBlock: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.s) {
+            HStack {
+                Circle().fill(statusDotColor).frame(width: 8, height: 8)
+                Text(stateTitle)
+                    .font(.millioCalloutRegular)
+                Spacer(minLength: AppSpacing.s)
+                if presentation.state == .archived {
+                    Text(L("accounts_core.deposit.detail.status.closed"))
+                        .font(.millioCalloutSemibold)
+                } else if let daysRemaining = presentation.snapshot.daysRemaining, daysRemaining >= 0 {
+                    Text(L("accounts_core.deposit.detail.days_remaining \(daysRemaining)"))
+                        .font(.millioCalloutSemibold)
+                }
+            }
+            .foregroundStyle(.white.opacity(0.9))
+
+            if let progress = presentation.snapshot.progress {
+                progressBar(progress)
+                HStack {
+                    Text(openingDate.formatted(date: .abbreviated, time: .omitted))
+                    Spacer()
+                    if let maturityDate = presentation.snapshot.maturityDate {
+                        Text(maturityDate.formatted(date: .abbreviated, time: .omitted))
+                    }
+                }
+                .font(.millioMicro)
+                .foregroundStyle(.white.opacity(0.58))
+            }
+        }
+    }
+
+    private var statusDotColor: Color {
+        switch presentation.state {
+        case .dueSoon, .maturedNeedsAction: AppColors.warning
+        case .archived: .white.opacity(0.5)
+        default: .white
+        }
+    }
+
+    private func progressBar(_ progress: Decimal) -> some View {
+        let clamped = min(max(NSDecimalNumber(decimal: progress).doubleValue, 0), 1)
+        return GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.white.opacity(0.22))
+                Capsule().fill(.white).frame(width: proxy.size.width * clamped)
+            }
+        }
+        .frame(height: 4)
+    }
+
+    @ViewBuilder
+    private var metricsRow: some View {
+        if presentation.state == .archived {
+            metricCard(presentation.snapshot.confirmedInterest, label: L("accounts_core.deposit.detail.received_over_term"))
+        } else {
+            let next = presentation.snapshot.nextAccrual
+            let maturity = presentation.snapshot.maturityAmount.value != nil ? presentation.snapshot.maturityAmount : nil
+            if next != nil || maturity != nil {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: AppSpacing.s) { metricTiles(next: next, maturity: maturity) }
+                    VStack(spacing: AppSpacing.s) { metricTiles(next: next, maturity: maturity) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func metricTiles(next: DepositAccrual?, maturity: DepositAmount?) -> some View {
+        if let next { nextAccrualMetric(next) }
+        if let maturity { maturityMetric(maturity) }
+    }
+
+    private func nextAccrualMetric(_ accrual: DepositAccrual) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text(L("accounts_core.deposit.detail.next_accrual"))
+                .font(.millioCaptionRegular)
+                .foregroundStyle(.white.opacity(0.68))
+            Text("+\(amountText(accrual.amount))")
+                .font(.millioHeadline)
+                .foregroundStyle(.white)
+                .minimumScaleFactor(0.72)
+                .lineLimit(1)
+            Text(accrual.date.formatted(date: .abbreviated, time: .omitted))
+                .font(.millioMicro)
+                .foregroundStyle(.white.opacity(0.58))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.m)
+        .frame(minHeight: 92, alignment: .topLeading)
+        .background(.white.opacity(0.09), in: RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous))
+    }
+
+    private func maturityMetric(_ amount: DepositAmount) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text(L("accounts_core.deposit.detail.maturity_metric_label"))
+                .font(.millioCaptionRegular)
+                .foregroundStyle(.white.opacity(0.68))
+            Text(amountText(amount))
+                .font(.millioHeadline)
+                .foregroundStyle(.white)
+                .minimumScaleFactor(0.72)
+                .lineLimit(1)
+            Text(L("accounts_core.deposit.detail.forecast"))
+                .font(.millioMicro)
+                .foregroundStyle(.white.opacity(0.58))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.m)
+        .frame(minHeight: 92, alignment: .topLeading)
+        .background(.white.opacity(0.09), in: RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous))
+    }
+
+    private func metricCard(_ amount: DepositAmount, label: String) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text(label).font(.millioCaptionRegular).foregroundStyle(.white.opacity(0.68))
+            Text(amountText(amount))
+                .font(.millioHeadline)
+                .foregroundStyle(.white)
+                .minimumScaleFactor(0.72)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.m)
+        .frame(minHeight: 92, alignment: .topLeading)
+        .background(.white.opacity(0.09), in: RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous))
+    }
+
+    /// Итоговая строка условий вклада. Нет `meta` (вклад `incomplete`) или вклад закрыт — строка не
+    /// нужна: у закрытого вклада условия уже не действуют, у неполного — их ещё нет.
+    private var summaryLine: String? {
+        guard let meta, presentation.state != .archived, presentation.state != .incomplete else { return nil }
+        let rate = String(format: L("accounts_core.deposit.detail.rate_yearly_format"), NSDecimalNumber(decimal: meta.rate).doubleValue)
+        let topUp = meta.allowsTopUp
+            ? L("accounts_core.detail.deposit.badge.top_up_allowed")
+            : L("accounts_core.detail.deposit.badge.top_up_denied")
+        let capitalization = String(format: L("accounts_core.deposit.detail.capitalization_format"), capitalizationTitle(meta.capitalization))
+        return [rate, topUp, capitalization].joined(separator: " · ")
+    }
+
+    private func capitalizationTitle(_ capitalization: AccountDepositCapitalization) -> String {
+        switch capitalization {
+        case .none: L("accounts_core.deposit_form.capitalization.none")
+        case .daily: L("accounts_core.deposit_form.capitalization.daily")
+        case .monthly: L("accounts_core.deposit_form.capitalization.monthly")
+        case .quarterly: L("accounts_core.deposit_form.capitalization.quarterly")
+        case .customDays: L("accounts_core.deposit_form.capitalization.custom")
+        }
+    }
+
+    // MARK: - Действия
 
     private var actions: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: AppSpacing.s)], spacing: AppSpacing.s) {
@@ -83,12 +274,24 @@ struct DepositDetailSection: View {
                         .font(.millioBodySemibold)
                         .frame(maxWidth: .infinity, minHeight: 52)
                         .padding(.horizontal, AppSpacing.s)
-                        .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.iconBackground))
+                        .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(actionBackground(action)))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(action == .earlyClose || action == .archive ? AppColors.error : AppColors.textPrimary)
+                .foregroundStyle(actionForeground(action))
             }
         }
+    }
+
+    /// «Пополнить» — заливная акцентная (это основной путь пользователя на этом экране), «Изменить
+    /// баланс» — тише (контурная логика через полупрозрачную заливку), чтобы кнопки не читались как
+    /// два равнозначных действия.
+    private func actionBackground(_ action: DepositDetailAction) -> Color {
+        action == .topUp ? AppColors.positiveColor : AppColors.iconBackground
+    }
+
+    private func actionForeground(_ action: DepositDetailAction) -> Color {
+        if action == .earlyClose || action == .archive { return AppColors.error }
+        return action == .topUp ? .white : AppColors.textPrimary
     }
 
     /// Frequent money operations stay discoverable. Lifecycle and destructive actions live in the
@@ -103,69 +306,20 @@ struct DepositDetailSection: View {
             .foregroundStyle(AppColors.warning)
     }
 
-    private func amount(_ amount: DepositAmount, label: String, prominent: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text(label).font(.millioCaptionRegular).foregroundStyle(.white.opacity(0.68))
-            Text(amountText(amount))
-                .font(prominent ? .system(size: 28, weight: .bold) : .millioHeadline)
-                .foregroundStyle(.white)
-                .minimumScaleFactor(0.72)
-                .lineLimit(1)
-            if amount.provenance == .estimated {
-                Text(L("accounts_core.deposit.detail.forecast"))
-                    .font(.millioCaptionRegular)
-                    .foregroundStyle(.white.opacity(0.62))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func metricCard(_ amount: DepositAmount, label: String) -> some View {
-        self.amount(amount, label: label)
-            .padding(AppSpacing.m)
-            .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-            .background(.white.opacity(0.09), in: RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous))
-    }
-
-    private func progressView(_ progress: Decimal) -> some View {
-        let clamped = min(max(NSDecimalNumber(decimal: progress).doubleValue, 0), 1)
-        return VStack(spacing: AppSpacing.xs) {
-            HStack {
-                Text(L("accounts_core.deposit.detail.term_progress"))
-                Spacer()
-                Text(clamped.formatted(.percent.precision(.fractionLength(0))))
-                    .font(.millioCalloutSemibold)
-            }
-            .font(.millioCalloutRegular)
-            ProgressView(value: clamped)
-                .tint(.white)
-        }
-        .foregroundStyle(.white.opacity(0.78))
-    }
-
-    private func infoRow(_ label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text(label)
-                .font(.millioCalloutRegular)
-                .foregroundStyle(.white.opacity(0.66))
-            Text(value)
-                .font(.millioBodySemibold)
-                .foregroundStyle(.white.opacity(0.92))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
     private func amountText(_ amount: DepositAmount) -> String {
         guard let value = amount.value else { return L("accounts_core.deposit.detail.unavailable") }
         return DepositAmountTextFormatter.string(
             value,
             currency: presentation.snapshot.currency,
+            symbol: currencySymbol,
             locale: AppLocalization.currentAppLocale
         )
     }
 
-    private func dateAmount(_ accrual: DepositAccrual) -> String {
-        "\(accrual.date.formatted(date: .abbreviated, time: .omitted)) · \(amountText(accrual.amount))"
+    /// Один символ валюты везде на карточке ($, не "$" и "USD" вперемешку) — тот же резолвер,
+    /// что использует общий hero счетов (`AccountHeroPresentation`).
+    private var currencySymbol: String {
+        MonetaCurrency(rawValue: presentation.snapshot.currency)?.symbol ?? presentation.snapshot.currency
     }
 
     private var stateTitle: String {
@@ -176,16 +330,6 @@ struct DepositDetailSection: View {
         case .maturedNeedsAction: L("accounts_core.deposit.state.matured")
         case .archived: L("accounts_core.deposit.state.archived")
         case .incomplete: L("accounts_core.deposit.state.incomplete")
-        }
-    }
-
-    private var stateIcon: String {
-        switch presentation.state {
-        case .normal, .savings: "banknote.fill"
-        case .dueSoon: "clock.fill"
-        case .maturedNeedsAction: "checkmark.circle.fill"
-        case .archived: "archivebox.fill"
-        case .incomplete: "exclamationmark.triangle.fill"
         }
     }
 
@@ -213,13 +357,15 @@ struct DepositDetailSection: View {
 }
 
 enum DepositAmountTextFormatter {
-    static func string(_ value: Decimal, currency: String, locale: Locale) -> String {
+    /// `symbol` — то, что реально показываем ("$"); `currency` остаётся фолбэком для старых
+    /// вызовов (превью формы), где символа под рукой ещё нет.
+    static func string(_ value: Decimal, currency: String, symbol: String? = nil, locale: Locale) -> String {
         let number = value.formatted(
             .number
                 .locale(locale)
                 .grouping(.automatic)
                 .precision(.fractionLength(0...2))
         )
-        return "\(number) \(currency)"
+        return "\(number) \(symbol ?? currency)"
     }
 }
