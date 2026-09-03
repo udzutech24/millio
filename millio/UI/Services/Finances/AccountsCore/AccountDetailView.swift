@@ -22,6 +22,8 @@ struct AccountDetailView: View {
     /// Вместо прямого архивирования — выбор «перевести остаток» (тогда ступеньки не будет)
     /// или «закрыть с остатком» (архивировать как есть, осознанно).
     @State private var showNonZeroBalanceArchiveWarning = false
+    /// Bottom sheet «···» вклада (Коммит 1) — заменяет системный `Menu` у верхнего края.
+    @State private var showDepositActionsSheet = false
     /// Оформление счёта грузится ОДИН раз на открытие экрана, а не из тела `body`: `body`
     /// пересчитывается на каждую мутацию, а редактора оформления на этом экране нет.
     @State private var appearance: AccountAppearanceSnapshot?
@@ -288,23 +290,10 @@ struct AccountDetailView: View {
             if let presentation = depositPresentation,
                !depositOverflowActions(presentation).isEmpty || canEditDepositDetails {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        // У вклада нет actionsRow (свои операции живут в DepositDetailSection),
-                        // поэтому правка имени/группы/учёта в тотале доступна только отсюда.
-                        if canEditDepositDetails {
-                            Button(L("accounts_core.detail.action.edit_details"), systemImage: "square.and.pencil") {
-                                sheet = .editDetails
-                            }
-                        }
-                        ForEach(depositOverflowActions(presentation), id: \.self) { action in
-                            Button(
-                                depositOverflowTitle(action),
-                                systemImage: depositOverflowIcon(action),
-                                role: action == .archive ? .destructive : nil
-                            ) {
-                                handleDepositAction(action)
-                            }
-                        }
+                    // Коммит 1: bottom sheet вместо `Menu` у верхнего края — тот же список пунктов,
+                    // «Реквизиты счёта»/«Изменить условия» слиты в один (см. `depositActionSheetItems`).
+                    Button {
+                        showDepositActionsSheet = true
                     } label: {
                         Image(systemName: "ellipsis")
                     }
@@ -328,6 +317,16 @@ struct AccountDetailView: View {
         }
         .sheet(item: $sheet) { sheet in
             sheetContent(for: sheet)
+        }
+        .sheet(isPresented: $showDepositActionsSheet) {
+            if let presentation = depositPresentation {
+                AccountActionsSheet(
+                    accountName: account.name,
+                    accountTypeTitle: account.kind.localizedTitle,
+                    items: depositActionSheetItems(presentation),
+                    onDismiss: { showDepositActionsSheet = false }
+                )
+            }
         }
         .alert(
             L("accounts_core.detail.delete_confirm.title"),
@@ -1452,26 +1451,38 @@ struct AccountDetailView: View {
         presentation.actions.filter { $0 != .topUp && $0 != .adjustBalance }
     }
 
-    private func depositOverflowTitle(_ action: DepositDetailAction) -> String {
-        switch action {
-        case .topUp: L("accounts_core.deposit.action.top_up")
-        case .adjustBalance: L("accounts_core.detail.action.adjust_balance")
-        case .editTerms: L("accounts_core.deposit.action.edit_terms")
-        case .earlyClose: L("accounts_core.detail.deposit.action.early_close")
-        case .withdrawAtMaturity: L("accounts_core.deposit.action.withdraw_maturity")
-        case .archive: archiveActionTitle
+    /// Пункты bottom-sheet меню вклада (Коммит 1, `AccountActionsSheet`). «Реквизиты счёта» и
+    /// «Изменить условия» слиты в один пункт — экран `.editDetails` для вклада сам показывает
+    /// условия (Коммит 2). «Пополнить» сюда не добавляем — кнопка уже есть на экране
+    /// (`DepositDetailSection.actions`).
+    private func depositActionSheetItems(_ presentation: DepositDetailPresentation) -> [AccountActionSheetItem] {
+        var items: [AccountActionSheetItem] = []
+        if canEditDepositDetails {
+            items.append(.init(
+                title: L("accounts_core.detail.action.edit_details"),
+                icon: "square.and.pencil",
+                action: { sheet = .editDetails }
+            ))
         }
-    }
-
-    private func depositOverflowIcon(_ action: DepositDetailAction) -> String {
-        switch action {
-        case .topUp: "plus.circle"
-        case .adjustBalance: "slider.horizontal.3"
-        case .editTerms: "pencil"
-        case .earlyClose: "xmark.circle"
-        case .withdrawAtMaturity: "arrow.right.circle"
-        case .archive: "archivebox"
+        if presentation.actions.contains(.earlyClose) {
+            items.append(.init(
+                title: L("accounts_core.detail.deposit.action.early_close"),
+                // Реальное последствие из кода (`earlyClosePreview`), не выдуманная формулировка:
+                // штраф — доля от УЖЕ начисленных процентов, будущие начисления просто теряются.
+                subtitle: L("accounts_core.detail.deposit.early_close_confirm.message"),
+                icon: "xmark.circle",
+                action: { showEarlyCloseConfirm = true }
+            ))
         }
+        if presentation.actions.contains(.archive) {
+            items.append(.init(
+                title: L("accounts_core.detail.action.delete_account"),
+                icon: "trash",
+                isDestructive: true,
+                action: { requestArchiveConfirmation() }
+            ))
+        }
+        return items
     }
 
     private func performDeposit(_ operation: () throws -> DepositOperationResult) {

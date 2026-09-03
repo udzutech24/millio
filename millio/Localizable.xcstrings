@@ -5257,6 +5257,30 @@
         }
       }
     },
+    "accounts_core.detail.action.delete_account" : {
+      "extractionState" : "manual",
+      "comment" : "Красная строка «Удалить счёт» в bottom-sheet меню действий (Коммит 1)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить счёт"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除账户"
+          }
+        }
+      }
+    },
     "accounts_core.detail.action.delete" : {
       "extractionState" : "manual",
       "localizations" : {
