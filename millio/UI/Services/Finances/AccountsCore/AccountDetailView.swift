@@ -1165,6 +1165,32 @@ struct AccountDetailView: View {
                                 includeInTotal: edit.includeInTotal
                             )
                             EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+                            if let newOpeningDate = edit.openingDate {
+                                // Коммит 3: дата открытия менялась — атомарно применяет И новую
+                                // дату, И новые условия (`edit.meta` уже включает обе правки),
+                                // поэтому обычный `coordinator.editTerms` здесь НЕ вызывается —
+                                // он читал бы старую дату из `account.createdAt` и продублировал
+                                // бы перестройку графика поверх уже пересчитанной.
+                                let confirmedAlready = DepositOpeningDateRecalculation.hasConfirmedInterest(
+                                    events: account.events ?? []
+                                )
+                                if confirmedAlready {
+                                    // Сюда мы попадаем ТОЛЬКО после явного подтверждения в самом
+                                    // листе (`DepositAccountDetailsSheet.handleDoneTapped`) —
+                                    // единственный путь, ломающий инвариант «прошлое неприкосновенно».
+                                    _ = try DepositOpeningDateRecalculation.recalculateConfirmed(
+                                        account: account, newOpeningDate: newOpeningDate,
+                                        meta: edit.meta, service: service, context: modelContext
+                                    )
+                                } else {
+                                    _ = try DepositOpeningDateRecalculation.applySilently(
+                                        account: account, newOpeningDate: newOpeningDate,
+                                        meta: edit.meta, service: service, context: modelContext
+                                    )
+                                }
+                                synchronizeDepositReminder(meta: edit.meta)
+                                return DepositOperationResult(operationID: nil, eventIDs: [], wasAlreadyPersisted: false)
+                            }
                             let coordinator = DepositOperationCoordinator(modelContext: modelContext)
                             let result = try coordinator.editTerms(
                                 depositID: account.id,

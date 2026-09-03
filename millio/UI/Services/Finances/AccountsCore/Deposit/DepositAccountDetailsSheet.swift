@@ -120,6 +120,9 @@ struct DepositAccountDetailsResult {
     let note: String?
     let includeInTotal: Bool
     let meta: DepositMeta
+    /// `nil` — дату открытия не трогали. Иначе — новая дата; какой путь применения (тихий/с
+    /// подтверждением) уже решён В ЭТОМ экране ДО вызова `onSave` (см. `handleDoneTapped`).
+    let openingDate: Date?
 }
 
 // MARK: - Экран
@@ -146,6 +149,7 @@ struct DepositAccountDetailsSheet: View {
     @State private var selectedGroupID: UUID?
 
     @State private var rateText: String
+    @State private var openingDate: Date
     @State private var termEnd: Date
     @State private var allowsTopUp: Bool
     @State private var capitalization: AccountDepositCapitalization
@@ -155,11 +159,14 @@ struct DepositAccountDetailsSheet: View {
     @State private var isTaxable: Bool
 
     private enum ActiveFieldSheet: Identifiable {
-        case group, rate, termEnd, capitalization, payoutDay
+        case group, rate, openingDate, termEnd, capitalization, payoutDay
         var id: Int { hashValue }
     }
     @State private var activeFieldSheet: ActiveFieldSheet?
     @FocusState private var inputFocused: Bool
+    /// Предупреждение перед пересчётом ПОДТВЕРЖДЁННЫХ начислений (Коммит 3, п.2) — показывается
+    /// вместо немедленного `onSave`, если дата открытия изменилась и у вклада есть подтверждения.
+    @State private var showOpeningDateRecalcWarning = false
 
     init(
         account: Account,
@@ -186,6 +193,7 @@ struct DepositAccountDetailsSheet: View {
         _selectedGroupID = State(initialValue: account.group?.id)
 
         _rateText = State(initialValue: NSDecimalNumber(decimal: meta.rate).stringValue)
+        _openingDate = State(initialValue: account.createdAt)
         _termEnd = State(initialValue: meta.termEnd ?? Date())
         _allowsTopUp = State(initialValue: meta.allowsTopUp)
         _capitalization = State(initialValue: meta.capitalization)
@@ -224,8 +232,36 @@ struct DepositAccountDetailsSheet: View {
         return DepositAccountDetailsResult(
             name: trimmedName, group: selectedGroup,
             note: trimmedNote.isEmpty ? nil : trimmedNote,
-            includeInTotal: includeInTotal, meta: candidateMeta
+            includeInTotal: includeInTotal, meta: candidateMeta,
+            openingDate: openingDateChanged ? openingDate : nil
         )
+    }
+
+    /// Сравнение по дню, а не по секундам: пикер даты открытия не редактирует время, полное
+    /// равенство `Date` дало бы ложное «изменилось» из-за времени суток исходного `createdAt`.
+    private var openingDateChanged: Bool {
+        !Calendar.current.isDate(openingDate, inSameDayAs: account.createdAt)
+    }
+
+    private var hasConfirmedInterestEvents: Bool {
+        DepositOpeningDateRecalculation.hasConfirmedInterest(events: account.events ?? [])
+    }
+
+    private var confirmedInterestCount: Int {
+        DepositOpeningDateRecalculation.confirmedInterestCount(events: account.events ?? [])
+    }
+
+    /// Единственная точка входа кнопки «Готово»: если дата открытия не менялась — сохраняем как
+    /// обычно; если менялась и подтверждённых начислений нет — тоже сразу (тихий путь, п.2 брифинга);
+    /// если подтверждённые начисления есть — сначала предупреждение, `onSave` вызывается ТОЛЬКО
+    /// после явного подтверждения (см. `openingDateWarningSheet`).
+    private func handleDoneTapped() {
+        guard let result else { return }
+        if result.openingDate != nil && hasConfirmedInterestEvents {
+            showOpeningDateRecalcWarning = true
+        } else {
+            onSave(result)
+        }
     }
 
     var body: some View {
@@ -236,6 +272,10 @@ struct DepositAccountDetailsSheet: View {
                     VStack(alignment: .leading, spacing: AppSpacing.s) {
                         accountDetailsSectionCaption(L("accounts_core.deposit_form.section.terms"))
                         termsBox
+                        Text(L("accounts_core.deposit_form.opening_date_recalc_hint"))
+                            .font(.millioCaption2Regular)
+                            .foregroundStyle(AppColors.textTertiary)
+                            .padding(.horizontal, AppSpacing.s)
                     }
                     VStack(alignment: .leading, spacing: AppSpacing.s) {
                         accountDetailsSectionCaption(L("accounts_core.deposit.tax.section_title"))
@@ -256,9 +296,7 @@ struct DepositAccountDetailsSheet: View {
                     Button(L("accounts_core.detail.sheet.cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L("common.done")) {
-                        if let result { onSave(result) }
-                    }
+                    Button(L("common.done"), action: handleDoneTapped)
                     .font(.millioCalloutSemibold)
                     .foregroundStyle(.white)
                     .padding(.horizontal, AppSpacing.m)
@@ -273,6 +311,9 @@ struct DepositAccountDetailsSheet: View {
             }
             .sheet(item: $activeFieldSheet) { fieldSheet in
                 fieldSheetContent(for: fieldSheet)
+            }
+            .sheet(isPresented: $showOpeningDateRecalcWarning) {
+                openingDateWarningSheet
             }
         }
     }
@@ -323,6 +364,11 @@ struct DepositAccountDetailsSheet: View {
                 title: L("accounts_core.deposit_form.section.rate"),
                 value: rate.map { String(format: "%.2f%%", NSDecimalNumber(decimal: $0).doubleValue) } ?? "—"
             ) { activeFieldSheet = .rate }
+            AccountDetailsDivider()
+            AccountDetailsFieldRow(
+                title: L("accounts_core.deposit_form.opening_date_label"),
+                value: openingDate.formatted(date: .abbreviated, time: .omitted)
+            ) { activeFieldSheet = .openingDate }
             if meta.termEnd != nil {
                 AccountDetailsDivider()
                 AccountDetailsFieldRow(
@@ -428,6 +474,41 @@ struct DepositAccountDetailsSheet: View {
         }
     }
 
+    // MARK: - Предупреждение перед пересчётом подтверждённых начислений (Коммит 3, п.2)
+
+    /// Показывается ТОЛЬКО когда дата открытия изменилась И у вклада есть подтверждённые
+    /// начисления. Красная кнопка — единственный путь, вызывающий `onSave` в этом случае:
+    /// без неё `handleDoneTapped` дальше не идёт, `account`/события не меняются.
+    private var openingDateWarningSheet: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.l) {
+            Text(L("accounts_core.deposit_form.opening_date_warning.title"))
+                .font(.millioBodySemibold)
+                .foregroundStyle(AppColors.textPrimary)
+            Text(String(format: L("accounts_core.deposit_form.opening_date_warning.message_format"), confirmedInterestCount))
+                .font(.millioCalloutRegular)
+                .foregroundStyle(AppColors.textSecondary)
+            Button(L("accounts_core.deposit_form.opening_date_warning.confirm")) {
+                showOpeningDateRecalcWarning = false
+                if let result { onSave(result) }
+            }
+            .font(.millioBodySemibold)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.error))
+
+            Button(L("accounts_core.detail.sheet.cancel")) {
+                showOpeningDateRecalcWarning = false
+            }
+            .font(.millioBodySemibold)
+            .foregroundStyle(AppColors.textPrimary)
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.iconBackground))
+        }
+        .padding(AppSpacing.l)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
+
     // MARK: - Bottom-sheet пикеры полей
 
     @ViewBuilder
@@ -462,6 +543,17 @@ struct DepositAccountDetailsSheet: View {
                     Text(verbatim: "%").font(.millioTitle3).foregroundStyle(AppColors.brandPrimary)
                 }
                 .padding(.horizontal, AppSpacing.l)
+            }
+        case .openingDate:
+            AccountFieldPickerSheet(title: L("accounts_core.deposit_form.opening_date_label")) {
+                activeFieldSheet = nil
+            } content: {
+                // `...Date()` — дата открытия не может быть в будущем (тот же запрет, что
+                // и в `DepositOpeningDateRecalculation.apply`, здесь дополнительно на уровне UI).
+                DatePicker("", selection: $openingDate, in: ...Date(), displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .padding(.horizontal, AppSpacing.l)
             }
         case .termEnd:
             AccountFieldPickerSheet(title: L("accounts_core.deposit_form.term_end")) {

@@ -4052,6 +4052,126 @@
         }
       }
     },
+    "accounts_core.deposit_form.opening_date_label" : {
+      "extractionState" : "manual",
+      "comment" : "Строка «Дата открытия ›» в «Реквизитах счёта» вклада (Коммит 3)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opening date"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дата открытия"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开户日期"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit_form.opening_date_recalc_hint" : {
+      "extractionState" : "manual",
+      "comment" : "Мелкая подпись под боксом «Условия вклада» о последствии смены даты открытия",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changing the opening date recalculates accrued interest."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сдвиг даты открытия пересчитает начисленные проценты."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更改开户日期将重新计算已计利息。"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit_form.opening_date_warning.title" : {
+      "extractionState" : "manual",
+      "comment" : "Заголовок bottom-sheet предупреждения перед пересчётом подтверждённых начислений",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recalculate accrued interest?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пересчитать начисленные проценты?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要重新计算已计利息吗？"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit_form.opening_date_warning.message_format" : {
+      "extractionState" : "manual",
+      "comment" : "Тело предупреждения: сколько подтверждённых начислений будет пересоздано",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld already accrued interest events will be recalculated for the new date. Past numbers and the tax estimate for the affected years will change."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld уже начисленных процентов будут пересчитаны под новую дату. Изменятся прошлые числа и налоговая оценка за затронутые годы."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将按新日期重新计算 %lld 笔已计利息。过去的数字和相关年度的税务估算将发生变化。"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit_form.opening_date_warning.confirm" : {
+      "extractionState" : "manual",
+      "comment" : "Красная кнопка подтверждения пересчёта подтверждённых начислений",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recalculate"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пересчитать"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新计算"
+          }
+        }
+      }
+    },
     "accounts_core.deposit_form.section.rate" : {
       "extractionState" : "manual",
       "localizations" : {
