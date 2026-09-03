@@ -424,6 +424,221 @@
         }
       }
     },
+    "accounts_core.debit_card.repair.action" : {
+      "extractionState" : "manual",
+      "comment" : "Строка в «Реквизитах счёта» дебетовой карты — ручной ремонт LegacyAccountConversion-бага",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is a credit card"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это кредитная карта"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这实际上是信用卡"
+          }
+        }
+      }
+    },
+    "accounts_core.debit_card.repair.action_hint" : {
+      "extractionState" : "manual",
+      "comment" : "Пояснение под строкой «Это кредитная карта»",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use this if this account was actually a credit card but is stored as a debit card"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Используйте, если этот счёт на самом деле кредитка, а хранится как дебетовая карта"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果该账户实际上是信用卡，但被存储为借记卡，请使用此项"
+          }
+        }
+      }
+    },
+    "accounts_core.debit_card.repair.title" : {
+      "extractionState" : "manual",
+      "comment" : "Заголовок листа ремонта дебетовая→кредитная карта",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore as a credit card"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Восстановить как кредитную карту"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复为信用卡"
+          }
+        }
+      }
+    },
+    "accounts_core.debit_card.repair.limit_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Credit limit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кредитный лимит"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "信用额度"
+          }
+        }
+      }
+    },
+    "accounts_core.debit_card.repair.debt_label" : {
+      "extractionState" : "manual",
+      "comment" : "Строка предпросмотра ремонта: «Долг: X ₽»",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Debt"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Долг"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "欠款"
+          }
+        }
+      }
+    },
+    "accounts_core.debit_card.repair.available_label" : {
+      "extractionState" : "manual",
+      "comment" : "Строка предпросмотра ремонта: «Доступно: Y ₽»",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Available"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступно"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可用额度"
+          }
+        }
+      }
+    },
+    "accounts_core.debit_card.repair.total_change_format" : {
+      "extractionState" : "manual",
+      "comment" : "Строка предпросмотра ремонта: «В „Итого“ было +N ₽ → станет −X ₽»",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In “Total” it was %@ → will become %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В «Итого» было %@ → станет %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在「总计」中原为 %@ → 将变为 %@"
+          }
+        }
+      }
+    },
+    "accounts_core.debit_card.repair.confirm" : {
+      "extractionState" : "manual",
+      "comment" : "Красная кнопка подтверждения ремонта дебетовая→кредитная карта",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подтвердить"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "确认"
+          }
+        }
+      }
+    },
+    "accounts_core.debit_card.repair.error" : {
+      "extractionState" : "manual",
+      "comment" : "Сообщение об ошибке ремонта (напр. лимит не указан)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't apply the credit limit. Make sure it's greater than zero."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось применить лимит. Убедитесь, что он указан и больше нуля."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法应用信用额度。请确保额度大于零。"
+          }
+        }
+      }
+    },
     "accounts_core.detail.badge.archived" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -9,6 +9,13 @@ enum DebitCardOperationCoordinatorError: Error, Equatable {
     case refundExceedsExpense
     case invalidTransferTarget
     case currencyMismatch
+    /// Счёт с `cardMeta.creditLimit` попал в `adjust()` — писателя для настоящих дебетовых/
+    /// наличных карт. `target >= 0` здесь бессмысленный гард для кредитного долга (именно так и
+    /// возник баг «Альфа Кредитка»: старая миграция записала кредитку дебетовой картой, и «Изменить
+    /// долг» тем же путём чуть не закрепило бы долг положительным вкладом в тотал повторно).
+    /// Кредитная семантика — `AccountsCoreService.adjustBalance` +
+    /// `CreditCardFinancialContract.rawAvailableBalance(debt:creditLimit:)`.
+    case creditCardRequiresCreditSemantics
 }
 
 struct DebitCardOperationCommand {
@@ -119,6 +126,12 @@ final class DebitCardOperationCoordinator {
 
     func adjust(account: Account, to targetBalance: Decimal, operationID rawID: String, reason: String, date: Date = Date()) throws -> DebitCardOperationResult {
         guard !modelContext.hasChanges else { throw DebitCardOperationCoordinatorError.dirtyContext }
+        // Кредитный лимит на этом счёте означает кредитную семантику, даже если сюда как-то дошёл
+        // вызов для .debitCard/.bankAccount — `target >= 0` ниже трактует ЛЮБОЙ неотрицательный
+        // ввод как «остаток», а для долга по кредитке это в точности перевёрнутый знак.
+        guard (account.cardMeta?.creditLimit ?? 0) <= 0 else {
+            throw DebitCardOperationCoordinatorError.creditCardRequiresCreditSemantics
+        }
         let operationID = try normalizedOperationID(rawID)
         guard account.archivedAt == nil, account.deletedAt == nil else { throw DebitCardContractError.archivedAccount }
         let normalizedReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
