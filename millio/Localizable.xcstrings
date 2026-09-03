@@ -4075,6 +4075,30 @@
         }
       }
     },
+    "accounts_core.deposit_form.section.terms" : {
+      "extractionState" : "manual",
+      "comment" : "Капитель над боксом «Условия вклада» в «Реквизитах счёта» (Коммит 2)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deposit terms"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Условия вклада"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存款条款"
+          }
+        }
+      }
+    },
     "accounts_core.deposit_form.section.term" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5049,6 +5073,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "约 %@ 卢布"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.tax.section_title" : {
+      "extractionState" : "manual",
+      "comment" : "Капитель над налоговым боксом в «Реквизитах счёта» (Коммит 2)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tax"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Налог"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "税务"
           }
         }
       }
@@ -7580,6 +7628,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "备注"
+          }
+        }
+      }
+    },
+    "accounts_core.detail.sheet.note_add_placeholder" : {
+      "extractionState" : "manual",
+      "comment" : "Плейсхолдер поля заметки в «Реквизитах счёта» (Коммит 2), когда заметка пустая",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加"
           }
         }
       }

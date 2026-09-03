@@ -1146,7 +1146,39 @@ struct AccountDetailView: View {
                 }
             )
         case .editDetails:
-            if account.productType == .creditCard {
+            if account.kind == .deposit, let meta = account.depositMeta, let presentation = depositPresentation {
+                // Коммит 2: «Реквизиты счёта» вклада — слияние генерик-формы и правки условий в
+                // один экран тёмного языка приложения. Другие типы продолжают открывать прежние
+                // экраны ниже — их поведение этой веткой не затронуто.
+                DepositAccountDetailsSheet(
+                    account: account,
+                    modelContext: modelContext,
+                    meta: meta,
+                    canEarlyClose: presentation.actions.contains(.earlyClose),
+                    onSave: { edit in
+                        performDeposit {
+                            try service.updateAccount(
+                                account,
+                                name: edit.name,
+                                group: edit.group,
+                                note: edit.note,
+                                includeInTotal: edit.includeInTotal
+                            )
+                            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+                            let coordinator = DepositOperationCoordinator(modelContext: modelContext)
+                            let result = try coordinator.editTerms(
+                                depositID: account.id,
+                                command: DepositTermsEditCommand(meta: edit.meta)
+                            )
+                            synchronizeDepositReminder(meta: edit.meta)
+                            return result
+                        }
+                    },
+                    onProductTransitionCommitted: productTransitionCommitted,
+                    onRequestEarlyClose: { showEarlyCloseConfirm = true },
+                    onRequestDelete: { requestArchiveConfirmation() }
+                )
+            } else if account.productType == .creditCard {
                 CreditCardEditSheet(account: account, modelContext: modelContext, onSave: { command, settings in
                     performEdit {
                         try CreditCardEditorService(modelContext: modelContext).update(account: account, command: command)
