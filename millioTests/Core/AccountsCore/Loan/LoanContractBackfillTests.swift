@@ -134,4 +134,41 @@ struct LoanContractBackfillTests {
         #expect(contract == nil)
         #expect(try context.fetch(FetchDescriptor<LoanContract>()).isEmpty)
     }
+
+    @Test("Платёж из легаси-меты задаёт график: срок не выдумывается из termEnd")
+    func backfillPrefersLegacyPaymentOverTermEnd() throws {
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let context = container.mainContext
+        var meta = referenceMeta
+        meta.monthlyPayment = 30_929
+        let account = try makeLegacyLoan(context: context, meta: meta)
+
+        let contract = try #require(
+            try LoanContractBackfill.ensureContract(for: account, context: context, now: now, calendar: calendar)
+        )
+
+        // Дата начала кредита в старом мире потеряна (миграция пишет opening датой миграции),
+        // поэтому срок «до termEnd» — это остаток периодов, а principal — исходная сумма.
+        // Вместе они давали платёж «по формуле» в разы больше договорного, поэтому срок не берём.
+        #expect(contract.termPeriods == 0)
+        #expect(contract.paymentOverride == 30_929)
+        #expect(contract.principal == 1_200_000)
+    }
+
+    @Test("Ставки в легаси-мете нет: договор её не выдумывает")
+    func backfillKeepsUnknownRateZero() throws {
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let context = container.mainContext
+        var meta = referenceMeta
+        meta.rate = 0
+        let account = try makeLegacyLoan(context: context, meta: meta)
+
+        let contract = try #require(
+            try LoanContractBackfill.ensureContract(for: account, context: context, now: now, calendar: calendar)
+        )
+
+        #expect(contract.annualRatePercent == 0)
+        // И на экране такая ставка обязана выглядеть пустой, а не настоящим «0% годовых».
+        #expect(LoanTermsDraft(terms: contract.terms).ratePercentText.isEmpty)
+    }
 }

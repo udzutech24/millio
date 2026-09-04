@@ -124,4 +124,52 @@ struct LoanContractPersistenceTests {
         #expect(rows.first?.paymentsMade == 5)
         #expect(rows.first?.paidInterestTotal == 92_554)
     }
+
+    @Test("Правка суммы и ставки на существующем договоре переживает перезапуск")
+    func editedPrincipalAndRateSurviveRestart() throws {
+        let url = makeStoreURL()
+        defer { removeStore(at: url) }
+
+        let accountID = UUID()
+        let firstPayment = calendar.date(from: DateComponents(year: 2026, month: 3, day: 15))!
+
+        // Договор в том виде, в каком его приносит backfill старого счёта: ставки нет, сумма мусорная.
+        do {
+            let container = try makeContainer(at: url)
+            let context = container.mainContext
+            try LoanContractStore(context: context).upsert(accountID: accountID) { contract in
+                contract.principal = 9_052_673
+                contract.annualRatePercent = 0
+                contract.termPeriods = 4
+                contract.firstPaymentDate = firstPayment
+                contract.paymentsMade = 0
+            }
+            try context.save()
+        }
+
+        do {
+            let container = try makeContainer(at: url)
+            let context = container.mainContext
+            let stored = try #require(try LoanContractStore(context: context).contract(for: accountID))
+            var draft = LoanTermsDraft(terms: stored.terms)
+            draft.principalText = "3000000"
+            draft.ratePercentText = "18.9"
+            draft.termMonths = 12
+            let terms = try #require(draft.terms)
+            try LoanContractStore(context: context).upsert(accountID: accountID) { contract in
+                contract.principal = terms.principal
+                contract.annualRatePercent = terms.annualRatePercent
+                contract.termPeriods = terms.termPeriods
+            }
+            try context.save()
+        }
+
+        let reopened = try makeContainer(at: url)
+        let restored = try #require(
+            try LoanContractStore(context: reopened.mainContext).contract(for: accountID)
+        )
+        #expect(restored.principal == 3_000_000)
+        #expect(restored.annualRatePercent == 18.9)
+        #expect(restored.termPeriods == 12)
+    }
 }

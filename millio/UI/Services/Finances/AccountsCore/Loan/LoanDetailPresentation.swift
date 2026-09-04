@@ -51,6 +51,9 @@ struct LoanDetailPresentation: Equatable {
             calendar: calendar
         )
         let nextRow = ahead.rows.first
+        // Открытый график (срок задаёт платёж, §4.2 — так приезжают счета из старого мира): срока
+        // в договоре нет, и «0 мес» на чипсе было бы ложью. Показываем то, что реально впереди.
+        let termPeriods = terms.termPeriods > 0 ? terms.termPeriods : ahead.paymentCount
 
         return LoanDetailPresentation(
             currency: currency,
@@ -66,8 +69,8 @@ struct LoanDetailPresentation: Equatable {
             paidInterestTotal: paidInterestTotal,
             paymentsMade: paymentsMade,
             paymentsAhead: ahead.paymentCount,
-            termPeriods: terms.termPeriods,
-            termMonths: terms.termPeriods * terms.frequency.stepMonths,
+            termPeriods: termPeriods,
+            termMonths: termPeriods * terms.frequency.stepMonths,
             annualRatePercent: terms.annualRatePercent,
             scheduleType: terms.scheduleType,
             frequency: terms.frequency

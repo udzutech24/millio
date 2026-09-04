@@ -9784,6 +9784,50 @@
         }
       }
     },
+    "accounts_core.loan_form.principal_correction_note" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loan amount correction"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Уточнение суммы кредита"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "贷款金额修正"
+          }
+        }
+      }
+    },
+    "accounts_core.loan_form.principal_ledger_note" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The outstanding balance is changed by account operations, not by this field — it holds the contract amount only."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Остаток долга меняют операции по счёту, а не эта строка: здесь только сумма из договора."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "欠款余额由账户操作改变，而不是此处：这一行只保存合同金额。"
+          }
+        }
+      }
+    },
     "accounts_core.loan_form.rate" : {
       "localizations" : {
         "en" : {

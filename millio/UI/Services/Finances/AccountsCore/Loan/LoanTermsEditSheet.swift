@@ -3,9 +3,8 @@ import SwiftData
 
 /// Экран «Условия кредита» — оболочка `LoanTermsFormCard` для правки уже существующего счёта.
 ///
-/// Режим определяется наличием договора, а не типом экрана: пока `LoanContract` не заведён,
-/// сумма и ставка редактируемые. Иначе счёт, созданный старой формой (она никогда не собирала
-/// ставку — `AccountsCoreAdditionBridge.loanMeta` пишет `rate: 0`), навсегда остался бы без ставки.
+/// Редактируются все условия, включая сумму и ставку: счёт, приехавший из старого мира, иначе
+/// навсегда остался бы с нулевой ставкой и суммой, которую нечем исправить.
 struct LoanTermsEditSheet: View {
     let account: Account
     let modelContext: ModelContext
@@ -15,6 +14,9 @@ struct LoanTermsEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: LoanTermsDraft
     @State private var errorMessage: String?
+    /// Сумма, с которой экран открылся. Нужна, чтобы отличить правку суммы от правки любого
+    /// другого условия: остаток догоняем только когда человек тронул именно эту строку.
+    private let seededPrincipal: Decimal?
 
     init(
         account: Account,
@@ -30,21 +32,27 @@ struct LoanTermsEditSheet: View {
         // пустой черновик с первым платежом через месяц, как у типового графика.
         if let terms = LoanTermsResolver.terms(for: account, contract: contract) {
             _draft = State(initialValue: LoanTermsDraft(terms: terms))
+            seededPrincipal = terms.principal
         } else {
             let nextMonth = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
             _draft = State(initialValue: LoanTermsDraft(firstPaymentDate: nextMonth))
+            seededPrincipal = nil
         }
     }
 
-    private var mode: LoanTermsFormCard.Mode { contract == nil ? .create : .edit }
+    /// Платежей по договору ещё не было → сумма кредита и есть остаток долга, и правка суммы
+    /// имеет право догнать ленту (см. `save()`). Были → остаток за лентой, форма его не трогает.
+    private var paymentsMade: Int { contract?.paymentsMade ?? 0 }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 LoanTermsFormCard(
-                    mode: mode,
                     currencyCode: account.currency,
-                    draft: $draft
+                    draft: $draft,
+                    principalFootnote: paymentsMade > 0
+                        ? L("accounts_core.loan_form.principal_ledger_note")
+                        : nil
                 )
                 .padding(AppSpacing.l)
             }
@@ -78,6 +86,10 @@ struct LoanTermsEditSheet: View {
         }
     }
 
+    /// Человек тронул именно сумму. Без этой проверки правка одной только ставки переписывала бы
+    /// остаток долга суммой договора — на легаси-счёте это молча стёрло бы уже погашенную часть.
+    private var principalChanged: Bool { draft.principal != seededPrincipal }
+
     private func save() {
         guard let terms = draft.terms else { return }
         do {
@@ -92,7 +104,18 @@ struct LoanTermsEditSheet: View {
                 contract.frequency = terms.frequency
                 contract.paymentOverride = terms.paymentOverride
             }
-            try modelContext.save()
+
+            // Порядок как в `LoanPaymentRecorder`: договор правится ДО события, и `recordEvent`
+            // (единственная точка записи) сохраняет всё разом — второго save-барьера нет.
+            let correction = principalChanged
+                ? try LoanPrincipalCorrection(modelContext: modelContext).alignOutstanding(
+                    account: account,
+                    to: terms.principal,
+                    paymentsMade: paymentsMade
+                )
+                : nil
+            if correction == nil { try modelContext.save() }
+
             EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             onSaved()
             dismiss()

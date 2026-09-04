@@ -825,12 +825,11 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         }
     }
 
-    /// Условия договора — тот же `LoanTermsFormCard`, что и на экране правки условий, в режиме
-    /// создания (сумма и ставка редактируемые). Заменил прежние поля «Сумма кредита»,
+    /// Условия договора — тот же `LoanTermsFormCard`, что и на экране правки условий.
+    /// Заменил прежние поля «Сумма кредита»,
     /// «Ежемесячный платёж» и «День платежа»: они дублировали бы поля карточки.
     private var loanTermsSection: some View {
         LoanTermsFormCard(
-            mode: .create,
             currencyCode: selectedCurrency,
             draft: $loanDraft
         )

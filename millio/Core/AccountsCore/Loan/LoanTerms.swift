@@ -42,9 +42,15 @@ extension LoanTerms {
     ///
     /// `LoanMeta` не хранит ни периодичности, ни даты первого платежа, ни срока в периодах —
     /// восстанавливаем: шаг всегда месячный, первый платёж = месяц от открытия счёта в
-    /// `paymentDay`, срок = число месяцев до `termEnd`. Без `termEnd` срок неизвестен, и тогда
-    /// единственный работающий вход — ручной платёж (график открытый). Нет ни того, ни другого —
-    /// условий нет, возвращаем `nil` вместо выдуманных значений.
+    /// `paymentDay`. Нет ни платежа, ни `termEnd` — условий нет, возвращаем `nil` вместо
+    /// выдуманных значений.
+    ///
+    /// ⚠️ Дата начала кредита в старом мире ТЕРЯЕТСЯ: `LegacyAccountsMigrator` пишет opening-событие
+    /// датой миграции (`:303`, `nowProvider()`), а `LoanMeta` своей даты не хранит. Поэтому срок,
+    /// посчитанный от `termEnd`, — это число ОСТАВШИХСЯ платежей, тогда как `principal` — ИСХОДНАЯ
+    /// сумма; вместе они дают платёж «по формуле» в разы больше договорного (кредит на 12 месяцев,
+    /// из которых прошло 8, показывал платёж ×3). Поэтому платёж из меты имеет приоритет: он —
+    /// точное число из договора, и при нём срок графику не нужен вовсе (открытый график, §4.2).
     init?(legacy meta: LoanMeta, openingDate: Date, calendar: Calendar = Calendar(identifier: .gregorian)) {
         guard meta.principal > 0 else { return nil }
         guard let firstPayment = DepositInterestScheduler.scheduledPeriodEnd(
@@ -55,11 +61,11 @@ extension LoanTerms {
         ) else { return nil }
 
         let periods: Int
-        if let termEnd = meta.termEnd {
+        if meta.monthlyPayment != nil {
+            periods = 0
+        } else if let termEnd = meta.termEnd {
             let months = calendar.dateComponents([.month], from: firstPayment, to: termEnd).month ?? 0
             periods = max(months + 1, 1)
-        } else if meta.monthlyPayment != nil {
-            periods = 0
         } else {
             return nil
         }

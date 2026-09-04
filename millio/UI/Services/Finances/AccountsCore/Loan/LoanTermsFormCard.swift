@@ -1,24 +1,20 @@
 import SwiftUI
 
-/// Форма «Условия кредита» (макет, ЭКРАН 2) — один компонент на оба режима.
+/// Форма «Условия кредита» (макет, ЭКРАН 2) — один компонент и для создания, и для правки.
 ///
-/// `.create` — сумма и ставка редактируемые (условия ещё не зафиксированы);
-/// `.edit` — они только показываются: у заключённого договора сумма и ставка не меняются,
-/// меняются срок, дата первого платежа, тип и периодичность платежа, ручной платёж.
-/// Остальные поля в обоих режимах одинаковые, поэтому это один компонент, а не два экрана.
+/// Все условия, включая сумму и ставку, редактируемые в обоих случаях. Read-only сумма и ставка
+/// из макета не пережили реальные данные: у счетов, приехавших из старого мира, ставка нулевая, а
+/// сумма может быть мусорной, и чинить их было бы нечем (баг владельца 2026-09-04).
 ///
 /// Собран из существующих примитивов тёмного языка (`AccountDetailsBoxCard`,
-/// `AccountDetailsFieldRow`, `AccountDetailsValueRow`, `AccountDetailsToggleRow`,
-/// `AccountFieldPickerSheet`, `AccountSelectionChip`) — своих строк формы не заводит.
+/// `AccountDetailsFieldRow`, `AccountDetailsToggleRow`, `AccountFieldPickerSheet`,
+/// `AccountSelectionChip`) — своих строк формы не заводит.
 struct LoanTermsFormCard: View {
-    enum Mode {
-        case create
-        case edit
-    }
-
-    let mode: Mode
     let currencyCode: String
     @Binding var draft: LoanTermsDraft
+    /// Сноска под суммой кредита: показывается, когда правка суммы уже НЕ двигает остаток долга
+    /// (по договору были платежи). `nil` — сноски нет.
+    var principalFootnote: String? = nil
 
     private enum ActiveFieldSheet: Identifiable {
         case principal, rate, term, firstPaymentDate, payment
@@ -46,28 +42,22 @@ struct LoanTermsFormCard: View {
         VStack(alignment: .leading, spacing: AppSpacing.s) {
             accountDetailsSectionCaption(L("accounts_core.loan_form.section.amount_rate"))
             AccountDetailsBoxCard {
-                switch mode {
-                case .create:
-                    AccountDetailsFieldRow(
-                        title: L("accounts_core.loan_form.principal"),
-                        value: principalValueText
-                    ) { activeFieldSheet = .principal }
-                    AccountDetailsDivider()
-                    AccountDetailsFieldRow(
-                        title: L("accounts_core.loan_form.rate"),
-                        value: rateValueText
-                    ) { activeFieldSheet = .rate }
-                case .edit:
-                    AccountDetailsValueRow(
-                        title: L("accounts_core.loan_form.principal"),
-                        value: principalValueText
-                    )
-                    AccountDetailsDivider()
-                    AccountDetailsValueRow(
-                        title: L("accounts_core.loan_form.rate"),
-                        value: rateValueText
-                    )
-                }
+                AccountDetailsFieldRow(
+                    title: L("accounts_core.loan_form.principal"),
+                    value: principalValueText
+                ) { activeFieldSheet = .principal }
+                AccountDetailsDivider()
+                AccountDetailsFieldRow(
+                    title: L("accounts_core.loan_form.rate"),
+                    value: rateValueText
+                ) { activeFieldSheet = .rate }
+            }
+            if let principalFootnote {
+                Text(principalFootnote)
+                    .font(.millioCaption2Regular)
+                    .foregroundStyle(AppColors.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, AppSpacing.s)
             }
         }
     }

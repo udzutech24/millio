@@ -30,7 +30,12 @@ struct LoanTermsDraft: Equatable {
     /// Сид из уже существующих условий (договор V12 либо легаси-мета через `LoanTermsResolver`).
     init(terms: LoanTerms) {
         principalText = Self.rawText(terms.principal)
-        ratePercentText = Self.rawText(terms.annualRatePercent)
+        // Нулевая ставка в сиде = «ставка неизвестна», а не «0% годовых»: старая форма кредита
+        // ставку не собирала вовсе (`AccountsCoreAdditionBridge.loanMeta` пишет `rate: 0`).
+        // Показываем пустое поле — ноль выдавал бы себя за настоящую ставку и молча вырождал
+        // аннуитет в `principal / n`. Цена решения: у честной рассрочки под 0% ставку придётся
+        // ввести заново — зато график никогда не строится на выдуманном проценте.
+        ratePercentText = terms.annualRatePercent > 0 ? Self.rawText(terms.annualRatePercent) : ""
         termMonths = max(terms.termPeriods, 0) * terms.frequency.stepMonths
         firstPaymentDate = terms.firstPaymentDate
         scheduleType = terms.scheduleType

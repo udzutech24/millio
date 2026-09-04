@@ -176,4 +176,21 @@ struct LoanTermsDraftTests {
         #expect(rebuilt.frequency == source.frequency)
         #expect(rebuilt.paymentOverride == source.paymentOverride)
     }
+
+    @Test("Нулевая ставка из старого мира приходит в форму пустой, а не нулём")
+    func zeroRateSeedsEmptyField() throws {
+        let source = LoanTerms(
+            principal: 1_200_000,
+            annualRatePercent: 0,
+            termPeriods: 12,
+            firstPaymentDate: firstPayment
+        )
+
+        let draft = LoanTermsDraft(terms: source)
+
+        // Пустое поле, а не «0»: старая форма ставку не собирала, и ноль здесь означает «неизвестно».
+        #expect(draft.ratePercentText.isEmpty)
+        // И сохранить такие условия нельзя, пока ставку не ввели, — график не строится на догадке.
+        #expect(draft.terms == nil)
+    }
 }
