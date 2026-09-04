@@ -1,7 +1,7 @@
 {
   "planFile": "2026-09-04__credit-account-type.md",
   "title": "Тип счёта «Кредит»",
-  "updated": "2026-09-04T21:40:00Z",
+  "updated": "2026-09-04T21:00:00Z",
   "phases": [
     {
       "name": "Ф1 — Разведка, спека, план",
@@ -39,9 +39,14 @@
       "note": "LoanPaymentCashflowProjector: расход на платёж + отдельная строка страховки, дедуп importSourceRaw \"loanPayment\" + importReferenceKey; LoanContract зарегистрирован в ModelTypeRegistry + LoanContractImporter (round-trip бэкапа); net worth правок не потребовал — Р6 доказан тестом. 11 новых тестов, кредит 107 зелёных (было 93), полный millioTests 2676 passed / 25 failed против базы 2617 / 27 — новых красных нет"
     },
     {
+      "name": "Правки по замечаниям с устройства",
+      "status": "done",
+      "note": "7e0583e сумма/ставка редактируемые · 93f31e5 + 500c953 автофокус и высота листов · 77b2d0f тап по активной вкладке → корень"
+    },
+    {
       "name": "Ф8 — Сдача владельцу",
-      "status": "pending",
-      "note": "merge/push/устройство — только по явному «да»"
+      "status": "in_progress",
+      "note": "ветка запушена, билд на iPhone 17 Pro Max; идёт device-проверка, мерж не делали"
     }
   ],
   "costUsd": null,
