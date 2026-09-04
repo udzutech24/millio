@@ -8774,6 +8774,116 @@
         }
       }
     },
+    "accounts_core.loan.schedule.empty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No schedule yet — check the loan terms"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "График пока не построен — проверьте условия кредита"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无还款计划 — 请检查贷款条件"
+          }
+        }
+      }
+    },
+    "accounts_core.loan.schedule.legend.interest" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "interest to the bank"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "проценты банку"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "银行利息"
+          }
+        }
+      }
+    },
+    "accounts_core.loan.schedule.legend.principal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "principal"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "тело долга"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本金"
+          }
+        }
+      }
+    },
+    "accounts_core.loan.schedule.overpayment" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total overpayment"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переплата за весь срок"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全期总利息"
+          }
+        }
+      }
+    },
+    "accounts_core.loan.schedule.overpayment_note_format" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ of the loan amount. Prepayment will recalculate it."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ от суммы кредита. При досрочном погашении пересчитается."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "占贷款金额的 %@。提前还款后将重新计算。"
+          }
+        }
+      }
+    },
     "accounts_core.loan_form.first_payment_date" : {
       "localizations" : {
         "en" : {

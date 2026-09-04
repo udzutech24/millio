@@ -76,7 +76,10 @@ struct LoanDetailPresentation: Equatable {
     /// Платёж при этом не «плывёт»: аннуитет самоподобен — `annuity(остаток, i, оставшихся периодов)`
     /// равен исходному платежу. Ручной платёж договора (`paymentOverride`) переносится как есть,
     /// он же и определяет число оставшихся периодов.
-    private static func remainingTerms(
+    ///
+    /// Не приватная: тем же способом строит свою часть `LoanSchedulePresentation` (Ф5). Второе
+    /// определение «что впереди» развело бы число строк графика и строку «N впереди» на деталке.
+    static func remainingTerms(
         terms: LoanTerms,
         outstanding: Decimal,
         paymentsMade: Int,
@@ -98,27 +101,12 @@ struct LoanDetailPresentation: Equatable {
 
 extension LoanDetailPresentation {
     /// Один символ валюты на всех экранах кредита — тот же резолвер, что у hero счетов.
-    var currencySymbol: String {
-        MonetaCurrency(rawValue: currency)?.symbol ?? currency
-    }
+    var currencySymbol: String { LoanMoneyFormat.symbol(for: currency) }
 
     /// Деньги кредита — целые рубли, как в hero и в строке списка счетов. Единственная точка
     /// округления на экране: ядро считает без округлений (контракт §4.3).
-    func money(_ value: Decimal) -> String {
-        let text = AccountRowAmountFormatter.text(
-            NSDecimalNumber(decimal: value).doubleValue,
-            isHidden: false,
-            maximumFractionDigits: 0
-        )
-        return "\(text) \(currencySymbol)"
-    }
+    func money(_ value: Decimal) -> String { LoanMoneyFormat.money(value, currency: currency) }
 
     /// Прогресс с одним знаком после запятой — «5,2%» макета.
-    var progressText: String {
-        let percent = NSDecimalNumber(decimal: progress * 100).doubleValue
-        let number = percent.formatted(
-            .number.locale(AppLocalization.currentAppLocale).precision(.fractionLength(1))
-        )
-        return "\(number)%"
-    }
+    var progressText: String { LoanMoneyFormat.percent(progress) }
 }

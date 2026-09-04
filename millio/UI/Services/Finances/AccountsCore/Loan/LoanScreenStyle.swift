@@ -17,4 +17,19 @@ enum LoanScreenStyle {
 
     static let buttonCornerRadius: CGFloat = AppSpacing.m
     static let buttonHeight: CGFloat = 52
+
+    // MARK: - График платежей (ЭКРАН 3)
+
+    /// Подсветка текущего периода: та же подложка, что у тихой кнопки, приглушённая до фона строки —
+    /// на полную яркость `iconBackground` двухцветная полоса теряет контраст.
+    static let currentRowFill = AppColors.iconBackground.opacity(0.4)
+    /// Внесённые платежи не прячем, а приглушаем: строка «N впереди» на деталке должна сходиться
+    /// с тем, что видно на экране.
+    static let paidRowOpacity: Double = 0.45
+    static let shareBarHeight: CGFloat = 8
+    /// Колонки строки графика фиксированы, иначе полосы 60 строк встали бы «лесенкой»
+    /// (у дифференцированного графика сумма платежа в каждой строке своя).
+    static let scheduleMonthColumnWidth: CGFloat = 62
+    static let scheduleAmountColumnWidth: CGFloat = 96
+    static let scheduleRowHeight: CGFloat = 40
 }

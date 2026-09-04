@@ -27,6 +27,8 @@ struct AccountDetailView: View {
     /// Тот же bottom sheet «···» у кредита в детальном режиме: у него на экране только «Внести
     /// платёж» и «Досрочно», остальные действия счёта живут в меню (спека §5).
     @State private var showLoanActionsSheet = false
+    /// График платежей кредита — отдельный экран пушем (Ф5), как «Тип продукта» у вклада.
+    @State private var showLoanSchedule = false
     /// Оформление счёта грузится ОДИН раз на открытие экрана, а не из тела `body`: `body`
     /// пересчитывается на каждую мутацию, а редактора оформления на этом экране нет.
     @State private var appearance: AccountAppearanceSnapshot?
@@ -364,6 +366,18 @@ struct AccountDetailView: View {
         }
         .sheet(item: $sheet) { sheet in
             sheetContent(for: sheet)
+        }
+        // Витрина графика строится ЗДЕСЬ, а не в свойстве экрана: 60 строк не нужны на каждый
+        // пересчёт `body`, а замыкание назначения выполняется только в момент перехода.
+        .navigationDestination(isPresented: $showLoanSchedule) {
+            if let terms = LoanTermsResolver.terms(for: account, contract: loanContract) {
+                LoanScheduleView(presentation: LoanSchedulePresentation.make(
+                    terms: terms,
+                    outstandingPrincipal: max(-balanceToday, 0),
+                    paymentsMade: loanContract?.paymentsMade ?? 0,
+                    currency: account.currency
+                ))
+            }
         }
         .sheet(isPresented: $showDepositActionsSheet) {
             if let presentation = depositPresentation {
@@ -1596,9 +1610,10 @@ struct AccountDetailView: View {
         switch action {
         case .payment: sheet = .loanPayment
         case .terms: sheet = .loanTerms
-        // Ф5 (график) и Ф6 (досрочное погашение) плана 2026-09-04__credit-account-type:
-        // элементы на экране уже есть, экранов за ними пока нет.
-        case .schedule, .prepayment: break
+        case .schedule: showLoanSchedule = true
+        // Ф6 плана 2026-09-04__credit-account-type: кнопка «Досрочно» на экране есть, листа за
+        // ней пока нет.
+        case .prepayment: break
         }
     }
 

@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Действия деталки кредита. `.schedule` и `.prepayment` подключаются в Ф5 и Ф6 — до тех пор
-/// соответствующие элементы на экране неактивны, а не спрятаны: их место в макете уже определено.
+/// Действия деталки кредита. `.prepayment` подключается в Ф6 — до тех пор кнопка на экране
+/// неактивна, а не спрятана: её место в макете уже определено.
 enum LoanDetailAction: Equatable {
     case payment
     case prepayment
@@ -105,7 +105,7 @@ struct LoanDetailSection: View {
 
     // MARK: - Разбивка платежа
 
-    /// Точки-легенды — тот же цветовой словарь, что будет у двухцветной полосы графика (Ф5).
+    /// Точки-легенды — тот же цветовой словарь, что у двухцветной полосы графика (`LoanShareBar`).
     private var breakdown: some View {
         AccountDetailsBoxCard {
             LoanBreakdownRow(
@@ -131,27 +131,30 @@ struct LoanDetailSection: View {
 
     private var emptyValue: String { L("accounts_core.loan_form.value_empty") }
 
-    /// Строка перехода в график. Чеврон есть, нажатия пока нет — экран приходит в Ф5,
-    /// а пустой переход хуже, чем видимая, но неактивная строка.
+    /// Строка перехода в график (Ф5). Число впереди — то же, что считает витрина графика:
+    /// оба берут «сколько осталось» из одного `remainingTerms`, поэтому строка и экран сходятся.
     private var scheduleRow: some View {
-        HStack {
-            Text(L("accounts_core.loan.detail.schedule"))
+        Button { onAction(.schedule) } label: {
+            HStack {
+                Text(L("accounts_core.loan.detail.schedule"))
+                    .font(.millioBody)
+                    .foregroundStyle(AppColors.textPrimary)
+                Spacer(minLength: AppSpacing.s)
+                Text(String(
+                    format: L("accounts_core.loan.detail.schedule_ahead_format"),
+                    presentation.paymentsAhead
+                ))
                 .font(.millioBody)
-                .foregroundStyle(AppColors.textPrimary)
-            Spacer(minLength: AppSpacing.s)
-            Text(String(
-                format: L("accounts_core.loan.detail.schedule_ahead_format"),
-                presentation.paymentsAhead
-            ))
-            .font(.millioBody)
-            .foregroundStyle(AppColors.textSecondary)
-            .lineLimit(1)
-            Image(systemName: "chevron.right")
-                .font(.millioCaption2)
-                .foregroundStyle(AppColors.textTertiary)
+                .foregroundStyle(AppColors.textSecondary)
+                .lineLimit(1)
+                Image(systemName: "chevron.right")
+                    .font(.millioCaption2)
+                    .foregroundStyle(AppColors.textTertiary)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
-        .frame(minHeight: 44)
+        .buttonStyle(.plain)
         .padding(.horizontal, AppSpacing.l)
-        .opacity(0.6)
     }
 }
