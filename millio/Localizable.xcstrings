@@ -8400,6 +8400,28 @@
         }
       }
     },
+    "accounts_core.loan.cashflow.insurance_note" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loan insurance"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Страховка по кредиту"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "贷款保险"
+          }
+        }
+      }
+    },
     "accounts_core.loan.detail.error.not_a_loan" : {
       "localizations" : {
         "en" : {

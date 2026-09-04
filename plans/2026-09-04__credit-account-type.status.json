@@ -1,7 +1,7 @@
 {
   "planFile": "2026-09-04__credit-account-type.md",
   "title": "Тип счёта «Кредит»",
-  "updated": "2026-09-04T15:10:00Z",
+  "updated": "2026-09-04T21:40:00Z",
   "phases": [
     {
       "name": "Ф1 — Разведка, спека, план",
@@ -35,8 +35,8 @@
     },
     {
       "name": "Ф7 — Интеграция (Cashflow, реестр, totals)",
-      "status": "pending",
-      "note": null
+      "status": "done",
+      "note": "LoanPaymentCashflowProjector: расход на платёж + отдельная строка страховки, дедуп importSourceRaw \"loanPayment\" + importReferenceKey; LoanContract зарегистрирован в ModelTypeRegistry + LoanContractImporter (round-trip бэкапа); net worth правок не потребовал — Р6 доказан тестом. 11 новых тестов, кредит 107 зелёных (было 93), полный millioTests 2676 passed / 25 failed против базы 2617 / 27 — новых красных нет"
     },
     {
       "name": "Ф8 — Сдача владельцу",

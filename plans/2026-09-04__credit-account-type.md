@@ -242,7 +242,7 @@ recurring, backup, `credit.includeInTotal`), шесть неоднозначны
 сценариев. (3) Сокращение срока в примечании «Срок» считается в месяцах, а не в платежах: при
 квартальной периодичности «на 13 платежей» человеку ничего не говорит.
 
-## Ф7 — Интеграция
+## Ф7 — Интеграция ✅
 
 - Платёж → транзакция `.expense` в Cashflow (`CashflowMonthMutationPolicy.validate` перед вставкой,
   дедуп `importSourceRaw: "loanPayment"` + `importReferenceKey`); страховка — отдельной строкой.
@@ -251,6 +251,37 @@ recurring, backup, `credit.includeInTotal`), шесть неоднозначны
 - Тест net worth: счёт `.loan` уменьшает тотал ровно на остаток тела, будущие проценты не попадают
   (правок `AccountTotalsContribution` не ожидается — тест это доказывает).
 **Готово когда:** полный `make test` зелёный, повторный прогон платежа не задваивает транзакцию.
+
+**Сделано.** `LoanPaymentCashflowProjector` (`millio/Core/AccountsCore/Loan/`) — проводка платежа в
+Cashflow: расход `.other` на фактически внесённую сумму (тело + проценты после клампа по остатку)
+и, отдельной строкой, страховка `.insurance` из `LoanContract.insuranceAmount`. Дедуп — пара
+`importSourceRaw: "loanPayment"` + `importReferenceKey` (`paymentID` и `paymentID#insurance`), как
+у `DepositCashflowProjector`. Второго пути записи не заведено: проектор зовёт существующий
+`LoanPaymentRecorder.record(_:on:)`, через который идут все три операции кредита.
+`LoanContract` зарегистрирован в `ModelTypeRegistry` + `LoanContractImporter`
+(`AccountsCoreFeatureRegistration.swift`) — до этого условия кредита в бэкап не попадали вовсе.
+
+**Проводка идёт ПЕРВЫМ шагом платежа** — до правки договора и события ленты: закрытый месяц
+Cashflow обязан отбить платёж целиком, пока в контексте ещё ничего не изменено. Сохранение
+по-прежнему одно (`recordEvent`/`save` в ветке без события), поэтому строки Cashflow, договор и
+событие уезжают в стор одной транзакцией, а `rollback()` снимает их вместе.
+
+**Решение вне спеки: страховка начисляется только на платежах, расходующих период** графика
+(плановый платёж и недоплата). Досрочка период не расходует — это погашение тела вне графика, и
+страховая премия за него не платится; иначе каждое досрочное погашение добавляло бы лишний расход.
+
+**Net worth правок не потребовал** (Р6 подтверждён тестом, а не постулатом): `.loan` отдаёт баланс
+ленты, лента содержит только тело, `AccountTotalsContribution` кредит не трогает. Тест
+`LoanNetWorthContributionTests` доказывает: остаток 1 137 241 ₽ уменьшает тотал ровно на эту сумму,
+проценты впереди 571 206 ₽ в сальдо не попадают, уплаченные 92 554 ₽ долг не гасят.
+
+**Гейт.** Сборка зелёная (0 ошибок). 11 новых тестов (`LoanPaymentCashflowProjectionTests` 5 ·
+`LoanContractBackupIntegrationTests` 4 · `LoanNetWorthContributionTests` 2), все зелёные; по кредиту
+107 зелёных против 93 на `888406e`. Полный `millioTests` — 2676 passed / 25 failed против базы
+2617 / 27: новых красных нет, оставшиеся 25 — тот же baseline/flaky-класс (курсы в `UserDefaults`,
+l10n zh-Hans, `LanguageManager`-race, тяжёлые totals/dynamics по таймауту, `credit.includeInTotal`).
+Диф `Localizable.xcstrings` — `--numstat` 22/0, один ключ
+`accounts_core.loan.cashflow.insurance_note` в ru/en/zh-Hans.
 
 ## Ф8 — Сдача владельцу
 

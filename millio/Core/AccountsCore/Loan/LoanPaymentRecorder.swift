@@ -10,8 +10,8 @@ import SwiftData
 /// Единственный путь записи для всех операций кредита: плановый платёж (Ф4), досрочное погашение и
 /// недоплата (Ф6). Второй путь развёл бы правила «что уменьшает долг» по экранам.
 ///
-/// Проводка расхода в Cashflow — не здесь: она появится в Ф7 (спека §9.1) и обязана быть
-/// дедуплицируемой, чего у события счёта нет.
+/// Расход в Cashflow пишет `LoanPaymentCashflowProjector` — здесь же, одной транзакцией с событием
+/// и договором (спека §9.1). Дедупликация — его забота, ключом служит `paymentID` этой операции.
 @MainActor
 struct LoanPaymentRecorder {
     private let modelContext: ModelContext
@@ -73,6 +73,25 @@ struct LoanPaymentRecorder {
         )
         let principalPart = min(entry.principalPart, outstanding)
 
+        // Расход идёт ПЕРВЫМ шагом: закрытый месяц Cashflow должен отбить платёж целиком, пока в
+        // контексте ещё ничего не изменено. Сумма — фактически внесённая (тело + проценты, после
+        // клампа по остатку), а не запрошенная: в Cashflow попадает то, что реально ушло из кармана.
+        //
+        // Страховая премия начисляется только на платежах, которые расходуют период графика.
+        // Досрочка периода не расходует — она гасит тело вне графика, и страховку за неё не платят.
+        let paymentID = UUID()
+        let insuranceAmount = entry.consumesPeriod
+            ? try LoanContractStore(context: modelContext).contract(for: account.id)?.insuranceAmount
+            : nil
+        try LoanPaymentCashflowProjector.project(
+            account: account,
+            paymentID: paymentID,
+            amount: principalPart + max(entry.interestPart, 0),
+            insuranceAmount: insuranceAmount,
+            date: date,
+            context: modelContext
+        )
+
         // Порядок важен: договор правится ДО записи события. `recordEvent` — единственная точка
         // сохранения, и её `rollback()` при ошибке снимает вместе с событием и эти правки —
         // так «одна транзакция» получается без второго save-барьера.
@@ -83,8 +102,8 @@ struct LoanPaymentRecorder {
         }
 
         guard principalPart > 0 else {
-            // Договор изменился, а события нет — сохраняем сами: `recordEvent` в этой ветке не
-            // вызывается, и без save правка осталась бы только в памяти контекста.
+            // Договор и строки Cashflow изменились, а события нет — сохраняем сами: `recordEvent`
+            // в этой ветке не вызывается, и без save правки остались бы только в памяти контекста.
             try modelContext.save()
             return nil
         }
