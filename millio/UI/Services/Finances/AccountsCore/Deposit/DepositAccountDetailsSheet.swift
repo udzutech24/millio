@@ -173,12 +173,7 @@ struct AccountFieldAmountSheet: View {
                 }
             }
         }
-        .task {
-            // Фокус запрашиваем после анимации презентации: на первом кадре UIKit ещё не
-            // отдал листу responder-цепочку и клавиатура не поднимается (нужен лишний тап).
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            isFocused = true
-        }
+        .autofocusAfterPresentation($isFocused)
     }
 }
 

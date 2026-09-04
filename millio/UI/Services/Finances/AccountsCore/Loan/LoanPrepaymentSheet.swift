@@ -16,6 +16,12 @@ struct LoanPrepaymentSheet: View {
     @State private var strategy: LoanPrepaymentStrategy = .term
     @State private var amountText = ""
     @FocusState private var amountFocused: Bool
+    @State private var detent: PresentationDetent = .height(Self.compactHeight)
+
+    /// Компактная высота: шапка + поле суммы с подсказкой + кнопка. Держим числом, потому что
+    /// `.presentationDetents` требует высоту до layout-прохода. Пока сумма не введена, лист не
+    /// разворачивается на весь экран — под полем зияла пустота до кнопки.
+    private static let compactHeight: CGFloat = 300
 
     private var amount: Decimal {
         Decimal(string: AmountInputFormatter.sanitize(amountText)) ?? .zero
@@ -34,6 +40,10 @@ struct LoanPrepaymentSheet: View {
 
     var body: some View {
         let presentation = presentation
+        // Разворачиваем лист, только когда ядру есть что показать под полем ввода.
+        let isExpanded = !presentation.options.isEmpty
+            || !presentation.diff.isEmpty
+            || presentation.outcome != nil
         VStack(spacing: 0) {
             title
             ScrollView {
@@ -68,8 +78,12 @@ struct LoanPrepaymentSheet: View {
         }
         .padding(.top, AppSpacing.xl)
         .background(GradientBackground())
-        .presentationDetents([.large])
+        .presentationDetents([.height(Self.compactHeight), .large], selection: $detent)
         .presentationDragIndicator(.visible)
+        .onChange(of: isExpanded) { _, expanded in
+            detent = expanded ? .large : .height(Self.compactHeight)
+        }
+        .autofocusAfterPresentation($amountFocused)
         .toolbar {
             // Цифровая клавиатура не имеет клавиши подтверждения — без этой кнопки поле суммы
             // невозможно закрыть, не уводя лист.
