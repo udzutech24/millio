@@ -22,7 +22,6 @@ struct LoanTermsFormCard: View {
     }
 
     @State private var activeFieldSheet: ActiveFieldSheet?
-    @FocusState private var inputFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.xl) {
@@ -221,22 +220,28 @@ struct LoanTermsFormCard: View {
     private func fieldSheetContent(for field: ActiveFieldSheet) -> some View {
         switch field {
         case .principal:
-            AccountFieldPickerSheet(title: L("accounts_core.loan_form.principal")) {
+            AccountFieldAmountSheet(
+                title: L("accounts_core.loan_form.principal"),
+                value: $draft.principalText,
+                suffix: currencySymbol
+            ) {
                 activeFieldSheet = nil
-            } content: {
-                amountInput(value: $draft.principalText, suffix: currencySymbol)
             }
         case .rate:
-            AccountFieldPickerSheet(title: L("accounts_core.loan_form.rate")) {
+            AccountFieldAmountSheet(
+                title: L("accounts_core.loan_form.rate"),
+                value: $draft.ratePercentText,
+                suffix: "%"
+            ) {
                 activeFieldSheet = nil
-            } content: {
-                amountInput(value: $draft.ratePercentText, suffix: "%")
             }
         case .payment:
-            AccountFieldPickerSheet(title: L("accounts_core.loan_form.payment_amount")) {
+            AccountFieldAmountSheet(
+                title: L("accounts_core.loan_form.payment_amount"),
+                value: $draft.paymentText,
+                suffix: currencySymbol
+            ) {
                 activeFieldSheet = nil
-            } content: {
-                amountInput(value: $draft.paymentText, suffix: currencySymbol)
             }
         case .term:
             AccountFieldPickerSheet(title: L("accounts_core.loan_form.term")) {
@@ -260,17 +265,5 @@ struct LoanTermsFormCard: View {
                     .padding(.horizontal, AppSpacing.l)
             }
         }
-    }
-
-    private func amountInput(value: Binding<String>, suffix: String) -> some View {
-        HStack {
-            AmountTextField(placeholder: "0", value: value)
-                .font(.millioTitle)
-                .focused($inputFocused)
-            Text(verbatim: suffix)
-                .font(.millioTitle3)
-                .foregroundStyle(AppColors.brandPrimary)
-        }
-        .padding(.horizontal, AppSpacing.l)
     }
 }

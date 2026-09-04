@@ -108,6 +108,9 @@ struct AccountDetailsDivider: View {
 /// ручка + заголовок + «Готово», вместо перехода на отдельный экран (требование мока Коммита 2).
 struct AccountFieldPickerSheet<Content: View>: View {
     let title: String
+    /// Высота листа. Пикерам (даты, колесо, список) нужен `.medium`; полю ввода — компактный
+    /// `.height(...)` по фактическому контенту, иначе под полем зияет пустота на пол-экрана.
+    var detents: Set<PresentationDetent> = [.medium]
     let onDone: () -> Void
     @ViewBuilder let content: () -> Content
 
@@ -127,8 +130,55 @@ struct AccountFieldPickerSheet<Content: View>: View {
             content()
             Spacer(minLength: 0)
         }
-        .presentationDetents([.medium])
+        .presentationDetents(detents)
         .presentationDragIndicator(.visible)
+    }
+}
+
+/// Компактный лист ввода числа для строки формы счёта (сумма кредита, ставка, платёж, ставка
+/// вклада). Отличается от общего `AccountFieldPickerSheet` двумя вещами, за которые пришёл
+/// баг владельца 2026-09-04: клавиатура поднимается сразу (фокус живёт ВНУТРИ листа — `@FocusState`
+/// презентующего экрана через границу презентации не работает) и высота листа равна контенту.
+struct AccountFieldAmountSheet: View {
+    let title: String
+    @Binding var value: String
+    /// Суффикс справа от поля: символ валюты или «%».
+    let suffix: String
+    let onDone: () -> Void
+
+    @FocusState private var isFocused: Bool
+
+    /// Заголовок + поле + отступы. Держим числом, потому что `.presentationDetents` требует
+    /// высоту до layout-прохода, а `.presentationSizing(.fitted)` схлопывает лист при показе
+    /// клавиатуры.
+    private static let sheetHeight: CGFloat = 148
+
+    var body: some View {
+        AccountFieldPickerSheet(title: title, detents: [.height(Self.sheetHeight)], onDone: onDone) {
+            HStack(spacing: AppSpacing.s) {
+                AmountTextField(placeholder: "0", value: $value)
+                    .font(.millioTitle)
+                    .focused($isFocused)
+                Text(verbatim: suffix)
+                    .font(.millioTitle3)
+                    .foregroundStyle(AppColors.brandPrimary)
+            }
+            .padding(.horizontal, AppSpacing.l)
+            .padding(.bottom, AppSpacing.l)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button(L("common.done"), action: onDone)
+                        .font(.millioBodySemibold)
+                }
+            }
+        }
+        .task {
+            // Фокус запрашиваем после анимации презентации: на первом кадре UIKit ещё не
+            // отдал листу responder-цепочку и клавиатура не поднимается (нужен лишний тап).
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            isFocused = true
+        }
     }
 }
 
@@ -556,16 +606,12 @@ struct DepositAccountDetailsSheet: View {
                 .listStyle(.plain)
             }
         case .rate:
-            AccountFieldPickerSheet(title: L("accounts_core.deposit_form.section.rate")) {
+            AccountFieldAmountSheet(
+                title: L("accounts_core.deposit_form.section.rate"),
+                value: $rateText,
+                suffix: "%"
+            ) {
                 activeFieldSheet = nil
-            } content: {
-                HStack {
-                    AmountTextField(placeholder: "0", value: $rateText)
-                        .font(.millioTitle)
-                        .focused($inputFocused)
-                    Text(verbatim: "%").font(.millioTitle3).foregroundStyle(AppColors.brandPrimary)
-                }
-                .padding(.horizontal, AppSpacing.l)
             }
         case .openingDate:
             AccountFieldPickerSheet(title: L("accounts_core.deposit_form.opening_date_label")) {
