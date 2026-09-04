@@ -74,7 +74,7 @@ struct DepositHeroContent: View {
             .foregroundStyle(.white.opacity(0.9))
 
             if let progress = presentation.snapshot.progress {
-                progressBar(progress)
+                AccountHeroProgressBar(progress: progress)
                 HStack {
                     Text(openingDate.formatted(date: .abbreviated, time: .omitted))
                     Spacer()
@@ -94,17 +94,6 @@ struct DepositHeroContent: View {
         case .archived: .white.opacity(0.5)
         default: .white
         }
-    }
-
-    private func progressBar(_ progress: Decimal) -> some View {
-        let clamped = min(max(NSDecimalNumber(decimal: progress).doubleValue, 0), 1)
-        return GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.22))
-                Capsule().fill(.white).frame(width: proxy.size.width * clamped)
-            }
-        }
-        .frame(height: 4)
     }
 
     @ViewBuilder
@@ -130,58 +119,23 @@ struct DepositHeroContent: View {
     }
 
     private func nextAccrualMetric(_ accrual: DepositAccrual) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text(L("accounts_core.deposit.detail.next_accrual"))
-                .font(.millioCaptionRegular)
-                .foregroundStyle(.white.opacity(0.68))
-            Text("+\(amountText(accrual.amount))")
-                .font(.millioHeadline)
-                .foregroundStyle(.white)
-                .minimumScaleFactor(0.72)
-                .lineLimit(1)
-            Text(accrual.date.formatted(date: .abbreviated, time: .omitted))
-                .font(.millioMicro)
-                .foregroundStyle(.white.opacity(0.58))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.m)
-        .frame(minHeight: 92, alignment: .topLeading)
-        .background(.white.opacity(0.09), in: RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous))
+        AccountHeroMetricTile(
+            title: L("accounts_core.deposit.detail.next_accrual"),
+            value: "+\(amountText(accrual.amount))",
+            caption: accrual.date.formatted(date: .abbreviated, time: .omitted)
+        )
     }
 
     private func maturityMetric(_ amount: DepositAmount) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text(L("accounts_core.deposit.detail.maturity_metric_label"))
-                .font(.millioCaptionRegular)
-                .foregroundStyle(.white.opacity(0.68))
-            Text(amountText(amount))
-                .font(.millioHeadline)
-                .foregroundStyle(.white)
-                .minimumScaleFactor(0.72)
-                .lineLimit(1)
-            Text(L("accounts_core.deposit.detail.forecast"))
-                .font(.millioMicro)
-                .foregroundStyle(.white.opacity(0.58))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.m)
-        .frame(minHeight: 92, alignment: .topLeading)
-        .background(.white.opacity(0.09), in: RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous))
+        AccountHeroMetricTile(
+            title: L("accounts_core.deposit.detail.maturity_metric_label"),
+            value: amountText(amount),
+            caption: L("accounts_core.deposit.detail.forecast")
+        )
     }
 
     private func metricCard(_ amount: DepositAmount, label: String) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text(label).font(.millioCaptionRegular).foregroundStyle(.white.opacity(0.68))
-            Text(amountText(amount))
-                .font(.millioHeadline)
-                .foregroundStyle(.white)
-                .minimumScaleFactor(0.72)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.m)
-        .frame(minHeight: 92, alignment: .topLeading)
-        .background(.white.opacity(0.09), in: RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous))
+        AccountHeroMetricTile(title: label, value: amountText(amount))
     }
 
     /// Итоговая строка условий вклада. Нет `meta` (вклад `incomplete`) или вклад закрыт — строка не

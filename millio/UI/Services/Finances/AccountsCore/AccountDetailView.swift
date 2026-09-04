@@ -24,6 +24,9 @@ struct AccountDetailView: View {
     @State private var showNonZeroBalanceArchiveWarning = false
     /// Bottom sheet «···» вклада (Коммит 1) — заменяет системный `Menu` у верхнего края.
     @State private var showDepositActionsSheet = false
+    /// Тот же bottom sheet «···» у кредита в детальном режиме: у него на экране только «Внести
+    /// платёж» и «Досрочно», остальные действия счёта живут в меню (спека §5).
+    @State private var showLoanActionsSheet = false
     /// Оформление счёта грузится ОДИН раз на открытие экрана, а не из тела `body`: `body`
     /// пересчитывается на каждую мутацию, а редактора оформления на этом экране нет.
     @State private var appearance: AccountAppearanceSnapshot?
@@ -43,6 +46,7 @@ struct AccountDetailView: View {
         case depositTerms
         case depositMaturity
         case loanTerms
+        case loanPayment
         case buy
         case sell
         case dividend
@@ -111,6 +115,24 @@ struct AccountDetailView: View {
             calendarPolicy: DepositCalendarPolicy(timeZone: .current)
         )
         return DepositDetailPresentation.make(snapshot: snapshot)
+    }
+
+    /// Детальный режим кредита (Ф4). Признак режима — наличие условий, а не `kind`: счёт `.loan`
+    /// без `LoanMeta` и без договора остаётся на старом генерик-экране, ничего не теряя.
+    ///
+    /// Остаток берётся из ленты событий (спека Р6) и разворачивается в положительную величину:
+    /// в ядре долг хранится отрицательным балансом, а человеку показываем «сколько осталось».
+    private var loanPresentation: LoanDetailPresentation? {
+        guard account.kind == .loan else { return nil }
+        _ = refreshToken
+        guard let terms = LoanTermsResolver.terms(for: account, contract: loanContract) else { return nil }
+        return LoanDetailPresentation.make(
+            terms: terms,
+            outstandingPrincipal: max(-balanceToday, 0),
+            paymentsMade: loanContract?.paymentsMade ?? 0,
+            paidInterestTotal: loanContract?.paidInterestTotal ?? 0,
+            currency: account.currency
+        )
     }
 
     /// Сумма hero — ровно то же число, что в строке списка «Счета» и в тоталах: у кредитки это
@@ -256,6 +278,12 @@ struct AccountDetailView: View {
                                     meta: account.depositMeta
                                 )
                             }
+                        } else if let loanPresentation {
+                            // Кредит — та же подмена начинки, что у вклада: hero несёт остаток
+                            // долга, прогресс погашенного тела и ближайший платёж.
+                            AccountHeroCardView(presentation: heroPresentation) {
+                                LoanHeroContent(presentation: loanPresentation)
+                            }
                         } else {
                             AccountHeroCardView(presentation: heroPresentation)
                         }
@@ -274,12 +302,18 @@ struct AccountDetailView: View {
                             taxPresentation: depositTaxPresentation,
                             onAction: handleDepositAction
                         )
+                    } else if let loanPresentation {
+                        LoanDetailSection(presentation: loanPresentation, onAction: handleLoanAction)
                     } else if account.productType == .creditCard {
                         CreditCardDetailSection(account: account, rawBalance: balanceToday)
                     } else if let snapshot = debitSnapshot {
                         DebitCardDetailSection(account: account, snapshot: snapshot)
                     }
-                    if account.kind != .deposit && account.archivedAt == nil && account.deletedAt == nil
+                    // Кредит в детальном режиме, как и вклад, свои действия рисует сам: генерик-ряд
+                    // дал бы вторую кнопку платежа рядом с «Внести платёж», а это две разные
+                    // операции с одинаковым названием.
+                    if account.kind != .deposit && loanPresentation == nil
+                        && account.archivedAt == nil && account.deletedAt == nil
                         && (debitSnapshot?.canWrite ?? true) {
                         actionsRow
                     }
@@ -298,6 +332,15 @@ struct AccountDetailView: View {
                     // «Реквизиты счёта»/«Изменить условия» слиты в один (см. `depositActionSheetItems`).
                     Button {
                         showDepositActionsSheet = true
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }
+                    .accessibilityLabel(L("accounts_core.detail.action.edit"))
+                }
+            } else if loanPresentation != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showLoanActionsSheet = true
                     } label: {
                         Image(systemName: "ellipsis")
                     }
@@ -331,6 +374,14 @@ struct AccountDetailView: View {
                     onDismiss: { showDepositActionsSheet = false }
                 )
             }
+        }
+        .sheet(isPresented: $showLoanActionsSheet) {
+            AccountActionsSheet(
+                accountName: account.name,
+                accountTypeTitle: account.kind.localizedTitle,
+                items: loanActionSheetItems,
+                onDismiss: { showLoanActionsSheet = false }
+            )
         }
         .alert(
             L("accounts_core.detail.delete_confirm.title"),
@@ -393,8 +444,10 @@ struct AccountDetailView: View {
         .task(id: account.id) {
             appearance = try? AccountAppearanceStore(context: modelContext)
                 .loadSnapshots()[account.id]
+            // Ленивый перевод в детальный режим (спека Р5): счёт `.loan`, заведённый старой формой,
+            // получает договор из легаси-меты ровно здесь — при первом открытии деталки.
             loanContract = account.kind == .loan
-                ? try? LoanContractStore(context: modelContext).contract(for: account.id)
+                ? try? LoanContractBackfill.ensureContract(for: account, context: modelContext)
                 : nil
             guard account.kind == .marketInvestment else { return }
             await AccountMarketPriceService(modelContext: modelContext).refreshTodayPrices()
@@ -1176,6 +1229,15 @@ struct AccountDetailView: View {
                     refreshToken = UUID()
                 }
             )
+        case .loanPayment:
+            if let loanPresentation {
+                LoanPaymentConfirmSheet(
+                    presentation: loanPresentation,
+                    onConfirm: { recordLoanPayment(loanPresentation) },
+                    // Явный `self`: параметр `sheet` этой функции затеняет одноимённый `@State`.
+                    onDismiss: { self.sheet = nil }
+                )
+            }
         case .editDetails:
             if account.kind == .deposit, let meta = account.depositMeta, let presentation = depositPresentation {
                 // Коммит 2: «Реквизиты счёта» вклада — слияние генерик-формы и правки условий в
@@ -1528,6 +1590,62 @@ struct AccountDetailView: View {
         case .withdrawAtMaturity: sheet = .depositMaturity
         case .archive: requestArchiveConfirmation()
         }
+    }
+
+    private func handleLoanAction(_ action: LoanDetailAction) {
+        switch action {
+        case .payment: sheet = .loanPayment
+        case .terms: sheet = .loanTerms
+        // Ф5 (график) и Ф6 (досрочное погашение) плана 2026-09-04__credit-account-type:
+        // элементы на экране уже есть, экранов за ними пока нет.
+        case .schedule, .prepayment: break
+        }
+    }
+
+    /// Плановый платёж: долг уменьшает только тело, проценты копятся в договоре (спека Р6).
+    /// Обе записи — одна транзакция внутри `LoanPaymentRecorder`.
+    private func recordLoanPayment(_ presentation: LoanDetailPresentation) {
+        guard let principalPart = presentation.nextPaymentPrincipal,
+              let interestPart = presentation.nextPaymentInterest,
+              let date = presentation.nextPaymentDate else { return }
+        perform {
+            try LoanPaymentRecorder(modelContext: modelContext).recordScheduledPayment(
+                account: account,
+                principalPart: principalPart,
+                interestPart: interestPart,
+                date: date
+            )
+            loanContract = try? LoanContractStore(context: modelContext).contract(for: account.id)
+        }
+    }
+
+    /// Пункты «···» кредита. «Внести платёж» сюда не дублируем — кнопка уже на экране
+    /// (`LoanDetailSection`), в меню только то, чего на экране нет.
+    private var loanActionSheetItems: [AccountActionSheetItem] {
+        var items: [AccountActionSheetItem] = [
+            .init(
+                title: L("accounts_core.detail.loan.action.terms"),
+                icon: "doc.text",
+                action: { sheet = .loanTerms }
+            )
+        ]
+        // «Изменить баланс» кредиту намеренно не даём: поле суммы отбрасывает минус
+        // (`AmountInputFormatter.sanitize`), и сохранение перевернуло бы знак долга — счёт-
+        // обязательство ушёл бы в net worth активом. Ремонт остатка — отдельная задача.
+        if account.archivedAt == nil && account.deletedAt == nil {
+            items.append(.init(
+                title: L("accounts_core.detail.action.edit_details"),
+                icon: "square.and.pencil",
+                action: { sheet = .editDetails }
+            ))
+        }
+        items.append(.init(
+            title: L("accounts_core.detail.action.delete_account"),
+            icon: "trash",
+            isDestructive: true,
+            action: { requestArchiveConfirmation() }
+        ))
+        return items
     }
 
     /// Правка реквизитов вклада (имя, группа, учёт в тотале) — те же условия, что и у actionsRow
