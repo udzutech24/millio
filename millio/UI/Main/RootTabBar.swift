@@ -8,6 +8,8 @@ import SwiftUI
 struct RootTabBar: View {
     @Binding var selectedTab: RootTab
     @Binding var showFABMenu: Bool
+    /// Повторный тап по уже активной вкладке — стандартный iOS-жест «вернуться в корень раздела».
+    var onReselectTab: ((RootTab) -> Void)? = nil
     let onFABAction: (FABAction) -> Void
 
     var body: some View {
@@ -156,7 +158,11 @@ struct RootTabBar: View {
     ) -> some View {
         let isActive = selectedTab == tab
         return Button {
-            selectedTab = tab
+            if isActive {
+                onReselectTab?(tab)
+            } else {
+                selectedTab = tab
+            }
         } label: {
             VStack(spacing: 3) {
                 Image(systemName: icon)
