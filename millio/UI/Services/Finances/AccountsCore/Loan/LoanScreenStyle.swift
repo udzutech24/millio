@@ -18,6 +18,16 @@ enum LoanScreenStyle {
     static let buttonCornerRadius: CGFloat = AppSpacing.m
     static let buttonHeight: CGFloat = 52
 
+    // MARK: - Досрочное погашение (ЭКРАН 4)
+
+    /// Подложка тега выгоды и карточки экономии — та же зелень, что у тела долга, приглушённая до
+    /// фона. Отдельного токена под неё не заводим: цвет тот же, меняется только насыщенность.
+    static let positiveFill = AppColors.positiveColor.opacity(0.10)
+    /// Та же роль для роста переплаты при недоплате.
+    static let negativeFill = AppColors.negativeColor.opacity(0.10)
+    static let radioSize: CGFloat = 20
+    static let radioDotSize: CGFloat = 10
+
     // MARK: - График платежей (ЭКРАН 3)
 
     /// Подсветка текущего периода: та же подложка, что у тихой кнопки, приглушённая до фона строки —

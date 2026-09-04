@@ -49,6 +49,7 @@ struct AccountDetailView: View {
         case depositMaturity
         case loanTerms
         case loanPayment
+        case loanPrepayment
         case buy
         case sell
         case dividend
@@ -124,13 +125,17 @@ struct AccountDetailView: View {
     ///
     /// Остаток берётся из ленты событий (спека Р6) и разворачивается в положительную величину:
     /// в ядре долг хранится отрицательным балансом, а человеку показываем «сколько осталось».
+    private var loanOutstandingPrincipal: Decimal {
+        LoanOutstanding.fromLedger(balance: balanceToday)
+    }
+
     private var loanPresentation: LoanDetailPresentation? {
         guard account.kind == .loan else { return nil }
         _ = refreshToken
         guard let terms = LoanTermsResolver.terms(for: account, contract: loanContract) else { return nil }
         return LoanDetailPresentation.make(
             terms: terms,
-            outstandingPrincipal: max(-balanceToday, 0),
+            outstandingPrincipal: loanOutstandingPrincipal,
             paymentsMade: loanContract?.paymentsMade ?? 0,
             paidInterestTotal: loanContract?.paidInterestTotal ?? 0,
             currency: account.currency
@@ -373,7 +378,7 @@ struct AccountDetailView: View {
             if let terms = LoanTermsResolver.terms(for: account, contract: loanContract) {
                 LoanScheduleView(presentation: LoanSchedulePresentation.make(
                     terms: terms,
-                    outstandingPrincipal: max(-balanceToday, 0),
+                    outstandingPrincipal: loanOutstandingPrincipal,
                     paymentsMade: loanContract?.paymentsMade ?? 0,
                     currency: account.currency
                 ))
@@ -1252,6 +1257,16 @@ struct AccountDetailView: View {
                     onDismiss: { self.sheet = nil }
                 )
             }
+        case .loanPrepayment:
+            if let terms = LoanTermsResolver.terms(for: account, contract: loanContract) {
+                LoanPrepaymentSheet(
+                    terms: terms,
+                    outstandingPrincipal: loanOutstandingPrincipal,
+                    paymentsMade: loanContract?.paymentsMade ?? 0,
+                    currency: account.currency,
+                    onConfirm: { entry in recordLoanExtraPayment(entry) }
+                )
+            }
         case .editDetails:
             if account.kind == .deposit, let meta = account.depositMeta, let presentation = depositPresentation {
                 // Коммит 2: «Реквизиты счёта» вклада — слияние генерик-формы и правки условий в
@@ -1611,9 +1626,7 @@ struct AccountDetailView: View {
         case .payment: sheet = .loanPayment
         case .terms: sheet = .loanTerms
         case .schedule: showLoanSchedule = true
-        // Ф6 плана 2026-09-04__credit-account-type: кнопка «Досрочно» на экране есть, листа за
-        // ней пока нет.
-        case .prepayment: break
+        case .prepayment: sheet = .loanPrepayment
         }
     }
 
@@ -1630,6 +1643,18 @@ struct AccountDetailView: View {
                 interestPart: interestPart,
                 date: date
             )
+            loanContract = try? LoanContractStore(context: modelContext).contract(for: account.id)
+        }
+    }
+
+    /// Досрочное погашение и недоплата (Ф6): что уходит в тело, что в проценты и расходуется ли
+    /// период — решено ядром (`LoanPrepaymentPlanner`), экран только записывает готовое.
+    ///
+    /// Дата — сегодняшняя, а не дата планового платежа: событие с будущей датой не попало бы в
+    /// баланс «на сегодня», и долг на экране не изменился бы до наступления этой даты.
+    private func recordLoanExtraPayment(_ entry: LoanExtraPaymentEntry) {
+        perform {
+            try LoanPaymentRecorder(modelContext: modelContext).record(entry, on: account)
             loanContract = try? LoanContractStore(context: modelContext).contract(for: account.id)
         }
     }

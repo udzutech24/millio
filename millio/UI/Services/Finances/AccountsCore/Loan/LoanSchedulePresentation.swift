@@ -37,8 +37,8 @@ struct LoanScheduleRowPresentation: Identifiable, Equatable {
 ///
 /// Прошлое и будущее берутся из РАЗНЫХ расчётов, и это намеренно:
 /// - внесённые платежи — строки исходного графика договора (их уже нельзя пересчитать задним числом);
-/// - платежи впереди — график от ФАКТИЧЕСКОГО остатка тем же `remainingTerms`, которым живёт
-///   деталка. Иначе после досрочного погашения число строк впереди разошлось бы со строкой
+/// - платежи впереди — график от ФАКТИЧЕСКОГО остатка тем же `LoanScheduleEngine.remainingTerms`,
+///   которым живёт деталка. Иначе после досрочного погашения число строк впереди разошлось бы со строкой
 ///   «N впереди», из которой на этот экран и заходят.
 struct LoanSchedulePresentation: Equatable {
     let currency: String
@@ -86,7 +86,7 @@ struct LoanSchedulePresentation: Equatable {
         let paid = contractRows.prefix(made).map {
             row($0, index: $0.index, isPaid: true, isCurrent: false)
         }
-        let aheadTerms = LoanDetailPresentation.remainingTerms(
+        let aheadTerms = LoanScheduleEngine.remainingTerms(
             terms: terms,
             outstanding: max(outstandingPrincipal, .zero),
             paymentsMade: made,

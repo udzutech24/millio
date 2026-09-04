@@ -194,6 +194,46 @@ struct LoanScheduleEngineTests {
         #expect(LoanScheduleEngine.schedule(terms: zeroTerm, calendar: calendar).rows.isEmpty)
     }
 
+    // MARK: - Условия «от сегодня» (Ф6)
+
+    @Test("Ручной платёж не дорисовывает лишнюю строку из погрешности Decimal")
+    func manualPaymentDoesNotAddResidualRow() throws {
+        let terms = referenceTerms()
+        let outstanding = LoanScheduleEngine.schedule(terms: terms, calendar: calendar)
+            .outstandingPrincipal(afterPayments: 5)
+        var ahead = LoanScheduleEngine.remainingTerms(
+            terms: terms, outstanding: outstanding, paymentsMade: 5, calendar: calendar
+        )
+        // Точный аннуитет на 55 периодов: обратный проход оставляет остаток в доли копейки, и без
+        // порога `residualPrincipalEpsilon` график получал бы 56-ю строку на 0,0000001 ₽.
+        ahead.paymentOverride = LoanScheduleEngine.annuityPayment(
+            principal: outstanding,
+            periodRate: LoanScheduleEngine.periodRate(annualRatePercent: 18.9, frequency: .monthly),
+            periods: 55
+        )
+        #expect(LoanScheduleEngine.schedule(terms: ahead, calendar: calendar).paymentCount == 55)
+    }
+
+    @Test("Остаток «от сегодня»: у дифференцированного пересчитывается число периодов")
+    func remainingTermsKeepPrincipalPace() {
+        let terms = referenceTerms(scheduleType: .differentiated)
+        // По графику: 1 100 000 ₽ при теле 20 000 ₽ в периоде — ровно 55 периодов.
+        #expect(
+            LoanScheduleEngine.remainingTerms(
+                terms: terms, outstanding: 1_100_000, paymentsMade: 5, calendar: calendar
+            ).termPeriods == 55
+        )
+        // После досрочки 200 000 ₽ тело в периоде прежнее, периодов остаётся 45, а не 55.
+        #expect(
+            LoanScheduleEngine.remainingTerms(
+                terms: terms, outstanding: 900_000, paymentsMade: 5, calendar: calendar
+            ).termPeriods == 45
+        )
+        // Неполный период округляется вверх — иначе остаток «повис» бы без последнего платежа.
+        #expect(LoanScheduleEngine.periodsKeepingPrincipalPace(balance: 890_000, principalPerPeriod: 20_000) == 45)
+        #expect(LoanScheduleEngine.periodsKeepingPrincipalPace(balance: 0, principalPerPeriod: 20_000) == 0)
+    }
+
     @Test("Периодичность: шаг в месяцах и число периодов в году")
     func frequencyStepsAreConsistent() {
         #expect(LoanPaymentFrequency.allCases.map(\.stepMonths) == [1, 2, 3, 6, 12])

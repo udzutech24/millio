@@ -60,6 +60,13 @@ enum LoanScheduleEngine {
     /// выше процентов растянул бы цикл на тысячи итераций. 1200 периодов = 100 лет при месячном шаге.
     static let maxOpenEndedPeriods = 1200
 
+    /// Остаток меньше половины копейки — это накопленная погрешность `Decimal`, а не долг.
+    ///
+    /// Без порога график с ручным платежом дорисовывает лишнюю строку на 0,0000001 ₽: платёж,
+    /// посчитанный как точный аннуитет на N периодов, при обратном проходе оставляет крошку, и
+    /// после досрочки-«платёж» экран показывал бы 56 платежей вместо 55 — рост срока из ниоткуда.
+    static let residualPrincipalEpsilon = Decimal(string: "0.005")!
+
     static func periodRate(annualRatePercent: Decimal, frequency: LoanPaymentFrequency) -> Decimal {
         annualRatePercent / 100 / Decimal(frequency.periodsPerYear)
     }
@@ -120,7 +127,7 @@ enum LoanScheduleEngine {
         var balance = principal
         var index = 0
 
-        while balance > 0, index < limit {
+        while balance > residualPrincipalEpsilon, index < limit {
             index += 1
             guard let date = paymentDate(period: index, terms: terms, calendar: calendar) else { break }
             let interest = balance * rate
@@ -183,6 +190,52 @@ enum LoanScheduleEngine {
         }
 
         return LoanSchedule(principal: principal, rows: rows)
+    }
+
+    // MARK: - Условия «от сегодня»
+
+    /// Условия для графика ВПЕРЕДИ: от фактического остатка (спека Р6), а не обрезкой исходного
+    /// графика с конца. После досрочного погашения остаток уже не совпадает с расчётной точкой
+    /// графика, и обрезка показывала бы платёж и дату закрытия из несуществующего сценария.
+    ///
+    /// Скорость погашения сохраняется в том виде, в каком её задаёт тип графика:
+    /// - аннуитет самоподобен, `annuity(остаток, i, оставшихся периодов)` равен исходному платежу,
+    ///   а ручной платёж договора (`paymentOverride`) переносится как есть и сам задаёт число строк;
+    /// - у дифференцированного постоянно ТЕЛО в периоде, поэтому число периодов пересчитывается
+    ///   под остаток: иначе после досрочки тело в периоде «поплыло» бы вниз вместо сокращения срока.
+    static func remainingTerms(
+        terms: LoanTerms,
+        outstanding: Decimal,
+        paymentsMade: Int,
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) -> LoanTerms {
+        var remaining = terms
+        remaining.principal = outstanding
+        remaining.termPeriods = max(terms.termPeriods - max(paymentsMade, 0), 0)
+        if terms.scheduleType == .differentiated, terms.termPeriods > 0 {
+            remaining.termPeriods = periodsKeepingPrincipalPace(
+                balance: outstanding,
+                principalPerPeriod: terms.principal / Decimal(terms.termPeriods)
+            )
+        }
+        if let nextDate = paymentDate(period: max(paymentsMade, 0) + 1, terms: terms, calendar: calendar) {
+            remaining.firstPaymentDate = nextDate
+        }
+        return remaining
+    }
+
+    /// Сколько периодов нужно, чтобы погасить `balance` неизменным телом `principalPerPeriod`.
+    ///
+    /// Частное округляется до 6 знаков ПЕРЕД потолком: без этого 45,0000000001 от накопленной
+    /// погрешности `Decimal` дало бы лишний период.
+    static func periodsKeepingPrincipalPace(balance: Decimal, principalPerPeriod: Decimal) -> Int {
+        guard balance > 0, principalPerPeriod > 0 else { return 0 }
+        var quotient = balance / principalPerPeriod
+        var trimmed = Decimal()
+        NSDecimalRound(&trimmed, &quotient, 6, .plain)
+        var ceiled = Decimal()
+        NSDecimalRound(&ceiled, &trimmed, 0, .up)
+        return max(NSDecimalNumber(decimal: ceiled).intValue, 1)
     }
 
     // MARK: - Даты

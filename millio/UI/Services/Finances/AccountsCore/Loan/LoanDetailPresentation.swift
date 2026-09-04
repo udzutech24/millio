@@ -41,8 +41,13 @@ struct LoanDetailPresentation: Equatable {
     ) -> LoanDetailPresentation {
         let principal = max(terms.principal, .zero)
         let outstanding = max(outstandingPrincipal, .zero)
+        // «Что впереди» считает ядро (`LoanScheduleEngine.remainingTerms`), а не экран: тем же
+        // методом живут график (Ф5) и лист досрочного погашения (Ф6), поэтому «N впереди» на
+        // деталке и число строк на других экранах — одно число по построению, а не по совпадению.
         let ahead = LoanScheduleEngine.schedule(
-            terms: remainingTerms(terms: terms, outstanding: outstanding, paymentsMade: paymentsMade, calendar: calendar),
+            terms: LoanScheduleEngine.remainingTerms(
+                terms: terms, outstanding: outstanding, paymentsMade: paymentsMade, calendar: calendar
+            ),
             calendar: calendar
         )
         let nextRow = ahead.rows.first
@@ -69,32 +74,6 @@ struct LoanDetailPresentation: Equatable {
         )
     }
 
-    /// График «впереди» строится от ФАКТИЧЕСКОГО остатка (Р6), а не обрезается с конца исходного:
-    /// после досрочного погашения (Ф6) остаток уже не совпадает с расчётной точкой графика, и
-    /// обрезка показывала бы платёж и дату закрытия из несуществующего сценария.
-    ///
-    /// Платёж при этом не «плывёт»: аннуитет самоподобен — `annuity(остаток, i, оставшихся периодов)`
-    /// равен исходному платежу. Ручной платёж договора (`paymentOverride`) переносится как есть,
-    /// он же и определяет число оставшихся периодов.
-    ///
-    /// Не приватная: тем же способом строит свою часть `LoanSchedulePresentation` (Ф5). Второе
-    /// определение «что впереди» развело бы число строк графика и строку «N впереди» на деталке.
-    static func remainingTerms(
-        terms: LoanTerms,
-        outstanding: Decimal,
-        paymentsMade: Int,
-        calendar: Calendar
-    ) -> LoanTerms {
-        var remaining = terms
-        remaining.principal = outstanding
-        remaining.termPeriods = max(terms.termPeriods - max(paymentsMade, 0), 0)
-        if let nextDate = LoanScheduleEngine.paymentDate(
-            period: max(paymentsMade, 0) + 1, terms: terms, calendar: calendar
-        ) {
-            remaining.firstPaymentDate = nextDate
-        }
-        return remaining
-    }
 }
 
 // MARK: - Форматирование

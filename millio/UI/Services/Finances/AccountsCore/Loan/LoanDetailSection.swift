@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Действия деталки кредита. `.prepayment` подключается в Ф6 — до тех пор кнопка на экране
-/// неактивна, а не спрятана: её место в макете уже определено.
+/// Действия деталки кредита.
 enum LoanDetailAction: Equatable {
     case payment
     case prepayment
@@ -76,8 +75,8 @@ struct LoanDetailSection: View {
             .disabled(presentation.nextPayment == nil)
             .opacity(presentation.nextPayment == nil ? 0.4 : 1)
 
-            // TODO: Ф6 плана 2026-09-04__credit-account-type — лист досрочного погашения.
-            // Кнопка на своём месте по макету, но до Ф6 нажимать нечего.
+            // Досрочка доступна, пока долг не погашен: лист сам решит, досрочное это погашение
+            // или недоплата, — но при нулевом остатке вносить уже нечего.
             Button { onAction(.prepayment) } label: {
                 actionLabel(
                     L("accounts_core.loan.detail.action.prepayment"),
@@ -86,8 +85,8 @@ struct LoanDetailSection: View {
                 )
             }
             .buttonStyle(.plain)
-            .disabled(true)
-            .opacity(0.4)
+            .disabled(presentation.outstandingPrincipal <= 0)
+            .opacity(presentation.outstandingPrincipal <= 0 ? 0.4 : 1)
         }
     }
 

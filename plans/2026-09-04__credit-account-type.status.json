@@ -1,7 +1,7 @@
 {
   "planFile": "2026-09-04__credit-account-type.md",
   "title": "Тип счёта «Кредит»",
-  "updated": "2026-09-04T11:10:00Z",
+  "updated": "2026-09-04T15:10:00Z",
   "phases": [
     {
       "name": "Ф1 — Разведка, спека, план",
@@ -20,18 +20,18 @@
     },
     {
       "name": "Ф4 — Деталка счёта",
-      "status": "pending",
-      "note": null
+      "status": "done",
+      "note": "LoanDetailPresentation + hero/секция/лист платежа + LoanScreenStyle (медь #E0A458); платёж уменьшает долг на тело, проценты — в договор; ленивый backfill Р5. 15 новых тестов + 176 регресс + 54 l10n, 0 failed; коммит 17833d0"
     },
     {
       "name": "Ф5 — График платежей",
-      "status": "pending",
-      "note": null
+      "status": "done",
+      "note": "LoanSchedulePresentation + LoanScheduleView + LoanShareBar + общий LoanMoneyFormat; строка «N впереди» на деталке открывает экран пушем. 7 новых тестов, 119 passed / 0 failed (кредит, схема V12, вклад, локализация). Эталон: 60 строк, текущий период шестой, переплата 663 760 ₽ (55,3 %); колонка «Тело %» макета расходится с ядром с 3-го платежа — эталон спека §4.5. Коммит c89fd6b"
     },
     {
       "name": "Ф6 — Досрочное погашение",
-      "status": "pending",
-      "note": null
+      "status": "done",
+      "note": "LoanPrepaymentPlanner + LoanPrepaymentPresentation + LoanPrepaymentSheet, кнопка «Досрочно» подключена к AccountDetailView; запись только через LoanPaymentRecorder.record(_:on:), сценарий «платёж» пишет paymentOverride. Кламп пыли LoanOutstanding (Decimal через double). 72 теста кредита зелёные, полный millioTests 2617 passed / 27 failed = baseline/flaky, 0 красных в кредите. Эталон: 937 241 · срок 31 063 / 42 платежа / 226 771 · платёж 25 600 / 100 455"
     },
     {
       "name": "Ф7 — Интеграция (Cashflow, реестр, totals)",
