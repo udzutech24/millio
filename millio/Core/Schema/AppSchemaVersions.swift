@@ -197,6 +197,19 @@ enum AppSchemaV11: VersionedSchema {
     ]
 }
 
+// MARK: - V12 (LoanContract — условия и прогресс кредита в детальном режиме)
+
+/// Аддитивная версия: добавляется ровно одна таблица `LoanContract`, декларации V11 остаются
+/// byte-for-byte (образец — V8/V11). `Account` не меняется, поэтому его checksum обязан СОВПАДАТЬ
+/// с V10/V11 — это проверяет `AppSchemaFrozenGraphTests`. Условия кредита сознательно НЕ добавлены
+/// полями в `LoanMeta`: composite attribute внутри `Account` сдвинул бы его checksum задним числом.
+enum AppSchemaV12: VersionedSchema {
+    static var versionIdentifier = Schema.Version(12, 0, 0)
+    static var models: [any PersistentModel.Type] = AppSchemaV11.models + [
+        LoanContract.self,
+    ]
+}
+
 // MARK: - Текущая схема (единственный источник правды)
 
 // При добавлении нового @Model:
@@ -207,7 +220,7 @@ enum AppSchemaV11: VersionedSchema {
 // ВАЖНО: models уже выпущенной версии (или версии, под идентификатором которой уже
 // существуют сторы на дисках — dev/sim в том числе) — не редактировать задним числом.
 // Это ломает staged migration (см. комментарий V4 выше, Находка 2).
-typealias AppSchemaCurrent = AppSchemaV11
+typealias AppSchemaCurrent = AppSchemaV12
 
 // MARK: - План миграции
 
@@ -225,6 +238,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         AppSchemaV9.self,
         AppSchemaV10.self,
         AppSchemaV11.self,
+        AppSchemaV12.self,
     ]
 
     static var stages: [MigrationStage] = [
@@ -238,6 +252,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
         .lightweight(fromVersion: AppSchemaV8.self, toVersion: AppSchemaV9.self),
         .lightweight(fromVersion: AppSchemaV9.self, toVersion: AppSchemaV10.self),
         .lightweight(fromVersion: AppSchemaV10.self, toVersion: AppSchemaV11.self),
+        .lightweight(fromVersion: AppSchemaV11.self, toVersion: AppSchemaV12.self),
     ]
 }
 

@@ -1,16 +1,48 @@
 {
   "planFile": "2026-09-04__credit-account-type.md",
   "title": "Тип счёта «Кредит»",
-  "updated": "2026-09-04T00:00:00Z",
+  "updated": "2026-09-04T11:00:00Z",
   "phases": [
-    { "name": "Ф1 — Разведка, спека, план", "status": "done", "note": "recon дописан, спека 245 строк, контракт округления проверен расчётом" },
-    { "name": "Ф2 — Ядро расчёта и схема V12", "status": "pending", "note": "LoanTerms/ScheduleEngine/PrepaymentPlanner + LoanContract + 12 эталонных чисел" },
-    { "name": "Ф3 — Экран «Условия кредита»", "status": "pending", "note": null },
-    { "name": "Ф4 — Деталка счёта", "status": "pending", "note": null },
-    { "name": "Ф5 — График платежей", "status": "pending", "note": null },
-    { "name": "Ф6 — Досрочное погашение", "status": "pending", "note": null },
-    { "name": "Ф7 — Интеграция (Cashflow, реестр, totals)", "status": "pending", "note": null },
-    { "name": "Ф8 — Сдача владельцу", "status": "pending", "note": "merge/push/устройство — только по явному «да»" }
+    {
+      "name": "Ф1 — Разведка, спека, план",
+      "status": "done",
+      "note": "recon дописан, спека 245 строк, контракт округления проверен расчётом"
+    },
+    {
+      "name": "Ф2 — Ядро расчёта и схема V12",
+      "status": "done",
+      "note": "12 эталонных чисел сходятся в ноль; V12 аддитивна; 234 теста зелёные (ядро+схема+вклад)"
+    },
+    {
+      "name": "Ф3 — Экран «Условия кредита»",
+      "status": "pending",
+      "note": null
+    },
+    {
+      "name": "Ф4 — Деталка счёта",
+      "status": "pending",
+      "note": null
+    },
+    {
+      "name": "Ф5 — График платежей",
+      "status": "pending",
+      "note": null
+    },
+    {
+      "name": "Ф6 — Досрочное погашение",
+      "status": "pending",
+      "note": null
+    },
+    {
+      "name": "Ф7 — Интеграция (Cashflow, реестр, totals)",
+      "status": "pending",
+      "note": null
+    },
+    {
+      "name": "Ф8 — Сдача владельцу",
+      "status": "pending",
+      "note": "merge/push/устройство — только по явному «да»"
+    }
   ],
   "costUsd": null,
   "etaMinutes": null

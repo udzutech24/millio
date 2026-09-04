@@ -27,6 +27,9 @@ struct AccountDetailView: View {
     /// Оформление счёта грузится ОДИН раз на открытие экрана, а не из тела `body`: `body`
     /// пересчитывается на каждую мутацию, а редактора оформления на этом экране нет.
     @State private var appearance: AccountAppearanceSnapshot?
+    /// Договор кредита (V12) — грузится тем же одним заходом, что и оформление. Через него
+    /// `LoanTermsResolver` отдаёт условия; напрямую `account.loanMeta` экран больше не читает.
+    @State private var loanContract: LoanContract?
 
     private enum ActiveSheet: Identifiable {
         case income
@@ -389,6 +392,9 @@ struct AccountDetailView: View {
         .task(id: account.id) {
             appearance = try? AccountAppearanceStore(context: modelContext)
                 .loadSnapshots()[account.id]
+            loanContract = account.kind == .loan
+                ? try? LoanContractStore(context: modelContext).contract(for: account.id)
+                : nil
             guard account.kind == .marketInvestment else { return }
             await AccountMarketPriceService(modelContext: modelContext).refreshTodayPrices()
             refreshToken = UUID()
@@ -413,16 +419,23 @@ struct AccountDetailView: View {
 
     // MARK: - Обязательства (.loan/.debt) — доп. инфо и кастомные действия (Фаза 2)
 
+    /// Условия кредита — только через `LoanTermsResolver` (спека Р5): договор V12, иначе сид из
+    /// легаси `LoanMeta`. Прямого чтения `account.loanMeta` здесь быть не должно, иначе договор и
+    /// мета разъедутся у одного и того же счёта.
     private var loanInfoLines: [String]? {
-        guard let meta = account.loanMeta else { return nil }
+        guard let terms = LoanTermsResolver.terms(for: account, contract: loanContract) else { return nil }
         var lines: [String] = []
-        if meta.rate > 0 {
-            lines.append(String(format: L("accounts_core.detail.loan.rate_format"), NSDecimalNumber(decimal: meta.rate).doubleValue))
+        if terms.annualRatePercent > 0 {
+            lines.append(String(format: L("accounts_core.detail.loan.rate_format"), NSDecimalNumber(decimal: terms.annualRatePercent).doubleValue))
         }
-        if let payment = meta.monthlyPayment {
-            lines.append(String(format: L("accounts_core.detail.loan.monthly_payment_format"), NSDecimalNumber(decimal: payment).doubleValue, account.currency))
+        if let payment = LoanScheduleEngine.regularPayment(terms: terms), payment > 0 {
+            let rounded = DepositInterestScheduler.round2(payment)
+            lines.append(String(format: L("accounts_core.detail.loan.monthly_payment_format"), NSDecimalNumber(decimal: rounded).doubleValue, account.currency))
         }
-        if let termEnd = meta.termEnd {
+        // Срок известен только когда он задан в периодах: график с ручным платежом и без срока
+        // открытый, и дату закрытия здесь считать нечем (её показывает деталка кредита, Ф4).
+        if terms.termPeriods > 0,
+           let termEnd = LoanScheduleEngine.paymentDate(period: terms.termPeriods, terms: terms) {
             lines.append(String(format: L("accounts_core.detail.loan.term_end_format"), termEnd.formatted(date: .abbreviated, time: .omitted)))
         }
         return lines.isEmpty ? nil : lines
