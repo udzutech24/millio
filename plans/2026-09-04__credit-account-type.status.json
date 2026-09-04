@@ -1,7 +1,7 @@
 {
   "planFile": "2026-09-04__credit-account-type.md",
   "title": "Тип счёта «Кредит»",
-  "updated": "2026-09-04T11:00:00Z",
+  "updated": "2026-09-04T11:10:00Z",
   "phases": [
     {
       "name": "Ф1 — Разведка, спека, план",
@@ -15,8 +15,8 @@
     },
     {
       "name": "Ф3 — Экран «Условия кредита»",
-      "status": "pending",
-      "note": null
+      "status": "done",
+      "note": "LoanTermsFormCard в двух режимах + LoanTermsEditSheet + запись LoanContract в транзакции создания счёта; 212 тестов зелёные (176 ядро/схема/пресеты + 36 l10n)"
     },
     {
       "name": "Ф4 — Деталка счёта",

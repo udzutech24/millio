@@ -22,7 +22,7 @@ struct AccountDetailsBoxCard<Content: View>: View {
 }
 
 /// Капитель — подпись секции над боксом («УСЛОВИЯ ВКЛАДА» и т.п.).
-private func accountDetailsSectionCaption(_ title: String) -> some View {
+func accountDetailsSectionCaption(_ title: String) -> some View {
     Text(title)
         .font(.millioCaption2)
         .foregroundStyle(AppColors.textTertiary)
@@ -59,7 +59,30 @@ struct AccountDetailsFieldRow: View {
     }
 }
 
-private struct AccountDetailsToggleRow: View {
+/// Нередактируемый близнец `AccountDetailsFieldRow`: та же метрика строки и та же типографика,
+/// но без чеврона и без нажатия. Нужен там, где поле показывается, но менять его нельзя
+/// (сумма и ставка уже заключённого кредита).
+struct AccountDetailsValueRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.millioBody)
+                .foregroundStyle(AppColors.textPrimary)
+            Spacer(minLength: AppSpacing.s)
+            Text(value)
+                .font(.millioBody)
+                .foregroundStyle(AppColors.textSecondary)
+                .lineLimit(1)
+        }
+        .frame(minHeight: 44)
+        .padding(.horizontal, AppSpacing.l)
+    }
+}
+
+struct AccountDetailsToggleRow: View {
     let title: String
     @Binding var isOn: Bool
 
@@ -75,7 +98,7 @@ private struct AccountDetailsToggleRow: View {
     }
 }
 
-private struct AccountDetailsDivider: View {
+struct AccountDetailsDivider: View {
     var body: some View {
         Divider().background(Color.white.opacity(0.08)).padding(.leading, AppSpacing.l)
     }
@@ -83,7 +106,7 @@ private struct AccountDetailsDivider: View {
 
 /// Bottom-sheet обёртка для полей-пикеров («Ставка», «Дата окончания», «Капитализация», ...) —
 /// ручка + заголовок + «Готово», вместо перехода на отдельный экран (требование мока Коммита 2).
-private struct AccountFieldPickerSheet<Content: View>: View {
+struct AccountFieldPickerSheet<Content: View>: View {
     let title: String
     let onDone: () -> Void
     @ViewBuilder let content: () -> Content

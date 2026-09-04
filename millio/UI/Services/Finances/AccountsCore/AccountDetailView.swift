@@ -42,6 +42,7 @@ struct AccountDetailView: View {
         case depositAdjustBalance
         case depositTerms
         case depositMaturity
+        case loanTerms
         case buy
         case sell
         case dividend
@@ -861,6 +862,11 @@ struct AccountDetailView: View {
                     actionButton(L("accounts_core.detail.action.transfer"), icon: "arrow.left.arrow.right") {
                         sheet = .transfer
                     }
+                    if account.kind == .loan {
+                        actionButton(L("accounts_core.detail.loan.action.terms"), icon: "doc.text") {
+                            sheet = .loanTerms
+                        }
+                    }
                     if account.kind == .deposit, account.depositMeta?.allowsEarlyClose == true {
                         actionButton(L("accounts_core.detail.deposit.action.early_close"), icon: "xmark.circle.fill", isDestructive: true) {
                             showEarlyCloseConfirm = true
@@ -1156,6 +1162,18 @@ struct AccountDetailView: View {
                             )
                         }
                     }
+                }
+            )
+        case .loanTerms:
+            LoanTermsEditSheet(
+                account: account,
+                modelContext: modelContext,
+                contract: loanContract,
+                onSaved: {
+                    // Договор перечитываем сразу: `loanContract` грузится один раз в `.task`,
+                    // и без перечитывания экран показывал бы старые условия до переоткрытия.
+                    loanContract = try? LoanContractStore(context: modelContext).contract(for: account.id)
+                    refreshToken = UUID()
                 }
             )
         case .editDetails:

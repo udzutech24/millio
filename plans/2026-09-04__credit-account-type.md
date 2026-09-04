@@ -66,7 +66,7 @@ UI (Ф6) — аннуитетный. Возвращает `nil` + тест.
 **Долг Ф7:** `LoanContract` ещё не зарегистрирован в `ModelTypeRegistry` (нет `LoanContractImporter`),
 поэтому в бэкап пока не попадает.
 
-## Ф3 — Экран «Условия кредита»
+## Ф3 — Экран «Условия кредита» ✅
 
 Форма в двух режимах: создание (сумма и ставка редактируемые) и правка (read-only, как на макете).
 Срок, дата первого платежа, сегмент типа платежа, чипсы периодичности, тумблер «задать платёж вручную»
@@ -76,6 +76,43 @@ UI (Ф6) — аннуитетный. Возвращает `nil` + тест.
 нативный `.pickerStyle(.segmented)`, `AmountTextField` для всех сумм.
 Первым — потому что без способа завести договор остальные три экрана нечем наполнять.
 **Готово когда:** договор создаётся и правится, изменения переживают перезапуск, сборка зелёная.
+
+**Сделано.** `millio/UI/Services/Finances/AccountsCore/Loan/`: `LoanTermsDraft` (черновик формы —
+разбор полей, срок «месяцы ↔ периоды», платёж-подсказка из ядра), `LoanTermsFormCard`
+(режимы `.create`/`.edit`: в правке сумма и ставка read-only), `LoanTermsEditSheet` (оболочка
+правки, пишет `LoanContract` через `LoanContractStore`). Вход в правку — кнопка «Условия кредита»
+в `AccountDetailView` (`ActiveSheet.loanTerms`). Создание: карточка условий встроена в
+`InlineCreditCreateForm`, договор пишется через `graphEnricher` `AccountProductFactory.create` —
+в ТОЙ ЖЕ транзакции, что и счёт. `LoanMeta` не расширялась, легаси-кортеж формы сохранил форму.
+
+**Переиспользовано:** `AccountDetailsBoxCard` / `AccountDetailsFieldRow` / `AccountDetailsToggleRow` /
+`AccountDetailsDivider` / `AccountFieldPickerSheet` (у трёх снят `private`), `AmountTextField`,
+нативный `.pickerStyle(.segmented)`. Чипс `periodChip` вынесен из `DepositTermsInputCard` в
+`AccountSelectionChip` — вклад теперь зовёт тот же компонент. Написано с нуля только
+`AccountDetailsValueRow` (read-only близнец строки формы, аналога не было).
+
+**Режим определяется наличием договора, а не экраном.** Счёт, созданный старой формой, приходит
+со ставкой 0 (`AccountsCoreAdditionBridge.loanMeta` её никогда не собирал) — поэтому пока
+`LoanContract` не заведён, сумма и ставка редактируемые даже в правке.
+
+**Дедупликация формы создания.** Из `InlineCreditCreateForm` убраны поля «Сумма кредита»,
+«Ежемесячный платёж», «Режим платежа» и «День платежа»: их теперь собирает карточка условий, и два
+поля «сумма кредита» на одном экране были бы багом. Легаси-кортеж собирается из черновика
+(`paymentMode` всегда `.dayOfMonth`, день — из даты первого платежа), `LoanMeta.termEnd` считается
+ядром вместо прежнего «+1 год».
+
+**Гейт.** Сборка зелёная (BUILD SUCCEEDED). Тесты: 176 passed / 0 failed
+(`LoanTermsDraftTests`, `LoanContractPersistenceTests`, `LoanScheduleEngine`, `LoanContractStore`,
+`LoanPrepaymentPlanner`, `SchemaConsistencyTests`, `AppSchemaFrozenGraphTests`,
+`AllPresetsOnNewCoreTests`, `CreditCardCreationContractTests`, `DepositPresentationTests`) +
+36 passed / 0 failed на локализации (`LocalizationKeysTests`, `LocalizableXcstringsTests`,
+`FinanceLocalizationTests`). Диff `Localizable.xcstrings` — 570 строк, только вставки.
+
+**Расхождения с макетом (осознанные).** (1) «Сумма платежа» и «Сумма кредита» правятся листом
+снизу, а не инлайн-полем — на этом экране все поля открываются листом (требование брифинга,
+`AccountFieldPickerSheet`). (2) Срок в модели — периоды, в форме — месяцы; при неежемесячной
+периодичности срок подтягивается вверх до кратного шагу. (3) Медный акцент `#E0A458` не вводился:
+`LoanScreenStyle` — предмет Ф4, форма пока в общем `brandPrimary`.
 
 ## Ф4 — Деталка счёта
 

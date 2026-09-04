@@ -223,36 +223,10 @@ struct DepositTermsInputCard: View {
         }
     }
 
+    /// Единственная реализация чипса живёт в `AccountSelectionChip` — её же использует форма
+    /// условий кредита. Метод оставлен как тонкая обёртка, чтобы не переписывать вызовы вокруг.
     private func periodChip(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.millioCallout)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .foregroundStyle(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.s)
-                .background {
-                    RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                        .fill(isSelected
-                              ? LinearGradient(
-                                  colors: AppColors.financesGradient.map { $0.opacity(0.35) },
-                                  startPoint: .leading, endPoint: .trailing
-                              )
-                              : LinearGradient(
-                                  colors: [AppColors.iconBackground, AppColors.iconBackground],
-                                  startPoint: .leading, endPoint: .trailing
-                              ))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                                .stroke(
-                                    isSelected ? AppColors.brandPrimary : Color.clear,
-                                    lineWidth: 1
-                                )
-                        }
-                }
-        }
-        .buttonStyle(.plain)
+        AccountSelectionChip(title: title, isSelected: isSelected, action: action)
     }
 
     private func title(for option: AccountDepositCapitalization) -> String {
