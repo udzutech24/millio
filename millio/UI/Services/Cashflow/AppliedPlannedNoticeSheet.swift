@@ -29,11 +29,69 @@ struct AppliedPlannedNoticeSheet: View {
 
 // MARK: - AppliedPlannedNoticeContent
 
+/// Шасси листа: фон, скролл и кнопка закрытия. Содержимое живёт отдельным `View`, потому что
+/// `ScrollView` не даёт снять с него снимок (`ImageRenderer` не раскладывает его содержимое) —
+/// а проверка «на Dynamic Type XXXL ничего не обрезано» без снимка не делается.
 struct AppliedPlannedNoticeContent: View {
 
     let summary: AppliedPlannedNoticeSummary
+    let isInitiallyExpanded: Bool
 
     @Environment(\.dismiss) private var dismiss
+
+    init(summary: AppliedPlannedNoticeSummary, isExpanded: Bool = false) {
+        self.summary = summary
+        self.isInitiallyExpanded = isExpanded
+    }
+
+    var body: some View {
+        ZStack {
+            GradientBackground()
+
+            VStack(spacing: 0) {
+                ScrollView {
+                    AppliedPlannedNoticeColumn(summary: summary, isExpanded: isInitiallyExpanded)
+                }
+
+                dismissButton
+            }
+        }
+    }
+
+    private var dismissButton: some View {
+        Button {
+            dismiss()
+        } label: {
+            Text(L("cashflow.applied_notice.dismiss"))
+                .font(.millioHeadline)
+                .foregroundStyle(AppColors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.m)
+                .background(
+                    RoundedRectangle(cornerRadius: AppSpacing.l, style: .continuous)
+                        .fill(AppColors.cardBoxBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppSpacing.l, style: .continuous)
+                                .stroke(AppColors.cardBoxBorder, lineWidth: 1)
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, AppSpacing.l)
+        .padding(.top, AppSpacing.s)
+        .padding(.bottom, AppSpacing.l)
+    }
+}
+
+// MARK: - AppliedPlannedNoticeColumn
+
+/// Прокручиваемое содержимое сводки. Своей высоты не задаёт и ничего не обрезает: на крупных
+/// размерах шрифта колонка просто становится выше, а прокрутку даёт шасси.
+struct AppliedPlannedNoticeColumn: View {
+
+    let summary: AppliedPlannedNoticeSummary
+
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var isExpanded: Bool
@@ -50,27 +108,17 @@ struct AppliedPlannedNoticeContent: View {
     private var isStackedLayout: Bool { dynamicTypeSize >= .xxxLarge }
 
     var body: some View {
-        ZStack {
-            GradientBackground()
-
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: AppSpacing.l) {
-                        titleBlock
-                        totalsCard
-                        if !summary.details.isEmpty {
-                            detailsSection
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, AppSpacing.l)
-                    .padding(.top, AppSpacing.l)
-                    .padding(.bottom, AppSpacing.xl)
-                }
-
-                dismissButton
+        VStack(alignment: .leading, spacing: AppSpacing.l) {
+            titleBlock
+            totalsCard
+            if !summary.details.isEmpty {
+                detailsSection
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, AppSpacing.l)
+        .padding(.top, AppSpacing.l)
+        .padding(.bottom, AppSpacing.xl)
     }
 
     // MARK: - Заголовок
@@ -269,33 +317,6 @@ struct AppliedPlannedNoticeContent: View {
         }
         .font(.millioCaption2Regular)
         .foregroundStyle(AppColors.textTertiary)
-    }
-
-    // MARK: - Закрытие
-
-    private var dismissButton: some View {
-        Button {
-            dismiss()
-        } label: {
-            Text(L("cashflow.applied_notice.dismiss"))
-                .font(.millioHeadline)
-                .foregroundStyle(AppColors.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.m)
-                .background(
-                    RoundedRectangle(cornerRadius: AppSpacing.l, style: .continuous)
-                        .fill(AppColors.cardBoxBackground)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppSpacing.l, style: .continuous)
-                                .stroke(AppColors.cardBoxBorder, lineWidth: 1)
-                        )
-                )
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, AppSpacing.l)
-        .padding(.top, AppSpacing.s)
-        .padding(.bottom, AppSpacing.l)
     }
 
     // MARK: - Общее
