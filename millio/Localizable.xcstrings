@@ -21590,6 +21590,12 @@
             "state" : "translated",
             "value" : "Проценты по вкладу — информационно"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存款利息 — 仅供参考"
+          }
         }
       }
     },
@@ -21606,6 +21612,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Понятно"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "知道了"
           }
         }
       }
@@ -21661,6 +21673,18 @@
               }
             }
           }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld 笔支出"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -21677,6 +21701,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Скрыть список"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏列表"
           }
         }
       }
@@ -21728,6 +21758,18 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld начисления"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld 笔收入"
                 }
               }
             }
@@ -21786,6 +21828,18 @@
               }
             }
           }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "还有 %lld 笔操作"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -21803,6 +21857,12 @@
             "state" : "translated",
             "value" : "Показать список"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示列表"
+          }
         }
       }
     },
@@ -21819,6 +21879,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Применились автоматически — балансы уже обновлены"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已自动执行 — 余额已保持最新"
           }
         }
       }
@@ -21874,6 +21940,18 @@
               }
             }
           }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "您离开期间：%lld 笔操作"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -21890,6 +21968,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Итого по валютам"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "各币种总计"
           }
         }
       }
