@@ -333,7 +333,9 @@ struct CashflowCategoryTransactionSheet: View {
                 }
             }
             .onAppear {
-                CashflowCategorySheetBootstrap.prepare(viewModel: viewModel)
+                // prepare() переехал в CashflowUnifiedEntryContainer — он вызывается один раз на
+                // открытие экрана. Здесь остаётся только пересчёт месячного среза: он зависит от
+                // page-local состояния (kind + selectedMonth) и уже кэширован snapshotCache.
                 reloadMonthlyTotal()
                 if !hasSeenCategoryCapCoachMark {
                     showCategoryCapCoachMark = true

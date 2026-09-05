@@ -1,0 +1,16 @@
+{
+  "planFile": "2026-09-05__scroll-navigation-performance.md",
+  "title": "Производительность скролла и переходов",
+  "updated": "2026-09-05T09:10:00+03:00",
+  "phases": [
+    { "name": "Ф0. Замер «до»", "status": "done", "note": "70e6a96 — body экрана 452.7 мс = 27 кадров" },
+    { "name": "Ф1. Кэш баланса счёта", "status": "done", "note": "a549072 — 452.7 → 1.521 мс (×298); device-ок: владелец подтвердил ускорение скролла" },
+    { "name": "Ф1b. Сворачивание групп при сбросе вкладки", "status": "done", "note": "c913ab9 — expandedGroupIDs в @State экрана, 7 тестов, device-проверка PENDING" },
+    { "name": "Ф2. Табы: TabView вместо ZStack+opacity", "status": "skipped", "note": "no-go по стресс-тесту 2026-09-05; подпункт про мутации @Published закрыт в Ф1b" },
+    { "name": "Ф1c. Лаг сегментов экрана ввода", "status": "done", "note": "23c08c5 bootstrap на контейнер + e68750a l10n + 5ebd69d автофокус; device-проверка PENDING" },
+    { "name": "Ф3. Форматтеры и layout в hot-path", "status": "pending", "note": "108 мест, ~50 в горячем пути; ждёт итога device-проверки" },
+    { "name": "Ф4. Замер «после» + device-проверка", "status": "in_progress", "note": "билд 5ebd69d на устройстве, ждём вердикт владельца по 3 сценариям" }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

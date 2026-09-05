@@ -58,6 +58,10 @@ struct CashflowTransactionEditorView: View {
     let customNavigationTitle: String?
     let preselectedIncomeCategoryRaw: String?
     let preselectedExpenseCategoryRaw: String?
+    /// Внутри CashflowUnifiedEntryContainer счета уже загружены bootstrap'ом контейнера, а редактор
+    /// живёт страницей TabView — его .onAppear срабатывает на каждое переключение сегмента.
+    /// Повторный `.loadCards` там пишет в общее состояние VM и перерисовывает все три сегмента.
+    let refreshesAccountsOnAppear: Bool
     let onSave: (() -> Void)?
 
     @State private var selectedTransactionType: CashflowTransactionType
@@ -116,6 +120,7 @@ struct CashflowTransactionEditorView: View {
         preselectedExpenseCategoryRaw: String? = nil,
         initialRecurrenceRule: CashflowRecurrenceRule? = nil,
         initialTransactionDate: Date? = nil,
+        refreshesAccountsOnAppear: Bool = true,
         onSave: (() -> Void)? = nil
     ) {
         self.viewModel = viewModel
@@ -129,6 +134,7 @@ struct CashflowTransactionEditorView: View {
         self.customNavigationTitle = customNavigationTitle
         self.preselectedIncomeCategoryRaw = preselectedIncomeCategoryRaw
         self.preselectedExpenseCategoryRaw = preselectedExpenseCategoryRaw
+        self.refreshesAccountsOnAppear = refreshesAccountsOnAppear
         self.onSave = onSave
 
         if let transaction = transaction {
@@ -312,7 +318,9 @@ struct CashflowTransactionEditorView: View {
             Text(autoApplyToggleHelpMessage)
         }
         .onAppear {
-            refreshSelectableAccounts()
+            if refreshesAccountsOnAppear {
+                refreshSelectableAccounts()
+            }
             loadAvailableCurrencies()
             synchronizeSelectedCards()
             synchronizeTransferCurrencies()
@@ -328,10 +336,10 @@ struct CashflowTransactionEditorView: View {
             }
             validateAvailableBalance()
             refreshTransferRateSuggestion()
-            DispatchQueue.main.async {
-                isAmountFieldFocused = true
-            }
         }
+        // Автоподъём клавиатуры оставлен, но вынесен из .onAppear: раньше фокус запрашивался
+        // посреди анимации презентации/перелистывания сегмента и дёргал её.
+        .autofocusAfterPresentation($isAmountFieldFocused)
         .onChange(of: selectedCardID) { _, _ in
             if selectedCardID == selectedToCardID {
                 selectedToCardID = nil
