@@ -30311,6 +30311,30 @@
         }
       }
     },
+    "cashflow.category.quick_select" : {
+      "comment" : "Header above the category grid on the unified entry screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick select"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Быстрый выбор"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "快速选择"
+          }
+        }
+      }
+    },
     "cashflow.category.reorder.edit" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -30434,8 +30458,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Sort"
+            "state" : "translated",
+            "value" : "Сортировка"
           }
         },
         "tr" : {
@@ -30613,6 +30637,102 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "所有分类"
+          }
+        }
+      }
+    },
+    "cashflow.category.sort.activity" : {
+      "comment" : "Category sort mode: most recently used first",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activity"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По активности"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按活跃度"
+          }
+        }
+      }
+    },
+    "cashflow.category.sort.amount" : {
+      "comment" : "Category sort mode: largest monthly amount first",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amount"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По сумме"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按金额"
+          }
+        }
+      }
+    },
+    "cashflow.category.sort.manual" : {
+      "comment" : "Category sort mode: user-defined order",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manual"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вручную"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手动"
+          }
+        }
+      }
+    },
+    "cashflow.category.sort.name" : {
+      "comment" : "Category sort mode: alphabetical by category name",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По названию"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按名称"
           }
         }
       }
