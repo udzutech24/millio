@@ -101,7 +101,7 @@ struct CashflowScheduledAppliedNoticeTests {
 
         _ = await service.applyDuePlannedTransactionsIfNeeded(referenceNow: referenceNow)
 
-        let digest = try #require(store.takeDigest())
+        let digest = try #require(store.beginPresentation())
         #expect(digest.totalCount == 1)
         #expect(digest.details.count == 1)
         let entry = try #require(digest.details.first)
@@ -135,7 +135,7 @@ struct CashflowScheduledAppliedNoticeTests {
         let service = makeService(context: context, defaults: defaults, store: store, transactions: { [income] })
         _ = await service.applyDuePlannedTransactionsIfNeeded(referenceNow: referenceNow)
 
-        let digest = try #require(store.takeDigest())
+        let digest = try #require(store.beginPresentation())
         #expect(digest.details.first?.amount == Decimal(5_000))
         #expect(digest.incomeCount == 1)
     }
@@ -163,7 +163,7 @@ struct CashflowScheduledAppliedNoticeTests {
 
         #expect(!due.hasAppliedBalanceEffect)
         #expect(!store.hasPending)
-        #expect(store.takeDigest() == nil)
+        #expect(store.beginPresentation() == nil)
     }
 
     @Test("В журнал идут только применённые; повтор провалившейся не дублирует успешную")
@@ -208,7 +208,7 @@ struct CashflowScheduledAppliedNoticeTests {
         shouldFail = false
         _ = await service.applyDuePlannedTransactionsIfNeeded(referenceNow: referenceNow.addingTimeInterval(60))
 
-        let digest = try #require(store.takeDigest())
+        let digest = try #require(store.beginPresentation())
         #expect(digest.totalCount == 2)
         #expect(digest.details.map(\.title) == ["Связь", "Подписка"])
         #expect(digest.totalsByCurrency["RUB"] == Decimal(-300))
@@ -249,7 +249,7 @@ struct CashflowScheduledAppliedNoticeTests {
         let didGenerate = await service.generateRecurringTransactionsIfNeeded()
         #expect(didGenerate)
 
-        let digest = try #require(store.takeDigest())
+        let digest = try #require(store.beginPresentation())
         #expect(digest.totalCount == 1)
         let entry = try #require(digest.details.first)
         #expect(entry.kind == .recurring)

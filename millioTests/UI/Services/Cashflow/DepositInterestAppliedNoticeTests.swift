@@ -124,7 +124,7 @@ struct DepositInterestAppliedNoticeTests {
 
         #expect(bridge.materializeDueInterestIncome() == true)
 
-        let digest = try #require(store.takeDigest())
+        let digest = try #require(store.beginPresentation())
         #expect(digest.totalCount == 2)
         #expect(digest.details.count == 2)
         #expect(digest.details.allSatisfy { $0.kind == .depositInterest })
@@ -136,9 +136,12 @@ struct DepositInterestAppliedNoticeTests {
         #expect(digest.expenseCount == 0)
         #expect(digest.totalsByCurrency["USD"] == digest.details.reduce(Decimal(0)) { $0 + $1.amount })
 
+        // Пользователь закрыл лист — только теперь журнал очищается.
+        store.finishPresentation(digest)
+
         // Повторный прогон нечего материализовать — журнал не пополняется задним числом.
         #expect(bridge.materializeDueInterestIncome() == false)
-        #expect(store.takeDigest() == nil)
+        #expect(store.beginPresentation() == nil)
     }
 
     @Test("Без стора мост работает как прежде")

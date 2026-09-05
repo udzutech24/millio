@@ -137,12 +137,25 @@ final class AppliedPlannedNoticeStore {
         save(digest)
     }
 
-    /// Читает сводку и очищает журнал: повторный вызов вернёт `nil`, поэтому одна и та же
-    /// сводка не покажется дважды.
-    func takeDigest() -> AppliedPlannedDigest? {
+    /// Отдаёт сводку для показа, НЕ очищая журнал.
+    ///
+    /// Журнал живёт до `finishPresentation(_:)` намеренно: очистка в момент показа означала бы,
+    /// что приложение, убитое с открытым листом, стирает сводку, которую пользователь так и не
+    /// прочитал. Повторный показ той же сводки, пока лист на экране, отсекается не здесь,
+    /// а гейтом (`Readiness.isAlreadyPresenting`).
+    func beginPresentation() -> AppliedPlannedDigest? {
         let digest = loadDigest()
-        defaults.removeObject(forKey: storageKey)
         return digest.isEmpty ? nil : digest
+    }
+
+    /// Убирает из журнала показанную сводку. Вызывается на фактическом закрытии листа.
+    ///
+    /// Если пока лист был на экране журнал успел пополниться (полночь материализовала
+    /// повторяющуюся операцию), запись не трогается: показать сводку лишний раз безобиднее,
+    /// чем молча потерять непоказанное применение.
+    func finishPresentation(_ presented: AppliedPlannedDigest) {
+        guard loadDigest() == presented else { return }
+        defaults.removeObject(forKey: storageKey)
     }
 
     // MARK: - Storage
