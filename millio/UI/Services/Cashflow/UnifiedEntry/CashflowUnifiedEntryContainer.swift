@@ -96,6 +96,17 @@ struct CashflowUnifiedEntryContainer: View {
             }
         }
         .background(Color.black)
+        // Сегменты — страницы TabView, поэтому их собственный .onAppear срабатывает на КАЖДОЕ
+        // переключение. Загрузка счетов и всей ленты операций (prepare) должна выполняться один раз
+        // на открытие экрана ввода, иначе тап по сегменту тянет работу масштаба холодного старта
+        // на том же потоке, что рисует анимацию перелистывания.
+        //
+        // Порядок относительно .onAppear страниц не важен: prepare() синхронен, а месячный срез
+        // страницы считается в MainActor-Task, который стартует только после всего прохода обновления
+        // SwiftUI — то есть state.transactions к этому моменту уже заполнен.
+        .onAppear {
+            CashflowCategorySheetBootstrap.prepare(viewModel: viewModel)
+        }
     }
 
     // MARK: - Segment picker
