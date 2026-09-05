@@ -178,6 +178,11 @@ struct RootTabView: View {
                 )
             }
         }
+        .sheet(item: appliedPlannedNoticeBinding) { item in
+            // Ф2: заглушка — только число применённых операций. Настоящий лист (суммы по валютам,
+            // раскрытие в список, «и ещё N») — Ф3 плана, локализация — Ф5.
+            AppliedPlannedNoticeStubSheet(digest: item.digest)
+        }
         .onChange(of: dashboardPeriodDays) { _, newValue in
             SettingsManager.shared.dashboardDeltaPeriodDays = newValue
             showDeltaPeriodPicker = false
@@ -199,6 +204,26 @@ struct RootTabView: View {
                 return appState.pendingIncomingStatementItem
             },
             set: { value in appState.pendingIncomingStatementItem = value }
+        )
+    }
+
+    /// Взаимоисключение листов здесь ручное (очереди в проекте нет) — сводка ждёт, пока экран
+    /// свободен. Лист выписки в этом списке тоже: он приоритетнее сводки.
+    private var appliedPlannedNoticeBinding: Binding<AppliedPlannedNoticeItem?> {
+        Binding(
+            get: {
+                guard !showIncomeSheet,
+                      !showExpenseSheet,
+                      !showTransferSheet,
+                      !showProfileSheet,
+                      !router.showingSubscription,
+                      !showDeltaPeriodPicker,
+                      !appState.isStatementOnboardingActive,
+                      appState.pendingIncomingStatementItem == nil,
+                      appState.pendingIncomingBackupURL == nil else { return nil }
+                return appState.pendingAppliedPlannedNotice
+            },
+            set: { value in appState.pendingAppliedPlannedNotice = value }
         )
     }
 
@@ -447,6 +472,11 @@ struct RootTabView: View {
                     ? diContainer?.sheetsExportTrigger
                     : nil
             )
+            // Сводку показывает гейт готовности в millioApp — VM только сообщает, что журнал
+            // пополнился. Прямой показ отсюда обошёл бы блокировку и очередь листов.
+            vm.onPlannedOperationsApplied = { [appState] in
+                appState.appliedPlannedNoticeRequestToken &+= 1
+            }
             vm.handle(.syncDisplayCurrencyWithPrimary(appState.primaryCurrencyCode))
             vm.handle(.loadCards)
             vm.handle(.loadTransactions)

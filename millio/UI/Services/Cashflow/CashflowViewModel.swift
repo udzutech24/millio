@@ -23,6 +23,11 @@ final class CashflowViewModel: ViewModelProtocol {
     /// двойном тапе CTA/гонке двух вызовов persist на MainActor.
     @Published private(set) var isPersistingTransaction: Bool = false
 
+    /// Сообщение презентационному слою: цикл применения закончился и в журнале есть непоказанное.
+    /// Решение «показывать или ждать» принимается не здесь — VM не видит ни блокировки экрана,
+    /// ни смены scope, ни очереди листов.
+    var onPlannedOperationsApplied: (() -> Void)?
+
     let modelContext: ModelContext
     private let historicalRateStore: HistoricalRateStore
     private let notificationManager: NotificationManagerProtocol
@@ -130,7 +135,10 @@ final class CashflowViewModel: ViewModelProtocol {
             scopeIdentifier: self.dataScopeIdentifier,
             now: self.now,
             transactionsProvider: { [weak self] in self?.state.transactions ?? [] },
-            onTransactionsMutated: { [weak self] in self?.loadTransactionsSnapshot() },
+            onTransactionsMutated: { [weak self] in
+                self?.loadTransactionsSnapshot()
+                self?.notifyAppliedPlannedNoticeIfPending()
+            },
             onResolveExchangeInfo: { [weak self] transaction in
                 guard let self else { return CashflowExchangeInfo(rate: nil, rateDate: nil, rateCurrency: nil) }
                 return await self.currencyService.resolveExchangeInfo(for: transaction)
@@ -475,7 +483,19 @@ final class CashflowViewModel: ViewModelProtocol {
     /// cashflow-add-transaction-redesign, §1.8.B) — без этого доход вклада начисляется
     /// «в фоне» в AccountsCore и никогда не появляется в ленте Cashflow.
     private func scheduleAccountsCoreDepositInterestSync() {
-        accountsCoreDepositCashflowBridge.scheduleSync { [weak self] in self?.loadTransactionsSnapshot() }
+        accountsCoreDepositCashflowBridge.scheduleSync { [weak self] in
+            self?.loadTransactionsSnapshot()
+            self?.notifyAppliedPlannedNoticeIfPending()
+        }
+    }
+
+    /// Дёргается на завершении каждого из трёх путей применения (разовые к дате, повторяющиеся,
+    /// проценты по вкладу). Проверка `hasPending` здесь, а не у вызывающих: журнал пополняется
+    /// только после успешного `save()`, поэтому «есть непоказанное» — единственный надёжный
+    /// признак того, что применение реально состоялось.
+    func notifyAppliedPlannedNoticeIfPending() {
+        guard appliedPlannedNoticeStore.hasPending else { return }
+        onPlannedOperationsApplied?()
     }
 
     func loadCards() {

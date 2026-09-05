@@ -1,15 +1,43 @@
 {
   "planFile": "2026-09-05__planned-operations-applied-notice.md",
   "title": "Сводка применённых плановых операций",
-  "updated": "2026-09-05T15:05:00Z",
+  "updated": "2026-09-05T16:20:00Z",
   "phases": [
-    { "name": "Ф0 журнал + агрегат", "status": "done", "note": "2776d66 · 4 теста, гейт сверен" },
-    { "name": "Ф1 запись из cashflow-путей", "status": "done", "note": "8409b31 · 5 тестов, гейт сверен Денисом" },
-    { "name": "Ф1b проценты по вкладу", "status": "done", "note": "4 теста, полный прогон 2725/21 против baseline 2719/23" },
-    { "name": "Ф2 триггер показа", "status": "in_progress", "note": "через гейт millioApp:272-290" },
-    { "name": "Ф3 UI листа снизу", "status": "pending", "note": "по валютам отдельно, адаптивные детенты" },
-    { "name": "Ф4 ультракод-эффект", "status": "pending", "note": "первый .metal + Reduce Motion" },
-    { "name": "Ф5 локализация и self-audit", "status": "pending", "note": "RU/EN/zh-Hans + плюрализация" }
+    {
+      "name": "Ф0 журнал + агрегат",
+      "status": "done",
+      "note": "2776d66 · 4 теста, гейт сверен"
+    },
+    {
+      "name": "Ф1 запись из cashflow-путей",
+      "status": "done",
+      "note": "8409b31 · 5 тестов, гейт сверен Денисом"
+    },
+    {
+      "name": "Ф1b проценты по вкладу",
+      "status": "done",
+      "note": "4 теста, полный прогон 2725/21 против baseline 2719/23"
+    },
+    {
+      "name": "Ф2 триггер показа",
+      "status": "done",
+      "note": "9 тестов, полный прогон 2696/27 против baseline HEAD 2692/22"
+    },
+    {
+      "name": "Ф3 UI листа снизу",
+      "status": "pending",
+      "note": "по валютам отдельно, адаптивные детенты"
+    },
+    {
+      "name": "Ф4 ультракод-эффект",
+      "status": "pending",
+      "note": "первый .metal + Reduce Motion"
+    },
+    {
+      "name": "Ф5 локализация и self-audit",
+      "status": "pending",
+      "note": "RU/EN/zh-Hans + плюрализация"
+    }
   ],
   "costUsd": null,
   "etaMinutes": null

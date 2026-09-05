@@ -219,6 +219,7 @@ struct millioApp: App {
                             unlockWithBiometrics: unlockWithBiometricsIfEnabled
                         )
                         presentNextIncomingStatementIfReady()
+                        presentAppliedPlannedNoticeIfReady()
 
                         await financeStartupWarmupUseCase?.warmupIfNeeded()
                         await runHistoricalMaintenancePipeline()
@@ -236,8 +237,21 @@ struct millioApp: App {
                 }
                 .onChange(of: appState.lifecycle) { _, _ in
                     presentNextIncomingStatementIfReady()
+                    presentAppliedPlannedNoticeIfReady()
                 }
                 .onChange(of: appState.isAppLocked) { _, _ in
+                    presentNextIncomingStatementIfReady()
+                    presentAppliedPlannedNoticeIfReady()
+                }
+                // Сводка стоит в очереди ПОСЛЕ листа выписки: пока выписка занимает экран,
+                // решение — .wait, и повторная попытка нужна ровно в момент её закрытия.
+                .onChange(of: appState.pendingIncomingStatementItem == nil) { _, _ in
+                    presentAppliedPlannedNoticeIfReady()
+                }
+                .onChange(of: appState.appliedPlannedNoticeRequestToken) { _, _ in
+                    presentAppliedPlannedNoticeIfReady()
+                }
+                .onChange(of: appState.pendingAppliedPlannedNotice == nil) { _, _ in
                     presentNextIncomingStatementIfReady()
                 }
             } else {
@@ -278,7 +292,10 @@ struct millioApp: App {
                 readiness = .locked
             } else if appState.lifecycle != .ready || activeModelContainer == nil {
                 readiness = .storeUnavailable
-            } else if appState.isRestoreInProgress || isSwitchingScope || isReconciling {
+            } else if appState.isRestoreInProgress || isSwitchingScope || isReconciling
+                        || appState.pendingAppliedPlannedNotice != nil {
+                // Сводка уже на экране: выписка ждёт её закрытия. Без этой ветки оба листа
+                // оказались бы взаимно заблокированы биндингами RootTabView.
                 readiness = .modalBusy
             } else {
                 readiness = .ready
@@ -287,6 +304,34 @@ struct millioApp: App {
         } catch {
             AppLogger.log(.error, category: "StatementIngress", "Statement inbox unavailable code=inbox_failed")
         }
+    }
+
+    /// Единственная точка показа сводки применённых плановых операций: и после цикла применения
+    /// (через `appState.appliedPlannedNoticeRequestToken`), и на `didBecomeActive`. Второго пути
+    /// презентации нет намеренно — два листа одновременно SwiftUI глотает молча.
+    @MainActor
+    private func presentAppliedPlannedNoticeIfReady() {
+        // Скриншот-режим и UI-тесты сеются данными с плановыми операциями: лист поверх экрана
+        // ломает и съёмку скриншотов, и сценарии тестов.
+        guard !runtimeEnvironment.isAnyTesting else { return }
+        // Тот же способ получить scope, что у CashflowViewModel (`dataScopeIdentifier`) — иначе
+        // журнал писался бы под одним ключом, а читался под другим.
+        guard let scopeIdentifier = activeModelContainer?.configurations.first?.name else { return }
+        let store = AppliedPlannedNoticeStore(defaults: .standard, scopeIdentifier: scopeIdentifier)
+
+        let readiness = AppliedPlannedNoticePresentation.Readiness(
+            isAppLocked: appState.isAppLocked,
+            isStoreReady: appState.lifecycle == .ready,
+            isModalBusy: appState.isRestoreInProgress || isSwitchingScope || isReconciling,
+            hasPendingStatement: appState.pendingIncomingStatementItem != nil,
+            isAlreadyPresenting: appState.pendingAppliedPlannedNotice != nil
+        )
+
+        guard let item = AppliedPlannedNoticePresentation.makeItem(
+            store: store,
+            readiness: readiness
+        ) else { return }
+        appState.pendingAppliedPlannedNotice = item
     }
 
     @MainActor
