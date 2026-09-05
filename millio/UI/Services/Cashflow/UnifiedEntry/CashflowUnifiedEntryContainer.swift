@@ -79,7 +79,8 @@ struct CashflowUnifiedEntryContainer: View {
                     customNavigationTitle: L("cashflow.operation.new_transfer"),
                     initialTransactionDate: initialMonth.map {
                         CashflowCategorySheetBootstrap.initialTransactionDate(forSelectedMonth: $0)
-                    }
+                    },
+                    refreshesAccountsOnAppear: false
                 )
                 .tag(CashflowSheetTab.transfer)
             }
