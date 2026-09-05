@@ -538,6 +538,13 @@ struct FinancesMainTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     var onNavigateToDynamics: (() -> Void)? = nil
     @State private var draggedGroupID: String?
+    /// Раскрытые группы — состояние ЭКРАНА, а не общего `FinanceState`. Два следствия, обе
+    /// намеренные: (1) тап по активной вкладке «Счета» бампит `resetToken` в `RootTabView`,
+    /// пересоздаёт это поддерево и сворачивает группы сам, без отдельной логики сброса;
+    /// (2) раскрытие группы больше не мутирует `@Published state` и не дёргает перерисовку
+    /// Дашборда и Динамики, которым это состояние не нужно.
+    /// Персистентности у него никогда не было — поведение при перезапуске не меняется.
+    @State private var expandedGroupIDs: Set<String> = []
     @State private var isEmptyIntroHidden: Bool = FinancesEmptyStateIntroPrefs().isHidden()
     /// Разворот сводной строки «Скрытые группы (N)» — сессионный, без персистентности.
     @State private var isHiddenGroupsRowExpanded = false
@@ -970,7 +977,8 @@ struct FinancesMainTabView: View {
                         FinanceGroupRow(
                             group: group,
                             viewModel: viewModel,
-                            draggedGroupID: $draggedGroupID
+                            draggedGroupID: $draggedGroupID,
+                            expandedGroupIDs: $expandedGroupIDs
                         )
                     }
                 }
@@ -1007,7 +1015,8 @@ struct FinancesMainTabView: View {
                         FinanceGroupRow(
                             group: group,
                             viewModel: viewModel,
-                            draggedGroupID: $draggedGroupID
+                            draggedGroupID: $draggedGroupID,
+                            expandedGroupIDs: $expandedGroupIDs
                         )
                     }
 
@@ -1026,15 +1035,23 @@ struct FinancesMainTabView: View {
     private static let ungroupedSectionKey = "finances.ungrouped.section"
 
     private var isUngroupedSectionExpanded: Bool {
-        viewModel.state.expandedGroupIDs.contains(Self.ungroupedSectionKey)
+        expandedGroupIDs.contains(Self.ungroupedSectionKey)
+    }
+
+    private func toggleUngroupedSection() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            if expandedGroupIDs.contains(Self.ungroupedSectionKey) {
+                expandedGroupIDs.remove(Self.ungroupedSectionKey)
+            } else {
+                expandedGroupIDs.insert(Self.ungroupedSectionKey)
+            }
+        }
     }
 
     private var ungroupedSectionRow: some View {
         VStack(spacing: 0) {
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    viewModel.handle(.toggleGroupExpanded(Self.ungroupedSectionKey))
-                }
+                toggleUngroupedSection()
             } label: {
                 HStack(spacing: AppSpacing.m) {
                     Text(FinanceSystemGroups.ungroupedName)

@@ -116,6 +116,10 @@ struct FinanceGroupRow: View {
     let group: AccountGroup
     @ObservedObject var viewModel: FinanceViewModel
     @Binding var draggedGroupID: String?
+    /// Раскрытые группы живут в `@State` экрана «Счета», а не в общем `FinanceState`:
+    /// раскрытие не должно перерисовывать Дашборд и Динамику, а сброс вкладки обязан
+    /// сворачивать группы сам (пересоздание поддерева обнуляет локальный `@State`).
+    @Binding var expandedGroupIDs: Set<String>
 
     // Раньше 28pt резервировали место под цветную полоску-акцент слева от заголовка.
     // Полоску заменила иконка типа продукта (см. FinanceGroupTypeIconView) — инсет уменьшен.
@@ -128,9 +132,19 @@ struct FinanceGroupRow: View {
     }
     
     private var isExpanded: Bool {
-        viewModel.state.expandedGroupIDs.contains(groupID)
+        expandedGroupIDs.contains(groupID)
     }
-    
+
+    private func toggleExpanded() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            if expandedGroupIDs.contains(groupID) {
+                expandedGroupIDs.remove(groupID)
+            } else {
+                expandedGroupIDs.insert(groupID)
+            }
+        }
+    }
+
     private var groupTotal: Double {
         viewModel.state.groupTotals[groupID] ?? 0.0
     }
@@ -208,9 +222,7 @@ struct FinanceGroupRow: View {
                 )
 
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        viewModel.handle(.toggleGroupExpanded(groupID))
-                    }
+                    toggleExpanded()
                 } label: {
                     headerContent(containerWidth: proxy.size.width)
                 }
@@ -408,9 +420,7 @@ struct FinanceGroupRow: View {
 
     private var dragChevron: some View {
         Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                viewModel.handle(.toggleGroupExpanded(groupID))
-            }
+            toggleExpanded()
         } label: {
             Image(systemName: "chevron.right")
                 .font(.system(size: 14, weight: .semibold))

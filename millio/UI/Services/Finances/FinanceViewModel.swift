@@ -100,9 +100,6 @@ struct FinanceState {
         !archivedCards.isEmpty || !archivedCredits.isEmpty || !archivedInvestments.isEmpty
     }
 
-    /// Множество ID групп с открытыми аккордеонами
-    var expandedGroupIDs: Set<String> = []
-    
     /// Словарь сумм групп по их ID (в собственной валюте группы, если задана — для бейджа строки).
     var groupTotals: [String: Double] = [:]
 
@@ -209,7 +206,6 @@ enum FinanceAction {
     case showSecondaryDisplayCurrencySheet
     case hideSecondaryDisplayCurrencySheet
     case setSecondaryDisplayCurrency(String?)
-    case toggleGroupExpanded(String)
     case moveGroup(sourceGroupID: String, destinationIndex: Int)
     case moveAccount(sourceAccountID: String, destinationIndex: Int, groupID: String)
     case setGroupTotal(String, Double)
@@ -673,13 +669,6 @@ final class FinanceViewModel: ViewModelProtocol {
             scheduleBackgroundTask { viewModel in
                 await viewModel.refreshRates()
                 await viewModel.calculateTotalAmountAsync()
-            }
-
-        case .toggleGroupExpanded(let groupID):
-            if state.expandedGroupIDs.contains(groupID) {
-                state.expandedGroupIDs.remove(groupID)
-            } else {
-                state.expandedGroupIDs.insert(groupID)
             }
 
         case .moveGroup(let sourceGroupID, let destinationIndex):

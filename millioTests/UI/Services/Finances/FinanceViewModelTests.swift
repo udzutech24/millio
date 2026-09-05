@@ -455,22 +455,9 @@ struct FinanceViewModelTests {
         #expect(SettingsManager.shared.primaryCurrencyCode == "USD")
     }
 
-    @Test("FinanceViewModel раскрывает и сворачивает группу по groupUniqueID")
-    func testToggleGroupExpandedTracksGroupUniqueID() throws {
-        let modelContext = try createTestModelContext()
-        let viewModel = FinanceViewModel(modelContext: modelContext, skipInitialLoad: true)
-
-        let group = FinanceGroup(name: "Основная", colorHex: "#FFFFFF", order: 0)
-        let groupID = group.groupUniqueID
-
-        #expect(viewModel.state.expandedGroupIDs.contains(groupID) == false)
-
-        viewModel.handle(.toggleGroupExpanded(groupID))
-        #expect(viewModel.state.expandedGroupIDs.contains(groupID))
-
-        viewModel.handle(.toggleGroupExpanded(groupID))
-        #expect(viewModel.state.expandedGroupIDs.contains(groupID) == false)
-    }
+    // Тест раскрытия группы через `.toggleGroupExpanded` удалён вместе с самим action:
+    // состояние раскрытия переехало в `@State` экрана «Счета».
+    // Инварианты новой схемы — `FinanceGroupExpansionResetTests`.
 
     /// [Ф5c.7 contract] Портировано на core-фикстуры — `.moveGroup` теперь core-primary.
     @Test("FinanceViewModel сохраняет ручной порядок групп после перетаскивания")
