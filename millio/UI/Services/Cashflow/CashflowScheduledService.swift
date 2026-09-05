@@ -41,6 +41,16 @@ final class CashflowScheduledService {
     /// Колбэк: применить balance-эффект для due-плановой транзакции
     private let onApplyDuePlannedEffect: (CashflowTransaction) async throws -> Void
 
+    /// Журнал непоказанных применений. Пополняется ТОЛЬКО после успешного `modelContext.save()`.
+    private let appliedNoticeStore: AppliedPlannedNoticeStore
+
+    /// Колбэк: имя счёта транзакции. Сервису недоступно — легаси-карты и счета нового ядра
+    /// лежат в разных мирах данных, а резолвер обоих живёт в VM.
+    private let noticeAccountNameResolver: (CashflowTransaction) -> String
+
+    /// Колбэк: отображаемый заголовок транзакции (заметка/категория) — резолверы категорий в VM.
+    private let noticeTitleResolver: (CashflowTransaction) -> String
+
     // MARK: - State
 
     private var isRecurringGenerationInProgress = false
@@ -70,7 +80,10 @@ final class CashflowScheduledService {
         onTransactionsMutated: @escaping () -> Void,
         onResolveExchangeInfo: @escaping (CashflowTransaction) async -> CashflowExchangeInfo,
         onApplyRecurringToCard: @escaping (CashflowTransaction) async -> Void,
-        onApplyDuePlannedEffect: @escaping (CashflowTransaction) async throws -> Void
+        onApplyDuePlannedEffect: @escaping (CashflowTransaction) async throws -> Void,
+        appliedNoticeStore: AppliedPlannedNoticeStore,
+        noticeAccountNameResolver: @escaping (CashflowTransaction) -> String,
+        noticeTitleResolver: @escaping (CashflowTransaction) -> String
     ) {
         self.modelContext = modelContext
         self.defaults = defaults
@@ -81,6 +94,9 @@ final class CashflowScheduledService {
         self.onResolveExchangeInfo = onResolveExchangeInfo
         self.onApplyRecurringToCard = onApplyRecurringToCard
         self.onApplyDuePlannedEffect = onApplyDuePlannedEffect
+        self.appliedNoticeStore = appliedNoticeStore
+        self.noticeAccountNameResolver = noticeAccountNameResolver
+        self.noticeTitleResolver = noticeTitleResolver
     }
 
     // MARK: - Public: Queries
@@ -283,6 +299,9 @@ final class CashflowScheduledService {
         let today = calendar.startOfDay(for: now())
 
         var didInsert = false
+        // Буфер сводки: записи копятся здесь и уходят в журнал только после успешного save().
+        var pendingNotices: [AppliedPlannedEntry] = []
+        let noticeAppliedAt = now()
         let seriesKey = { (transaction: CashflowTransaction) -> String? in
             guard let recurrenceSeriesID = transaction.recurrenceSeriesID else { return nil }
             return "\(recurrenceSeriesID)|\(transaction.transactionTypeRaw)"
@@ -355,6 +374,9 @@ final class CashflowScheduledService {
                     modelContext.insert(generated)
                     await onApplyRecurringToCard(generated)
                     allTransactions.append(generated)
+                    pendingNotices.append(
+                        makeAppliedNotice(for: generated, kind: .recurring, appliedAt: noticeAppliedAt)
+                    )
                     didInsert = true
                 }
 
@@ -365,8 +387,11 @@ final class CashflowScheduledService {
         guard didInsert else { return false }
         do {
             try modelContext.save()
+            commitAppliedNotices(pendingNotices)
             return true
         } catch {
+            // Буфер выбрасывается вместе с несохранённой пачкой: сводка не должна отчитаться
+            // об операциях, которых в базе нет.
             AppLogger.log(.error, category: "Cashflow", "Failed to save recurring transactions: \(error.localizedDescription)")
             return false
         }
@@ -410,6 +435,12 @@ final class CashflowScheduledService {
         // чекпойнта из-за него зациклило бы ретраи навсегда.
         var hasFailedApply = false
 
+        // Буфер сводки согласован с логикой провалов: сюда попадают только операции, чей apply
+        // прошёл без ошибки. Провалившаяся остаётся внутри окна (чекпойнт не двигается) и попадёт
+        // в журнал тем прогоном, в котором реально применится; повтора по уже применённым не будет —
+        // их отсекает hasAppliedBalanceEffect. Пропуск по политике закрытого месяца в буфер не идёт.
+        var pendingNotices: [AppliedPlannedEntry] = []
+
         for transaction in dueTransactions {
             guard (try? CashflowMonthMutationPolicy(modelContext: modelContext).validate(
                 .scheduledApply,
@@ -421,6 +452,9 @@ final class CashflowScheduledService {
                 try await onApplyDuePlannedEffect(transaction)
                 transaction.hasAppliedBalanceEffect = true
                 transaction.updatedAt = referenceNow
+                pendingNotices.append(
+                    makeAppliedNotice(for: transaction, kind: .scheduled, appliedAt: referenceNow)
+                )
             } catch {
                 hasFailedApply = true
                 AppLogger.log(
@@ -433,6 +467,7 @@ final class CashflowScheduledService {
 
         do {
             try modelContext.save()
+            commitAppliedNotices(pendingNotices)
             // Повторный проход по успешно применённым безопасен — их отсекает hasAppliedBalanceEffect.
             if hasFailedApply {
                 AppLogger.log(
@@ -445,9 +480,44 @@ final class CashflowScheduledService {
             }
             return true
         } catch {
+            // Сохранение не прошло — буфер сводки выбрасывается целиком (см. комментарий выше).
             AppLogger.log(.error, category: "Cashflow", "Failed to save due planned auto-apply: \(error.localizedDescription)")
             return false
         }
+    }
+
+    // MARK: - Private: Applied Notice Journal
+
+    /// Переносит буфер в журнал. Вызывается ТОЛЬКО из ветки успешного `modelContext.save()`.
+    private func commitAppliedNotices(_ entries: [AppliedPlannedEntry]) {
+        for entry in entries {
+            appliedNoticeStore.append(entry)
+        }
+    }
+
+    /// Собирает запись сводки. Величину берём по модулю, а знак — от типа операции: если в модели
+    /// когда-нибудь окажется уже отрицательная сумма расхода, знак не удвоится и нетто-итог сводки
+    /// не разойдётся с реальностью.
+    private func makeAppliedNotice(
+        for transaction: CashflowTransaction,
+        kind: AppliedPlannedEntry.Kind,
+        appliedAt: Date
+    ) -> AppliedPlannedEntry {
+        let magnitude = Self.noticeDecimal(from: abs(transaction.amount))
+        return AppliedPlannedEntry(
+            title: noticeTitleResolver(transaction),
+            accountName: noticeAccountNameResolver(transaction),
+            amount: transaction.transactionType == .expense ? -magnitude : magnitude,
+            currencyCode: transaction.currency,
+            appliedAt: appliedAt,
+            kind: kind
+        )
+    }
+
+    /// Double → Decimal через строковое представление — прямой `Decimal(Double)` протаскивает
+    /// двоичный мусор в суммы сводки. Тот же приём, что в `AccountsCoreCashflowBridge`.
+    private static func noticeDecimal(from value: Double) -> Decimal {
+        Decimal(string: String(format: "%.6f", value)) ?? Decimal(value)
     }
 
     /// Переносит общий (до-scope) чекпойнт в per-scope ключ. Идемпотентно: срабатывает, только пока

@@ -116,6 +116,12 @@ final class CashflowViewModel: ViewModelProtocol {
             onLoadBudgetPlanForCurrentPeriod: { [weak self] in self?.loadBudgetPlanForCurrentPeriod() }
         )
     }()
+    /// Журнал плановых операций, применённых автоматически и ещё не показанных пользователю.
+    /// Владелец — VM: сводку забирает презентационный слой, писать в неё имеет право только
+    /// `scheduledService` после успешного сохранения.
+    private(set) lazy var appliedPlannedNoticeStore: AppliedPlannedNoticeStore = {
+        AppliedPlannedNoticeStore(defaults: self.defaults, scopeIdentifier: self.dataScopeIdentifier)
+    }()
     // scheduledService использует lazy из-за замыканий на self
     private(set) lazy var scheduledService: CashflowScheduledService = {
         CashflowScheduledService(
@@ -134,6 +140,13 @@ final class CashflowViewModel: ViewModelProtocol {
             },
             onApplyDuePlannedEffect: { [weak self] transaction in
                 try await self?.persistenceService.applyAccountBalanceEffect(for: transaction, direction: .apply)
+            },
+            appliedNoticeStore: self.appliedPlannedNoticeStore,
+            noticeAccountNameResolver: { [weak self] transaction in
+                self?.plannedNoticeAccountName(for: transaction) ?? ""
+            },
+            noticeTitleResolver: { [weak self] transaction in
+                self?.plannedNoticeTitle(for: transaction) ?? ""
             }
         )
     }()
