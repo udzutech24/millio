@@ -14,14 +14,14 @@ import SwiftUI
 // MARK: - AppliedPlannedNoticeSheet
 
 /// Обёртка презентации. Отдельно от содержимого, чтобы содержимое можно было отрисовать
-/// без модификаторов листа — в превью и в снимке под крупным Dynamic Type.
+/// без модификаторов листа — в превью и в снимке для гейта.
 struct AppliedPlannedNoticeSheet: View {
     let digest: AppliedPlannedDigest
 
     var body: some View {
         AppliedPlannedNoticeContent(summary: AppliedPlannedNoticeSummary(digest: digest))
-            // Фиксированной высоты нет намеренно: на Dynamic Type XXXL заголовок и строки
-            // вырастают в несколько раз, и любой `.fraction` обрезал бы текст.
+            // Фиксированной высоты нет намеренно: содержимое растёт от объёма (до 50 строк
+            // деталей — это тысячи точек), и любой `.fraction` обрезал бы список.
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
     }
@@ -30,8 +30,8 @@ struct AppliedPlannedNoticeSheet: View {
 // MARK: - AppliedPlannedNoticeContent
 
 /// Шасси листа: фон, скролл и кнопка закрытия. Содержимое живёт отдельным `View`, потому что
-/// `ScrollView` не даёт снять с него снимок (`ImageRenderer` не раскладывает его содержимое) —
-/// а проверка «на Dynamic Type XXXL ничего не обрезано» без снимка не делается.
+/// `ImageRenderer` не раскладывает содержимое `ScrollView` — а проверка «ничего не обрезано»
+/// снимается только рендером колонки целиком.
 struct AppliedPlannedNoticeContent: View {
 
     let summary: AppliedPlannedNoticeSummary
@@ -86,13 +86,12 @@ struct AppliedPlannedNoticeContent: View {
 
 // MARK: - AppliedPlannedNoticeColumn
 
-/// Прокручиваемое содержимое сводки. Своей высоты не задаёт и ничего не обрезает: на крупных
-/// размерах шрифта колонка просто становится выше, а прокрутку даёт шасси.
+/// Прокручиваемое содержимое сводки. Своей высоты не задаёт и ничего не обрезает: ни одного
+/// `lineLimit` и ни одного `frame(height:)` — длинный текст переносится, колонка растёт,
+/// а прокрутку даёт шасси.
 struct AppliedPlannedNoticeColumn: View {
 
     let summary: AppliedPlannedNoticeSummary
-
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var isExpanded: Bool
 
@@ -102,10 +101,6 @@ struct AppliedPlannedNoticeColumn: View {
         self.summary = summary
         _isExpanded = State(initialValue: isExpanded)
     }
-
-    /// На крупных размерах шрифта пара «подпись — сумма» в одну строку не помещается,
-    /// поэтому строки перестраиваются в столбец, а не сжимаются и не обрезаются.
-    private var isStackedLayout: Bool { dynamicTypeSize >= .xxxLarge }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.l) {
@@ -164,33 +159,21 @@ struct AppliedPlannedNoticeColumn: View {
         .background(cardBackground)
     }
 
-    @ViewBuilder
     private func currencyRow(_ line: AppliedPlannedNoticeSummary.CurrencyLine) -> some View {
-        let code = Text(line.currencyCode)
-            .font(.millioCallout)
-            .foregroundStyle(AppColors.textSecondary)
+        HStack(alignment: .firstTextBaseline, spacing: AppSpacing.m) {
+            Text(line.currencyCode)
+                .font(.millioCallout)
+                .foregroundStyle(AppColors.textSecondary)
 
-        let amount = Text(
-            AppliedPlannedNoticeAmountFormat.signedAmount(line.net, currencyCode: line.currencyCode)
-        )
-        .font(.millioTitle3)
-        .foregroundStyle(amountColor(for: line.net))
+            Spacer(minLength: AppSpacing.s)
 
-        if isStackedLayout {
-            VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                code
-                amount
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.m) {
-                code
-                Spacer(minLength: AppSpacing.s)
-                amount
-            }
-            .fixedSize(horizontal: false, vertical: true)
+            Text(AppliedPlannedNoticeAmountFormat.signedAmount(line.net, currencyCode: line.currencyCode))
+                .font(.millioTitle3)
+                .foregroundStyle(amountColor(for: line.net))
         }
+        // Переносим, а не обрезаем: длинная сумма в редкой валюте уедет на вторую строку,
+        // но не превратится в «…».
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Начисления и списания — общие по всей сводке, не по каждой валюте: журнал per-currency
@@ -289,18 +272,9 @@ struct AppliedPlannedNoticeColumn: View {
         .foregroundStyle(amountColor(for: entry.amount))
         .fixedSize(horizontal: false, vertical: true)
 
-        Group {
-            if isStackedLayout {
-                VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                    info
-                    amount
-                }
-            } else {
-                HStack(alignment: .top, spacing: AppSpacing.m) {
-                    info
-                    amount
-                }
-            }
+        HStack(alignment: .top, spacing: AppSpacing.m) {
+            info
+            amount
         }
         .padding(.vertical, AppSpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -336,3 +310,39 @@ struct AppliedPlannedNoticeColumn: View {
         return AppColors.textPrimary
     }
 }
+
+// MARK: - Превью
+
+#if DEBUG
+/// Фикстура превью: 62 применения при потолке деталей 50 — состояние с «и ещё N», до которого
+/// вручную не доберёшься, и именно на нём снимался гейт Ф3.
+private func appliedPlannedNoticePreviewSummary() -> AppliedPlannedNoticeSummary {
+    var digest = AppliedPlannedDigest()
+    let titles = ["Аренда квартиры", "Подписка на хранилище", "Зарплата", "Коммунальные платежи"]
+    let accounts = ["Основной счёт", "Накопительный счёт", "Карта для подписок", "Вклад «Максимальный доход»"]
+    for index in 0..<62 {
+        let isInterest = index % 7 == 0
+        digest.accumulate(
+            AppliedPlannedEntry(
+                title: isInterest ? "Проценты по вкладу" : titles[index % titles.count],
+                accountName: accounts[index % accounts.count],
+                amount: isInterest
+                    ? Decimal(index) + Decimal(string: "0.37")!
+                    : (index.isMultiple(of: 2) ? Decimal(1_500 + index * 137) : Decimal(-(940 + index * 53))),
+                currencyCode: index % 11 == 0 ? "USD" : "RUB",
+                appliedAt: Date(timeIntervalSince1970: 1_700_000_000 + Double(index) * 86_400),
+                kind: isInterest ? .depositInterest : (index.isMultiple(of: 3) ? .recurring : .scheduled)
+            )
+        )
+    }
+    return AppliedPlannedNoticeSummary(digest: digest)
+}
+
+#Preview("Сводка — свёрнутая") {
+    AppliedPlannedNoticeContent(summary: appliedPlannedNoticePreviewSummary())
+}
+
+#Preview("Сводка — список раскрыт") {
+    AppliedPlannedNoticeContent(summary: appliedPlannedNoticePreviewSummary(), isExpanded: true)
+}
+#endif

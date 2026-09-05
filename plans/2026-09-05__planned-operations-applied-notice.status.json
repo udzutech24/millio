@@ -1,15 +1,43 @@
 {
   "planFile": "2026-09-05__planned-operations-applied-notice.md",
   "title": "Сводка применённых плановых операций",
-  "updated": "2026-09-05T17:05:00Z",
+  "updated": "2026-09-05T17:35:00Z",
   "phases": [
-    { "name": "Ф0 журнал + агрегат", "status": "done", "note": "2776d66 · 4 теста" },
-    { "name": "Ф1 запись из cashflow-путей", "status": "done", "note": "8409b31 · 5 тестов, сверено Денисом" },
-    { "name": "Ф1b проценты по вкладу", "status": "done", "note": "c76e298 · 4 теста" },
-    { "name": "Ф2 триггер показа", "status": "done", "note": "26bae81 · 9 тестов, сверено Денисом" },
-    { "name": "Ф3 UI листа снизу", "status": "in_progress", "note": "4c5bb63+2e742f7 WIP — гейт не пройден, билд у владельца" },
-    { "name": "Ф4 ультракод-эффект", "status": "pending", "note": "первый .metal + Reduce Motion" },
-    { "name": "Ф5 локализация и self-audit", "status": "pending", "note": "EN/zh-Hans + плюрализация" }
+    {
+      "name": "Ф0 журнал + агрегат",
+      "status": "done",
+      "note": "2776d66 · 4 теста"
+    },
+    {
+      "name": "Ф1 запись из cashflow-путей",
+      "status": "done",
+      "note": "8409b31 · 5 тестов, сверено Денисом"
+    },
+    {
+      "name": "Ф1b проценты по вкладу",
+      "status": "done",
+      "note": "c76e298 · 4 теста"
+    },
+    {
+      "name": "Ф2 триггер показа",
+      "status": "done",
+      "note": "26bae81 · 9 тестов, сверено Денисом"
+    },
+    {
+      "name": "Ф3 UI листа снизу",
+      "status": "done",
+      "note": "гейт пройден: снимки 393×3923, 50 разделителей; 9 новых тестов; ScreenshotTests 8/8; device-проверка за владельцем"
+    },
+    {
+      "name": "Ф4 ультракод-эффект",
+      "status": "pending",
+      "note": "первый .metal + Reduce Motion"
+    },
+    {
+      "name": "Ф5 локализация и self-audit",
+      "status": "pending",
+      "note": "остались zh-Hans и прочие языки: RU+EN заведены в Ф3"
+    }
   ],
   "costUsd": null,
   "etaMinutes": null

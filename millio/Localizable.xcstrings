@@ -21579,6 +21579,12 @@
     "cashflow.applied_notice.deposit_interest_note" : {
       "comment" : "Applied planned notice: marks a deposit interest row as informational",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deposit interest — for your information"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -21590,6 +21596,12 @@
     "cashflow.applied_notice.dismiss" : {
       "comment" : "Applied planned notice: closes the sheet",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Got it"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -21602,6 +21614,24 @@
       "comment" : "Applied planned notice: how many applied operations were charges, e.g. '3 charges'",
       "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld charge"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld charges"
+                }
+              }
+            }
+          }
+        },
         "ru" : {
           "variations" : {
             "plural" : {
@@ -21637,6 +21667,12 @@
     "cashflow.applied_notice.hide_details" : {
       "comment" : "Applied planned notice: collapses the list of applied operations",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide list"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -21649,6 +21685,24 @@
       "comment" : "Applied planned notice: how many applied operations were credits, e.g. '3 credits'",
       "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld credit"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld credits"
+                }
+              }
+            }
+          }
+        },
         "ru" : {
           "variations" : {
             "plural" : {
@@ -21685,6 +21739,24 @@
       "comment" : "Applied planned notice: tail row when the detail list is capped, e.g. 'and 12 more'",
       "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "and %lld more"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "and %lld more"
+                }
+              }
+            }
+          }
+        },
         "ru" : {
           "variations" : {
             "plural" : {
@@ -21720,6 +21792,12 @@
     "cashflow.applied_notice.show_details" : {
       "comment" : "Applied planned notice: expands the list of applied operations",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show list"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -21731,6 +21809,12 @@
     "cashflow.applied_notice.subtitle" : {
       "comment" : "Applied planned notice: explains the operations were applied automatically",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applied automatically — balances are already up to date"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -21743,6 +21827,24 @@
       "comment" : "Applied planned notice: sheet title with the number of applied operations",
       "extractionState" : "manual",
       "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "While you were away: %lld operation"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "While you were away: %lld operations"
+                }
+              }
+            }
+          }
+        },
         "ru" : {
           "variations" : {
             "plural" : {
@@ -21778,6 +21880,12 @@
     "cashflow.applied_notice.totals" : {
       "comment" : "Applied planned notice: header above per-currency net totals",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Totals by currency"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
