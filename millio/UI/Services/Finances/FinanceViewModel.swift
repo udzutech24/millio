@@ -279,6 +279,12 @@ final class FinanceViewModel: ViewModelProtocol {
     /// вместо одного, поэтому строки получают готовое значение отсюда.
     @Published private(set) var accountAppearances: [UUID: AccountAppearanceSnapshot] = [:]
 
+    /// Балансы core-счетов «сегодня» — ОДИН реплей на цикл `loadCoreEntities()` (Ф1, план
+    /// 2026-09-05). Намеренно НЕ внутри `@Published state`: строки читают этот срез из тела
+    /// View, а любая запись в `state` оттуда — мутация во время отрисовки. Здесь чтение
+    /// (`value(for:today:)`) немутирующее, а запись живёт только в цикле загрузки.
+    private(set) var balanceCache = AccountBalanceCache()
+
     private var lastManualStockRefreshAt: Date?
 
     private static let manualStockRefreshCooldown: TimeInterval = 15
@@ -809,6 +815,11 @@ final class FinanceViewModel: ViewModelProtocol {
         let today = nowProvider()
 
         let accounts = (try? modelContext.fetch(FetchDescriptor<Account>())) ?? []
+        // [Ф1] Кэш баланса — по ВСЕМ счетам, а не только по видимым: архивные строки рисуют
+        // экран архива и редактор группы через тот же `newCoreBalanceToday`.
+        balanceCache.rebuild(accounts: accounts, today: today) { [weak self] account in
+            self?.replayBalanceToday(account) ?? 0
+        }
         state.accounts = accounts
             .filter { $0.isVisible(on: today) }
             .sorted { $0.order != $1.order ? $0.order < $1.order : $0.createdAt < $1.createdAt }
@@ -1337,13 +1348,23 @@ final class FinanceViewModel: ViewModelProtocol {
         return ((try? modelContext.fetchCount(descriptor)) ?? 0) > 0
     }
 
-    /// Знаковый вклад счёта нового ядра в сальдо «сейчас» — прямой синхронный реплей событий (список
-    /// короткий, см. Т2 в плане; async-кэш через `AccountsTotalsService` подключается там, где важна
-    /// производительность на длинной истории — тотал/график). Ф7b: значение прогоняется через ту же
+    /// Знаковый вклад счёта нового ядра в сальдо «сейчас». Ф7b: значение прогоняется через ту же
     /// единую точку знака (`AccountTotalsContribution`), что и тоталы/серия — кредитная карта в строке
     /// списка и сортировке показывается как −долг (красным через `NewCoreAccountRow.amountValue < 0`),
     /// а не как остаток лимита. Для экрана деталки счёта остаток берётся ОТДЕЛЬНО, прямым `balanceAt`.
+    ///
+    /// [Ф1, план 2026-09-05] Читает срез `balanceCache`, а не реплеит ленту на каждый вызов.
+    /// Исходное допущение «список короткий» не выдержало проверки: 62 счёта владельца давали
+    /// 452 мс на один проход body при бюджете кадра 16.7 мс. Промах кэша — не ошибка, а откат
+    /// в прежнее поведение (честный реплей), см. `AccountBalanceCache`.
     func newCoreBalanceToday(_ account: Account) -> Decimal {
+        if let cached = balanceCache.value(for: account, today: nowProvider()) { return cached }
+        return replayBalanceToday(account)
+    }
+
+    /// Реплей ленты в знаковый вклад — единственный производитель значений для `balanceCache`
+    /// и он же аварийный путь при промахе. Второго определения «баланс строки» быть не должно.
+    private func replayBalanceToday(_ account: Account) -> Decimal {
         let rawBalance = AccountBalanceEngine.balanceAt(
             // Ф1: строка списка показывает ПОДТВЕРЖДЁННЫЙ баланс вклада — тот же, что деталка
             // и тоталы. Прогнозные начисления живут в графике и расписании выплат, но не в остатке.

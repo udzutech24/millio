@@ -932,8 +932,14 @@ struct FinancesMainTabView: View {
     /// добавляемый в ту секцию, куда попал его net-тотал (регресс-guard: без него core-счета без
     /// группы становятся невидимы на экране «Счета», найдено `FinanceViewModelCoreEntitiesTests`).
     private func groupsListView(_ groups: [AccountGroup]) -> some View {
-        let nonEmptyGroups = groups.filter { !isGroupEmpty($0) }
-        let emptyGroups = groups.filter { isGroupEmpty($0) }
+        // [Ф1, план 2026-09-05] Одно разбиение вместо двух фильтров по тому же предикату:
+        // `isGroupEmpty` делает fetch легаси-группы, и второй проход платил за него повторно.
+        // Живое чтение сохранено намеренно (см. [R8] у `isGroupEmpty`) — здесь убран только дубль.
+        var nonEmptyGroups: [AccountGroup] = []
+        var emptyGroups: [AccountGroup] = []
+        for group in groups {
+            if isGroupEmpty(group) { emptyGroups.append(group) } else { nonEmptyGroups.append(group) }
+        }
         let groupsByID = Dictionary(uniqueKeysWithValues: nonEmptyGroups.map { ($0.groupUniqueID, $0) })
         let split = FinanceAccountsSectionSplitter.split(
             orderedGroupIDs: nonEmptyGroups.map(\.groupUniqueID),

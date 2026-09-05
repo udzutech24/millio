@@ -52,6 +52,9 @@ final class AccountBalancePerformanceTests: XCTestCase {
             currencyService: MockCurrencyRateService(),
             skipInitialLoad: true
         )
+        // Тот же путь, что и на экране: прогрев кэша балансов происходит в цикле загрузки.
+        // До Ф1 вызов ничего не менял в замере — кэша не существовало, цифры сопоставимы.
+        viewModel.handle(.loadGroups)
     }
 
     override func tearDownWithError() throws {
