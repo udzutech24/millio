@@ -22,6 +22,19 @@ struct AccountDetailView: View {
     /// Вместо прямого архивирования — выбор «перевести остаток» (тогда ступеньки не будет)
     /// или «закрыть с остатком» (архивировать как есть, осознанно).
     @State private var showNonZeroBalanceArchiveWarning = false
+    /// Bottom sheet «···» вклада (Коммит 1) — заменяет системный `Menu` у верхнего края.
+    @State private var showDepositActionsSheet = false
+    /// Тот же bottom sheet «···» у кредита в детальном режиме: у него на экране только «Внести
+    /// платёж» и «Досрочно», остальные действия счёта живут в меню (спека §5).
+    @State private var showLoanActionsSheet = false
+    /// График платежей кредита — отдельный экран пушем (Ф5), как «Тип продукта» у вклада.
+    @State private var showLoanSchedule = false
+    /// Оформление счёта грузится ОДИН раз на открытие экрана, а не из тела `body`: `body`
+    /// пересчитывается на каждую мутацию, а редактора оформления на этом экране нет.
+    @State private var appearance: AccountAppearanceSnapshot?
+    /// Договор кредита (V12) — грузится тем же одним заходом, что и оформление. Через него
+    /// `LoanTermsResolver` отдаёт условия; напрямую `account.loanMeta` экран больше не читает.
+    @State private var loanContract: LoanContract?
 
     private enum ActiveSheet: Identifiable {
         case income
@@ -34,6 +47,9 @@ struct AccountDetailView: View {
         case depositAdjustBalance
         case depositTerms
         case depositMaturity
+        case loanTerms
+        case loanPayment
+        case loanPrepayment
         case buy
         case sell
         case dividend
@@ -104,6 +120,137 @@ struct AccountDetailView: View {
         return DepositDetailPresentation.make(snapshot: snapshot)
     }
 
+    /// Детальный режим кредита (Ф4). Признак режима — наличие условий, а не `kind`: счёт `.loan`
+    /// без `LoanMeta` и без договора остаётся на старом генерик-экране, ничего не теряя.
+    ///
+    /// Остаток берётся из ленты событий (спека Р6) и разворачивается в положительную величину:
+    /// в ядре долг хранится отрицательным балансом, а человеку показываем «сколько осталось».
+    private var loanOutstandingPrincipal: Decimal {
+        LoanOutstanding.fromLedger(balance: balanceToday)
+    }
+
+    private var loanPresentation: LoanDetailPresentation? {
+        guard account.kind == .loan else { return nil }
+        _ = refreshToken
+        guard let terms = LoanTermsResolver.terms(for: account, contract: loanContract) else { return nil }
+        return LoanDetailPresentation.make(
+            terms: terms,
+            outstandingPrincipal: loanOutstandingPrincipal,
+            paymentsMade: loanContract?.paymentsMade ?? 0,
+            paidInterestTotal: loanContract?.paidInterestTotal ?? 0,
+            currency: account.currency
+        )
+    }
+
+    /// Сумма hero — ровно то же число, что в строке списка «Счета» и в тоталах: у кредитки это
+    /// долг со знаком минус, а не доступный лимит. Второго определения баланса не заводим.
+    private var heroAmount: Decimal {
+        AccountTotalsContribution.signedValue(
+            rawBalance: balanceToday,
+            kind: account.kind,
+            creditLimit: account.cardMeta?.creditLimit
+        )
+    }
+
+    private var heroPresentation: AccountHeroPresentation {
+        AccountHeroPresentation.make(
+            key: account.id.uuidString,
+            name: account.name,
+            appearance: appearance,
+            fallbackIconName: account.kind.fallbackIconName,
+            subtitle: heroSubtitle,
+            typeTitle: heroTypeTitle,
+            amountText: AccountRowAmountFormatter.text(
+                NSDecimalNumber(decimal: heroAmount).doubleValue,
+                isHidden: false,
+                maximumFractionDigits: account.kind == .marketInvestment ? 2 : 0
+            ),
+            currencySymbol: MonetaCurrency(rawValue: account.currency)?.symbol ?? account.currency,
+            isNegative: heroAmount < 0,
+            detailLines: heroDetailLines,
+            badges: heroBadges
+        )
+    }
+
+    /// Тип продукта на hero. Кредитка — не отдельный `AccountKind` (это `debitCard` с лимитом),
+    /// поэтому её название разрешается по `productType`, а не по `kind`.
+    private var heroTypeTitle: String {
+        account.productType == .creditCard
+            ? L("accounts_core.detail.type.credit_card")
+            : account.kind.localizedTitle
+    }
+
+    /// Вторая строка идентичности: у рыночной позиции — тикер, у карты — банк и `•• last4`.
+    private var heroSubtitle: String? {
+        if account.kind == .marketInvestment, let symbol = account.marketMeta?.symbol, !symbol.isEmpty {
+            return symbol.uppercased()
+        }
+        return bankLine
+    }
+
+    private var heroDetailLines: [String] {
+        var lines: [String] = []
+        lines.append(contentsOf: loanInfoLines ?? [])
+        lines.append(contentsOf: debtInfoLines ?? [])
+        lines.append(contentsOf: depositInfoLines ?? [])
+        if let creditHeroLine { lines.append(creditHeroLine) }
+        if account.kind == .marketInvestment {
+            // Нереализованный P/L был на прежнем `stockHero` — теряться при переезде он не должен.
+            lines.append("\(signedAmountText(unrealizedPL, type: .adjustment)) \(account.currency)")
+        }
+        if let note = account.note, !note.isEmpty { lines.append(note) }
+        return lines
+    }
+
+    /// Кредитка на hero: доступный лимит и дата ближайшего платежа. Подробные метрики (утилизация,
+    /// проценты, комиссии) остаются в `CreditCardDetailSection` — hero их не дублирует.
+    private var creditHeroLine: String? {
+        guard account.productType == .creditCard, let limit = account.cardMeta?.creditLimit else { return nil }
+        guard let snapshot = CreditCardFinancialContract.snapshot(
+            rawAvailableBalance: balanceToday,
+            creditLimit: limit,
+            events: account.events ?? []
+        ) else { return nil }
+        var parts = [String(
+            format: L("accounts_core.detail.credit.available_format"),
+            NSDecimalNumber(decimal: snapshot.availableLimit).doubleValue,
+            account.currency
+        )]
+        if let settings = CreditCardPaymentSettingsStore().load(accountID: account.id),
+           let status = CreditCardPaymentPolicy.status(
+               settings: settings,
+               graceDays: account.cardMeta?.graceDays,
+               now: Date(),
+               calendar: .current
+           ) {
+            parts.append(String(
+                format: L("accounts_core.detail.credit.payment_due_format"),
+                status.dueDate.formatted(date: .abbreviated, time: .omitted)
+            ))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private var heroBadges: [AccountHeroPresentation.Badge] {
+        var badges: [AccountHeroPresentation.Badge] = []
+        if account.archivedAt != nil {
+            badges.append(.init(text: L("accounts_core.detail.badge.archived"), systemImage: "archivebox"))
+        }
+        if !account.includeInTotal {
+            badges.append(.init(text: L("accounts_core.detail.total.excluded"), systemImage: "sum"))
+        }
+        if account.kind == .marketInvestment {
+            badges.append(.init(
+                text: isPriceStale
+                    ? L("accounts_core.detail.market.price_stale_badge")
+                    : L("accounts_core.detail.market.price_today_badge"),
+                systemImage: isPriceStale ? "clock.badge.exclamationmark" : "bolt.fill",
+                isWarning: isPriceStale
+            ))
+        }
+        return badges
+    }
+
     private var debitSnapshot: DebitCardSnapshot? {
         guard isDebitProduct else { return nil }
         _ = refreshToken
@@ -115,6 +262,39 @@ struct AccountDetailView: View {
             GradientBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.xl) {
+                    // Ф3: идентичность счёта рисует ТОЛЬКО hero — для всех типов сразу.
+                    // Исключение — недвижимость: её шапка это фото-обложка объекта (баланса на ней
+                    // нет), заменить её градиентом означало бы удалить фотографии пользователя.
+                    if AccountDetailDescriptor.resolve(for: account).kind != .realEstate {
+                        // Вклад — единственное исключение из стандартной начинки hero: несёт
+                        // баланс/статус/метрики вклада вместо имени/бейджа/иконки счёта (см.
+                        // `DepositHeroContent`). Второй, отдельной карточки статуса вклада после
+                        // этого существовать не должно — вся её начинка переехала сюда.
+                        if let investmentPresentation {
+                            // Рыночная позиция: та же логика замены standardContent, что у вклада —
+                            // hero несёт стоимость/прибыль/график позиции вместо identity-строки
+                            // счёта (имя уже в navigation title, тикер отдельно не дублируем).
+                            AccountHeroCardView(presentation: heroPresentation) {
+                                InvestmentHeroContent(presentation: investmentPresentation)
+                            }
+                        } else if let depositPresentation {
+                            AccountHeroCardView(presentation: heroPresentation) {
+                                DepositHeroContent(
+                                    presentation: depositPresentation,
+                                    openingDate: account.createdAt,
+                                    meta: account.depositMeta
+                                )
+                            }
+                        } else if let loanPresentation {
+                            // Кредит — та же подмена начинки, что у вклада: hero несёт остаток
+                            // долга, прогресс погашенного тела и ближайший платёж.
+                            AccountHeroCardView(presentation: heroPresentation) {
+                                LoanHeroContent(presentation: loanPresentation)
+                            }
+                        } else {
+                            AccountHeroCardView(presentation: heroPresentation)
+                        }
+                    }
                     if AccountDetailDescriptor.resolve(for: account).kind == .realEstate {
                         RealEstateDetailSection(
                             account: account,
@@ -126,23 +306,23 @@ struct AccountDetailView: View {
                     if let depositPresentation {
                         DepositDetailSection(
                             presentation: depositPresentation,
-                            accountName: account.name,
                             taxPresentation: depositTaxPresentation,
                             onAction: handleDepositAction
                         )
+                    } else if let loanPresentation {
+                        LoanDetailSection(presentation: loanPresentation, onAction: handleLoanAction)
                     } else if account.productType == .creditCard {
                         CreditCardDetailSection(account: account, rawBalance: balanceToday)
                     } else if let snapshot = debitSnapshot {
                         DebitCardDetailSection(account: account, snapshot: snapshot)
-                    } else if AccountDetailDescriptor.resolve(for: account).showsGenericHeader {
-                        header
                     }
-                    if account.kind != .deposit && account.archivedAt == nil && account.deletedAt == nil
+                    // Кредит в детальном режиме, как и вклад, свои действия рисует сам: генерик-ряд
+                    // дал бы вторую кнопку платежа рядом с «Внести платёж», а это две разные
+                    // операции с одинаковым названием.
+                    if account.kind != .deposit && loanPresentation == nil
+                        && account.archivedAt == nil && account.deletedAt == nil
                         && (debitSnapshot?.canWrite ?? true) {
                         actionsRow
-                    }
-                    if account.kind == .marketInvestment {
-                        marketInfoSection
                     }
                     historySection
                 }
@@ -155,23 +335,19 @@ struct AccountDetailView: View {
             if let presentation = depositPresentation,
                !depositOverflowActions(presentation).isEmpty || canEditDepositDetails {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        // У вклада нет actionsRow (свои операции живут в DepositDetailSection),
-                        // поэтому правка имени/группы/учёта в тотале доступна только отсюда.
-                        if canEditDepositDetails {
-                            Button(L("accounts_core.detail.action.edit_details"), systemImage: "square.and.pencil") {
-                                sheet = .editDetails
-                            }
-                        }
-                        ForEach(depositOverflowActions(presentation), id: \.self) { action in
-                            Button(
-                                depositOverflowTitle(action),
-                                systemImage: depositOverflowIcon(action),
-                                role: action == .archive ? .destructive : nil
-                            ) {
-                                handleDepositAction(action)
-                            }
-                        }
+                    // Коммит 1: bottom sheet вместо `Menu` у верхнего края — тот же список пунктов,
+                    // «Реквизиты счёта»/«Изменить условия» слиты в один (см. `depositActionSheetItems`).
+                    Button {
+                        showDepositActionsSheet = true
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }
+                    .accessibilityLabel(L("accounts_core.detail.action.edit"))
+                }
+            } else if loanPresentation != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showLoanActionsSheet = true
                     } label: {
                         Image(systemName: "ellipsis")
                     }
@@ -195,6 +371,36 @@ struct AccountDetailView: View {
         }
         .sheet(item: $sheet) { sheet in
             sheetContent(for: sheet)
+        }
+        // Витрина графика строится ЗДЕСЬ, а не в свойстве экрана: 60 строк не нужны на каждый
+        // пересчёт `body`, а замыкание назначения выполняется только в момент перехода.
+        .navigationDestination(isPresented: $showLoanSchedule) {
+            if let terms = LoanTermsResolver.terms(for: account, contract: loanContract) {
+                LoanScheduleView(presentation: LoanSchedulePresentation.make(
+                    terms: terms,
+                    outstandingPrincipal: loanOutstandingPrincipal,
+                    paymentsMade: loanContract?.paymentsMade ?? 0,
+                    currency: account.currency
+                ))
+            }
+        }
+        .sheet(isPresented: $showDepositActionsSheet) {
+            if let presentation = depositPresentation {
+                AccountActionsSheet(
+                    accountName: account.name,
+                    accountTypeTitle: account.kind.localizedTitle,
+                    items: depositActionSheetItems(presentation),
+                    onDismiss: { showDepositActionsSheet = false }
+                )
+            }
+        }
+        .sheet(isPresented: $showLoanActionsSheet) {
+            AccountActionsSheet(
+                accountName: account.name,
+                accountTypeTitle: account.kind.localizedTitle,
+                items: loanActionSheetItems,
+                onDismiss: { showLoanActionsSheet = false }
+            )
         }
         .alert(
             L("accounts_core.detail.delete_confirm.title"),
@@ -255,6 +461,13 @@ struct AccountDetailView: View {
             Text(errorMessage ?? "")
         }
         .task(id: account.id) {
+            appearance = try? AccountAppearanceStore(context: modelContext)
+                .loadSnapshots()[account.id]
+            // Ленивый перевод в детальный режим (спека Р5): счёт `.loan`, заведённый старой формой,
+            // получает договор из легаси-меты ровно здесь — при первом открытии деталки.
+            loanContract = account.kind == .loan
+                ? try? LoanContractBackfill.ensureContract(for: account, context: modelContext)
+                : nil
             guard account.kind == .marketInvestment else { return }
             await AccountMarketPriceService(modelContext: modelContext).refreshTodayPrices()
             refreshToken = UUID()
@@ -263,136 +476,8 @@ struct AccountDetailView: View {
 
     // MARK: - Header
 
-    @ViewBuilder
-    private var header: some View {
-        if account.kind == .marketInvestment {
-            stockHero
-        } else {
-            standardHeader
-        }
-    }
-
-    private var standardHeader: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.s) {
-            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
-                Text(formattedBalance)
-                    .font(.millioTitle)
-                    .foregroundStyle(balanceToday < 0 ? AppColors.error : AppColors.textPrimary)
-                Text(account.currency)
-                    .font(.millioBody)
-                    .foregroundStyle(AppColors.textTertiary)
-            }
-
-            if let bankLine {
-                Text(bankLine)
-                    .font(.millioCalloutRegular)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-
-            ForEach(loanInfoLines ?? [], id: \.self) { line in
-                Text(line)
-                    .font(.millioCalloutRegular)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-
-            ForEach(debtInfoLines ?? [], id: \.self) { line in
-                Text(line)
-                    .font(.millioCalloutRegular)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-
-            ForEach(depositInfoLines ?? [], id: \.self) { line in
-                Text(line)
-                    .font(.millioCalloutRegular)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-
-            if let note = account.note, !note.isEmpty {
-                Text(note)
-                    .font(.millioCalloutRegular)
-                    .foregroundStyle(AppColors.textTertiary)
-            }
-
-            if !account.includeInTotal {
-                Label(
-                    L("accounts_core.detail.total.excluded"),
-                    systemImage: "sum"
-                )
-                .font(.millioCaptionRegular)
-                .foregroundStyle(AppColors.textSecondary)
-                .padding(.horizontal, AppSpacing.s)
-                .padding(.vertical, AppSpacing.xs)
-                .background(
-                    Capsule().fill(AppColors.iconBackground)
-                )
-            }
-        }
-    }
-
-    private var stockHero: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.m) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                    Text(account.marketMeta?.symbol.uppercased() ?? account.name)
-                        .font(.millioHeadline)
-                        .foregroundStyle(.white)
-                    if account.name.caseInsensitiveCompare(account.marketMeta?.symbol ?? "") != .orderedSame {
-                        Text(account.name)
-                            .font(.millioCalloutRegular)
-                            .foregroundStyle(.white.opacity(0.72))
-                    }
-                }
-                Spacer()
-                Label(
-                    isPriceStale ? L("accounts_core.detail.market.price_stale_badge") : L("accounts_core.detail.market.price_today_badge"),
-                    systemImage: isPriceStale ? "clock.badge.exclamationmark" : "bolt.fill"
-                )
-                .font(.millioCaptionRegular)
-                .foregroundStyle(isPriceStale ? AppColors.warning : AppColors.positiveColor)
-                .padding(.horizontal, AppSpacing.s)
-                .padding(.vertical, AppSpacing.xs)
-                .background(Capsule().fill(Color.black.opacity(0.22)))
-            }
-
-            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
-                Text(formattedBalance)
-                    .font(.millioTitle)
-                    .foregroundStyle(.white)
-                    .minimumScaleFactor(0.65)
-                Text(account.currency)
-                    .font(.millioBody)
-                    .foregroundStyle(.white.opacity(0.72))
-            }
-
-            Label(
-                "\(signedAmountText(unrealizedPL, type: .adjustment)) \(account.currency)",
-                systemImage: unrealizedPL < 0 ? "arrow.down.right" : "arrow.up.right"
-            )
-            .font(.millioBodySemibold)
-            .foregroundStyle(unrealizedPL < 0 ? AppColors.negativeColor : AppColors.positiveColor)
-        }
-        .padding(AppSpacing.l)
-        .background(
-            ZStack {
-                LinearGradient(
-                    colors: [Color(hex: "102A56"), Color(hex: "123F7A"), Color(hex: "0D6B78")],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                Circle()
-                    .fill(AppColors.brandPrimary.opacity(0.28))
-                    .frame(width: 180, height: 180)
-                    .offset(x: 130, y: -80)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: AppSpacing.xl, style: .continuous))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppSpacing.xl, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-    }
-
+    /// Прежние `standardHeader` и `stockHero` сняты в Ф3: их содержимое переехало в
+    /// `AccountHeroCardView` (`heroDetailLines` / `heroBadges` / `heroSubtitle`).
     private var bankLine: String? {
         guard let cardMeta = account.cardMeta else { return nil }
         var parts: [String] = []
@@ -407,16 +492,23 @@ struct AccountDetailView: View {
 
     // MARK: - Обязательства (.loan/.debt) — доп. инфо и кастомные действия (Фаза 2)
 
+    /// Условия кредита — только через `LoanTermsResolver` (спека Р5): договор V12, иначе сид из
+    /// легаси `LoanMeta`. Прямого чтения `account.loanMeta` здесь быть не должно, иначе договор и
+    /// мета разъедутся у одного и того же счёта.
     private var loanInfoLines: [String]? {
-        guard let meta = account.loanMeta else { return nil }
+        guard let terms = LoanTermsResolver.terms(for: account, contract: loanContract) else { return nil }
         var lines: [String] = []
-        if meta.rate > 0 {
-            lines.append(String(format: L("accounts_core.detail.loan.rate_format"), NSDecimalNumber(decimal: meta.rate).doubleValue))
+        if terms.annualRatePercent > 0 {
+            lines.append(String(format: L("accounts_core.detail.loan.rate_format"), NSDecimalNumber(decimal: terms.annualRatePercent).doubleValue))
         }
-        if let payment = meta.monthlyPayment {
-            lines.append(String(format: L("accounts_core.detail.loan.monthly_payment_format"), NSDecimalNumber(decimal: payment).doubleValue, account.currency))
+        if let payment = LoanScheduleEngine.regularPayment(terms: terms), payment > 0 {
+            let rounded = DepositInterestScheduler.round2(payment)
+            lines.append(String(format: L("accounts_core.detail.loan.monthly_payment_format"), NSDecimalNumber(decimal: rounded).doubleValue, account.currency))
         }
-        if let termEnd = meta.termEnd {
+        // Срок известен только когда он задан в периодах: график с ручным платежом и без срока
+        // открытый, и дату закрытия здесь считать нечем (её показывает деталка кредита, Ф4).
+        if terms.termPeriods > 0,
+           let termEnd = LoanScheduleEngine.paymentDate(period: terms.termPeriods, terms: terms) {
             lines.append(String(format: L("accounts_core.detail.loan.term_end_format"), termEnd.formatted(date: .abbreviated, time: .omitted)))
         }
         return lines.isEmpty ? nil : lines
@@ -644,148 +736,109 @@ struct AccountDetailView: View {
         todayQuote == nil
     }
 
-    private var marketInfoSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.m) {
-            Text(L("accounts_core.detail.market.info_title"))
-                .font(.millioCaption)
-                .foregroundStyle(AppColors.textTertiary)
-                .textCase(.uppercase)
-
-            HStack(spacing: AppSpacing.s) {
-                stockHighlightCard(
-                    title: L("stock.detail.market_value"),
-                    value: "\(formattedBalance) \(account.currency)",
-                    icon: "chart.line.uptrend.xyaxis",
-                    tint: AppColors.brandPrimary
-                )
-                stockHighlightCard(
-                    title: L("stock.detail.total_return"),
-                    value: "\(signedAmountText(stockTotalReturn, type: .adjustment)) \(account.currency)",
-                    icon: stockTotalReturn < 0 ? "arrow.down.right" : "arrow.up.right",
-                    tint: stockTotalReturn < 0 ? AppColors.negativeColor : AppColors.positiveColor
-                )
-            }
-
-            VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                HStack {
-                    Text(L("accounts_core.detail.market.quantity_label"))
-                        .font(.millioCalloutRegular)
-                        .foregroundStyle(AppColors.textSecondary)
-                    Spacer()
-                    Text(formattedAmount(currentQuantity))
-                        .font(.millioBodySemibold)
-                        .foregroundStyle(AppColors.textPrimary)
-                }
-                HStack {
-                    Text(L("accounts_core.detail.market.price_label"))
-                        .font(.millioCalloutRegular)
-                        .foregroundStyle(AppColors.textSecondary)
-                    Spacer()
-                    HStack(spacing: AppSpacing.xs) {
-                        Text("\(formattedAmount(currentUnitPrice)) \(account.currency)")
-                            .font(.millioBodySemibold)
-                            .foregroundStyle(AppColors.textPrimary)
-                        if isPriceStale {
-                            Text(L("accounts_core.detail.market.price_stale_badge"))
-                                .font(.millioCaptionRegular)
-                                .foregroundStyle(AppColors.textTertiary)
-                        }
-                    }
-                }
-                marketMetricRow(
-                    L("accounts_core.detail.market.average_cost_label"),
-                    value: stockSnapshot?.averageUnitCost.map { "\(formattedAmount($0)) \(account.currency)" } ?? "—"
-                )
-                marketMetricRow(
-                    L("accounts_core.detail.market.cost_basis_label"),
-                    value: "\(formattedAmount(stockSnapshot?.openCostBasis ?? 0)) \(account.currency)"
-                )
-                marketMetricRow(
-                    L("accounts_core.detail.market.unrealized_label"),
-                    value: "\(signedAmountText(unrealizedPL, type: .adjustment)) \(account.currency)",
-                    tone: unrealizedPL
-                )
-                marketMetricRow(
-                    L("accounts_core.detail.market.realized_label"),
-                    value: "\(signedAmountText(stockSnapshot?.realizedProfitLoss ?? 0, type: .adjustment)) \(account.currency)",
-                    tone: stockSnapshot?.realizedProfitLoss
-                )
-                marketMetricRow(
-                    L("accounts_core.detail.market.dividends_label"),
-                    value: "\(formattedAmount(stockSnapshot?.dividends ?? 0)) \(account.currency)"
-                )
-                marketMetricRow(
-                    L("accounts_core.detail.market.fees_label"),
-                    value: "\(formattedAmount(stockSnapshot?.totalFees ?? 0)) \(account.currency)"
-                )
-            }
-            .padding(AppSpacing.m)
-            .background(
-                LinearGradient(
-                    colors: [Color(hex: "14233A"), Color(hex: "102D35")],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .clipShape(RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                    .stroke(AppColors.brandPrimary.opacity(0.18), lineWidth: 1)
-            )
-        }
-    }
-
-    private func stockHighlightCard(title: String, value: String, icon: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.s) {
-            Image(systemName: icon)
-                .font(.millioHeadline)
-                .foregroundStyle(tint)
-            Text(title)
-                .font(.millioCaptionRegular)
-                .foregroundStyle(AppColors.textSecondary)
-            Text(value)
-                .font(.millioBodySemibold)
-                .foregroundStyle(AppColors.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.m)
-        .background(
-            RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                .fill(tint.opacity(0.12))
+    /// Данные hero-карточки рыночной позиции (единая карточка вместо hero + плашка «ПОЗИЦИЯ» +
+    /// таблица на 8 строк). `nil`, если реплей событий упал — тогда hero молча падает на
+    /// стандартную начинку счёта вместо падения экрана целиком (см. `AccountDetailView.body`).
+    private var investmentPresentation: InvestmentHeroPresentation? {
+        guard account.kind == .marketInvestment, let snapshot = stockSnapshot else { return nil }
+        _ = refreshToken
+        let invested = snapshot.openCostBasis
+        // Знаменатель доходности — себестоимость ОТКРЫТОЙ позиции, а не сумма всех покупок за
+        // историю: снапшот не хранит второе число, а плодить его ради процента не стоит (KISS).
+        let returnPercent: Decimal? = invested > 0 ? (stockTotalReturn / invested) * 100 : nil
+        return InvestmentHeroPresentation(
+            currency: account.currency,
+            currencySymbol: MonetaCurrency(rawValue: account.currency)?.symbol ?? account.currency,
+            positionValue: balanceToday,
+            totalReturn: stockTotalReturn,
+            returnPercent: returnPercent,
+            quantity: snapshot.quantity,
+            currentUnitPrice: currentUnitPrice,
+            averageUnitCost: snapshot.averageUnitCost,
+            invested: invested,
+            dividends: snapshot.dividends,
+            realizedProfitLoss: snapshot.realizedProfitLoss,
+            fees: snapshot.totalFees,
+            portfolioSharePercent: portfolioSharePercent,
+            sparkline: priceHistoryPoints,
+            sparklineMonths: sparklineMonths,
+            latestPriceAsOf: latestPriceAsOf
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                .stroke(tint.opacity(0.25), lineWidth: 1)
+    }
+
+    /// Реальные точки цены символа из append-only кэша `HistoricalAssetPrice` — ничего не
+    /// синтезируем. Меньше 2 точек (нет истории или только сегодняшняя live-цена) — график не
+    /// строим вовсе, а не рисуем плоскую линию из одной точки.
+    private var priceHistoryPoints: [InvestmentPricePoint] {
+        guard let symbol = account.marketMeta?.symbol, !symbol.isEmpty else { return [] }
+        let upper = symbol.uppercased()
+        let descriptor = FetchDescriptor<HistoricalAssetPrice>(
+            predicate: #Predicate<HistoricalAssetPrice> { $0.symbol == upper },
+            sortBy: [SortDescriptor(\.dayKey, order: .forward)]
         )
-        .accessibilityElement(children: .combine)
-    }
-
-    private func marketMetricRow(_ title: String, value: String, tone: Decimal? = nil) -> some View {
-        HStack {
-            Text(title)
-                .font(.millioCalloutRegular)
-                .foregroundStyle(AppColors.textSecondary)
-            Spacer()
-            Text(value)
-                .font(.millioBodySemibold)
-                .foregroundStyle(
-                    tone.map { $0 < 0 ? AppColors.negativeColor : ($0 > 0 ? AppColors.positiveColor : AppColors.textPrimary) }
-                        ?? AppColors.textPrimary
-                )
+        guard let rows = try? modelContext.fetch(descriptor), rows.count >= 2 else { return [] }
+        // ~6 месяцев — дальше линия на sparkline-высоте карточки становится нечитаемой.
+        return rows.suffix(183).compactMap { row in
+            guard let date = Self.dayKeyFormatter.date(from: row.dayKey) else { return nil }
+            return InvestmentPricePoint(date: date, price: NSDecimalNumber(decimal: row.price).doubleValue)
         }
-        .accessibilityElement(children: .combine)
     }
 
-    private var formattedBalance: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.usesGroupingSeparator = true
-        formatter.groupingSeparator = " "
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSDecimalNumber(decimal: balanceToday)) ?? "0"
+    private var sparklineMonths: Int {
+        guard let first = priceHistoryPoints.first?.date, let last = priceHistoryPoints.last?.date else { return 0 }
+        let months = Calendar.current.dateComponents([.month], from: first, to: last).month ?? 0
+        return max(months, 1)
+    }
+
+    private var latestPriceAsOf: Date? {
+        guard !priceHistoryPoints.isEmpty else { return nil }
+        return todayQuote?.fetchedAt ?? latestCachedQuote?.fetchedAt
+    }
+
+    private static let dayKeyFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter
+    }()
+
+    /// Та же цепочка фолбэков, что у `currentUnitPrice`, но параметризованная — нужна для чужих
+    /// позиций в `portfolioSharePercent` (там не годится завязка на `account.marketMeta`).
+    private func liveOrCachedPrice(symbol: String, events: [AccountEvent]) -> Decimal {
+        let upper = symbol.uppercased()
+        let dayKey = AccountEvent.dayKey(for: Date())
+        let todayDescriptor = FetchDescriptor<HistoricalAssetPrice>(
+            predicate: #Predicate<HistoricalAssetPrice> { $0.symbol == upper && $0.dayKey == dayKey }
+        )
+        if let today = try? modelContext.fetch(todayDescriptor).first { return today.price }
+        let cachedDescriptor = FetchDescriptor<HistoricalAssetPrice>(
+            predicate: #Predicate<HistoricalAssetPrice> { $0.symbol == upper },
+            sortBy: [SortDescriptor(\.dayKey, order: .reverse)]
+        )
+        if let cached = try? modelContext.fetch(cachedDescriptor).first { return cached.price }
+        return events
+            .sorted { $0.date < $1.date }
+            .last(where: { ($0.type == .buy || $0.type == .sell) && $0.unitPrice != nil })?
+            .unitPrice ?? 0
+    }
+
+    /// Доля позиции в общей стоимости открытых рыночных счетов ТОЙ ЖЕ валюты. Кросс-валютные
+    /// позиции сюда не подмешиваем без конвертации — это была бы неверная цифра, а не «примерная»
+    /// (см. брифинг: «если источника нет — не выдумывай»). `nil`, если сравнивать не с чем.
+    private var portfolioSharePercent: Decimal? {
+        guard account.kind == .marketInvestment else { return nil }
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.kindRaw == "marketInvestment" })
+        guard let candidates = try? modelContext.fetch(descriptor) else { return nil }
+        let currency = account.currency
+        let peers = candidates.filter { $0.currency == currency && $0.archivedAt == nil && $0.deletedAt == nil }
+        let total = peers.reduce(Decimal.zero) { sum, acc in
+            guard let symbol = acc.marketMeta?.symbol, !symbol.isEmpty,
+                  let snapshot = try? StockLotEngine.replay(events: acc.events ?? [], on: Date()) else { return sum }
+            return sum + snapshot.quantity * liveOrCachedPrice(symbol: symbol, events: acc.events ?? [])
+        }
+        guard total > 0 else { return nil }
+        return (balanceToday / total) * 100
     }
 
     // MARK: - Actions
@@ -799,15 +852,18 @@ struct AccountDetailView: View {
         }
     }
 
+    /// Круглые действия (вариант A, утверждён): только «Купить» окрашена акцентом — это основной
+    /// путь пользователя на этом экране. «Продать»/«Дивиденд»/«Ещё» — одинаковый тёмный нейтральный
+    /// круг, чтобы не читаться как три равнозначных предупреждения (был баг: жёлтый/оранжевый).
     private var marketActions: some View {
-        HStack(spacing: AppSpacing.s) {
-            compactMarketAction(L("accounts_core.detail.market.action.buy"), icon: "plus.circle.fill", tint: AppColors.positiveColor, prominent: true) {
+        HStack(spacing: AppSpacing.m) {
+            circularMarketAction(L("accounts_core.detail.market.action.buy"), icon: "plus", prominent: true) {
                 sheet = .buy
             }
-            compactMarketAction(L("accounts_core.detail.market.action.sell"), icon: "minus.circle.fill", tint: AppColors.warning) {
+            circularMarketAction(L("accounts_core.detail.market.action.sell"), icon: "minus") {
                 sheet = .sell
             }
-            compactMarketAction(L("accounts_core.detail.market.action.dividend"), icon: "banknote.fill", tint: Color(hex: "FFD166")) {
+            circularMarketAction(L("accounts_core.detail.market.action.dividend"), icon: "banknote") {
                 sheet = .dividend
             }
             Menu {
@@ -815,43 +871,38 @@ struct AccountDetailView: View {
                 Button(L("accounts_core.detail.action.edit"), systemImage: "pencil") { sheet = .editDetails }
                 Button(archiveActionTitle, systemImage: "archivebox", role: .destructive) { requestArchiveConfirmation() }
             } label: {
-                Image(systemName: "ellipsis")
-                    .font(.millioHeadline)
-                    .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 48, height: 64)
-                    .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.iconBackground))
+                circularActionLabel(icon: "ellipsis", prominent: false, title: L("accounts_core.detail.market.action.more"))
             }
             .accessibilityLabel(L("accounts_core.detail.action.edit"))
+            Spacer(minLength: 0)
         }
     }
 
-    private func compactMarketAction(
-        _ title: String,
-        icon: String,
-        tint: Color,
-        prominent: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
+    private func circularMarketAction(_ title: String, icon: String, prominent: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: AppSpacing.xs) {
-                Image(systemName: icon).font(.millioHeadline)
-                Text(title)
-                    .font(.millioCaptionRegular)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .foregroundStyle(prominent ? Color.white : tint)
-            .frame(maxWidth: .infinity, minHeight: 64)
-            .background(
-                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                    .fill(prominent ? tint : tint.opacity(0.14))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                    .stroke(tint.opacity(0.28), lineWidth: 1)
-            )
+            circularActionLabel(icon: icon, prominent: prominent, title: title)
         }
         .buttonStyle(.plain)
+    }
+
+    /// Круг 46pt + подпись 11,5pt под ним. `#1C1C1E` — тот же ad-hoc hex, что уже использует этот
+    /// экран для рыночных акцентов (`Color(hex: "FFD166")` было здесь же) — токена под точный
+    /// нейтральный круг из мока в `AppColors` нет.
+    private func circularActionLabel(icon: String, prominent: Bool, title: String? = nil) -> some View {
+        VStack(spacing: AppSpacing.xs) {
+            Image(systemName: icon)
+                .font(.millioBodySemibold)
+                .foregroundStyle(prominent ? Color.white : AppColors.textPrimary)
+                .frame(width: 46, height: 46)
+                .background(Circle().fill(prominent ? AppColors.positiveColor : Color(hex: "1C1C1E")))
+            if let title {
+                Text(title)
+                    .font(.millioCaption2Medium)
+                    .foregroundStyle(AppColors.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
     }
 
     private var genericActions: some View {
@@ -882,6 +933,11 @@ struct AccountDetailView: View {
                     }
                     actionButton(L("accounts_core.detail.action.transfer"), icon: "arrow.left.arrow.right") {
                         sheet = .transfer
+                    }
+                    if account.kind == .loan {
+                        actionButton(L("accounts_core.detail.loan.action.terms"), icon: "doc.text") {
+                            sheet = .loanTerms
+                        }
                     }
                     if account.kind == .deposit, account.depositMeta?.allowsEarlyClose == true {
                         actionButton(L("accounts_core.detail.deposit.action.early_close"), icon: "xmark.circle.fill", isDestructive: true) {
@@ -1020,12 +1076,10 @@ struct AccountDetailView: View {
     // MARK: - History
 
     private var historySection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.m) {
-            Text(L("accounts_core.detail.history_title"))
-                .font(.millioCaption)
-                .foregroundStyle(AppColors.textTertiary)
-                .textCase(.uppercase)
-
+        AccountDetailPlaqueSection(
+            title: L("accounts_core.detail.history_title"),
+            caption: sortedEvents.isEmpty ? nil : L("cashflow.month_workspace.transaction_count \(sortedEvents.count)")
+        ) {
             if sortedEvents.isEmpty {
                 Text(L("accounts_core.detail.no_events"))
                     .font(.millioCalloutRegular)
@@ -1062,10 +1116,17 @@ struct AccountDetailView: View {
             if (event.type == .buy || event.type == .sell || event.type == .adjustment),
                let quantity = event.quantity {
                 // buy/sell не имеют `amount` (движок E считает по quantity×price, не по денежной сумме) —
-                // показываем позицию явно, а не пустую строку.
-                Text(event.unitPrice.map { "\(formattedAmount(quantity)) × \(formattedAmount($0))" } ?? formattedAmount(quantity))
-                    .font(.millioBodySemibold)
-                    .foregroundStyle(AppColors.textPrimary)
+                // показываем количество и цену отдельными строками, а не одной «49 × 769,35».
+                VStack(alignment: .trailing, spacing: AppSpacing.xs) {
+                    Text(formattedAmount(quantity))
+                        .font(.millioBodySemibold)
+                        .foregroundStyle(AppColors.textPrimary)
+                    if let unitPrice = event.unitPrice {
+                        Text(String(format: L("accounts_core.detail.market.event_price_format"), formattedAmount(unitPrice)))
+                            .font(.millioCaptionRegular)
+                            .foregroundStyle(AppColors.textTertiary)
+                    }
+                }
             } else if let amount = event.amount {
                 Text(signedAmountText(amount, type: event.type))
                     .font(.millioBodySemibold)
@@ -1175,8 +1236,97 @@ struct AccountDetailView: View {
                     }
                 }
             )
+        case .loanTerms:
+            LoanTermsEditSheet(
+                account: account,
+                modelContext: modelContext,
+                contract: loanContract,
+                onSaved: {
+                    // Договор перечитываем сразу: `loanContract` грузится один раз в `.task`,
+                    // и без перечитывания экран показывал бы старые условия до переоткрытия.
+                    loanContract = try? LoanContractStore(context: modelContext).contract(for: account.id)
+                    refreshToken = UUID()
+                }
+            )
+        case .loanPayment:
+            if let loanPresentation {
+                LoanPaymentConfirmSheet(
+                    presentation: loanPresentation,
+                    onConfirm: { recordLoanPayment(loanPresentation) },
+                    // Явный `self`: параметр `sheet` этой функции затеняет одноимённый `@State`.
+                    onDismiss: { self.sheet = nil }
+                )
+            }
+        case .loanPrepayment:
+            if let terms = LoanTermsResolver.terms(for: account, contract: loanContract) {
+                LoanPrepaymentSheet(
+                    terms: terms,
+                    outstandingPrincipal: loanOutstandingPrincipal,
+                    paymentsMade: loanContract?.paymentsMade ?? 0,
+                    currency: account.currency,
+                    onConfirm: { entry in recordLoanExtraPayment(entry) }
+                )
+            }
         case .editDetails:
-            if account.productType == .creditCard {
+            if account.kind == .deposit, let meta = account.depositMeta, let presentation = depositPresentation {
+                // Коммит 2: «Реквизиты счёта» вклада — слияние генерик-формы и правки условий в
+                // один экран тёмного языка приложения. Другие типы продолжают открывать прежние
+                // экраны ниже — их поведение этой веткой не затронуто.
+                DepositAccountDetailsSheet(
+                    account: account,
+                    modelContext: modelContext,
+                    meta: meta,
+                    canEarlyClose: presentation.actions.contains(.earlyClose),
+                    onSave: { edit in
+                        performDeposit {
+                            try service.updateAccount(
+                                account,
+                                name: edit.name,
+                                group: edit.group,
+                                note: edit.note,
+                                includeInTotal: edit.includeInTotal
+                            )
+                            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+                            if let newOpeningDate = edit.openingDate {
+                                // Коммит 3: дата открытия менялась — атомарно применяет И новую
+                                // дату, И новые условия (`edit.meta` уже включает обе правки),
+                                // поэтому обычный `coordinator.editTerms` здесь НЕ вызывается —
+                                // он читал бы старую дату из `account.createdAt` и продублировал
+                                // бы перестройку графика поверх уже пересчитанной.
+                                let confirmedAlready = DepositOpeningDateRecalculation.hasConfirmedInterest(
+                                    events: account.events ?? []
+                                )
+                                if confirmedAlready {
+                                    // Сюда мы попадаем ТОЛЬКО после явного подтверждения в самом
+                                    // листе (`DepositAccountDetailsSheet.handleDoneTapped`) —
+                                    // единственный путь, ломающий инвариант «прошлое неприкосновенно».
+                                    _ = try DepositOpeningDateRecalculation.recalculateConfirmed(
+                                        account: account, newOpeningDate: newOpeningDate,
+                                        meta: edit.meta, service: service, context: modelContext
+                                    )
+                                } else {
+                                    _ = try DepositOpeningDateRecalculation.applySilently(
+                                        account: account, newOpeningDate: newOpeningDate,
+                                        meta: edit.meta, service: service, context: modelContext
+                                    )
+                                }
+                                synchronizeDepositReminder(meta: edit.meta)
+                                return DepositOperationResult(operationID: nil, eventIDs: [], wasAlreadyPersisted: false)
+                            }
+                            let coordinator = DepositOperationCoordinator(modelContext: modelContext)
+                            let result = try coordinator.editTerms(
+                                depositID: account.id,
+                                command: DepositTermsEditCommand(meta: edit.meta)
+                            )
+                            synchronizeDepositReminder(meta: edit.meta)
+                            return result
+                        }
+                    },
+                    onProductTransitionCommitted: productTransitionCommitted,
+                    onRequestEarlyClose: { showEarlyCloseConfirm = true },
+                    onRequestDelete: { requestArchiveConfirmation() }
+                )
+            } else if account.productType == .creditCard {
                 CreditCardEditSheet(account: account, modelContext: modelContext, onSave: { command, settings in
                     performEdit {
                         try CreditCardEditorService(modelContext: modelContext).update(account: account, command: command)
@@ -1471,6 +1621,73 @@ struct AccountDetailView: View {
         }
     }
 
+    private func handleLoanAction(_ action: LoanDetailAction) {
+        switch action {
+        case .payment: sheet = .loanPayment
+        case .terms: sheet = .loanTerms
+        case .schedule: showLoanSchedule = true
+        case .prepayment: sheet = .loanPrepayment
+        }
+    }
+
+    /// Плановый платёж: долг уменьшает только тело, проценты копятся в договоре (спека Р6).
+    /// Обе записи — одна транзакция внутри `LoanPaymentRecorder`.
+    private func recordLoanPayment(_ presentation: LoanDetailPresentation) {
+        guard let principalPart = presentation.nextPaymentPrincipal,
+              let interestPart = presentation.nextPaymentInterest,
+              let date = presentation.nextPaymentDate else { return }
+        perform {
+            try LoanPaymentRecorder(modelContext: modelContext).recordScheduledPayment(
+                account: account,
+                principalPart: principalPart,
+                interestPart: interestPart,
+                date: date
+            )
+            loanContract = try? LoanContractStore(context: modelContext).contract(for: account.id)
+        }
+    }
+
+    /// Досрочное погашение и недоплата (Ф6): что уходит в тело, что в проценты и расходуется ли
+    /// период — решено ядром (`LoanPrepaymentPlanner`), экран только записывает готовое.
+    ///
+    /// Дата — сегодняшняя, а не дата планового платежа: событие с будущей датой не попало бы в
+    /// баланс «на сегодня», и долг на экране не изменился бы до наступления этой даты.
+    private func recordLoanExtraPayment(_ entry: LoanExtraPaymentEntry) {
+        perform {
+            try LoanPaymentRecorder(modelContext: modelContext).record(entry, on: account)
+            loanContract = try? LoanContractStore(context: modelContext).contract(for: account.id)
+        }
+    }
+
+    /// Пункты «···» кредита. «Внести платёж» сюда не дублируем — кнопка уже на экране
+    /// (`LoanDetailSection`), в меню только то, чего на экране нет.
+    private var loanActionSheetItems: [AccountActionSheetItem] {
+        var items: [AccountActionSheetItem] = [
+            .init(
+                title: L("accounts_core.detail.loan.action.terms"),
+                icon: "doc.text",
+                action: { sheet = .loanTerms }
+            )
+        ]
+        // «Изменить баланс» кредиту намеренно не даём: поле суммы отбрасывает минус
+        // (`AmountInputFormatter.sanitize`), и сохранение перевернуло бы знак долга — счёт-
+        // обязательство ушёл бы в net worth активом. Ремонт остатка — отдельная задача.
+        if account.archivedAt == nil && account.deletedAt == nil {
+            items.append(.init(
+                title: L("accounts_core.detail.action.edit_details"),
+                icon: "square.and.pencil",
+                action: { sheet = .editDetails }
+            ))
+        }
+        items.append(.init(
+            title: L("accounts_core.detail.action.delete_account"),
+            icon: "trash",
+            isDestructive: true,
+            action: { requestArchiveConfirmation() }
+        ))
+        return items
+    }
+
     /// Правка реквизитов вклада (имя, группа, учёт в тотале) — те же условия, что и у actionsRow
     /// остальных типов счетов: архивный/удалённый счёт не редактируется.
     private var canEditDepositDetails: Bool {
@@ -1481,26 +1698,38 @@ struct AccountDetailView: View {
         presentation.actions.filter { $0 != .topUp && $0 != .adjustBalance }
     }
 
-    private func depositOverflowTitle(_ action: DepositDetailAction) -> String {
-        switch action {
-        case .topUp: L("accounts_core.deposit.action.top_up")
-        case .adjustBalance: L("accounts_core.detail.action.adjust_balance")
-        case .editTerms: L("accounts_core.deposit.action.edit_terms")
-        case .earlyClose: L("accounts_core.detail.deposit.action.early_close")
-        case .withdrawAtMaturity: L("accounts_core.deposit.action.withdraw_maturity")
-        case .archive: archiveActionTitle
+    /// Пункты bottom-sheet меню вклада (Коммит 1, `AccountActionsSheet`). «Реквизиты счёта» и
+    /// «Изменить условия» слиты в один пункт — экран `.editDetails` для вклада сам показывает
+    /// условия (Коммит 2). «Пополнить» сюда не добавляем — кнопка уже есть на экране
+    /// (`DepositDetailSection.actions`).
+    private func depositActionSheetItems(_ presentation: DepositDetailPresentation) -> [AccountActionSheetItem] {
+        var items: [AccountActionSheetItem] = []
+        if canEditDepositDetails {
+            items.append(.init(
+                title: L("accounts_core.detail.action.edit_details"),
+                icon: "square.and.pencil",
+                action: { sheet = .editDetails }
+            ))
         }
-    }
-
-    private func depositOverflowIcon(_ action: DepositDetailAction) -> String {
-        switch action {
-        case .topUp: "plus.circle"
-        case .adjustBalance: "slider.horizontal.3"
-        case .editTerms: "pencil"
-        case .earlyClose: "xmark.circle"
-        case .withdrawAtMaturity: "arrow.right.circle"
-        case .archive: "archivebox"
+        if presentation.actions.contains(.earlyClose) {
+            items.append(.init(
+                title: L("accounts_core.detail.deposit.action.early_close"),
+                // Реальное последствие из кода (`earlyClosePreview`), не выдуманная формулировка:
+                // штраф — доля от УЖЕ начисленных процентов, будущие начисления просто теряются.
+                subtitle: L("accounts_core.detail.deposit.early_close_confirm.message"),
+                icon: "xmark.circle",
+                action: { showEarlyCloseConfirm = true }
+            ))
         }
+        if presentation.actions.contains(.archive) {
+            items.append(.init(
+                title: L("accounts_core.detail.action.delete_account"),
+                icon: "trash",
+                isDestructive: true,
+                action: { requestArchiveConfirmation() }
+            ))
+        }
+        return items
     }
 
     private func performDeposit(_ operation: () throws -> DepositOperationResult) {

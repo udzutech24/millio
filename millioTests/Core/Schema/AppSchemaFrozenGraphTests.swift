@@ -131,7 +131,7 @@ final class AppSchemaFrozenGraphTests: XCTestCase {
         XCTAssertEqual(
             currentHash,
             previousHash,
-            "V11 заявлена как аддитивная, но форма Account изменилась — стор V10 больше не откроется"
+            "Текущая версия заявлена как аддитивная, но форма Account изменилась — стор V10 больше не откроется"
         )
         // При этом от версий ДО V10 (там ещё не было `DepositMeta.isTaxable`) он по-прежнему отличается.
         for version in ["4.0.0", "5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0"] {
@@ -139,19 +139,23 @@ final class AppSchemaFrozenGraphTests: XCTestCase {
         }
     }
 
-    /// Прямая проверка аддитивности текущей версии на уровне записанного стора: все сущности V10
-    /// присутствуют с теми же checksum, а разница ровно одна — новая таблица.
+    /// Прямая проверка аддитивности текущей версии на уровне записанного стора: все сущности
+    /// предыдущей версии присутствуют с теми же checksum, а разница ровно одна — новая таблица.
+    ///
+    /// Baseline двигается вместе с текущей версией (V10 → V11 при переходе на V12): тест сравнивает
+    /// «эта версия против предыдущей», а не против произвольной исторической.
     func testCurrentSchemaOnlyAddsNewEntityOnTopOfPreviousVersion() throws {
-        let previous = try entityHashes(for: Schema(AppSchemaV10.models, version: AppSchemaV10.versionIdentifier))
+        let previous = try entityHashes(for: Schema(AppSchemaV11.models, version: AppSchemaV11.versionIdentifier))
         let current = try entityHashes(for: Schema(AppSchemaCurrent.models, version: AppSchemaCurrent.versionIdentifier))
 
-        XCTAssertEqual(Set(current.keys).subtracting(previous.keys), ["AccountAppearance"])
-        // Форма новой таблицы пинится сразу: со следующей версией схемы V11 станет исторической,
-        // и её checksum должен быть уже зафиксирован, а не снят задним числом.
+        XCTAssertEqual(Set(current.keys).subtracting(previous.keys), ["LoanContract"])
+        // Форма V11-таблицы уже запинена в `stableEntityHashes` — проверяем, что V12 её не сдвинула.
+        // `LoanContract` попадёт туда, когда V12 станет исторической (т.е. при появлении V13):
+        // пинить checksum версии, которая ещё меняется, значит ловить ложные красные.
         XCTAssertEqual(current["AccountAppearance"], Self.stableEntityHashes["AccountAppearance"])
-        XCTAssertTrue(Set(previous.keys).subtracting(current.keys).isEmpty, "V11 потеряла таблицы V10")
+        XCTAssertTrue(Set(previous.keys).subtracting(current.keys).isEmpty, "V12 потеряла таблицы V11")
         for (entity, hash) in previous {
-            XCTAssertEqual(current[entity], hash, "V11 изменила форму сущности \(entity)")
+            XCTAssertEqual(current[entity], hash, "V12 изменила форму сущности \(entity)")
         }
     }
 

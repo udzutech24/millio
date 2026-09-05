@@ -1,0 +1,54 @@
+{
+  "planFile": "2026-09-04__credit-account-type.md",
+  "title": "Тип счёта «Кредит»",
+  "updated": "2026-09-04T21:00:00Z",
+  "phases": [
+    {
+      "name": "Ф1 — Разведка, спека, план",
+      "status": "done",
+      "note": "recon дописан, спека 245 строк, контракт округления проверен расчётом"
+    },
+    {
+      "name": "Ф2 — Ядро расчёта и схема V12",
+      "status": "done",
+      "note": "12 эталонных чисел сходятся в ноль; V12 аддитивна; 234 теста зелёные (ядро+схема+вклад)"
+    },
+    {
+      "name": "Ф3 — Экран «Условия кредита»",
+      "status": "done",
+      "note": "LoanTermsFormCard в двух режимах + LoanTermsEditSheet + запись LoanContract в транзакции создания счёта; 212 тестов зелёные (176 ядро/схема/пресеты + 36 l10n)"
+    },
+    {
+      "name": "Ф4 — Деталка счёта",
+      "status": "done",
+      "note": "LoanDetailPresentation + hero/секция/лист платежа + LoanScreenStyle (медь #E0A458); платёж уменьшает долг на тело, проценты — в договор; ленивый backfill Р5. 15 новых тестов + 176 регресс + 54 l10n, 0 failed; коммит 17833d0"
+    },
+    {
+      "name": "Ф5 — График платежей",
+      "status": "done",
+      "note": "LoanSchedulePresentation + LoanScheduleView + LoanShareBar + общий LoanMoneyFormat; строка «N впереди» на деталке открывает экран пушем. 7 новых тестов, 119 passed / 0 failed (кредит, схема V12, вклад, локализация). Эталон: 60 строк, текущий период шестой, переплата 663 760 ₽ (55,3 %); колонка «Тело %» макета расходится с ядром с 3-го платежа — эталон спека §4.5. Коммит c89fd6b"
+    },
+    {
+      "name": "Ф6 — Досрочное погашение",
+      "status": "done",
+      "note": "LoanPrepaymentPlanner + LoanPrepaymentPresentation + LoanPrepaymentSheet, кнопка «Досрочно» подключена к AccountDetailView; запись только через LoanPaymentRecorder.record(_:on:), сценарий «платёж» пишет paymentOverride. Кламп пыли LoanOutstanding (Decimal через double). 72 теста кредита зелёные, полный millioTests 2617 passed / 27 failed = baseline/flaky, 0 красных в кредите. Эталон: 937 241 · срок 31 063 / 42 платежа / 226 771 · платёж 25 600 / 100 455"
+    },
+    {
+      "name": "Ф7 — Интеграция (Cashflow, реестр, totals)",
+      "status": "done",
+      "note": "LoanPaymentCashflowProjector: расход на платёж + отдельная строка страховки, дедуп importSourceRaw \"loanPayment\" + importReferenceKey; LoanContract зарегистрирован в ModelTypeRegistry + LoanContractImporter (round-trip бэкапа); net worth правок не потребовал — Р6 доказан тестом. 11 новых тестов, кредит 107 зелёных (было 93), полный millioTests 2676 passed / 25 failed против базы 2617 / 27 — новых красных нет"
+    },
+    {
+      "name": "Правки по замечаниям с устройства",
+      "status": "done",
+      "note": "7e0583e сумма/ставка редактируемые · 93f31e5 + 500c953 автофокус и высота листов · 77b2d0f тап по активной вкладке → корень"
+    },
+    {
+      "name": "Ф8 — Сдача владельцу",
+      "status": "in_progress",
+      "note": "ветка запушена, билд на iPhone 17 Pro Max; идёт device-проверка, мерж не делали"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

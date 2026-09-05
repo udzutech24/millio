@@ -42,6 +42,8 @@ struct FinanceAddAccountView: View {
     @State private var selectedInvestmentPreset: FinanceAddAccountInvestmentPreset = .asset
     @State private var showCreateGroup = false
     @State private var cardData: InlineCardDraft?
+    /// Условия договора кредита (Ф3) — отдельно от `creditData`: легаси-кортеж их не вмещает.
+    @State private var loanTermsDraft: LoanTermsDraft?
     @State private var creditData: (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)?
     @State private var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?
     /// Данные формы «Вклад»/«Накопительный счёт» нового ядра (Фаза 3) — `nil` для остальных пресетов.
@@ -516,6 +518,9 @@ struct FinanceAddAccountView: View {
                 name: $accountName,
                 onCreditDataChanged: { data in
                     self.creditData = data
+                },
+                onLoanTermsChanged: { draft in
+                    self.loanTermsDraft = draft
                 }
             ) {
                 groupSection
@@ -1323,7 +1328,21 @@ struct FinanceAddAccountView: View {
                     groupID: group?.id,
                     loanMeta: meta
                 ))
-                _ = try factory.create(command)
+                // Договор пишем через `graphEnricher` — в том же transaction-контексте, что и
+                // счёт: иначе при сбое сохранения остался бы счёт без условий (или наоборот).
+                _ = try factory.create(command, graphEnricher: { _, transactionContext in
+                    guard let terms = loanTermsDraft?.terms else { return }
+                    try LoanContractStore(context: transactionContext)
+                        .upsert(accountID: command.accountID) { contract in
+                            contract.principal = terms.principal
+                            contract.annualRatePercent = terms.annualRatePercent
+                            contract.termPeriods = terms.termPeriods
+                            contract.firstPaymentDate = terms.firstPaymentDate
+                            contract.scheduleType = terms.scheduleType
+                            contract.frequency = terms.frequency
+                            contract.paymentOverride = terms.paymentOverride
+                        }
+                })
             case .debt:
                 guard let investmentData else { return }
                 let direction: DebtDirection = investmentData.investmentType == .positive ? .owedToMe : .owedByMe

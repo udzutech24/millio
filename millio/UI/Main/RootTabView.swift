@@ -46,6 +46,13 @@ struct RootTabView: View {
     // Internal finances tab state (для обратной совместимости с FinancesContentViewInternal)
     @State private var financesInternalTab: FinancesInternalTab = .main
 
+    /// Счётчик сбросов на вкладку. Инкремент меняет `.id` контента вкладки → SwiftUI
+    /// пересоздаёт её `NavigationStack` и раздел открывается на корневом экране.
+    /// Почему не только очистка path: вглубь (счёт → позиция) экраны уходят через
+    /// view-based `NavigationLink { … }`, а такие переходы в `NavigationPath` не попадают,
+    /// поэтому обнуления пути недостаточно.
+    @State private var tabResetTokens: [RootTab: Int] = [:]
+
     private var isNavigatedDeep: Bool {
         switch router.selectedTab {
         case .dashboard: !dashboardPath.isEmpty
@@ -88,7 +95,11 @@ struct RootTabView: View {
 
             // Кастомный таб бар — скрываем при push-навигации вглубь
             if !isNavigatedDeep {
-                RootTabBar(selectedTab: $router.selectedTab, showFABMenu: $showFABMenu) { fabAction in
+                RootTabBar(
+                    selectedTab: $router.selectedTab,
+                    showFABMenu: $showFABMenu,
+                    onReselectTab: { tab in resetTabToRoot(tab) }
+                ) { fabAction in
                     handleFABAction(fabAction)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -212,21 +223,55 @@ struct RootTabView: View {
         // Показываем только активный таб — ZStack с opacity для сохранения состояния
         ZStack {
             dashboardTab
+                .id(resetToken(for: .dashboard))
                 .opacity(router.selectedTab == .dashboard ? 1 : 0)
                 .allowsHitTesting(router.selectedTab == .dashboard)
 
             financesTab
+                .id(resetToken(for: .finances))
                 .opacity(router.selectedTab == .finances ? 1 : 0)
                 .allowsHitTesting(router.selectedTab == .finances)
 
             dynamicsTab
+                .id(resetToken(for: .dynamics))
                 .opacity(router.selectedTab == .dynamics ? 1 : 0)
                 .allowsHitTesting(router.selectedTab == .dynamics)
 
             cashflowTab
+                .id(resetToken(for: .cashflow))
                 .opacity(router.selectedTab == .cashflow ? 1 : 0)
                 .allowsHitTesting(router.selectedTab == .cashflow)
         }
+    }
+
+    // MARK: - Reselect → Root
+
+    private func resetToken(for tab: RootTab) -> Int {
+        tabResetTokens[tab] ?? 0
+    }
+
+    /// Тап по уже активной вкладке возвращает раздел на корневой экран.
+    /// Модальные листы закрываем вместе со сбросом, чтобы лист не завис поверх нового корня.
+    private func resetTabToRoot(_ tab: RootTab) {
+        dismissPresentedSheets()
+
+        switch tab {
+        case .dashboard: dashboardPath = NavigationPath()
+        case .finances:  financesPath = NavigationPath()
+        case .dynamics:  break
+        case .cashflow:  cashflowPath = NavigationPath()
+        }
+
+        tabResetTokens[tab] = resetToken(for: tab) + 1
+    }
+
+    private func dismissPresentedSheets() {
+        showIncomeSheet = false
+        showExpenseSheet = false
+        showTransferSheet = false
+        showProfileSheet = false
+        showDeltaPeriodPicker = false
+        router.showingSubscription = false
     }
 
     // MARK: - Dashboard Tab

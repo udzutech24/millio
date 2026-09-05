@@ -440,6 +440,37 @@ private struct FinanceDynamicsContentView: View {
         standardDynamicsContent
     }
 
+    /// Hero легаси-счёта. Собирается ТЕМ ЖЕ резолвером и из тех же источников, что строка списка
+    /// (`FinanceAccountRow`): имя/сумма — `getAccountInfo`, оформление — `AccountAppearance`,
+    /// легаси-поля иконки — `customIconInfo`. Сумма форматируется общим
+    /// `AccountRowAmountFormatter`, поэтому hero и строка не могут разойтись.
+    private var legacyHeroPresentation: AccountHeroPresentation? {
+        guard viewModel.state.isSingleAccountMode,
+              let account = initialAccount,
+              let info = financeViewModel.getAccountInfo(account: account) else { return nil }
+
+        let iconInfo = financeViewModel.customIconInfo(for: account)
+        let isLiability = financeViewModel.isAccountLiabilityForTotals(account: account)
+            || info.isCreditCardDebt
+            || info.amount < 0
+
+        return AccountHeroPresentation.make(
+            key: account.accountID,
+            name: info.name,
+            appearance: financeViewModel.appearance(for: account),
+            legacyIconName: iconInfo.iconName,
+            legacyIconColorHex: iconInfo.iconColor,
+            fallbackIconName: info.icon,
+            amountText: AccountRowAmountFormatter.text(
+                info.amount,
+                isHidden: financeViewModel.state.isAmountHidden,
+                maximumFractionDigits: financeViewModel.getMarketInvestment(account: account) != nil ? 2 : 0
+            ),
+            currencySymbol: MonetaCurrency(rawValue: info.currency)?.symbol ?? info.currency,
+            isNegative: isLiability
+        )
+    }
+
     private var standardDynamicsContent: some View {
         let isCreditCardAccount = initialAccount.map { inlineCreditCard(for: $0) != nil } ?? false
         let needsTopClearance = viewModel.state.isSingleAccountMode && isCreditCardAccount && shouldShowSingleAccountActionBar
@@ -460,6 +491,13 @@ private struct FinanceDynamicsContentView: View {
                                     )
                             }
                         )
+
+                    // Ф3: у легаси-счёта (Card/Credit/Investment) отдельного детального экрана нет —
+                    // тап по строке ведёт сюда. Без hero редизайн V11 на этих счетах заканчивался
+                    // бы строкой списка, ровно как в провале Ф1 (только новая модель).
+                    if let legacyHeroPresentation {
+                        AccountHeroCardView(presentation: legacyHeroPresentation)
+                    }
 
                     chartCard
 

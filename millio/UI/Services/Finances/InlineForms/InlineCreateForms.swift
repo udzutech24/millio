@@ -611,16 +611,20 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     @Environment(AppRouter.self) private var router
     @Binding var name: String
     let onCreditDataChanged: ((name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)?) -> Void
+    /// Условия договора (Ф3 кредита) — отдельным выходом от легаси-кортежа: `LoanMeta` их не
+    /// вмещает и не должна (её расширение сдвинуло бы checksum `Account`, спека Р1).
+    let onLoanTermsChanged: (LoanTermsDraft?) -> Void
     let groupSection: GroupSection
-    
-    @State private var amountText: String = ""
+
+    /// Сумма кредита, ставка, срок, дата первого платежа, тип и периодичность платежа —
+    /// всё это живёт в черновике условий, а не в отдельных `@State` формы: те же поля
+    /// в том же порядке показывает экран правки условий.
+    @State private var loanDraft = LoanTermsDraft(
+        firstPaymentDate: Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
+    )
     @State private var remainingAmountText: String = ""
-    @State private var monthlyPaymentText: String = ""
     @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var isFavorite: Bool = false
-    @State private var paymentMode: CreditPaymentMode = .dayOfMonth
-    @State private var paymentDayOfMonth: Int = max(1, min(31, Calendar.current.component(.day, from: Date())))
-    @State private var nextPaymentDate: Date = Date()
     @State private var reminderEnabled: Bool = false
     @State private var reminderDaysBeforeText: String = ""
     @State private var reminderDaysBeforeDisplayText: String = ""
@@ -634,10 +638,12 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     init(
         name: Binding<String>,
         onCreditDataChanged: @escaping ((name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)?) -> Void,
+        onLoanTermsChanged: @escaping (LoanTermsDraft?) -> Void,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
         self._name = name
         self.onCreditDataChanged = onCreditDataChanged
+        self.onLoanTermsChanged = onLoanTermsChanged
         self.groupSection = groupSection()
     }
     
@@ -645,15 +651,16 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         !name.isEmpty
     }
     
+    /// Легаси-кортеж формы. Сумма, платёж, срок и день платежа больше не собираются
+    /// собственными полями — они выводятся из условий договора, чтобы на одном экране не было
+    /// двух «сумм кредита». Форма `LoanMeta` при этом не меняется (спека Р1).
     func getCreditData() -> (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)? {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        let amount = parseNumber(amountText) ?? 0
+        let amount = loanDraft.principal.map { NSDecimalNumber(decimal: $0).doubleValue } ?? 0
         let remainingAmount = parseNumber(remainingAmountText) ?? 0
-        let monthlyPayment = parseNumber(monthlyPaymentText) ?? (amount / 12.0)
-        // Дефолты для упрощенной формы: срок 12 месяцев от текущей даты
-        let endDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
-        let dayOfMonth = paymentMode == .dayOfMonth ? paymentDayOfMonth : nil
-        let paymentDate = paymentMode == .nextDate ? nextPaymentDate : nil
+        let monthlyPayment = loanPayment ?? (amount / 12.0)
+        let endDate = loanTermEnd ?? (Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date())
+        let dayOfMonth = Calendar.current.component(.day, from: loanDraft.firstPaymentDate)
         let reminderDaysBefore = parseReminderDays(reminderDaysBeforeText)
         return (
             name,
@@ -665,20 +672,34 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
             .other,
             .consumer,
             isFavorite,
-            paymentMode,
+            .dayOfMonth,
             dayOfMonth,
-            paymentDate,
+            nil,
             reminderEnabled,
             reminderEnabled ? reminderDaysBefore : nil,
             reminderEnabled ? reminderTime : nil,
             true
         )
     }
+
+    /// Платёж по условиям: ручной, если задан, иначе расчётный аннуитет ядра. Своей формулы
+    /// форма не знает — считает `LoanScheduleEngine`.
+    private var loanPayment: Double? {
+        guard let terms = loanDraft.terms,
+              let payment = LoanScheduleEngine.regularPayment(terms: terms) else { return nil }
+        return NSDecimalNumber(decimal: DepositInterestScheduler.round2(payment)).doubleValue
+    }
+
+    /// Дата последнего платежа по графику — она же `LoanMeta.termEnd`.
+    private var loanTermEnd: Date? {
+        guard let terms = loanDraft.terms, terms.termPeriods > 0 else { return nil }
+        return LoanScheduleEngine.paymentDate(period: terms.termPeriods, terms: terms)
+    }
     
     var body: some View {
         VStack(spacing: 18) {
             balanceSection
-            paymentSection
+            loanTermsSection
             reminderSection
             groupSection
             calculationsSection
@@ -688,22 +709,12 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
             loadAvailableCurrencies()
         }
         .onChange(of: name) { _, _ in emitCreditDataChange() }
-        .onChange(of: amountText) { _, _ in emitCreditDataChange() }
         .onChange(of: remainingAmountText) { _, _ in emitCreditDataChange() }
-        .onChange(of: monthlyPaymentText) { _, _ in emitCreditDataChange() }
         .onChange(of: selectedCurrency) { _, _ in emitCreditDataChange() }
         .onChange(of: isFavorite) { _, _ in emitCreditDataChange() }
-        .onChange(of: paymentMode) { _, newMode in
-            if newMode == .dayOfMonth {
-                nextPaymentDate = Date()
-            }
-            if newMode == .nextDate {
-                paymentDayOfMonth = max(1, min(31, paymentDayOfMonth))
-            }
-            emitCreditDataChange()
-        }
-        .onChange(of: paymentDayOfMonth) { _, _ in emitCreditDataChange() }
-        .onChange(of: nextPaymentDate) { _, _ in emitCreditDataChange() }
+        // Наблюдаем черновик целиком, а не каждое условие по отдельности — иначе на восьмом
+        // `.onChange` этот `body` перестаёт проверяться типами за разумное время.
+        .onChange(of: loanDraft) { _, _ in emitCreditDataChange() }
         .onChange(of: reminderEnabled) { _, enabled in
             if !enabled {
                 reminderDaysBeforeText = ""
@@ -770,21 +781,6 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
-                        Text(L("finances.add_account.credit.amount"))
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        AmountTextField(placeholder: "0", value: $amountText)
-                        .foregroundStyle(AppColors.textPrimary)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 160)
-                    }
-                    .padding(.vertical, 14)
-                    .padding(.horizontal, 16)
-                    
-                    FinancesRowDivider(leadingPadding: 16)
-                    
-                    HStack(spacing: 12) {
                         Text(L("finances.add_account.credit.remaining_debt"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
@@ -829,89 +825,14 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         }
     }
 
-    private var paymentSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: L("finances.add_account.credit.payment.section"))
-            FinancesGlassCard {
-                VStack(spacing: 0) {
-                    HStack(spacing: 12) {
-                        Text(L("finances.add_account.credit.monthly_payment"))
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        AmountTextField(placeholder: "0", value: $monthlyPaymentText)
-                            .foregroundStyle(AppColors.textPrimary)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 160)
-                    }
-                    .padding(.vertical, 14)
-                    .padding(.horizontal, 16)
-
-                    FinancesRowDivider(leadingPadding: 16)
-
-                    HStack(spacing: 12) {
-                        Text(L("finances.add_account.credit.payment_mode"))
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        Menu {
-                            ForEach(CreditPaymentMode.allCases, id: \.self) { mode in
-                                Button(mode.displayName) {
-                                    paymentMode = mode
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(paymentMode.displayName)
-                                    .font(.system(size: 16, weight: .semibold))
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 12, weight: .semibold))
-                            }
-                            .foregroundStyle(AppColors.textTertiary)
-                        }
-                    }
-                    .padding(.vertical, 14)
-                    .padding(.horizontal, 16)
-
-                    FinancesRowDivider(leadingPadding: 16)
-
-                    if paymentMode == .dayOfMonth {
-                        HStack(spacing: 12) {
-                            Text(L("finances.add_account.credit.payment_day"))
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(AppColors.textPrimary)
-                            Spacer()
-                            Menu {
-                                ForEach(1...31, id: \.self) { day in
-                                    Button("\(day)") {
-                                        paymentDayOfMonth = day
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Text("\(paymentDayOfMonth)")
-                                        .font(.system(size: 16, weight: .semibold))
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 12, weight: .semibold))
-                                }
-                                .foregroundStyle(AppColors.textTertiary)
-                            }
-                        }
-                        .padding(.vertical, 14)
-                        .padding(.horizontal, 16)
-                    } else {
-                        DatePicker(
-                            L("finances.add_account.credit.next_payment_date"),
-                            selection: $nextPaymentDate,
-                            displayedComponents: .date
-                        )
-                        .foregroundStyle(AppColors.textPrimary)
-                        .padding(.vertical, 14)
-                        .padding(.horizontal, 16)
-                    }
-                }
-            }
-        }
+    /// Условия договора — тот же `LoanTermsFormCard`, что и на экране правки условий.
+    /// Заменил прежние поля «Сумма кредита»,
+    /// «Ежемесячный платёж» и «День платежа»: они дублировали бы поля карточки.
+    private var loanTermsSection: some View {
+        LoanTermsFormCard(
+            currencyCode: selectedCurrency,
+            draft: $loanDraft
+        )
     }
 
     private var reminderSection: some View {
@@ -1017,6 +938,9 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
 
     private func emitCreditDataChange() {
         onCreditDataChanged(getCreditData())
+        // Договор пишется отдельно от легаси-кортежа: пока условия неполные, отдаём nil —
+        // тогда счёт создастся как раньше, без `LoanContract`, и деталка возьмёт сид из меты.
+        onLoanTermsChanged(loanDraft.terms == nil ? nil : loanDraft)
     }
 
     private static func defaultReminderTime() -> Date {

@@ -377,6 +377,9 @@ struct AccountEditDetailsSheet: View {
     @State private var selectedLoanID: UUID?
     /// nil = «Без группы» (счёт без группы = `account.group == nil`, канон Ungrouped ядра).
     @State private var selectedGroupID: UUID?
+    /// Ручной ремонт «дебетовая карта на самом деле кредитка» (LegacyAccountConversion-баг,
+    /// см. `DebitToCreditCardRepair`) — НЕ автоматика, открывается только явным тапом владельца.
+    @State private var showCreditCardRepairSheet = false
 
     init(
         account: Account,
@@ -455,6 +458,17 @@ struct AccountEditDetailsSheet: View {
                         }
                     }
                 }
+                if account.productType == .debitCard {
+                    Section {
+                        Button {
+                            showCreditCardRepairSheet = true
+                        } label: {
+                            Label(L("accounts_core.debit_card.repair.action"), systemImage: "creditcard.trianglebadge.exclamationmark")
+                        }
+                    } footer: {
+                        Text(L("accounts_core.debit_card.repair.action_hint"))
+                    }
+                }
                 AccountProductTransitionSection(
                     account: account,
                     modelContext: modelContext,
@@ -481,6 +495,12 @@ struct AccountEditDetailsSheet: View {
                         )
                     }
                     .disabled(trimmedName.isEmpty)
+                }
+            }
+            .sheet(isPresented: $showCreditCardRepairSheet) {
+                DebitToCreditCardRepairSheet(account: account, modelContext: modelContext) {
+                    showCreditCardRepairSheet = false
+                    onProductTransitionCommitted()
                 }
             }
         }

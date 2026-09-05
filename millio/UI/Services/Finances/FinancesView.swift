@@ -1057,31 +1057,46 @@ struct FinancesMainTabView: View {
                             NewCoreAccountRow(
                                 account: account,
                                 balance: viewModel.newCoreBalanceToday(account),
-                                isAmountHidden: viewModel.state.isAmountHidden
+                                isAmountHidden: viewModel.state.isAmountHidden,
+                                appearance: viewModel.appearance(for: account),
+                                onToggleFavorite: { viewModel.toggleFavorite(account) },
+                                onSaveAppearance: { iconName, tintHex, presetRaw in
+                                    viewModel.saveAppearance(
+                                        iconName: iconName,
+                                        tintHex: tintHex,
+                                        presetRaw: presetRaw,
+                                        for: account
+                                    )
+                                }
                             )
                             .padding(.horizontal, FinancesMainLayoutPolicy.horizontalPadding)
                         }
                         .buttonStyle(.plain)
                     }
-                    // Легаси-fallback-хвост (invariant 9 §2.1) — минимальный ряд (не reuse приватного
-                    // `FinanceAccountRow` из `FinanceRows.swift`, read-only: dynamics/edit доступны
-                    // через deep-link на «Динамика» не проведён в этом гейте, как и у core-строк выше).
+                    // Легаси-fallback-хвост (invariant 9 §2.1). Своей вёрстки у него больше НЕТ:
+                    // именно эта параллельная разметка была причиной того, что редизайн V11 не
+                    // доезжал до счетов старого мира. Read-only: dynamics/edit отсюда не заведены,
+                    // как и у core-строк выше.
                     ForEach(viewModel.legacyAccountsMatchingGroupName(FinanceSystemGroups.ungroupedName), id: \.accountUniqueID) { account in
                         if let info = viewModel.getAccountInfo(account: account) {
-                            HStack(spacing: AppSpacing.m) {
-                                Image(systemName: info.icon)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                Text(info.name)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Text(formatBalance(info.amount, isHidden: viewModel.state.isAmountHidden))
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(info.isCreditCardDebt ? AppColors.error : AppColors.textPrimary)
-                            }
+                            let iconInfo = viewModel.customIconInfo(for: account)
+                            AccountRowView(
+                                presentation: AccountRowPresentation.make(
+                                    key: account.accountID,
+                                    name: info.name,
+                                    appearance: viewModel.appearance(for: account),
+                                    legacyIconName: iconInfo.iconName,
+                                    legacyIconColorHex: iconInfo.iconColor,
+                                    fallbackIconName: info.icon,
+                                    amountText: AccountRowAmountFormatter.text(
+                                        info.amount,
+                                        isHidden: viewModel.state.isAmountHidden
+                                    ),
+                                    currencySymbol: MonetaCurrency(rawValue: info.currency)?.symbol ?? info.currency,
+                                    isNegative: info.isCreditCardDebt || info.amount < 0
+                                )
+                            )
                             .padding(.horizontal, FinancesMainLayoutPolicy.horizontalPadding)
-                            .padding(.vertical, AppSpacing.s)
                         }
                     }
                 }

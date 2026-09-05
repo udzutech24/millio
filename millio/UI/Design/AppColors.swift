@@ -172,6 +172,14 @@ enum AppColors {
 
     /// Цвет для иконок в кнопках действий (белый)
     static let iconColor = Color.white
+
+    // MARK: - Card Box (тёмные плашки «карточных» экранов — Реквизиты счёта и т.п., не системный Form)
+
+    /// Фон тёмной плашки-бокса (не системный `Form`-фон) — Коммит 2 редизайна деталки вклада.
+    static let cardBoxBackground = Color(hex: "131316")
+
+    /// Рамка тёмной плашки-бокса.
+    static let cardBoxBorder = Color(hex: "202024")
     
     /// Цвет фона для иконок в кнопках действий
     static let iconBackground = Color.white.opacity(0.2)

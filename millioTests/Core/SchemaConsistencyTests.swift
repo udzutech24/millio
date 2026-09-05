@@ -164,6 +164,25 @@ struct SchemaConsistencyTests {
             ))
     }
 
+    /// V12 аддитивна: добавляет ровно `LoanContract` и не теряет ни одной таблицы V11.
+    /// Потерянная строка = молча удалённая таблица у пользователей на V11-сторах.
+    @Test
+    func v12PreservesEveryV11Entity() {
+        let v11Names = Set(AppSchemaV11.models.map { entityName(for: $0) })
+        let v12Names = Set(AppSchemaV12.models.map { entityName(for: $0) })
+        let missing = v11Names.subtracting(v12Names)
+        #expect(missing.isEmpty,
+            Comment(rawValue:
+                "V11 содержит типы, отсутствующие в V12: \(missing). " +
+                "V12 должна сохранять все released entity names V11."
+            ))
+        #expect(v12Names.subtracting(v11Names) == ["LoanContract"],
+            Comment(rawValue:
+                "V12 заявлена как добавление одной таблицы LoanContract, а добавляет " +
+                "\(v12Names.subtracting(v11Names)). Каждая новая таблица требует своей версии схемы."
+            ))
+    }
+
     /// AppSchema.create() возвращает схему из тех же типов что и AppSchemaCurrent.
     @Test
     func appSchemaCreateMatchesSchemaCurrent() {

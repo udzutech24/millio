@@ -30,6 +30,7 @@ struct AccountsCoreFeatureRegistration {
         ModelTypeRegistry.shared.register(RealEstateProfile.self, typeName: "RealEstateProfile")
         ModelTypeRegistry.shared.register(AccountAttachment.self, typeName: "AccountAttachment")
         ModelTypeRegistry.shared.register(AccountAppearance.self, typeName: "AccountAppearance")
+        ModelTypeRegistry.shared.register(LoanContract.self, typeName: "LoanContract")
         ModelTypeRegistry.shared.registerBackupExporter(
             "HistoricalPortfolioValuation",
             exporter: HistoricalPortfolioValuationBackupExporter.export
@@ -44,6 +45,87 @@ struct AccountsCoreFeatureRegistration {
         ModelTypeRegistry.shared.registerImporter(RealEstateProfileImporter.self)
         ModelTypeRegistry.shared.registerImporter(AccountAttachmentImporter.self)
         ModelTypeRegistry.shared.registerImporter(AccountAppearanceImporter.self)
+        ModelTypeRegistry.shared.registerImporter(LoanContractImporter.self)
+    }
+}
+
+// MARK: - Loan V12 importer
+
+/// Договор по кредиту (V12): условия и прогресс погашения счёта `.loan`.
+///
+/// Владельца счёта импортёр не требует — по тому же доводу, что `AccountAppearanceImporter`:
+/// порядок строк в бэкапе не гарантирует, что `Account` уже импортирован, а ронять весь restore
+/// из-за одного договора нельзя. Upsert по `id`: повторный импорт того же словаря даёт одну строку.
+struct LoanContractImporter: ModelImporter {
+    static func importType() -> String { "LoanContract" }
+    /// После Account (31) — договор адресует счёт по `accountID`.
+    static var importPriority: Int { 36 }
+
+    static func `import`(from data: [String: Any], context: ModelContext) throws {
+        guard let idRaw = data["id"] as? String, let id = UUID(uuidString: idRaw),
+              let accountRaw = data["accountID"] as? String, let accountID = UUID(uuidString: accountRaw) else {
+            throw AppError.backupCorrupted
+        }
+        let principal = decimal(data["principal"])
+        let annualRatePercent = decimal(data["annualRatePercent"])
+        let termPeriods = data["termPeriods"] as? Int ?? 0
+        let firstPaymentDate = date(data["firstPaymentDate"]) ?? Date()
+        let scheduleTypeRaw = data["scheduleTypeRaw"] as? String ?? LoanScheduleType.annuity.rawValue
+        let frequencyRaw = data["frequencyRaw"] as? String ?? LoanPaymentFrequency.monthly.rawValue
+        let paymentOverride = optionalDecimal(data["paymentOverride"])
+        let paymentsMade = data["paymentsMade"] as? Int ?? 0
+        let paidInterestTotal = decimal(data["paidInterestTotal"])
+        let insuranceAmount = optionalDecimal(data["insuranceAmount"])
+        let createdAt = date(data["createdAt"]) ?? Date()
+        let updatedAt = date(data["updatedAt"]) ?? createdAt
+
+        let descriptor = FetchDescriptor<LoanContract>(predicate: #Predicate { $0.id == id })
+        if let existing = try context.fetch(descriptor).first {
+            existing.accountID = accountID
+            existing.principal = principal
+            existing.annualRatePercent = annualRatePercent
+            existing.termPeriods = termPeriods
+            existing.firstPaymentDate = firstPaymentDate
+            existing.scheduleTypeRaw = scheduleTypeRaw
+            existing.frequencyRaw = frequencyRaw
+            existing.paymentOverride = paymentOverride
+            existing.paymentsMade = paymentsMade
+            existing.paidInterestTotal = paidInterestTotal
+            existing.insuranceAmount = insuranceAmount
+            existing.createdAt = createdAt
+            existing.updatedAt = updatedAt
+            return
+        }
+        context.insert(LoanContract(
+            id: id,
+            accountID: accountID,
+            principal: principal,
+            annualRatePercent: annualRatePercent,
+            termPeriods: termPeriods,
+            firstPaymentDate: firstPaymentDate,
+            scheduleType: LoanScheduleType(rawValue: scheduleTypeRaw) ?? .annuity,
+            frequency: LoanPaymentFrequency(rawValue: frequencyRaw) ?? .monthly,
+            paymentOverride: paymentOverride,
+            paymentsMade: paymentsMade,
+            paidInterestTotal: paidInterestTotal,
+            insuranceAmount: insuranceAmount,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        ))
+    }
+
+    /// Денежные поля экспортируются строкой (`"\(decimal)"`) — Double по пути не появляется,
+    /// иначе копейки договора «плыли» бы на каждом бэкапе.
+    private static func optionalDecimal(_ value: Any?) -> Decimal? {
+        (value as? String).flatMap { Decimal(string: $0) }
+    }
+
+    private static func decimal(_ value: Any?) -> Decimal {
+        optionalDecimal(value) ?? .zero
+    }
+
+    private static func date(_ value: Any?) -> Date? {
+        (value as? TimeInterval).map(Date.init(timeIntervalSince1970:))
     }
 }
 
