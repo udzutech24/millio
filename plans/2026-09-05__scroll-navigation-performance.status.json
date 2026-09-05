@@ -1,0 +1,14 @@
+{
+  "planFile": "2026-09-05__scroll-navigation-performance.md",
+  "title": "Производительность скролла и переходов",
+  "updated": "2026-09-05T08:05:00+03:00",
+  "phases": [
+    { "name": "Ф0. Замер «до»", "status": "done", "note": "70e6a96 — body экрана 452.7 мс = 27 кадров" },
+    { "name": "Ф1. Кэш баланса счёта", "status": "done", "note": "a549072 — 452.7 → 1.521 мс (×298), 6 тестов" },
+    { "name": "Ф2. Табы: TabView вместо ZStack+opacity", "status": "pending", "note": null },
+    { "name": "Ф3. Форматтеры и layout в hot-path", "status": "pending", "note": null },
+    { "name": "Ф4. Замер «после» + device-проверка", "status": "pending", "note": "хвост: замер не покрывает легаси-fetch владельца" }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}
