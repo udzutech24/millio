@@ -251,7 +251,13 @@ struct millioApp: App {
                 .onChange(of: appState.appliedPlannedNoticeRequestToken) { _, _ in
                     presentAppliedPlannedNoticeIfReady()
                 }
-                .onChange(of: appState.pendingAppliedPlannedNotice == nil) { _, _ in
+                // Закрытие листа сводки: журнал очищается ТОЛЬКО здесь (не в момент показа —
+                // иначе убитое с открытым листом приложение стёрло бы непрочитанную сводку),
+                // и здесь же освобождается очередь для листа выписки.
+                .onChange(of: appState.pendingAppliedPlannedNotice) { previous, current in
+                    if current == nil, let previous {
+                        appliedPlannedNoticeStore()?.finishPresentation(previous.digest)
+                    }
                     presentNextIncomingStatementIfReady()
                 }
             } else {
@@ -314,10 +320,7 @@ struct millioApp: App {
         // Скриншот-режим и UI-тесты сеются данными с плановыми операциями: лист поверх экрана
         // ломает и съёмку скриншотов, и сценарии тестов.
         guard !runtimeEnvironment.isAnyTesting else { return }
-        // Тот же способ получить scope, что у CashflowViewModel (`dataScopeIdentifier`) — иначе
-        // журнал писался бы под одним ключом, а читался под другим.
-        guard let scopeIdentifier = activeModelContainer?.configurations.first?.name else { return }
-        let store = AppliedPlannedNoticeStore(defaults: .standard, scopeIdentifier: scopeIdentifier)
+        guard let store = appliedPlannedNoticeStore() else { return }
 
         let readiness = AppliedPlannedNoticePresentation.Readiness(
             isAppLocked: appState.isAppLocked,
@@ -332,6 +335,14 @@ struct millioApp: App {
             readiness: readiness
         ) else { return }
         appState.pendingAppliedPlannedNotice = item
+    }
+
+    /// Журнал сводки. Scope берётся тем же способом, что у `CashflowViewModel.dataScopeIdentifier`,
+    /// иначе журнал писался бы под одним ключом, а читался под другим.
+    @MainActor
+    private func appliedPlannedNoticeStore() -> AppliedPlannedNoticeStore? {
+        guard let scopeIdentifier = activeModelContainer?.configurations.first?.name else { return nil }
+        return AppliedPlannedNoticeStore(defaults: .standard, scopeIdentifier: scopeIdentifier)
     }
 
     @MainActor

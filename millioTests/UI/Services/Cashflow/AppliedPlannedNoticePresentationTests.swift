@@ -82,18 +82,28 @@ struct AppliedPlannedNoticePresentationTests {
 
     // MARK: - (б) свернул/развернул — сводка ровно один раз
 
-    @Test("Сводка показывается один раз: второй и третий заход пусты")
-    func noticeShownOnlyOnce() {
+    @Test("Сводка показывается один раз: пока лист открыт — она же, после закрытия — ничего")
+    func noticeShownOnlyOnce() throws {
         let store = makeStore()
         store.append(appliedEntry())
 
-        let first = AppliedPlannedNoticePresentation.makeItem(store: store, readiness: idleReadiness())
-        let second = AppliedPlannedNoticePresentation.makeItem(store: store, readiness: idleReadiness())
-        let third = AppliedPlannedNoticePresentation.makeItem(store: store, readiness: idleReadiness())
+        let first = try #require(AppliedPlannedNoticePresentation.makeItem(
+            store: store,
+            readiness: idleReadiness()
+        ))
 
-        #expect(first != nil)
-        #expect(second == nil)
-        #expect(third == nil)
+        // Пока лист на экране, повторные попытки отсекает isAlreadyPresenting, а журнал жив:
+        // он очищается только по факту закрытия листа.
+        #expect(AppliedPlannedNoticePresentation.makeItem(
+            store: store,
+            readiness: idleReadiness(isAlreadyPresenting: true)
+        ) == nil)
+        #expect(store.hasPending == true)
+
+        store.finishPresentation(first.digest)
+
+        #expect(AppliedPlannedNoticePresentation.makeItem(store: store, readiness: idleReadiness()) == nil)
+        #expect(AppliedPlannedNoticePresentation.makeItem(store: store, readiness: idleReadiness()) == nil)
         #expect(store.hasPending == false)
     }
 

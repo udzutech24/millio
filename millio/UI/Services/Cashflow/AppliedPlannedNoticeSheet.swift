@@ -93,13 +93,25 @@ struct AppliedPlannedNoticeColumn: View {
 
     let summary: AppliedPlannedNoticeSummary
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var isExpanded: Bool
+
+    /// Фаза дизеринга шапки: 0 на появлении, 1 в осевшем состоянии.
+    @State private var appearPhase: Double = 0
+
+    /// Смена значения — момент вибрации для `.sensoryFeedback`.
+    @State private var hapticTick = false
 
     /// `isExpanded` в инициализаторе — вход для превью и снимка: в приложении лист всегда
     /// открывается свёрнутым.
     init(summary: AppliedPlannedNoticeSummary, isExpanded: Bool = false) {
         self.summary = summary
         _isExpanded = State(initialValue: isExpanded)
+    }
+
+    private var appearance: AppliedPlannedNoticeAppearancePlan {
+        AppliedPlannedNoticeAppearancePlan.make(reduceMotion: reduceMotion)
     }
 
     var body: some View {
@@ -114,6 +126,26 @@ struct AppliedPlannedNoticeColumn: View {
         .padding(.horizontal, AppSpacing.l)
         .padding(.top, AppSpacing.l)
         .padding(.bottom, AppSpacing.xl)
+        .onAppear { playAppearance() }
+        // Декларативный отклик вместо UIKit-генератора: он привязан к смене состояния, сам
+        // уважает системные настройки и не требует ручного prepare/удержания генератора.
+        .sensoryFeedback(trigger: hapticTick) { _, _ in
+            switch appearance.haptic {
+            case .softImpact: return .impact(flexibility: .soft, intensity: 0.7)
+            case nil: return nil
+            }
+        }
+    }
+
+    /// Дизеринг обязан проявиться, а не появиться готовым: без движения фазы шейдер читается
+    /// просто как ещё одна заливка. При Reduce Motion фаза сразу конечная и вибрации нет.
+    private func playAppearance() {
+        guard appearance.isDitherEnabled else {
+            appearPhase = 1
+            return
+        }
+        withAnimation(AppAnimation.springGentle) { appearPhase = 1 }
+        if appearance.haptic != nil { hapticTick.toggle() }
     }
 
     // MARK: - Заголовок
@@ -130,6 +162,30 @@ struct AppliedPlannedNoticeColumn: View {
         }
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.l)
+        .background(headerBackground)
+    }
+
+    /// Эффект живёт только в шапке: дизеринг под колонкой сумм мешал бы их читать, а на дашборде
+    /// ему нечего сообщать — сводка показывается ровно один раз на цикл применения.
+    @ViewBuilder
+    private var headerBackground: some View {
+        let shape = RoundedRectangle(cornerRadius: AppSpacing.l, style: .continuous)
+        if appearance.isDitherEnabled {
+            // Белая заливка — маска: цвет каждого пикселя считает шейдер, от фигуры ему нужна
+            // только альфа, дающая сглаженные скругления.
+            shape
+                .fill(.white)
+                .ditheredGradient(phase: appearPhase)
+        } else {
+            shape.fill(
+                LinearGradient(
+                    colors: AppColors.cashflowGradient,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
     }
 
     // MARK: - Итоги по валютам

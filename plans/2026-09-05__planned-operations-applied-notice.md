@@ -1,7 +1,7 @@
 # План: уведомление о применённых плановых операциях
 
-Статус: **В РАБОТЕ** — Ф0, Ф1, Ф1b, Ф2 реализованы и гейты сверены; Ф3 в работе (WIP на устройстве).
-Прогресс: 4 из 7 фаз. Обновлён: 05.09.2026.
+Статус: **В РАБОТЕ** — Ф0, Ф1, Ф1b, Ф2, Ф3, Ф4 реализованы и гейты сверены. Осталась Ф5.
+Прогресс: 6 из 7 фаз. Обновлён: 05.09.2026.
 Спека: [`specs/2026-09-05-planned-operations-applied-notice.md`](../specs/2026-09-05-planned-operations-applied-notice.md).
 Размер: **L** (10+ файлов, затрагивается Core). Ветка: `feature/planned-operations-applied-notice`.
 Стресс-тест: пройден 2026-09-05, план переписан по находкам (журнал внизу).
@@ -183,19 +183,76 @@
 
 Осталось владельцу: проверка на устройстве.
 
-## Фаза 4 — «ультракод»-эффект `[ ]`
+## Фаза 4 — «ультракод»-эффект `[x]` РЕАЛИЗОВАН
 
-Первый шейдер в проекте — заводим инфраструктуру:
+Первый шейдер в проекте — инфраструктура заведена:
 
-- `.metal`-файл в таргете + `ShaderLibrary.default`, дизеринг-градиент через `.colorEffect`.
-- Хаптика — по образцу тестируемого плана `LaunchSplashHapticsPlan.swift:23`
-  (`.sensoryFeedback` в проекте ещё не используется, сейчас генераторы).
-- Reduce Motion через `@Environment(\.accessibilityReduceMotion)` (образцы:
-  `LaunchingView.swift:13`, `CashflowUnifiedEntryContainer.swift:39,88`) — при включённом
-  обычное появление без эффекта и без вибрации.
-- Применяется только здесь.
+- `millio/UI/Design/Shaders/MillioDitheredGradient.metal` — стичабл-функция
+  `millioDitheredGradient(position, color, size, phase, pixelSize)`. Дизеринг сделан
+  **упорядоченным (матрица Байера 4×4) на сетке 3 pt**: градиент 6A5CFF → D02BFF квантуется
+  по порогу ячейки (`floor(base * levels + threshold) / levels`, `levels` 3 → 7 по фазе), сверху
+  идёт шахматное затемнение той же сетки (амплитуда 0.20 → 0.07) и светлая полоса, живущая только
+  во время появления. Порог зависит от координаты, а не от случайного числа: иначе текстура
+  мерцала бы между кадрами вместо того, чтобы читаться как поверхность.
+- `millio/UI/Design/DitheredGradientEffect.swift` — `View.ditheredGradient(phase:)` поверх
+  `ShaderLibrary.default` + `visualEffect { ... colorEffect }` (размер вью берётся из прокси).
+  Модификатор `Animatable` по `phase`: **аргументы шейдера SwiftUI сама не интерполирует**, без
+  этого фаза перескакивала бы 0 → 1 одним кадром и проявления не было бы. Анимация —
+  `AppAnimation.springGentle`, литералов нет.
+- Эффект применён к **шапке листа** (`AppliedPlannedNoticeSheet.swift`, `headerBackground`):
+  фигура заливается белым как маска, весь цвет считает шейдер. Ни дашборд, ни остальной лист
+  не тронуты.
+- Хаптика — `.sensoryFeedback` (первое использование в проекте) вместо UIKit-генератора:
+  привязана к смене состояния, сама уважает системные настройки, не требует ручного
+  prepare/удержания генератора. Что играть — решает план, а не вью.
+- `AppliedPlannedNoticeAppearancePlan.make(reduceMotion:)` — чистое решение по образцу
+  `LaunchSplashHapticsPlan`: `isDitherEnabled` + `haptic`. При Reduce Motion обе части гаснут
+  вместе, шапка получает обычный `LinearGradient` без текстуры и без вибрации.
 
-**Гейт Ф4:** device-проверка владельцем (эффект + вибрация), отдельно прогон с Reduce Motion.
+**Сборка потребовала установки компонента Xcode:** `xcodebuild -downloadComponent MetalToolchain`.
+Без него любой `.metal` в проекте роняет сборку (`cannot execute tool 'metal'`). Второе:
+при `-derivedDataPath` внутри репозитория run-script Crashlytics упирается в песочницу — прогоны
+шли с `ENABLE_USER_SCRIPT_SANDBOXING=NO` (настройка проекта не менялась).
+
+**Гейт Ф4:** ✅ пройден на симуляторе; device-проверка владельцем — за ним.
+- Шейдер компилируется и лежит в бандле: `default.metallib` внутри `millio.app`,
+  `metal-nm` показывает `T millioDitheredGradient`.
+- Снимки симулятора (iPhone 17 Pro): `/private/tmp/millio-f4-snapshots/01-dither-settled.png`
+  (эффект включён) и `02-reduce-motion.png` (Reduce Motion). Разбор пикселей шапки (y 236→504):
+  с эффектом — 635 уникальных цветов, средняя разница соседних ячеек 32.8, 38.5 % пар отличаются
+  больше чем на 8 (ступени + шахматка); с Reduce Motion — 1750 цветов, 16.6 и 9.3 % (гладкий
+  градиент, текстуры нет). То есть дизеринг именно включается и именно выключается.
+- Тесты: `millioTests/UI/Services/Cashflow/AppliedPlannedNoticeAppearancePlanTests.swift` — 3 шт.
+  (обычный режим играет обе части; Reduce Motion гасит обе; настройка не оставляет половину).
+- `millioUITests/ScreenshotTests` — 8/8 зелёные (xcresulttool: 11 кейсов в прогоне, все восемь
+  скриншотных Passed).
+- Полный прогон: **2743 total / 2708 passed / 29 failed** против baseline 2740/24. Прирост total —
+  ровно 3 новых теста. Ни один красный не из зоны Ф4: все 27 кейсов `AppliedPlannedNotice*`
+  зелёные. Из 27 красных `millioTests` при изолированном перепрогоне **13 зелёные** (флак
+  параллельных клонов), оставшиеся 14 — известные пре-существующие кластеры
+  (`unresolvedLegacyFailsClosed`, `testPercentChangeWithZeroDenominator`, `FinanceDynamics*`,
+  `GroupsMigrator`, `ProfileLocalization` zh-Hans, `QuickSetupApplier`, `RealEstateProduct`).
+  Два красных `millioUITests` (`testLaunchesDebitHarness…`, `testTenIncomeExpenseSwitchesBaseline`)
+  падают и в изолированном прогоне и к сводке отношения не имеют.
+
+### Ф4·0 — очистка журнала перенесена на закрытие листа
+
+Находка верификатора: `takeDigest()` чистил UserDefaults **в момент показа**, поэтому убитое
+с открытым листом приложение стирало сводку, которую пользователь не прочитал.
+
+- `AppliedPlannedNoticeStore`: `takeDigest()` → `beginPresentation()` (читает, не очищая) +
+  `finishPresentation(_:)` (очищает по факту закрытия). От повторного показа защищает не стор,
+  а гейт (`Readiness.isAlreadyPresenting`).
+- `finishPresentation` гасит журнал **только если он не изменился** с момента показа: если пока
+  лист был на экране применилась ещё одна операция, запись остаётся целиком. Показать сводку
+  лишний раз безобиднее, чем потерять непоказанное.
+- Точка вызова — `millioApp`, `onChange(of: appState.pendingAppliedPlannedNotice)` на переходе
+  в `nil`. Именно там: биндинг `RootTabView` возвращает `nil` и когда лист просто уступил экран
+  другому листу — в этом случае `appState` не меняется и журнал не трогается.
+- Тесты: `AppliedPlannedNoticeStoreTests` +2 («журнал переживает перезапуск, пока лист открыт,
+  и очищается после закрытия»; «дописанное во время показа не стирается закрытием»),
+  `AppliedPlannedNoticePresentationTests` — сценарий «показ один раз» переписан под новый жизненный
+  цикл. Стор-часть этой правки попала в develop-ветку соседним коммитом `cf89068`.
 
 ## Фаза 5 — локализация и self-audit `[ ]`
 
@@ -243,6 +300,12 @@
   Для Ф3 держать в уме: заглушка `AppliedPlannedNoticeStubSheet` подлежит замене целиком, лист
   показывается только вне тестовых/скриншотных режимов, а `AppliedPlannedNoticeItem` уже несёт
   digest — новых полей в AppState для UI не нужно.
+- 2026-09-05 — Ф4 реализована: шейдер + хаптика + Reduce Motion, плюс перенос очистки журнала
+  на закрытие листа. Для Ф5 держать в уме: (а) `.metal` в проекте требует установленного
+  MetalToolchain (`xcodebuild -downloadComponent MetalToolchain`) — на чистой машине сборка иначе
+  падает; (б) прогоны с `-derivedDataPath` внутри репозитория требуют
+  `ENABLE_USER_SCRIPT_SANDBOXING=NO`, иначе спотыкается run-script Crashlytics; (в) новых строк
+  локализации Ф4 не завела ни одной — `Localizable.xcstrings` не трогался.
 - 2026-09-05 — Ф3 реализована: заглушка заменена листом, модель отделена от вью. Для Ф4
   держать в уме: (а) Dynamic Type в приложении не работает вообще — шрифты `AppTypography`
   фиксированные, замер `.large` = `.xxxLarge` = `.accessibility5` = 277 pt, так что «проверить

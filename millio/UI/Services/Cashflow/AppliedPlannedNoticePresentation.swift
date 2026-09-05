@@ -83,15 +83,17 @@ enum AppliedPlannedNoticePresentation {
         return .show
     }
 
-    /// Единственный способ превратить журнал в лист: при `.wait` и `.nothing` журнал не трогается,
-    /// при `.show` сводка забирается ровно один раз.
+    /// Единственный способ превратить журнал в лист: при `.wait` и `.nothing` журнал не трогается.
+    /// При `.show` журнал тоже НЕ очищается — сводка считается доставленной только после
+    /// `AppliedPlannedNoticeStore.finishPresentation(_:)` на закрытии листа. От повторного показа
+    /// той же сводки защищает `readiness.isAlreadyPresenting`.
     @MainActor
     static func makeItem(
         store: AppliedPlannedNoticeStore,
         readiness: Readiness
     ) -> AppliedPlannedNoticeItem? {
         guard decide(hasPendingNotice: store.hasPending, readiness: readiness) == .show,
-              let digest = store.takeDigest() else { return nil }
+              let digest = store.beginPresentation() else { return nil }
         return AppliedPlannedNoticeItem(digest: digest)
     }
 }

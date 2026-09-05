@@ -1,7 +1,7 @@
 {
   "planFile": "2026-09-05__planned-operations-applied-notice.md",
   "title": "Сводка применённых плановых операций",
-  "updated": "2026-09-05T17:35:00Z",
+  "updated": "2026-09-05T18:45:00Z",
   "phases": [
     {
       "name": "Ф0 журнал + агрегат",
@@ -26,12 +26,12 @@
     {
       "name": "Ф3 UI листа снизу",
       "status": "done",
-      "note": "гейт пройден: снимки 393×3923, 50 разделителей; 9 новых тестов; ScreenshotTests 8/8; device-проверка за владельцем"
+      "note": "cf89068 + begin/finishPresentation: очистка журнала перенесена на закрытие листа"
     },
     {
       "name": "Ф4 ультракод-эффект",
-      "status": "pending",
-      "note": "первый .metal + Reduce Motion"
+      "status": "done",
+      "note": "шейдер+haptic+ReduceMotion, 3 теста; ScreenshotTests 8/8; снимки /private/tmp/millio-f4-snapshots; device-проверка за владельцем"
     },
     {
       "name": "Ф5 локализация и self-audit",
