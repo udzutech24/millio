@@ -21576,6 +21576,216 @@
         "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "其他账户" } }
       }
     },
+    "cashflow.applied_notice.deposit_interest_note" : {
+      "comment" : "Applied planned notice: marks a deposit interest row as informational",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проценты по вкладу — информационно"
+          }
+        }
+      }
+    },
+    "cashflow.applied_notice.dismiss" : {
+      "comment" : "Applied planned notice: closes the sheet",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Понятно"
+          }
+        }
+      }
+    },
+    "cashflow.applied_notice.expense_count %lld" : {
+      "comment" : "Applied planned notice: how many applied operations were charges, e.g. '3 charges'",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld списания"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld списаний"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld списание"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld списания"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "cashflow.applied_notice.hide_details" : {
+      "comment" : "Applied planned notice: collapses the list of applied operations",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрыть список"
+          }
+        }
+      }
+    },
+    "cashflow.applied_notice.income_count %lld" : {
+      "comment" : "Applied planned notice: how many applied operations were credits, e.g. '3 credits'",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld начисления"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld начислений"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld начисление"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld начисления"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "cashflow.applied_notice.more %lld" : {
+      "comment" : "Applied planned notice: tail row when the detail list is capped, e.g. 'and 12 more'",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "и ещё %lld операции"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "и ещё %lld операций"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "и ещё %lld операция"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "и ещё %lld операции"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "cashflow.applied_notice.show_details" : {
+      "comment" : "Applied planned notice: expands the list of applied operations",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать список"
+          }
+        }
+      }
+    },
+    "cashflow.applied_notice.subtitle" : {
+      "comment" : "Applied planned notice: explains the operations were applied automatically",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Применились автоматически — балансы уже обновлены"
+          }
+        }
+      }
+    },
+    "cashflow.applied_notice.title %lld" : {
+      "comment" : "Applied planned notice: sheet title with the number of applied operations",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Пока вас не было: %lld операции"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Пока вас не было: %lld операций"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Пока вас не было: %lld операция"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Пока вас не было: %lld операции"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "cashflow.applied_notice.totals" : {
+      "comment" : "Applied planned notice: header above per-currency net totals",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Итого по валютам"
+          }
+        }
+      }
+    },
     "cashflow.asset_change" : {
       "localizations" : {
         "de" : {

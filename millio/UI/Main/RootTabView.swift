@@ -179,9 +179,7 @@ struct RootTabView: View {
             }
         }
         .sheet(item: appliedPlannedNoticeBinding) { item in
-            // Ф2: заглушка — только число применённых операций. Настоящий лист (суммы по валютам,
-            // раскрытие в список, «и ещё N») — Ф3 плана, локализация — Ф5.
-            AppliedPlannedNoticeStubSheet(digest: item.digest)
+            AppliedPlannedNoticeSheet(digest: item.digest)
         }
         .onChange(of: dashboardPeriodDays) { _, newValue in
             SettingsManager.shared.dashboardDeltaPeriodDays = newValue
