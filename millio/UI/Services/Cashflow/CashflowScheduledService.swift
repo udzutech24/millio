@@ -21,6 +21,11 @@ final class CashflowScheduledService {
     private let defaults: UserDefaults
     private let now: () -> Date
 
+    /// `DataScope.storeConfigurationName` активного стора. Берётся явно от владельца сервиса
+    /// (конфигурация контейнера), а НЕ из `AppState.activeScopeKey`: тот дефолтится в guest и на
+    /// холодном старте может не успеть получить реальный scope.
+    private let scopeIdentifier: String
+
     /// Провайдер текущего снапшота транзакций из state
     private let transactionsProvider: () -> [CashflowTransaction]
 
@@ -41,13 +46,25 @@ final class CashflowScheduledService {
     private var isRecurringGenerationInProgress = false
     private var isDueAutoApplyInProgress = false
 
-    private let dueAutoApplyCheckpointKey = "cashflow_due_auto_apply_checkpoint_v1"
+    /// Префикс per-scope ключа чекпойнта. До разделения ключ был общим на всё приложение —
+    /// гостевая сессия двигала чекпойнт владельца, и его плановые операции не применялись никогда.
+    static let dueAutoApplyCheckpointKeyPrefix = "cashflow_due_auto_apply_checkpoint_v1."
+
+    /// Общий ключ до разделения по scope. Переносится в per-scope ключ при первом запуске: без
+    /// переноса чекпойнт стал бы nil, окно [чекпойнт, сейчас] схлопнулось бы и due-операции
+    /// из него не применились бы уже никогда.
+    static let legacyDueAutoApplyCheckpointKey = "cashflow_due_auto_apply_checkpoint_v1"
+
+    private var dueAutoApplyCheckpointKey: String {
+        Self.dueAutoApplyCheckpointKeyPrefix + scopeIdentifier
+    }
 
     // MARK: - Init
 
     init(
         modelContext: ModelContext,
         defaults: UserDefaults,
+        scopeIdentifier: String,
         now: @escaping () -> Date,
         transactionsProvider: @escaping () -> [CashflowTransaction],
         onTransactionsMutated: @escaping () -> Void,
@@ -57,6 +74,7 @@ final class CashflowScheduledService {
     ) {
         self.modelContext = modelContext
         self.defaults = defaults
+        self.scopeIdentifier = scopeIdentifier
         self.now = now
         self.transactionsProvider = transactionsProvider
         self.onTransactionsMutated = onTransactionsMutated
@@ -357,6 +375,7 @@ final class CashflowScheduledService {
     @discardableResult
     func applyDuePlannedTransactionsIfNeeded(referenceNow: Date? = nil) async -> Bool {
         let referenceNow = referenceNow ?? now()
+        migrateLegacyCheckpointIfNeeded()
         guard let storedCheckpoint = defaults.object(forKey: dueAutoApplyCheckpointKey) as? Date else {
             defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
             return false
@@ -385,6 +404,12 @@ final class CashflowScheduledService {
             return false
         }
 
+        // Провал применения хотя бы одной операции запрещает двигать чекпойнт: иначе она уходит
+        // за окно [чекпойнт, сейчас] и не применится уже никогда (деньги теряются молча).
+        // Пропуск по политике закрытого месяца — не провал: это осознанный отказ, и удержание
+        // чекпойнта из-за него зациклило бы ретраи навсегда.
+        var hasFailedApply = false
+
         for transaction in dueTransactions {
             guard (try? CashflowMonthMutationPolicy(modelContext: modelContext).validate(
                 .scheduledApply,
@@ -397,6 +422,7 @@ final class CashflowScheduledService {
                 transaction.hasAppliedBalanceEffect = true
                 transaction.updatedAt = referenceNow
             } catch {
+                hasFailedApply = true
                 AppLogger.log(
                     .error,
                     category: "Cashflow",
@@ -407,12 +433,36 @@ final class CashflowScheduledService {
 
         do {
             try modelContext.save()
-            defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
+            // Повторный проход по успешно применённым безопасен — их отсекает hasAppliedBalanceEffect.
+            if hasFailedApply {
+                AppLogger.log(
+                    .warning,
+                    category: "Cashflow",
+                    "Due auto-apply checkpoint kept at previous value after failed apply"
+                )
+            } else {
+                defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
+            }
             return true
         } catch {
             AppLogger.log(.error, category: "Cashflow", "Failed to save due planned auto-apply: \(error.localizedDescription)")
             return false
         }
+    }
+
+    /// Переносит общий (до-scope) чекпойнт в per-scope ключ. Идемпотентно: срабатывает, только пока
+    /// per-scope значения нет. Легаси-ключ не удаляем — его ещё может забрать другой scope.
+    private func migrateLegacyCheckpointIfNeeded() {
+        guard defaults.object(forKey: dueAutoApplyCheckpointKey) == nil,
+              let legacyCheckpoint = defaults.object(forKey: Self.legacyDueAutoApplyCheckpointKey) as? Date else {
+            return
+        }
+        defaults.set(legacyCheckpoint, forKey: dueAutoApplyCheckpointKey)
+        AppLogger.log(
+            .info,
+            category: "Cashflow",
+            "Migrated shared due auto-apply checkpoint into scope \(scopeIdentifier)"
+        )
     }
 
     // MARK: - Private: Helpers

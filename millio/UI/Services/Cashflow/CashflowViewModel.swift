@@ -56,9 +56,14 @@ final class CashflowViewModel: ViewModelProtocol {
         )
     }()
 
-    var historicalValuationScopeID: String {
+    /// Идентификатор активного scope данных (`DataScope.storeConfigurationName`), взятый из
+    /// конфигурации открытого стора. Именно отсюда, а не из `AppState.activeScopeKey`: тот
+    /// дефолтится в guest и на холодном старте может не получить реальный scope.
+    var dataScopeIdentifier: String {
         modelContext.container.configurations.first?.name ?? "unresolved-scope"
     }
+
+    var historicalValuationScopeID: String { dataScopeIdentifier }
 
     // MARK: - Services
     let historyService: CashflowHistoryService
@@ -116,6 +121,7 @@ final class CashflowViewModel: ViewModelProtocol {
         CashflowScheduledService(
             modelContext: self.modelContext,
             defaults: self.defaults,
+            scopeIdentifier: self.dataScopeIdentifier,
             now: self.now,
             transactionsProvider: { [weak self] in self?.state.transactions ?? [] },
             onTransactionsMutated: { [weak self] in self?.loadTransactionsSnapshot() },
