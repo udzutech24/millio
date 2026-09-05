@@ -41,16 +41,21 @@ final class AccountsCoreDepositCashflowBridge {
     private let calendar: Calendar
     private var isSyncInProgress = false
     private let publishCommitted: () -> Void
+    /// Журнал непоказанных применений. Опционален: мост создаётся и в тестах, и в путях, где
+    /// сводка не нужна; без стора запись просто не ведётся, материализация не меняется.
+    private let appliedNoticeStore: AppliedPlannedNoticeStore?
 
     init(
         modelContext: ModelContext,
         now: @escaping () -> Date = Date.init,
         calendar: Calendar = Calendar(identifier: .gregorian),
-        publishCommitted: (() -> Void)? = nil
+        publishCommitted: (() -> Void)? = nil,
+        appliedNoticeStore: AppliedPlannedNoticeStore? = nil
     ) {
         self.modelContext = modelContext
         self.now = now
         self.calendar = calendar
+        self.appliedNoticeStore = appliedNoticeStore
         self.publishCommitted = publishCommitted ?? {
             EventBus.shared.publish(FinanceEvent.depositOperationCommitted)
         }
@@ -139,11 +144,34 @@ final class AccountsCoreDepositCashflowBridge {
             )
             guard report.insertedCount > 0 else { return false }
             try modelContext.save()
+            // Только после успешного save(): иначе журнал расскажет о начислениях, которых нет.
+            commitAppliedNotices(for: report.inserted)
             publishCommitted()
             return true
         } catch {
             AppLogger.log(.error, category: "AccountsCore", "Не удалось материализовать доход по вкладу в Cashflow: \(error)")
             return false
+        }
+    }
+
+    /// Проценты по вкладу — чисто информационная запись: баланс двигает `AccountEvent`,
+    /// а материализованная строка Cashflow идёт с `affectsCardBalance = false`.
+    /// Сумма всегда положительна (проектор пропускает только `amount > 0`).
+    ///
+    /// В `appliedAt` идёт дата начисления, а не `now()`: один прогон материализует сразу все
+    /// накопившиеся периоды, и «применено сейчас» слило бы полгода начислений в один момент.
+    private func commitAppliedNotices(for rows: [DepositCashflowProjectionReport.InsertedRow]) {
+        guard let appliedNoticeStore else { return }
+        let title = L("cashflow.upcoming.source.deposit_interest")
+        for row in rows {
+            appliedNoticeStore.append(AppliedPlannedEntry(
+                title: title,
+                accountName: row.accountName,
+                amount: row.amount,
+                currencyCode: row.currencyCode,
+                appliedAt: row.date,
+                kind: .depositInterest
+            ))
         }
     }
 }

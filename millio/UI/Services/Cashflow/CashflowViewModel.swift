@@ -161,7 +161,11 @@ final class CashflowViewModel: ViewModelProtocol {
     // Обратный мост — АccountsCore → Cashflow (Фаза 0 плана cashflow-add-transaction-redesign):
     // делает due-проценты вкладов нового ядра видимыми доходными записями в ленте.
     private(set) lazy var accountsCoreDepositCashflowBridge: AccountsCoreDepositCashflowBridge = {
-        AccountsCoreDepositCashflowBridge(modelContext: self.modelContext, now: self.now)
+        AccountsCoreDepositCashflowBridge(
+            modelContext: self.modelContext,
+            now: self.now,
+            appliedNoticeStore: self.appliedPlannedNoticeStore
+        )
     }()
     // persistenceService использует lazy из-за замыканий на self
     private(set) lazy var persistenceService: CashflowPersistenceService = {
