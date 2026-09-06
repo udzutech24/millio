@@ -4,6 +4,8 @@ extension Font {
     // MARK: - Display
     static let millioDisplay: Font = .system(size: 30, weight: .bold)
     static let millioDisplayLarge: Font = .system(size: 52, weight: .semibold)
+    /// Сумма-герой на экране быстрого ввода (месячный итог).
+    static let millioAmountHero: Font = .system(size: 44, weight: .bold)
 
     // MARK: - Title
     static let millioTitle: Font = .system(size: 24, weight: .bold)
