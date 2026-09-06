@@ -1,0 +1,66 @@
+{
+  "_generated": true,
+  "planFile": "2026-05-12__google-sheets-sync.md",
+  "title": "Plan: Millio → Google Sheets (экспорт данных)",
+  "updated": "2026-09-06T01:16:23.817Z",
+  "phases": [
+    {
+      "name": "Phase 0 — Google Cloud + OAuth Consent (блокер)",
+      "status": "pending"
+    },
+    {
+      "name": "Phase 1 — Backend: OAuth + инициализация Spreadsheet",
+      "status": "done"
+    },
+    {
+      "name": "1.1 Backend: OAuth + Sheets proxy",
+      "status": "done"
+    },
+    {
+      "name": "1.2 iOS: SheetsSync service",
+      "status": "done"
+    },
+    {
+      "name": "1.3 Структура Sheet",
+      "status": "done"
+    },
+    {
+      "name": "1.4 Dashboard формулы (шаблон)",
+      "status": "done"
+    },
+    {
+      "name": "Phase 2 — Backend: полный sync истории",
+      "status": "pending"
+    },
+    {
+      "name": "2.1 Full sync endpoint",
+      "status": "pending"
+    },
+    {
+      "name": "2.2 Incremental sync",
+      "status": "pending"
+    },
+    {
+      "name": "Phase 3 — iOS: SheetsExportService + UI",
+      "status": "done"
+    },
+    {
+      "name": "3.1 SheetsExportService",
+      "status": "done"
+    },
+    {
+      "name": "3.2 SheetsExportTrigger",
+      "status": "done"
+    },
+    {
+      "name": "3.3 SheetsConnectionView",
+      "status": "done"
+    },
+    {
+      "name": "3.4 Локализация",
+      "status": "done"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

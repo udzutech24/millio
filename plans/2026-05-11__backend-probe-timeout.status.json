@@ -1,0 +1,18 @@
+{
+  "_generated": true,
+  "planFile": "2026-05-11__backend-probe-timeout.md",
+  "title": "Plan: backend-probe-timeout",
+  "updated": "2026-09-06T01:16:23.816Z",
+  "phases": [
+    {
+      "name": "Фаза 1 — Снизить timeoutInterval",
+      "status": "pending"
+    },
+    {
+      "name": "Фаза 2 — Верификация на устройстве",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

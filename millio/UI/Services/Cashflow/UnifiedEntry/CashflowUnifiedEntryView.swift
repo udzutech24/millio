@@ -41,6 +41,10 @@ struct CashflowCategoryTransactionSheet: View {
     @State private var showSettingsSheet: Bool = false
     @State private var showBulkExpenseImportSheet: Bool = false
     @State private var showBudgetSetupSheet: Bool = false
+    @State private var showMoreSheet: Bool = false
+    /// Действие из листа «…» выполняется в его onDismiss: iOS не открывает новый sheet,
+    /// пока предыдущий ещё закрывается.
+    @State private var pendingMoreAction: CashflowEntryMoreAction?
 
     @State private var showCreateCategorySheet: Bool = false
     @State private var newCategoryName: String = ""
@@ -215,6 +219,14 @@ struct CashflowCategoryTransactionSheet: View {
                     initialCardID: initialHistoryCardID,
                     initialStartDate: historyRange.start,
                     initialEndDate: historyRange.end
+                )
+            }
+            .sheet(isPresented: $showMoreSheet, onDismiss: performPendingMoreAction) {
+                CashflowEntryMoreSheet(
+                    kind: kind,
+                    planTitle: planButtonTitle,
+                    sortMode: $sortMode,
+                    onSelect: { pendingMoreAction = $0 }
                 )
             }
             .sheet(isPresented: $showRecurringManagement) {
@@ -414,16 +426,8 @@ struct CashflowCategoryTransactionSheet: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("cashflow.unified.history")
 
-            Menu {
-                Button(L("cashflow.category.create.title", defaultValue: "New category"), systemImage: "plus") {
-                    showCreateCategorySheet = true
-                }
-                Button(L("cashflow.category.reorder.edit", defaultValue: "Edit order"), systemImage: "arrow.up.arrow.down") {
-                    showReorderSheet = true
-                }
-                Button(L("cashflow.common.settings", defaultValue: "Settings"), systemImage: "gearshape") {
-                    showSettingsSheet = true
-                }
+            Button {
+                showMoreSheet = true
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .semibold))
@@ -431,6 +435,7 @@ struct CashflowCategoryTransactionSheet: View {
                     .frame(width: 42, height: 42)
                     .background(innerPanelBackground)
             }
+            .buttonStyle(.plain)
             .accessibilityLabel(L("cashflow.category.manage", defaultValue: "Manage categories"))
         }
         .padding(.top, 6)
@@ -567,7 +572,7 @@ struct CashflowCategoryTransactionSheet: View {
 
     private func managementButton(entry: CashflowManagementEntry) -> some View {
         Button {
-            handleManagementTap(entry)
+            handleManagementTap(entry.destination)
         } label: {
             Image(systemName: entry.icon)
                 .font(.system(size: 18, weight: .semibold))
@@ -633,8 +638,28 @@ struct CashflowCategoryTransactionSheet: View {
         }
     }
 
-    private func handleManagementTap(_ entry: CashflowManagementEntry) {
-        switch entry.destination {
+    private func performPendingMoreAction() {
+        guard let action = pendingMoreAction else { return }
+        pendingMoreAction = nil
+        switch action {
+        case .search:
+            isSearchExpanded = true
+            isSearchFieldFocused = true
+        case .management(let destination):
+            handleManagementTap(destination)
+        case .monthPlan:
+            showBudgetSetupSheet = true
+        case .reorderCategories:
+            showReorderSheet = true
+        case .screenSettings:
+            showSettingsSheet = true
+        case .createCategory:
+            showCreateCategorySheet = true
+        }
+    }
+
+    private func handleManagementTap(_ destination: CashflowManagementDestination) {
+        switch destination {
         case .bulkImport:
             showBulkExpenseImportSheet = true
         case .recurring:

@@ -1,0 +1,186 @@
+{
+  "_generated": true,
+  "planFile": "2026-05-11__language-switch-hardening.md",
+  "title": "Plan: Language Switch Hardening",
+  "updated": "2026-09-06T01:16:23.816Z",
+  "phases": [
+    {
+      "name": "Добавить Logger-логи в BundleLanguageOverride.apply():",
+      "status": "done"
+    },
+    {
+      "name": "Добавить лог в AppState.didSet — обновлённый UUID languageRefreshToken и язык",
+      "status": "done"
+    },
+    {
+      "name": "Запустить на симуляторе EN → RU, посмотреть Console",
+      "status": "pending"
+    },
+    {
+      "name": "Проверить Language.locale для en, ru, zh-Hans: совпадает ли с .lproj папками в Bundle",
+      "status": "done"
+    },
+    {
+      "name": "Проверить: в BundleLanguageOverride.installedBundleIDs — thread-safety (set без lock)",
+      "status": "done"
+    },
+    {
+      "name": "Подтверждён root cause: String(localized:) с .xcstrings на iOS 16+ обходит ObjC swizzling",
+      "status": "done"
+    },
+    {
+      "name": "Добавлен var currentBundle: Bundle в LanguageManager (с lock)",
+      "status": "done"
+    },
+    {
+      "name": "Создан millio/Core/Language/L10n.swift с функцией L() — обёртка с явным bundle:",
+      "status": "done"
+    },
+    {
+      "name": "641 вызов заменён: String(localized: \"key\") → L(\"key\") по всему проекту",
+      "status": "done"
+    },
+    {
+      "name": "Перегрузка L(String, defaultValue:) через NSLocalizedString для 39 вызовов с defaultValue:",
+      "status": "done"
+    },
+    {
+      "name": "BUILD SUCCEEDED",
+      "status": "done"
+    },
+    {
+      "name": "BundleLanguageOverride.installedBundleIDs — защитить отдельным lock или перейти на NSLock внутри кл…",
+      "status": "pending"
+    },
+    {
+      "name": "Убедиться что BundleLanguageOverride.apply() вызывается до обновления languageRefreshToken",
+      "status": "done"
+    },
+    {
+      "name": "TotalBalanceWidget.swift — \"д\" → L(\"dashboard.balance.days_suffix\") (EN: \"d\", zh-Hans: \"天\")",
+      "status": "done"
+    },
+    {
+      "name": "InvestmentEditorView.swift — \"/мес\" → L(\"finances.deposit.per_month_suffix\") (EN: \"/mo\", zh-Hans: \"…",
+      "status": "done"
+    },
+    {
+      "name": "DashboardView.swift — 4 строки (\"Месяц\", \"Готово\", \"Виджеты\", \"Закрыть\") → L(\"dashboard.*\") / L(\"co…",
+      "status": "done"
+    },
+    {
+      "name": "DashboardDeltaPeriodPickerSheet.swift — 5 period strings → L(\"dashboard.period.*\")",
+      "status": "done"
+    },
+    {
+      "name": "CashflowSummaryWidget.swift — \"Доходы\", \"Расходы\", \"Изм. активов\" → L(\"cashflow.*\")",
+      "status": "done"
+    },
+    {
+      "name": "CashflowInsightsChartModels.swift — 3 comparison strings → L(\"cashflow.insights.comparison.*\")",
+      "status": "done"
+    },
+    {
+      "name": "FinanceOverviewLedgerStyle.swift — 3 format strings → L(\"finances.overview.*\")",
+      "status": "done"
+    },
+    {
+      "name": "CurrencyDistributionChartView.swift + DistributionChartView.swift — \"Сумма\" → L(\"finances.chart.amo…",
+      "status": "done"
+    },
+    {
+      "name": "String(localized:) без bundle: — 7 мест в 5 файлах (PremiumUpsellAlert, SubscriptionView, Investmen…",
+      "status": "done"
+    },
+    {
+      "name": "22 новых ключа добавлены в Localizable.xcstrings (EN/RU/zh-Hans)",
+      "status": "done"
+    },
+    {
+      "name": "BUILD SUCCEEDED",
+      "status": "done"
+    },
+    {
+      "name": "scripts/l10n-audit.sh — аудит, exit 1 при проблемах",
+      "status": "done"
+    },
+    {
+      "name": "scripts/l10n-autofix.sh — автофиксер с --dry-run / --no-build",
+      "status": "done"
+    },
+    {
+      "name": "scripts/l10n-check-new-language.sh <lang> — проверка готовности для нового языка",
+      "status": "done"
+    },
+    {
+      "name": "testBundleOverrideApplyRU — после apply(.russian), Bundle.main.localizedString(forKey: someKnownKey…",
+      "status": "pending"
+    },
+    {
+      "name": "testBundleOverrideApplyEN — то же для EN",
+      "status": "pending"
+    },
+    {
+      "name": "testBundleOverrideApplyZhHans — то же для zh-Hans (если ключ переведён)",
+      "status": "pending"
+    },
+    {
+      "name": "testLanguageManagerSetLanguagePersists — после setLanguage(.english), currentLanguage == .english",
+      "status": "pending"
+    },
+    {
+      "name": "testLanguageManagerRoundTrip — RU → EN → RU, каждый раз bundle переключается правильно",
+      "status": "pending"
+    },
+    {
+      "name": "testSystemLanguageFallback — setLanguage(.system) очищает override (bundle fallback к системному)",
+      "status": "pending"
+    },
+    {
+      "name": "Проверить 3 языка для ключевых keys (если тесты были только для RU/EN — добавить zh-Hans)",
+      "status": "pending"
+    },
+    {
+      "name": "testLanguageSwitchToEnglish — открыть Profile, сменить язык на EN, вернуться на Dashboard, проверит…",
+      "status": "pending"
+    },
+    {
+      "name": "testLanguageSwitchBackToRussian — EN → RU",
+      "status": "pending"
+    },
+    {
+      "name": "Открыть millio/UI/Restore/RestoreView.swift, выписать все hardcoded RU literals",
+      "status": "pending"
+    },
+    {
+      "name": "Добавить ключи в Localizable.xcstrings (формат: restore.*)",
+      "status": "pending"
+    },
+    {
+      "name": "Заменить literals на String(localized: \"restore.key\")",
+      "status": "pending"
+    },
+    {
+      "name": "Добавить coverage-тест: LocalizableXcstringsTests проверяет что все restore.* ключи переведены на 3…",
+      "status": "pending"
+    },
+    {
+      "name": "Ручная проверка: EN → zh-Hans → RU на симуляторе, все экраны обновляются",
+      "status": "pending"
+    },
+    {
+      "name": "Все тесты из Phase 2 зелёные",
+      "status": "pending"
+    },
+    {
+      "name": "RestoreView не содержит RU literals (Phase 3)",
+      "status": "pending"
+    },
+    {
+      "name": "Нет регрессий: backup/restore flow, cashflow, dashboard работают",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

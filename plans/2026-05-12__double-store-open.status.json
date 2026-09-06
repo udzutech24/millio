@@ -1,0 +1,18 @@
+{
+  "_generated": true,
+  "planFile": "2026-05-12__double-store-open.md",
+  "title": "Plan: double-store-open",
+  "updated": "2026-09-06T01:16:23.817Z",
+  "phases": [
+    {
+      "name": "Фаза 1 — Убрать дублирующий вызов",
+      "status": "pending"
+    },
+    {
+      "name": "Фаза 2 — Верификация в симуляторе",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}
