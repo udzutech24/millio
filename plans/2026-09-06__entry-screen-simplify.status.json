@@ -1,13 +1,33 @@
 {
   "planFile": "2026-09-06__entry-screen-simplify.md",
   "title": "Упрощение экрана ввода",
-  "updated": "2026-09-06T12:00:00+03:00",
+  "updated": "2026-09-06T04:32:29+03:00",
   "phases": [
-    { "name": "Ф1 Лист «…»", "status": "done", "note": "4359c04, сборка зелёная" },
-    { "name": "Ф2 Шапка и сумма", "status": "done", "note": "8ffb969, device-проверка после Ф3" },
-    { "name": "Ф3 Категории и операции", "status": "pending", "note": "" },
-    { "name": "Ф4 Чистка и локализация", "status": "pending", "note": "" },
-    { "name": "Ф5 Декомпозиция файла", "status": "pending", "note": "отдельной сессией" }
+    {
+      "name": "Ф1 Лист «…»",
+      "status": "done",
+      "note": "4359c04"
+    },
+    {
+      "name": "Ф2 Шапка и сумма",
+      "status": "done",
+      "note": "b9028b4"
+    },
+    {
+      "name": "Ф3 Категории и операции",
+      "status": "in_progress",
+      "note": ""
+    },
+    {
+      "name": "Ф4 Чистка и локализация",
+      "status": "pending",
+      "note": ""
+    },
+    {
+      "name": "Ф5 Декомпозиция файла",
+      "status": "pending",
+      "note": "отдельной сессией"
+    }
   ],
   "costUsd": null,
   "etaMinutes": 300

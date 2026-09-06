@@ -7,8 +7,6 @@ struct CashflowUnifiedEntryHistorySection: View {
     let onOpenPaidHistory: () -> Void
     let onOpenUpcoming: () -> Void
 
-    @State private var filter: CashflowEntryHistoryFilter = .all
-
     private struct Row: Identifiable {
         let id: String
         let transaction: CashflowTransaction
@@ -28,41 +26,33 @@ struct CashflowUnifiedEntryHistorySection: View {
         let upcoming = viewModel.scheduledCalendarEntries(for: kind.categoryKind, month: month).map { entry in
             Row(id: "upcoming-\(entry.id)", transaction: entry.transaction, date: entry.scheduledDate, status: .upcoming)
         }
-        return (actual + upcoming)
-            .filter { filter.includes($0.status) }
-            .sorted { lhs, rhs in
-                if lhs.status != rhs.status { return lhs.status == .upcoming }
-                return lhs.status == .upcoming ? lhs.date < rhs.date : lhs.date > rhs.date
-            }
+        // Оплаченные и плановые идут одним списком по дате (свежие сверху) — сегмент
+        // All/Upcoming/Paid убран, статус плановой строки читается по подписи «· план».
+        return (actual + upcoming).sorted { $0.date > $1.date }
     }
+
+    private static let visibleRowCount = 3
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(L("cashflow.history.title", defaultValue: "History"))
-                    .font(.system(size: 15, weight: .semibold))
+                Text(L("cashflow.entry.more.section.operations", defaultValue: "Operations"))
+                    .font(.millioSubheadline)
                 Spacer()
-                Button(L("cashflow.category.show_all", defaultValue: "Show all"), action: onOpenPaidHistory)
-                    .font(.system(size: 12, weight: .semibold))
+                Button(L("cashflow.history.title", defaultValue: "History"), action: onOpenPaidHistory)
+                    .font(.millioCallout)
                     .foregroundStyle(AppColors.textSecondary)
+                    .accessibilityIdentifier("cashflow.unified.history.open")
             }
-
-            Picker(L("cashflow.history.status", defaultValue: "Status"), selection: $filter) {
-                Text(L("cashflow.history.status.all", defaultValue: "All")).tag(CashflowEntryHistoryFilter.all)
-                Text(L("cashflow.history.status.upcoming", defaultValue: "Upcoming")).tag(CashflowEntryHistoryFilter.upcoming)
-                Text(L("cashflow.history.status.paid", defaultValue: "Paid")).tag(CashflowEntryHistoryFilter.paid)
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("cashflow.unified.history.status")
 
             if rows.isEmpty {
                 Text(emptyText)
-                    .font(.system(size: 13))
+                    .font(.millioCallout)
                     .foregroundStyle(AppColors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 10)
             } else {
-                ForEach(rows.prefix(5)) { row in
+                ForEach(rows.prefix(Self.visibleRowCount)) { row in
                     Button {
                         row.status == .paid ? onOpenPaidHistory() : onOpenUpcoming()
                     } label: {
@@ -75,17 +65,16 @@ struct CashflowUnifiedEntryHistorySection: View {
                             )
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(cashflowHistoryPrimaryTitle(for: row.transaction))
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(.millioCallout)
                                     .lineLimit(1)
-                                Text(row.date.formatted(date: .abbreviated, time: .omitted))
-                                    .font(.system(size: 11))
+                                Text(subtitle(for: row))
+                                    .font(.millioCaption2Regular)
                                     .foregroundStyle(AppColors.textSecondary)
                             }
                             Spacer()
                             Text(cashflowHistoryAmountText(row.transaction.amount))
-                                .font(.system(size: 13, weight: .semibold))
-                            Text(row.status == .paid ? "✓" : "○")
-                                .foregroundStyle(row.status == .paid ? Color.green : AppColors.textSecondary)
+                                .font(.millioCalloutSemibold)
+                                .foregroundStyle(row.status == .paid ? AppColors.textPrimary : AppColors.textSecondary)
                         }
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 8)
@@ -94,16 +83,18 @@ struct CashflowUnifiedEntryHistorySection: View {
                 }
             }
         }
-        .padding(14)
+        .padding(AppSpacing.ml)
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.white.opacity(0.05)))
     }
 
     private var emptyText: String {
-        switch filter {
-        case .all: return L("cashflow.history.empty.filtered", defaultValue: "No operations for this month")
-        case .upcoming: return L("cashflow.history.empty.upcoming", defaultValue: "No upcoming operations for this month")
-        case .paid: return L("cashflow.history.empty.paid", defaultValue: "No paid operations for this month")
-        }
+        L("cashflow.history.empty.filtered", defaultValue: "No operations for this month")
+    }
+
+    private func subtitle(for row: Row) -> String {
+        let date = row.date.formatted(date: .abbreviated, time: .omitted)
+        guard row.status == .upcoming else { return date }
+        return "\(date) · \(L("cashflow.entry.history.planned_mark", defaultValue: "planned"))"
     }
 
     private func categoryIcon(for transaction: CashflowTransaction) -> String {

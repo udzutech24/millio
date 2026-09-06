@@ -6,9 +6,9 @@
 import SwiftUI
 
 /// Единая политика сетки категорий для экранов создания дохода/расхода.
-/// На узких экранах обе сетки переключаются на 3 колонки, чтобы размещение
-/// категорий в доходах и расходах оставалось консистентным. Для расходов с
-/// лимитами делаем это раньше, потому что карточки становятся плотнее.
+/// Базовая сетка — 3 колонки (компактная плитка: иконка · имя · сумма).
+/// На очень узких экранах (<280 pt) падаем до 2 колонок, иначе имя категории
+/// схлопывается до нечитаемого.
 struct CashflowCategoryGridLayout {
     struct CardMetrics {
         let topRowMinHeight: CGFloat
@@ -34,7 +34,7 @@ struct CashflowCategoryGridLayout {
     }
 
     static let compactColumns = 2
-    static let regularColumns = 2
+    static let regularColumns = 3
     static let compactWidthThreshold: CGFloat = 280
     static let budgetCompactWidthThreshold: CGFloat = 280
     static let columnSpacing: CGFloat = 10
