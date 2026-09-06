@@ -1,5 +1,7 @@
 # Xcode
 DerivedData/
+# Локальные derivedDataPath агентских прогонов (.dd-f0, .dd-f1, .dd-device, ...)
+.dd-*/
 -only-testing:*/
 *.xcuserstate
 *.xcuserdata/
