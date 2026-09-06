@@ -1,6 +1,6 @@
 # План: упрощение экрана ввода операций (Расходы / Доходы)
 
-**Дата:** 2026-09-06 · **Владелец:** Алексей · **Исполнитель:** Александр · **Статус:** В РАБОТЕ — Ф1–Ф4 РЕАЛИЗОВАНЫ, ждут device-проверки; открыта Ф5 (ветка `feature/entry-screen-simplify`)
+**Дата:** 2026-09-06 · **Владелец:** Алексей · **Исполнитель:** Александр · **Статус:** РЕАЛИЗОВАН — Ф1–Ф5 в ветке `feature/entry-screen-simplify`, ждём device-проверку владельца (мерж/пуш не делались)
 **Макет:** https://claude.ai/code/artifact/308226c9-680b-4aca-98c9-77aa4fa34e46 (артборды «Расходы», «Доходы», «Меню …»)
 **Ветка:** `feature/entry-screen-simplify` от `develop` (НЕ от `feature/planned-operations-applied-notice`)
 
@@ -47,7 +47,7 @@
 - Удалить мёртвый код старых кнопок и `CashflowManagementEntry`, если он больше нигде не используется (grep).
 - Строки ru/en/zh-Hans в `Localizable.xcstrings`; проверить `git diff` файла после сборки на устройство ([[feedback-xcodebuild-xcstrings-corruption]]).
 
-### [ ] Ф5 — Декомпозиция `CashflowUnifiedEntryView.swift` (1539 строк) — ОДОБРЕНО, отдельной сессией
+### ✅ [x] Ф5 — Декомпозиция `CashflowUnifiedEntryView.swift` — РЕАЛИЗОВАН (`53d6eff`)
 - Разнести на `…Header.swift` (шапка + месяц + сумма), `…CategoryGrid.swift` (сетка + плитка + overlay действий), `…MoreSheet.swift` (из Ф1), корень ≤400 строк.
 - Чистый рефакторинг без изменения поведения: гейт = тот же набор тестов, device-проверка не нужна.
 
@@ -93,3 +93,11 @@
   `CashflowBudgetLocalization.categoryBadgeText/categoryBudgetLimitLabel` и их ключи — чтобы вернуть бейдж лимита
   стоило 5 строк, если владельцу полоски 3 pt окажется мало.
   Гейт: сборка exit=0; целевые тесты 46/46 passed, 0 failed (`xcresulttool`, 7 классов Cashflow/UnifiedEntry).
+- **2026-09-06, Ф5**: чистый рефакторинг, поведение/строки/ключи не менялись. 1450 → **421** строка в корне.
+  Новые файлы (extension'ы того же типа, без новых структур и протаскивания биндингов):
+  `CashflowUnifiedEntryHeader.swift` 262 · `CashflowUnifiedEntryCategoryGrid.swift` 549 · `CashflowUnifiedEntryDataLoading.swift` 198.
+  Третий файл (месячный срез + бюджетные хаптики, ~200 строк) добавлен сверх плана: без него корень оставался 542 строки.
+  Оверлей действий над категорией уехал из `body` в `categoryActionsOverlay`/`categoryDeletionSheet`/`categoryUndoOverlay`.
+  Цена подхода: `private` в Swift — область файла, поэтому хранимое состояние экрана и общие хелперы стали internal;
+  `Calendar.startOfMonth` из `private extension` стал internal (второго определения в проекте нет — коллизии не будет).
+  Гейт: сборка exit=0, те же 7 классов тестов 46/46 passed.
