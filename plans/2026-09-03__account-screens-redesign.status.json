@@ -1,0 +1,19 @@
+{
+  "planFile": "2026-09-03__account-screens-redesign.md",
+  "title": "Экраны счетов: редизайн + ремонт кредитки",
+  "updated": "2026-09-03T10:20:00+03:00",
+  "phases": [
+    {"name": "Ф1. Единая карточка вклада", "status": "done", "note": "c74b658"},
+    {"name": "Ф2. Слияние с hero Ф3", "status": "done", "note": "f527213"},
+    {"name": "Ф3. Карточка инвестиции", "status": "done", "note": "927cc15"},
+    {"name": "Ф4. Меню листом снизу", "status": "done", "note": "511dcbb"},
+    {"name": "Ф5. Экран реквизитов", "status": "done", "note": "6f39cbf"},
+    {"name": "Ф6. Дата открытия вклада", "status": "done", "note": "ec24b40, 5 тестов"},
+    {"name": "Ф7. Ремонт кредитки", "status": "done", "note": "4c38a0e, 5 тестов"},
+    {"name": "Ф8. Device-проверка владельцем", "status": "in_progress", "note": "билд на устройстве"},
+    {"name": "Ф9. Остальные типы счетов", "status": "pending", "note": "дебетовая, наличные, кредит"},
+    {"name": "Ф10. Меню снизу по приложению", "status": "pending", "note": "38 меню + 31 алерт"}
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

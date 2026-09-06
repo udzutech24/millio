@@ -1,0 +1,30 @@
+Use case: ui-mockup. Create a polished high fidelity UI design presentation for Millio iOS personal finance app. User wants a radical simplification of the attached income/expense screen, DESIGN ONLY. Attached image is a reference for existing functionality, not layout to preserve. Deliver ONE large landscape image with THREE equally sized complete tall mobile screens side by side, flat front-on, no device hardware, no perspective. Ideally 2400x1800 or similar large landscape canvas. Outer board warm light gray, small black Russian captions above each screen: "01 / Расходы", "02 / Доходы", "03 / Меню «Ещё»". Screens have softly rounded corners, almost-black #0C0D0F background, charcoal #191B1F surfaces, off-white crisp typography, muted gray secondary text with good contrast. SF Pro-like typography, carefully typeset Cyrillic. Native premium iOS visual language, exceptionally clean whitespace and precise alignment. No gradients, glow, rings, nested borders, decorative illustrations or giant marketing headlines. Expense accent soft sky blue, income accent mint. Category icons restrained colored line symbols in small subtle square backgrounds, never giant emoji.
+
+Each full screen approximately 390x844 logical points, dense but readable, 20pt side padding, 44pt minimum touch rows. Small iOS status bar 9:41 at top. Top toolbar: small close x left, compact month title "Сентябрь 2026" with small down chevron centered, ellipsis right. Below: a single quiet segmented control "Расходы" "Доходы" "Перевод"; correct selected segment on each screen. Then compact unboxed summary: gray label "Расходы за месяц" or "Доходы за месяц", large white amount "68 450 ₽" or "210 000 ₽". Tiny inline right chevron next to summary signals details. No chart on main screen and no budget progress fabricated.
+
+Main action is selecting a category, so next heading "Добавить расход" or "Добавить доход", small search icon aligned right, muted helper "Выберите категорию". Eight compact category cards arranged in TWO COLUMNS FOUR ROWS, about 73pt high each, 8pt gaps, generous horizontal padding. Each card icon + category name top and monthly amount below; small quiet plus at top-right gives affordance for add. Do not create a separate large add CTA. All cards have legible text even zero categories, amounts zero in muted gray but not disabled.
+EXPENSE eight cards:
+"Продукты" "24 800 ₽"; "Кафе" "8 650 ₽";
+"Транспорт" "6 200 ₽"; "Дом" "18 000 ₽";
+"Покупки" "5 400 ₽"; "Здоровье" "3 200 ₽";
+"Подписки" "2 200 ₽"; "Другое" "0 ₽".
+INCOME eight cards:
+"Зарплата" "210 000 ₽"; "Подработка" "0 ₽";
+"Проценты" "0 ₽"; "Дивиденды" "0 ₽";
+"Аренда" "0 ₽"; "Подарки" "0 ₽";
+"Возвраты" "0 ₽"; "Другое" "0 ₽".
+Below grid quiet full-width link "Все категории" with chevron. Then plain section header "Последние операции", smaller link "Все →" on right. Two compact rows separated by fine dividers, no separate outer card and no status segmented control on main screen.
+Expense rows: "Продукты", "Сегодня, 12:30", "−2 450 ₽"; "Кафе", "Вчера, 18:40", "−850 ₽".
+Income rows: "Зарплата", "5 сентября", "+210 000 ₽"; planned row "Подработка", "Ожидается 28 сентября", "57 795 ₽", small outlined clock marks expected state. Actual income sum stays 210000, expected not counted. Bottom iOS home indicator. Fit all content naturally, no clipping.
+
+THIRD SCREEN: same income screen underneath a dark translucent scrim, with a native dark bottom sheet open. Top part of underlying income screen remains dimly recognizable. Sheet approx 65% phone height, rounded top corners, drag handle. Sheet title "Ещё", subtitle "Доходы · Сентябрь 2026", close x on right. Two understated grouped surfaces containing text-labeled rows with line icons and trailing chevrons.
+First group three rows:
+"План на месяц"
+"Запланированные доходы"
+"Повторяющиеся доходы"
+Second group four rows:
+"Новая категория"
+"Порядок категорий"
+"Управление категориями"
+"Настройки"
+Leave good separation between groups, no huge cards. The menu is the key demonstration of moving rare controls away. No invented export, subscription upsell, bottom tab bar, charts or extra features. All displayed data is illustrative. Meticulous readable Russian text and balanced screen proportions.
