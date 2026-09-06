@@ -11,10 +11,11 @@ struct AccountEventEntrySheet: View {
     @State private var amountText = ""
     @State private var date = Date()
     @State private var note = ""
+    /// Фокус живёт ВНУТРИ листа — через границу презентации `@FocusState` не работает.
+    @FocusState private var isAmountFocused: Bool
 
     private var parsedAmount: Decimal? {
-        let normalized = amountText.replacingOccurrences(of: ",", with: ".")
-        guard let value = Decimal(string: normalized), value > 0 else { return nil }
+        guard let value = Decimal(string: AmountTextField.canonical(from: amountText)), value > 0 else { return nil }
         return value
     }
 
@@ -22,12 +23,16 @@ struct AccountEventEntrySheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField(L("accounts_core.detail.sheet.amount_placeholder"), text: $amountText)
-                        .keyboardType(.decimalPad)
+                    AmountTextField(
+                        placeholder: L("accounts_core.detail.sheet.amount_placeholder"),
+                        value: $amountText
+                    )
+                    .focused($isAmountFocused)
                     DatePicker(L("accounts_core.detail.sheet.date_label"), selection: $date, displayedComponents: .date)
                     TextField(L("accounts_core.detail.sheet.note_placeholder"), text: $note)
                 }
             }
+            .autofocusAfterPresentation($isAmountFocused)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -57,6 +62,7 @@ struct AccountAdjustBalanceSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var amountText: String
+    @FocusState private var isAmountFocused: Bool
 
     init(currentBalance: Decimal, titleOverride: String? = nil, onSave: @escaping (Decimal) -> Void) {
         self.currentBalance = currentBalance
@@ -78,8 +84,10 @@ struct AccountAdjustBalanceSheet: View {
                         placeholder: L("accounts_core.detail.sheet.adjust.new_balance"),
                         value: $amountText
                     )
+                    .focused($isAmountFocused)
                 }
             }
+            .autofocusAfterPresentation($isAmountFocused)
             .navigationTitle(titleOverride ?? L("accounts_core.detail.sheet.adjust.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -121,8 +129,7 @@ struct AccountTransferSheet: View {
     }
 
     private var parsedAmount: Decimal? {
-        let normalized = amountText.replacingOccurrences(of: ",", with: ".")
-        guard let value = Decimal(string: normalized), value > 0 else { return nil }
+        guard let value = Decimal(string: AmountTextField.canonical(from: amountText)), value > 0 else { return nil }
         return value
     }
 
@@ -143,8 +150,10 @@ struct AccountTransferSheet: View {
                                 Text(account.name).tag(Optional(account.id))
                             }
                         }
-                        TextField(L("accounts_core.detail.sheet.amount_placeholder"), text: $amountText)
-                            .keyboardType(.decimalPad)
+                        AmountTextField(
+                            placeholder: L("accounts_core.detail.sheet.amount_placeholder"),
+                            value: $amountText
+                        )
                     }
                 }
             }
