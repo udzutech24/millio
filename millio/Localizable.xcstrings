@@ -30217,6 +30217,30 @@
         }
       }
     },
+    "cashflow.category.create.title" : {
+      "comment" : "Title of the quick create category sheet and menu item",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New category"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новая категория"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建分类"
+          }
+        }
+      }
+    },
     "cashflow.category.empty_month" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -30340,8 +30364,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Edit order"
+            "state" : "translated",
+            "value" : "Порядок категорий"
           }
         },
         "tr" : {

@@ -40,23 +40,21 @@ struct CashflowCategoryGridLayoutTests {
         #expect(count == CashflowCategoryGridLayout.regularColumns)
     }
 
-    @Test("При включенных лимитах на ширине телефона сетка тоже 3 колонки")
-    func expenseWithBudgetUsesRegularColumnsOnPhoneWidth() {
+    @Test("На ширине телефона сетка 3 колонки")
+    func expenseUsesRegularColumnsOnPhoneWidth() {
         let count = CashflowCategoryGridLayout.columnCount(
             for: .expense,
-            containerWidth: CGFloat(393),
-            showsBudgetDetails: true
+            containerWidth: CGFloat(393)
         )
 
         #expect(count == CashflowCategoryGridLayout.regularColumns)
     }
 
-    @Test("При включенных лимитах на широком экране сетка не меняется")
-    func expenseWithBudgetKeepsFourColumnsOnWideWidth() {
+    @Test("На широком экране сетка не меняется")
+    func expenseKeepsRegularColumnsOnWideWidth() {
         let count = CashflowCategoryGridLayout.columnCount(
             for: .expense,
-            containerWidth: CGFloat(600),
-            showsBudgetDetails: true
+            containerWidth: CGFloat(600)
         )
 
         #expect(count == CashflowCategoryGridLayout.regularColumns)
@@ -70,22 +68,6 @@ struct CashflowCategoryGridLayoutTests {
         )
 
         #expect(count == CashflowCategoryGridLayout.regularColumns)
-    }
-
-    @Test("Карточки категорий сохраняют одинаковую высоту с лимитом и без")
-    func cardsKeepSameHeightWithAndWithoutBudget() {
-        let compact = CashflowCategoryGridLayout.cardMetrics(showsBudgetDetails: false)
-        let budget = CashflowCategoryGridLayout.cardMetrics(showsBudgetDetails: true)
-
-        #expect(compact.cardMinHeight == budget.cardMinHeight)
-        #expect(compact.cardMinHeight == CashflowCategoryGridLayout.unifiedCardMinHeight)
-        #expect(compact.topRowMinHeight == budget.topRowMinHeight)
-        #expect(compact.topRowMinHeight == CashflowCategoryGridLayout.unifiedTopRowMinHeight)
-        #expect(compact.amountTopPadding > budget.amountTopPadding)
-        #expect(compact.usesFlexibleSpacer == false)
-        #expect(budget.usesFlexibleSpacer == true)
-        #expect(compact.footerMinHeight == budget.footerMinHeight)
-        #expect(compact.footerMinHeight == CashflowCategoryGridLayout.unifiedFooterMinHeight)
     }
 
     @Test("У расхода unpinned-пин скрыт по умолчанию")

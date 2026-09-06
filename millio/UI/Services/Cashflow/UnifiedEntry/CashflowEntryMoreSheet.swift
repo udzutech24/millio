@@ -32,6 +32,9 @@ struct CashflowEntryMoreSheet: View {
     static let detentHeight: CGFloat = 470
 
     var body: some View {
+        // ScrollView внутри фиксированного детента: при крупном Dynamic Type
+        // секции перестают помещаться в 470 pt и иначе обрезались бы.
+        ScrollView {
         VStack(alignment: .leading, spacing: AppSpacing.l) {
             Text(L("cashflow.entry.more.title", defaultValue: "More"))
                 .font(.millioTitle3)
@@ -75,7 +78,10 @@ struct CashflowEntryMoreSheet: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, AppSpacing.l)
+        .padding(.bottom, AppSpacing.l)
         .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollBounceBehavior(.basedOnSize)
         .background(Color.black.ignoresSafeArea())
         .presentationDetents([.height(Self.detentHeight)])
         .presentationDragIndicator(.visible)

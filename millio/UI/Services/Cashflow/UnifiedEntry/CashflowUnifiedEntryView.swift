@@ -13,18 +13,18 @@ import UIKit
 struct CashflowCategoryTransactionSheet: View {
     @ObservedObject var viewModel: CashflowViewModel
     let kind: CashflowCategoryTransactionSheetKind
-    let initialHistoryCardID: String?
+    private let initialHistoryCardID: String?
 
     @Environment(\.dismiss) var dismiss
-    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State var selectedMonth: Date
     @State var selectedCategory: CashflowCategoryOption?
     @State var searchText: String = ""
-    @State var isSearchExpanded: Bool = false
+    @State private var isSearchExpanded: Bool = false
     // Фаза 2 редизайна add-flow (§2.2): cap избранных категорий в сетке по умолчанию.
     @State var showAllCategories: Bool = false
-    @AppStorage("cashflow_category_cap_coachmark_seen") var hasSeenCategoryCapCoachMark: Bool = false
+    @AppStorage("cashflow_category_cap_coachmark_seen") private var hasSeenCategoryCapCoachMark: Bool = false
     @State var showCategoryCapCoachMark: Bool = false
     @State var monthlyTotal: Double = 0
     @State var categoryTotals: [String: Double] = [:]
@@ -35,16 +35,16 @@ struct CashflowCategoryTransactionSheet: View {
     @State var lastCategoryBudgetSteps: [String: Int] = [:]
     @State var isLoadingMonthlyTotal: Bool = false
     @State var monthTotalTask: Task<Void, Never>?
-    @State var showRecurringManagement: Bool = false
-    @State var showPlannedManagement: Bool = false
+    @State private var showRecurringManagement: Bool = false
+    @State private var showPlannedManagement: Bool = false
     @State var showTransactionsHistory: Bool = false
-    @State var showSettingsSheet: Bool = false
-    @State var showBulkExpenseImportSheet: Bool = false
-    @State var showBudgetSetupSheet: Bool = false
+    @State private var showSettingsSheet: Bool = false
+    @State private var showBulkExpenseImportSheet: Bool = false
+    @State private var showBudgetSetupSheet: Bool = false
     @State var showMoreSheet: Bool = false
     /// Действие из листа «…» выполняется в его onDismiss: iOS не открывает новый sheet,
     /// пока предыдущий ещё закрывается.
-    @State var pendingMoreAction: CashflowEntryMoreAction?
+    @State private var pendingMoreAction: CashflowEntryMoreAction?
 
     @State var showCreateCategorySheet: Bool = false
     @State var newCategoryName: String = ""
@@ -64,14 +64,14 @@ struct CashflowCategoryTransactionSheet: View {
     @State var categoryFeedbackSequence: Int = 0
     @State var hasCompletedInitialLoad: Bool = false
     @State var suppressNextCategoryTap: Bool = false
-    @State var showReorderSheet: Bool = false
+    @State private var showReorderSheet: Bool = false
     @State var sortMode: CashflowCategorySortMode
     @State var frozenCategoryOrder: [String] = []
     @State var snapshotRevision: Int = 0
     @State var snapshotCache = CashflowUnifiedEntrySnapshotCache()
-    @FocusState var isSearchFieldFocused: Bool
-    let outerCornerRadius: CGFloat = 22
-    let innerCornerRadius: CGFloat = 16
+    @FocusState private var isSearchFieldFocused: Bool
+    private let outerCornerRadius: CGFloat = 22
+    private let innerCornerRadius: CGFloat = 16
 
     init(
         viewModel: CashflowViewModel,
@@ -256,14 +256,14 @@ struct CashflowCategoryTransactionSheet: View {
     }
 
     @ViewBuilder
-    var searchFieldSection: some View {
+    private var searchFieldSection: some View {
         if shouldShowSearchField {
             searchSection
                 .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 
-    var searchSection: some View {
+    private var searchSection: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14, weight: .semibold))
@@ -272,6 +272,16 @@ struct CashflowCategoryTransactionSheet: View {
                 .textInputAutocapitalization(.words)
                 .foregroundStyle(AppColors.textPrimary)
                 .focused($isSearchFieldFocused)
+
+            Button {
+                toggleSearch()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.millioSubheadline)
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L("cashflow.common.close"))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -282,11 +292,11 @@ struct CashflowCategoryTransactionSheet: View {
         }
     }
 
-    var shouldShowSearchField: Bool {
+    private var shouldShowSearchField: Bool {
         isSearchExpanded || !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    func toggleSearch() {
+    private func toggleSearch() {
         if shouldShowSearchField {
             searchText = ""
             isSearchExpanded = false
@@ -299,13 +309,17 @@ struct CashflowCategoryTransactionSheet: View {
         }
     }
 
-    func performPendingMoreAction() {
+    private func performPendingMoreAction() {
         guard let action = pendingMoreAction else { return }
         pendingMoreAction = nil
         switch action {
         case .search:
             withAnimation(AppAnimation.standard) { isSearchExpanded = true }
-            isSearchFieldFocused = true
+            // Поле появляется в этом же проходе обновления — фокус ставим следующим тиком,
+            // иначе @FocusState цепляется за ещё не смонтированный TextField.
+            DispatchQueue.main.async {
+                isSearchFieldFocused = true
+            }
         case .management(let destination):
             handleManagementTap(destination)
         case .monthPlan:
@@ -319,7 +333,7 @@ struct CashflowCategoryTransactionSheet: View {
         }
     }
 
-    func handleManagementTap(_ destination: CashflowManagementDestination) {
+    private func handleManagementTap(_ destination: CashflowManagementDestination) {
         switch destination {
         case .bulkImport:
             showBulkExpenseImportSheet = true
@@ -331,7 +345,7 @@ struct CashflowCategoryTransactionSheet: View {
     }
 
     @ViewBuilder
-    func scheduledManagementSheet(mode: CashflowScheduledTransactionsMode) -> some View {
+    private func scheduledManagementSheet(mode: CashflowScheduledTransactionsMode) -> some View {
         NavigationStack {
             CashflowScheduledTransactionsView(
                 viewModel: viewModel,
@@ -361,7 +375,7 @@ struct CashflowCategoryTransactionSheet: View {
         .presentationDragIndicator(.visible)
     }
 
-    var historyShortcutSection: some View {
+    private var historyShortcutSection: some View {
         CashflowUnifiedEntryHistorySection(
             viewModel: viewModel,
             kind: kind,
@@ -374,15 +388,6 @@ struct CashflowCategoryTransactionSheet: View {
                 showPlannedManagement = true
             }
         )
-    }
-
-    var outerPanelBackground: some View {
-        RoundedRectangle(cornerRadius: outerCornerRadius, style: .continuous)
-            .fill(Color.black.opacity(0.24))
-            .overlay(
-                RoundedRectangle(cornerRadius: outerCornerRadius, style: .continuous)
-                    .stroke(kind.strokeGradient.opacity(0.76), lineWidth: 1)
-            )
     }
 
     var innerPanelBackground: some View {

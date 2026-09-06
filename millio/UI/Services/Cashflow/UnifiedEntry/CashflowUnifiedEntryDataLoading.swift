@@ -11,7 +11,7 @@ import SwiftUI
 import UIKit
 
 extension CashflowCategoryTransactionSheet {
-    func handleBudgetThresholdHaptics(
+    private func handleBudgetThresholdHaptics(
         previousSnapshot: BudgetProgressSnapshot?,
         newSnapshot: BudgetProgressSnapshot?,
         previousCategorySteps: [String: Int]
@@ -20,7 +20,7 @@ extension CashflowCategoryTransactionSheet {
         handleCategoryBudgetHaptics(newSnapshot: newSnapshot, previousSteps: previousCategorySteps)
     }
 
-    func handleMonthlyBudgetHaptic(
+    private func handleMonthlyBudgetHaptic(
         previousSnapshot: BudgetProgressSnapshot?,
         newSnapshot: BudgetProgressSnapshot?
     ) {
@@ -42,7 +42,7 @@ extension CashflowCategoryTransactionSheet {
         }
     }
 
-    func handleCategoryBudgetHaptics(
+    private func handleCategoryBudgetHaptics(
         newSnapshot: BudgetProgressSnapshot?,
         previousSteps: [String: Int]
     ) {

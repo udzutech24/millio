@@ -33,7 +33,6 @@ extension CashflowCategoryTransactionSheet {
                     .foregroundStyle(AppColors.textPrimary.opacity(0.92))
                     .contentTransition(.numericText())
                     .frame(maxWidth: .infinity)
-                .frame(maxWidth: .infinity)
 
                 Button {
                     shiftMonth(by: 1)
@@ -62,7 +61,7 @@ extension CashflowCategoryTransactionSheet {
                     .background(innerPanelBackground)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(L("cashflow.category.manage", defaultValue: "Manage categories"))
+            .accessibilityLabel(L("cashflow.entry.more.title", defaultValue: "More"))
         }
         .padding(.top, 6)
     }
@@ -103,7 +102,7 @@ extension CashflowCategoryTransactionSheet {
     }
 
     @ViewBuilder
-    var planProgressBar: some View {
+    private var planProgressBar: some View {
         if let snapshot = budgetSnapshot, snapshot.limit > 0 {
             GeometryReader { proxy in
                 let progress = min(max(snapshot.progress, 0), 1)
@@ -120,7 +119,7 @@ extension CashflowCategoryTransactionSheet {
         }
     }
 
-    var planSummaryLine: some View {
+    private var planSummaryLine: some View {
         Text(planSummaryText)
             .font(.millioCallout)
             .foregroundStyle(AppColors.textSecondary)
@@ -128,7 +127,7 @@ extension CashflowCategoryTransactionSheet {
             .minimumScaleFactor(0.8)
     }
 
-    var planSummaryText: String {
+    private var planSummaryText: String {
         guard let snapshot = budgetSnapshot, snapshot.limit > 0 else {
             return L("cashflow.entry.plan.none", defaultValue: "No plan")
         }
@@ -142,16 +141,7 @@ extension CashflowCategoryTransactionSheet {
         )
     }
 
-    var toolbarCircleBackground: some View {
-        Circle()
-            .fill(Color.black.opacity(0.92))
-            .overlay(
-                Circle()
-                    .stroke(Color.white.opacity(0.78), lineWidth: 1.6)
-            )
-    }
-
-    var monthChevronBackground: some View {
+    private var monthChevronBackground: some View {
         Circle()
             .fill(Color.white.opacity(0.04))
             .overlay(
@@ -160,7 +150,7 @@ extension CashflowCategoryTransactionSheet {
             )
     }
 
-    var monthHeaderBackground: some View {
+    private var monthHeaderBackground: some View {
         RoundedRectangle(cornerRadius: 20, style: .continuous)
             .fill(Color.black.opacity(0.24))
             .overlay(
@@ -169,7 +159,7 @@ extension CashflowCategoryTransactionSheet {
             )
     }
 
-    func circleToolbarButton(
+    private func circleToolbarButton(
         systemName: String,
         accessibilityLabel: String,
         action: @escaping () -> Void
@@ -192,7 +182,7 @@ extension CashflowCategoryTransactionSheet {
         .accessibilityLabel(accessibilityLabel)
     }
 
-    func shiftMonth(by value: Int) {
+    private func shiftMonth(by value: Int) {
         let calendar = Calendar.current
         guard let newValue = calendar.date(byAdding: .month, value: value, to: selectedMonth) else {
             return
@@ -206,7 +196,7 @@ extension CashflowCategoryTransactionSheet {
         }
     }
 
-    func formattedMonthlyTotal(_ value: Double) -> String {
+    private func formattedMonthlyTotal(_ value: Double) -> String {
         let amount = formattedAmount(value)
         let code = viewModel.state.displayCurrency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !code.isEmpty else { return amount }
@@ -214,7 +204,7 @@ extension CashflowCategoryTransactionSheet {
         return "\(amount) \(symbol)"
     }
 
-    func monthlyBudgetStatusText(_ snapshot: BudgetProgressSnapshot) -> String {
+    private func monthlyBudgetStatusText(_ snapshot: BudgetProgressSnapshot) -> String {
         let currency = cashflowCurrencyCodeLabel(viewModel.state.displayCurrency)
         return CashflowBudgetLocalization.monthlyStatus(
             for: kind,
@@ -222,11 +212,11 @@ extension CashflowCategoryTransactionSheet {
             currency: currency
         )
     }
-    var currentMonthStart: Date {
+    private var currentMonthStart: Date {
         Calendar.current.startOfMonth(for: Date())
     }
 
-    var canMoveForward: Bool {
+    private var canMoveForward: Bool {
         selectedMonth < currentMonthStart
     }
 
@@ -243,20 +233,5 @@ extension CashflowCategoryTransactionSheet {
 
     var historyRange: (start: Date, end: Date) {
         CashflowViewModel.monthHistoryRange(for: selectedMonth, calendar: .current)
-    }
-
-    func monthRangeText(for month: Date) -> String {
-        let calendar = Calendar.current
-        let start = calendar.startOfMonth(for: month)
-        guard
-            let end = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: start)
-        else {
-            return ""
-        }
-
-        let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
-        formatter.dateFormat = "dd.MM"
-        return "\(formatter.string(from: start)) — \(formatter.string(from: end))"
     }
 }

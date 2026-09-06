@@ -59,7 +59,7 @@ extension CashflowCategoryTransactionSheet {
 
     /// Последняя плитка сетки: создание категории прямо из сетки, пунктирная рамка
     /// отличает её от обычных категорий.
-    var newCategoryTile: some View {
+    private var newCategoryTile: some View {
         Button {
             showCreateCategorySheet = true
         } label: {
@@ -140,7 +140,7 @@ extension CashflowCategoryTransactionSheet {
         }
     }
 
-    var cashflowEmptyMonthState: some View {
+    private var cashflowEmptyMonthState: some View {
         VStack(spacing: 12) {
             Image(systemName: "tray")
                 .font(.system(size: 40))
@@ -159,7 +159,7 @@ extension CashflowCategoryTransactionSheet {
     /// Полоска лимита остаётся — без неё сигнал о превышении бюджета виден только
     /// в листе плана; бейджи и подпись лимита ушли туда же ради компактности.
 
-    func categoryCard(for option: CashflowCategoryOption) -> some View {
+    private func categoryCard(for option: CashflowCategoryOption) -> some View {
         let summary = categoryBudgetSummary(for: option)
         let amount = categoryTotals[option.rawValue, default: 0]
         let isActive = amount > 0.0000001
@@ -247,7 +247,7 @@ extension CashflowCategoryTransactionSheet {
         }
     }
 
-    var pinnedBadge: some View {
+    private var pinnedBadge: some View {
         Image(systemName: "pin.fill")
             .font(.system(size: 9, weight: .bold))
             .foregroundStyle(Color(hex: "FF6B6B"))
@@ -264,29 +264,29 @@ extension CashflowCategoryTransactionSheet {
             .accessibilityLabel(L("cashflow.category.pinned"))
     }
 
-    func togglePinned(for option: CashflowCategoryOption) {
+    private func togglePinned(for option: CashflowCategoryOption) {
         let nextValue = !viewModel.isCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind)
         viewModel.setCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind, isPinned: nextValue)
     }
 
-    func openCategoryEditor(for option: CashflowCategoryOption) {
+    private func openCategoryEditor(for option: CashflowCategoryOption) {
         categoryEditorMode = .edit(rawValue: option.rawValue)
         categoryEditorName = option.displayName
         categoryEditorIcon = option.icon
         showCategoryEditorSheet = true
     }
 
-    func openCategoryActions(for option: CashflowCategoryOption) {
+    private func openCategoryActions(for option: CashflowCategoryOption) {
         pendingActionCategory = option
         showCategoryActionsDialog = true
     }
 
-    func closeCategoryActions() {
+    private func closeCategoryActions() {
         showCategoryActionsDialog = false
         pendingActionCategory = nil
     }
 
-    func destructiveActionTitle(for option: CashflowCategoryOption) -> String {
+    private func destructiveActionTitle(for option: CashflowCategoryOption) -> String {
         option.isCustom
             ? L("cashflow.category.actions.delete")
             : String(
@@ -296,18 +296,18 @@ extension CashflowCategoryTransactionSheet {
             )
     }
 
-    func destructiveActionIcon(for option: CashflowCategoryOption) -> String {
+    private func destructiveActionIcon(for option: CashflowCategoryOption) -> String {
         option.isCustom ? "trash" : "archivebox"
     }
 
-    func presentDeleteCategoryFlow(for option: CashflowCategoryOption) {
+    private func presentDeleteCategoryFlow(for option: CashflowCategoryOption) {
         pendingCategoryDeletionPreview = viewModel.categoryDeletionPreview(
             rawValue: option.rawValue,
             kind: kind.categoryKind
         )
     }
 
-    func handleCategoryDeletion(preview: CashflowCategoryDeletionPreview, targetRaw: String) {
+    private func handleCategoryDeletion(preview: CashflowCategoryDeletionPreview, targetRaw: String) {
         guard let undoAction = viewModel.performCategoryRemoval(
             rawValue: preview.rawValue,
             kind: preview.kind,
@@ -323,7 +323,7 @@ extension CashflowCategoryTransactionSheet {
         presentUndoCategoryDeletion(undoAction)
     }
 
-    func presentUndoCategoryDeletion(_ action: CashflowCategoryMutationUndoAction) {
+    private func presentUndoCategoryDeletion(_ action: CashflowCategoryMutationUndoAction) {
         categoryUndoDismissTask?.cancel()
         pendingCategoryUndoAction = action
         categoryUndoDismissTask = Task { @MainActor in
@@ -333,13 +333,13 @@ extension CashflowCategoryTransactionSheet {
         }
     }
 
-    func dismissUndoCategoryDeletion() {
+    private func dismissUndoCategoryDeletion() {
         categoryUndoDismissTask?.cancel()
         categoryUndoDismissTask = nil
         pendingCategoryUndoAction = nil
     }
 
-    func handleUndoCategoryDeletion() {
+    private func handleUndoCategoryDeletion() {
         guard let action = pendingCategoryUndoAction else { return }
         guard viewModel.undoCategoryMutation(action) else { return }
         if selectedCategory?.rawValue == action.targetOption.rawValue {
@@ -381,19 +381,14 @@ extension CashflowCategoryTransactionSheet {
 
         showCategoryEditorSheet = false
     }
-    var showsBudgetDetails: Bool {
-        budgetSnapshot != nil
-    }
-
-    var categoryColumns: [GridItem] {
+    private var categoryColumns: [GridItem] {
         CashflowCategoryGridLayout.columns(
             for: kind,
-            containerWidth: categoryGridWidth,
-            showsBudgetDetails: showsBudgetDetails
+            containerWidth: categoryGridWidth
         )
     }
 
-    var categories: [CashflowCategoryOption] {
+    private var categories: [CashflowCategoryOption] {
         let base = viewModel.orderedCategoryOptions(
             for: kind.categoryKind,
             matching: searchText
@@ -407,35 +402,35 @@ extension CashflowCategoryTransactionSheet {
     // Сама формула cap вынесена в `CashflowCategoryCapPolicy` (чистая функция, юнит-тестируется
     // без View-харнеса) — здесь только адаптация к состоянию этого экрана (поиск/showAll/pin).
 
-    var isCategorySearchActive: Bool {
+    private var isCategorySearchActive: Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// R8: активный поиск снимает cap полностью — иначе категория вне топа не найдётся.
-    var shouldCapCategories: Bool {
+    private var shouldCapCategories: Bool {
         !showAllCategories && !isCategorySearchActive
     }
 
     /// Сколько pinned-категорий в начале уже отсортированного списка (pinned всегда
     /// идут первыми — инвариант `sortCategoryOptions`/`sortCategoryOptionsWithCustomOrder`).
-    var pinnedCategoryCount: Int {
+    private var pinnedCategoryCount: Int {
         categories.prefix { viewModel.isCategoryPinned(rawValue: $0.rawValue, kind: kind.categoryKind) }.count
     }
 
-    var categoryCapCount: Int {
+    private var categoryCapCount: Int {
         CashflowCategoryCapPolicy.visibleCount(pinnedCount: pinnedCategoryCount, totalCount: categories.count)
     }
 
-    var visibleCategories: [CashflowCategoryOption] {
+    private var visibleCategories: [CashflowCategoryOption] {
         guard shouldCapCategories else { return categories }
         return Array(categories.prefix(categoryCapCount))
     }
 
-    var showsCategoryExpandLink: Bool {
+    private var showsCategoryExpandLink: Bool {
         shouldCapCategories && categories.count > categoryCapCount
     }
 
-    var hasCustomCategoryOrder: Bool {
+    private var hasCustomCategoryOrder: Bool {
         viewModel.categoryCustomOrder(for: kind.categoryKind) != nil
     }
 
@@ -458,12 +453,12 @@ extension CashflowCategoryTransactionSheet {
         }
     }
 
-    func formattedCategoryTotal(for option: CashflowCategoryOption) -> String {
+    private func formattedCategoryTotal(for option: CashflowCategoryOption) -> String {
         let value = categoryTotals[option.rawValue] ?? 0
         return formattedAmount(value)
     }
 
-    func categoryBudgetSummary(for option: CashflowCategoryOption) -> BudgetCategoryProgressSnapshot? {
+    private func categoryBudgetSummary(for option: CashflowCategoryOption) -> BudgetCategoryProgressSnapshot? {
         return budgetSnapshot?.categorySnapshots.first(where: { $0.categoryRawValue == option.rawValue })
     }
 
@@ -480,14 +475,14 @@ extension CashflowCategoryTransactionSheet {
         showCreateCategorySheet = false
     }
 
-    func updateCategoryGridWidth(_ width: CGFloat) {
+    private func updateCategoryGridWidth(_ width: CGFloat) {
         guard width > 0 else { return }
         let rounded = width.rounded(.toNearestOrAwayFromZero)
         guard abs(rounded - categoryGridWidth) >= 1 else { return }
         categoryGridWidth = rounded
     }
 
-    func budgetStatusColor(_ status: BudgetStatus) -> Color {
+    private func budgetStatusColor(_ status: BudgetStatus) -> Color {
         budgetStatusTintToken(status).color
     }
 

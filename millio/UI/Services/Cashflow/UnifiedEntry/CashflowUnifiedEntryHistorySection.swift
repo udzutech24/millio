@@ -26,9 +26,9 @@ struct CashflowUnifiedEntryHistorySection: View {
         let upcoming = viewModel.scheduledCalendarEntries(for: kind.categoryKind, month: month).map { entry in
             Row(id: "upcoming-\(entry.id)", transaction: entry.transaction, date: entry.scheduledDate, status: .upcoming)
         }
-        // Оплаченные и плановые идут одним списком по дате (свежие сверху) — сегмент
-        // All/Upcoming/Paid убран, статус плановой строки читается по подписи «· план».
-        return (actual + upcoming).sorted { $0.date > $1.date }
+        // Ближайшие к сегодня — и в прошлое, и в будущее: так свежие факты и ближайший план
+        // стоят рядом, а далёкий план не вытесняет вчерашнюю покупку.
+        return (actual + upcoming).sorted { abs($0.date.timeIntervalSinceNow) < abs($1.date.timeIntervalSinceNow) }
     }
 
     private static let visibleRowCount = 3
