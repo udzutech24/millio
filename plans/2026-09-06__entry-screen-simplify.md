@@ -47,7 +47,7 @@
 - Удалить мёртвый код старых кнопок и `CashflowManagementEntry`, если он больше нигде не используется (grep).
 - Строки ru/en/zh-Hans в `Localizable.xcstrings`; проверить `git diff` файла после сборки на устройство ([[feedback-xcodebuild-xcstrings-corruption]]).
 
-### ✅ [x] Ф5 — Декомпозиция `CashflowUnifiedEntryView.swift` — РЕАЛИЗОВАН (`53d6eff`)
+### ✅ [x] Ф5 — Декомпозиция `CashflowUnifiedEntryView.swift` — РЕАЛИЗОВАН (`6ae1221`)
 - Разнести на `…Header.swift` (шапка + месяц + сумма), `…CategoryGrid.swift` (сетка + плитка + overlay действий), `…MoreSheet.swift` (из Ф1), корень ≤400 строк.
 - Чистый рефакторинг без изменения поведения: гейт = тот же набор тестов, device-проверка не нужна.
 

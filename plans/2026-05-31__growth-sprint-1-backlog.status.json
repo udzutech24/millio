@@ -1,0 +1,26 @@
+{
+  "_generated": true,
+  "planFile": "2026-05-31__growth-sprint-1-backlog.md",
+  "title": "Спринт 1 — «Монетизация перестаёт течь»",
+  "updated": "2026-09-06T01:16:23.818Z",
+  "phases": [
+    {
+      "name": "#5 — Paywall full-screen sheet вместо alert",
+      "status": "pending"
+    },
+    {
+      "name": "#2 — Закрыть 5 beta-флагов PRO",
+      "status": "pending"
+    },
+    {
+      "name": "#1 — Верификация launch-recovery + доказательные тесты",
+      "status": "pending"
+    },
+    {
+      "name": "#9 — Tap target ≥44pt в DashboardView",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

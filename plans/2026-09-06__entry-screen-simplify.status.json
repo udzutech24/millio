@@ -1,7 +1,7 @@
 {
   "planFile": "2026-09-06__entry-screen-simplify.md",
   "title": "Упрощение экрана ввода",
-  "updated": "2026-09-06T04:38:50+03:00",
+  "updated": "2026-09-06T18:30:00+03:00",
   "phases": [
     {
       "name": "Ф1 Лист «…»",
@@ -20,13 +20,13 @@
     },
     {
       "name": "Ф4 Чистка и локализация",
-      "status": "in_progress",
-      "note": ""
+      "status": "done",
+      "note": "3fead96, целевые тесты 46/46"
     },
     {
       "name": "Ф5 Декомпозиция файла",
-      "status": "pending",
-      "note": "отдельной сессией"
+      "status": "done",
+      "note": "6ae1221, корень 1450 → 421 строка"
     }
   ],
   "costUsd": null,
