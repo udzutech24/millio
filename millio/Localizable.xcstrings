@@ -35592,6 +35592,54 @@
         }
       }
     },
+    "cashflow.entry.plan.none" : {
+      "comment" : "Shown under the monthly amount when no plan is set",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No plan"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Плана нет"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无计划"
+          }
+        }
+      }
+    },
+    "cashflow.entry.plan.summary" : {
+      "comment" : "Plan progress line under the monthly amount: percent, plan amount, remaining",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld%% of plan %2$@ · %3$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld%% от плана %2$@ · %3$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "计划的 %1$lld%% · %2$@ · %3$@"
+          }
+        }
+      }
+    },
     "cashflow.history.asset_change.price" : {
       "extractionState" : "stale",
       "localizations" : {

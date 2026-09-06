@@ -172,7 +172,7 @@ struct CashflowCategoryTransactionSheet: View {
                         VStack(alignment: .leading, spacing: 12) {
                             headerSection
                             monthlyTotalSection
-                            managementSection
+                            searchFieldSection
                             categoriesSectionHeader
                             categoryCapCoachMarkBanner
                             categoriesSection
@@ -413,20 +413,6 @@ struct CashflowCategoryTransactionSheet: View {
             .background(monthHeaderBackground)
 
             Button {
-                pendingActionCategory = nil
-                showTransactionsHistory = true
-            } label: {
-                Label(L("cashflow.history.title", defaultValue: "History"), systemImage: "clock.arrow.circlepath")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .padding(.horizontal, 12)
-                    .frame(height: 42)
-                    .background(innerPanelBackground)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("cashflow.unified.history")
-
-            Button {
                 showMoreSheet = true
             } label: {
                 Image(systemName: "ellipsis")
@@ -441,165 +427,87 @@ struct CashflowCategoryTransactionSheet: View {
         .padding(.top, 6)
     }
 
+    /// Hero-блок месяца: сумма + полоска плана. Тап по всему блоку открывает историю
+    /// операций — отдельной пилюли «История» в шапке больше нет.
     private var monthlyTotalSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
+        Button {
+            pendingActionCategory = nil
+            showTransactionsHistory = true
+        } label: {
+            VStack(alignment: .leading, spacing: AppSpacing.s) {
                 Text(kind.monthlyTotalTitle)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.millioCallout)
                     .foregroundStyle(AppColors.textSecondary)
-                Spacer()
-                Button {
-                    showBudgetSetupSheet = true
-                } label: {
-                    Text(planButtonTitle)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(innerPanelBackground)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 2)
 
-            monthlySummaryHeroSection
-        }
-        .padding(12)
-        .background(outerPanelBackground)
-    }
-
-    @ViewBuilder
-    private var monthlySummaryHeroSection: some View {
-        let chartEntries = heroChartEntries
-        let showChart = !chartEntries.isEmpty
-
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 14) {
                 if isLoadingMonthlyTotal {
                     ProgressView()
                         .tint(AppColors.textPrimary)
-                        .scaleEffect(0.9)
-                        .padding(.vertical, 10)
+                        .frame(height: AppSpacing.xxl)
                 } else {
                     Text(formattedMonthlyTotal(monthlyTotal))
-                        .font(.system(size: 38, weight: .bold))
+                        .font(.millioAmountHero)
                         .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .minimumScaleFactor(0.6)
                         .contentTransition(.numericText())
-                        .shadow(color: kind.accentColor.opacity(0.45), radius: 12, x: 0, y: 0)
                 }
+
+                planProgressBar
+                planSummaryLine
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            if showChart {
-                Button {
-                    showTransactionsHistory = true
-                } label: {
-                    CashflowHistoryRingChart(
-                        entries: chartEntries,
-                        selectedRawValue: nil,
-                        progress: 0,
-                        onSelect: { _ in }
-                    )
-                    .frame(width: 80, height: 80)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 16)
-        .background(heroCardBackground)
-    }
-
-    private var heroChartEntries: [CashflowHistorySummaryEntry] {
-        let palette: [String] = kind == .expense
-            ? ["47D7FF", "FF9F5A", "F68BA7", "6FD2A8", "AFC8FF", "C5B6FF", "E7C66C", "9EA7BC"]
-            : ["63E6BE", "47D7FF", "7AB6FF", "FFD166", "FF9B9B", "D0BFFF", "95E0A3", "A1A7B8"]
-        let filtered = categoryTotals.filter { $0.value > 0.0000001 }
-        let total = filtered.values.reduce(0, +)
-        guard total > 0 else { return [] }
-        let optionMap = Dictionary(uniqueKeysWithValues: viewModel.categoryOptions(for: kind.categoryKind).map { ($0.rawValue, $0) })
-        return filtered
-            .sorted { $0.value > $1.value }
-            .enumerated()
-            .map { index, item in
-                let option = optionMap[item.key]
-                return CashflowHistorySummaryEntry(
-                    rawValue: item.key,
-                    title: option?.displayName ?? item.key,
-                    icon: option?.icon ?? "questionmark",
-                    amount: item.value,
-                    share: item.value / total,
-                    tintHex: palette[index % palette.count]
-                )
-            }
-    }
-
-    private var heroCardBackground: some View {
-        RoundedRectangle(cornerRadius: innerCornerRadius, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [kind.accentColor.opacity(0.38), Color.black.opacity(0.36)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: innerCornerRadius, style: .continuous)
-                    .stroke(kind.strokeGradient.opacity(0.60), lineWidth: 1)
-            )
-    }
-
-    private var managementSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            let entries = CashflowManagementEntry.entries(for: kind.categoryKind)
-            HStack(spacing: 10) {
-                ForEach(entries) { entry in
-                    managementButton(entry: entry)
-                }
-
-                searchToggleButton
-            }
-
-            if shouldShowSearchField {
-                searchSection
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .animation(.spring(response: 0.28, dampingFraction: 0.86), value: shouldShowSearchField)
-    }
-
-    private func managementButton(entry: CashflowManagementEntry) -> some View {
-        Button {
-            handleManagementTap(entry.destination)
-        } label: {
-            Image(systemName: entry.icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.92))
-                .frame(maxWidth: .infinity, minHeight: 52)
-            .background(innerPanelBackground)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(entry.title)
+        .accessibilityIdentifier("cashflow.unified.history")
     }
 
-    private var searchToggleButton: some View {
-        Button {
-            toggleSearch()
-        } label: {
-            Image(systemName: shouldShowSearchField ? "xmark" : "magnifyingglass")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.92))
-                .frame(maxWidth: .infinity, minHeight: 52)
-            .background(innerPanelBackground)
+    @ViewBuilder
+    private var planProgressBar: some View {
+        if let snapshot = budgetSnapshot, snapshot.limit > 0 {
+            GeometryReader { proxy in
+                let progress = min(max(snapshot.progress, 0), 1)
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.10))
+                    .overlay(alignment: .leading) {
+                        Capsule(style: .continuous)
+                            .fill(kind.strokeGradient)
+                            .frame(width: proxy.size.width * progress)
+                    }
+            }
+            .frame(height: 6)
+            .padding(.top, AppSpacing.xs)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(
-            shouldShowSearchField
-            ? L("cashflow.common.close", defaultValue: "Close")
-            : L("cashflow.operation.search_category", defaultValue: "Search category")
+    }
+
+    private var planSummaryLine: some View {
+        Text(planSummaryText)
+            .font(.millioCallout)
+            .foregroundStyle(AppColors.textSecondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+    }
+
+    private var planSummaryText: String {
+        guard let snapshot = budgetSnapshot, snapshot.limit > 0 else {
+            return L("cashflow.entry.plan.none", defaultValue: "No plan")
+        }
+        let percent = Int((min(max(snapshot.progress, 0), 1) * 100).rounded())
+        return String(
+            format: L("cashflow.entry.plan.summary", defaultValue: "%1$lld%% of plan %2$@ · %3$@"),
+            locale: AppLocalization.currentAppLocale,
+            percent,
+            formattedMonthlyTotal(snapshot.limit),
+            monthlyBudgetStatusText(snapshot)
         )
+    }
+
+    @ViewBuilder
+    private var searchFieldSection: some View {
+        if shouldShowSearchField {
+            searchSection
+                .transition(.move(edge: .top).combined(with: .opacity))
+        }
     }
 
     private var searchSection: some View {
@@ -643,7 +551,7 @@ struct CashflowCategoryTransactionSheet: View {
         pendingMoreAction = nil
         switch action {
         case .search:
-            isSearchExpanded = true
+            withAnimation(AppAnimation.standard) { isSearchExpanded = true }
             isSearchFieldFocused = true
         case .management(let destination):
             handleManagementTap(destination)
