@@ -60,9 +60,9 @@ struct CreditCardEditSheet: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: 14) {
-                    section("Main") {
+                    section(L("credit_card.edit.section.main")) {
                         TextField(L("accounts_core.detail.sheet.edit.name"), text: $name)
-                        Divider(); TextField("Bank / issuer", text: $bank)
+                        Divider(); TextField(L("credit_card.edit.bank_placeholder"), text: $bank)
                         Divider(); TextField(L("finances.editor.card.number_placeholder"), text: $last4)
                             .keyboardType(.numberPad)
                             .onChange(of: last4) { _, value in last4 = String(value.filter(\.isNumber).prefix(4)) }
@@ -71,40 +71,40 @@ struct CreditCardEditSheet: View {
                             ForEach(groups, id: \.id) { Text($0.name).tag(Optional($0.id)) }
                         }
                     }
-                    section("Лимит и условия") {
+                    section(L("credit_card.edit.section.limit")) {
                         HStack { Text(L("finances.add_account.card.credit_limit")); Spacer(); AmountTextField(placeholder: "0", value: $limit).multilineTextAlignment(.trailing) }
-                        Divider(); Stepper("Отсрочка: \(graceDays) дн.", value: $graceDays, in: 0...365)
+                        Divider(); Stepper(String(format: L("credit_card.edit.grace_days_format"), graceDays), value: $graceDays, in: 0...365)
                     }
                     section(L("finances.add_account.credit.payment.section")) {
-                        Stepper("Statement day: \(statementDay)", value: $statementDay, in: 1...31)
-                        Divider(); Stepper("Payment day: \(dueDay)", value: $dueDay, in: 1...31)
+                        Stepper(String(format: L("credit_card.edit.statement_day_format"), statementDay), value: $statementDay, in: 1...31)
+                        Divider(); Stepper(String(format: L("credit_card.edit.due_day_format"), dueDay), value: $dueDay, in: 1...31)
                         Divider(); HStack { Text(L("finances.add_account.credit.monthly_payment")); Spacer(); AmountTextField(placeholder: "0", value: $minimumPayment).multilineTextAlignment(.trailing) }
                     }
-                    section("Дата платежа и напоминание") {
-                        Picker("Дата платежа", selection: $paymentSettings.mode) {
-                            Text("По отсрочке").tag(CreditCardPaymentDateMode.gracePeriod)
-                            Text("Точная дата").tag(CreditCardPaymentDateMode.exactDate)
+                    section(L("credit_card.edit.section.payment_date")) {
+                        Picker(L("credit_card.detail.payment_date"), selection: $paymentSettings.mode) {
+                            Text(L("credit_card.edit.payment_mode.grace")).tag(CreditCardPaymentDateMode.gracePeriod)
+                            Text(L("credit_card.edit.payment_mode.exact")).tag(CreditCardPaymentDateMode.exactDate)
                         }.pickerStyle(.segmented)
                         Divider()
                         DatePicker(
-                            paymentSettings.mode == .gracePeriod ? "Дата начала" : "Дата платежа",
+                            paymentSettings.mode == .gracePeriod ? L("credit_card.edit.anchor_date") : L("credit_card.detail.payment_date"),
                             selection: paymentSettings.mode == .gracePeriod ? $paymentSettings.anchorDate : $paymentSettings.exactDate,
                             displayedComponents: .date
                         )
                         Divider()
-                        Picker("Напомнить", selection: $paymentSettings.reminderLead) {
-                            Text("Выкл.").tag(CreditCardReminderLead.none)
-                            Text("В день платежа").tag(CreditCardReminderLead.dayOf)
-                            Text("За 1 день").tag(CreditCardReminderLead.oneDay)
-                            Text("За 3 дня").tag(CreditCardReminderLead.threeDays)
-                            Text("За 7 дней").tag(CreditCardReminderLead.sevenDays)
+                        Picker(L("credit_card.edit.reminder"), selection: $paymentSettings.reminderLead) {
+                            Text(L("credit_card.edit.reminder.off")).tag(CreditCardReminderLead.none)
+                            Text(L("credit_card.edit.reminder.day_of")).tag(CreditCardReminderLead.dayOf)
+                            Text(L("credit_card.edit.reminder.one_day")).tag(CreditCardReminderLead.oneDay)
+                            Text(L("credit_card.edit.reminder.three_days")).tag(CreditCardReminderLead.threeDays)
+                            Text(L("credit_card.edit.reminder.seven_days")).tag(CreditCardReminderLead.sevenDays)
                         }
                         if paymentSettings.reminderLead != .none {
                             Divider()
-                            DatePicker("Время напоминания", selection: reminderTimeBinding, displayedComponents: .hourAndMinute)
+                            DatePicker(L("credit_card.edit.reminder_time"), selection: reminderTimeBinding, displayedComponents: .hourAndMinute)
                         }
                     }
-                    section("Accounting") {
+                    section(L("credit_card.edit.section.accounting")) {
                         Toggle(L("finances.add_account.total_impact.include"), isOn: $includeInTotal).tint(AppColors.toggleOnGreen)
                         Divider(); ViewThatFits(in: .horizontal) {
                             HStack { Text(L("finances.add_account.field.currency")); Spacer(); Text(account.currency).foregroundStyle(AppColors.textSecondary) }

@@ -1181,7 +1181,7 @@ struct AccountDetailView: View {
             let debt = max(0, creditLimit - balanceToday)
             AccountAdjustBalanceSheet(
                 currentBalance: isCreditCard ? debt : balanceToday,
-                titleOverride: isCreditCard ? "Изменить сумму долга" : nil,
+                titleOverride: isCreditCard ? L("accounts_core.detail.action.adjust_debt") : nil,
                 onSave: { newValue in
                     perform {
                         if isDebitProduct {
