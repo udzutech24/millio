@@ -105,20 +105,24 @@ struct CreditCardDetailSection: View {
                 ContentUnavailableView("Дата платежа не настроена", systemImage: "calendar.badge.exclamationmark")
             }
         }
-        .confirmationDialog(
-            L("credit_card.calendar_export.confirmation.title", defaultValue: "Add payment to Calendar?"),
-            isPresented: $showCalendarExportConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(L("credit_card.calendar_export.confirmation.action", defaultValue: "Continue")) {
-                beginCalendarExport()
-            }
-            Button(L("cashflow.common.cancel"), role: .cancel) {}
-        } message: {
-            Text(L(
-                "credit_card.calendar_export.confirmation.message",
-                defaultValue: "Millio will open Apple Calendar. Later changes to this payment will not update the exported event."
-            ))
+        // Подтверждение — тот же `AccountActionsSheet`, что и «···» счёта: в зоне счетов
+        // системных диалогов не осталось, всё подтверждается листом снизу.
+        .sheet(isPresented: $showCalendarExportConfirmation) {
+            AccountActionsSheet(
+                accountName: account.name,
+                accountTypeTitle: L("credit_card.calendar_export.confirmation.title", defaultValue: "Add payment to Calendar?"),
+                items: [
+                    AccountActionItem(
+                        title: L("credit_card.calendar_export.confirmation.action", defaultValue: "Continue"),
+                        subtitle: L(
+                            "credit_card.calendar_export.confirmation.message",
+                            defaultValue: "Millio will open Apple Calendar. Later changes to this payment will not update the exported event."
+                        ),
+                        icon: "calendar.badge.plus"
+                    ) { beginCalendarExport() }
+                ],
+                onDismiss: { showCalendarExportConfirmation = false }
+            )
         }
         .sheet(item: $calendarExportPayload) { payload in
             AppleCalendarEventEditorSheet(eventStore: calendarEventStore, payload: payload) { action in
