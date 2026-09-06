@@ -1,23 +1,13 @@
 import SwiftUI
 
-/// Один пункт bottom-sheet меню действий счёта. `subtitle` — вторая строка мелким серым текстом,
-/// используется для предупреждений о последствиях действия (напр. «Закрыть досрочно»).
-struct AccountActionSheetItem: Identifiable {
-    let id = UUID()
-    let title: String
-    var subtitle: String?
-    let icon: String
-    var isDestructive: Bool = false
-    let action: () -> Void
-}
-
 /// Переиспользуемое меню действий счёта — bottom sheet вместо системного `Menu` у верхнего края.
-/// Заменяет toolbar-меню деталки счёта (Коммит 1); тот же компонент рассчитан на переиспользование
-/// для long-press по строке счёта в списке «Счета» (пока не подключено).
+/// Пункт описывается тем же `AccountActionItem`, что и кнопка в `AccountActionsRow`.
+/// Тот же компонент рассчитан на переиспользование для long-press по строке счёта в списке
+/// «Счета» (пока не подключено).
 struct AccountActionsSheet: View {
     let accountName: String
     let accountTypeTitle: String
-    let items: [AccountActionSheetItem]
+    let items: [AccountActionItem]
     let onDismiss: () -> Void
 
     /// Высота листа — фиксированный `.height`, а не `.medium`/`.large`: число пунктов заранее
@@ -58,7 +48,7 @@ struct AccountActionsSheet: View {
             .padding(.bottom, AppSpacing.s)
     }
 
-    private func row(_ item: AccountActionSheetItem) -> some View {
+    private func row(_ item: AccountActionItem) -> some View {
         Button {
             onDismiss()
             item.action()
