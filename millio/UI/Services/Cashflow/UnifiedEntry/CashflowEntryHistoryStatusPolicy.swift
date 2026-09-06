@@ -5,21 +5,6 @@ enum CashflowEntryHistoryStatus: String, CaseIterable, Sendable {
     case paid
 }
 
-enum CashflowEntryHistoryFilter: String, CaseIterable, Sendable {
-    case all
-    case upcoming
-    case paid
-
-    func includes(_ status: CashflowEntryHistoryStatus) -> Bool {
-        switch (self, status) {
-        case (.all, _), (.upcoming, .upcoming), (.paid, .paid):
-            return true
-        default:
-            return false
-        }
-    }
-}
-
 /// Pure contract shared by the future History UI and its tests.
 /// It does not infer payment from title, category, or amount.
 struct CashflowEntryHistoryStatusPolicy {
@@ -70,42 +55,5 @@ struct CashflowEntryHistoryStatusPolicy {
             }
             return hasMatch ? .paid : .upcoming
         }
-    }
-
-    static func filteredAndSorted(
-        _ items: [Item],
-        filter: CashflowEntryHistoryFilter,
-        completedOccurrences: [CompletedOccurrence] = [],
-        calendar: Calendar = .current
-    ) -> [Item] {
-        items
-            .enumerated()
-            .map { index, item in
-                (
-                    index: index,
-                    item: item,
-                    status: status(
-                        for: item,
-                        completedOccurrences: completedOccurrences,
-                        calendar: calendar
-                    )
-                )
-            }
-            .filter { filter.includes($0.status) }
-            .sorted { lhs, rhs in
-                if lhs.status != rhs.status {
-                    return lhs.status == .upcoming
-                }
-                if lhs.item.date == rhs.item.date {
-                    return lhs.index < rhs.index
-                }
-                switch lhs.status {
-                case .upcoming:
-                    return lhs.item.date < rhs.item.date
-                case .paid:
-                    return lhs.item.date > rhs.item.date
-                }
-            }
-            .map(\.item)
     }
 }

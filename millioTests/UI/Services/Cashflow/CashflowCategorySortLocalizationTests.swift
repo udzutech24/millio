@@ -7,7 +7,7 @@ import Testing
 /// интерфейсе на экране ввода висели «Quick select» и «Activity».
 struct CashflowCategorySortLocalizationTests {
     private let requiredKeys = [
-        "cashflow.category.quick_select",
+        "cashflow.entry.more.section.categories",
         "cashflow.category.reorder.sort",
         "cashflow.category.sort.activity",
         "cashflow.category.sort.amount",
@@ -57,14 +57,14 @@ struct CashflowCategorySortLocalizationTests {
         let russian = Locale(identifier: "ru")
         let chinese = Locale(identifier: "zh-Hans")
 
-        #expect(AppLocalization.string("cashflow.category.quick_select", locale: russian) == "Быстрый выбор")
+        #expect(AppLocalization.string("cashflow.entry.more.section.categories", locale: russian) == "Категории")
         #expect(AppLocalization.string("cashflow.category.sort.activity", locale: russian) == "По активности")
         #expect(AppLocalization.string("cashflow.category.sort.amount", locale: russian) == "По сумме")
         #expect(AppLocalization.string("cashflow.category.sort.manual", locale: russian) == "Вручную")
         #expect(AppLocalization.string("cashflow.category.sort.name", locale: russian) == "По названию")
         #expect(AppLocalization.string("cashflow.category.reorder.sort", locale: russian) == "Сортировка")
 
-        #expect(AppLocalization.string("cashflow.category.quick_select", locale: chinese) == "快速选择")
+        #expect(AppLocalization.string("cashflow.entry.more.section.categories", locale: chinese) == "分类")
         #expect(AppLocalization.string("cashflow.category.sort.activity", locale: chinese) == "按活跃度")
     }
 
