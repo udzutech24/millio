@@ -23,7 +23,7 @@ struct DepositPresentationTests {
                 let snapshot = renderSnapshot(state: state)
                 let view = ScrollView {
                     DepositDetailSection(
-                        presentation: .make(snapshot: snapshot), onAction: { _ in }
+                        presentation: .make(snapshot: snapshot)
                     ).padding()
                 }
                 .frame(width: size.width, height: size.height)

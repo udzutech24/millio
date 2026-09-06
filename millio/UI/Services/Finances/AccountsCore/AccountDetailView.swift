@@ -12,21 +12,12 @@ struct AccountDetailView: View {
 
     @State private var refreshToken = UUID()
     @State private var sheet: ActiveSheet?
-    @State private var showArchiveConfirm = false
     @State private var errorMessage: String?
-    /// Предупреждение при попытке пополнить непополняемый вклад (брифинг Фазы 3, п.3) — НЕ жёсткий
-    /// запрет, alert с подтверждением («да, всё равно» открывает обычную форму дохода).
-    @State private var showTopUpWarning = false
-    @State private var showEarlyCloseConfirm = false
-    /// S8 (риск плана): архивация ненулевого счёта «прячет деньги» на графике без объяснения.
-    /// Вместо прямого архивирования — выбор «перевести остаток» (тогда ступеньки не будет)
-    /// или «закрыть с остатком» (архивировать как есть, осознанно).
-    @State private var showNonZeroBalanceArchiveWarning = false
-    /// Bottom sheet «···» вклада (Коммит 1) — заменяет системный `Menu` у верхнего края.
-    @State private var showDepositActionsSheet = false
-    /// Тот же bottom sheet «···» у кредита в детальном режиме: у него на экране только «Внести
-    /// платёж» и «Досрочно», остальные действия счёта живут в меню (спека §5).
-    @State private var showLoanActionsSheet = false
+    /// Одно состояние на все подтверждения экрана — раньше это были четыре отдельных `.alert`.
+    @State private var confirmation: Confirmation?
+    /// Один bottom sheet «···» на все типы счетов — заменил системные `Menu` у верхнего края
+    /// и три отдельных состояния (вклад / кредит / кредитка).
+    @State private var showActionsSheet = false
     /// График платежей кредита — отдельный экран пушем (Ф5), как «Тип продукта» у вклада.
     @State private var showLoanSchedule = false
     /// Оформление счёта грузится ОДИН раз на открытие экрана, а не из тела `body`: `body`
@@ -56,6 +47,18 @@ struct AccountDetailView: View {
         case fee
         case refund
         case revalue
+
+        var id: Int { hashValue }
+    }
+
+    /// Что именно подтверждает пользователь. `archiveNonZeroBalance` — отдельный случай:
+    /// архивация счёта с остатком «прячет деньги» на графике, поэтому предлагаем сначала
+    /// перевести остаток (S8 плана ядра счетов).
+    private enum Confirmation: Identifiable {
+        case archive
+        case archiveNonZeroBalance
+        case depositTopUp
+        case depositEarlyClose
 
         var id: Int { hashValue }
     }
@@ -306,8 +309,7 @@ struct AccountDetailView: View {
                     if let depositPresentation {
                         DepositDetailSection(
                             presentation: depositPresentation,
-                            taxPresentation: depositTaxPresentation,
-                            onAction: handleDepositAction
+                            taxPresentation: depositTaxPresentation
                         )
                     } else if let loanPresentation {
                         LoanDetailSection(presentation: loanPresentation, onAction: handleLoanAction)
@@ -316,12 +318,7 @@ struct AccountDetailView: View {
                     } else if let snapshot = debitSnapshot {
                         DebitCardDetailSection(account: account, snapshot: snapshot)
                     }
-                    // Кредит в детальном режиме, как и вклад, свои действия рисует сам: генерик-ряд
-                    // дал бы вторую кнопку платежа рядом с «Внести платёж», а это две разные
-                    // операции с одинаковым названием.
-                    if account.kind != .deposit && loanPresentation == nil
-                        && account.archivedAt == nil && account.deletedAt == nil
-                        && (debitSnapshot?.canWrite ?? true) {
+                    if isActionsRowVisible {
                         actionsRow
                     }
                     historySection
@@ -332,40 +329,16 @@ struct AccountDetailView: View {
         .navigationTitle(account.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if let presentation = depositPresentation,
-               !depositOverflowActions(presentation).isEmpty || canEditDepositDetails {
-                ToolbarItem(placement: .topBarTrailing) {
-                    // Коммит 1: bottom sheet вместо `Menu` у верхнего края — тот же список пунктов,
-                    // «Реквизиты счёта»/«Изменить условия» слиты в один (см. `depositActionSheetItems`).
-                    Button {
-                        showDepositActionsSheet = true
-                    } label: {
-                        Image(systemName: "ellipsis")
-                    }
-                    .accessibilityLabel(L("accounts_core.detail.action.edit"))
-                }
-            } else if loanPresentation != nil {
+            // «···» в toolbar остаётся только как запасной вход: пока панель действий на экране,
+            // её кнопка «Ещё» открывает тот же лист, и вторая точка входа была бы дубликатом.
+            if !isActionsRowVisible && !overflowItems.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        showLoanActionsSheet = true
+                        showActionsSheet = true
                     } label: {
                         Image(systemName: "ellipsis")
                     }
-                    .accessibilityLabel(L("accounts_core.detail.action.edit"))
-                }
-            } else if account.productType == .creditCard {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button(L("accounts_core.detail.action.edit"), systemImage: "pencil") {
-                            sheet = .editDetails
-                        }
-                        Button(archiveActionTitle, systemImage: "archivebox", role: .destructive) {
-                            requestArchiveConfirmation()
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                    }
-                    .accessibilityLabel(L("accounts_core.detail.action.edit"))
+                    .accessibilityLabel(L("accounts_core.detail.market.action.more"))
                 }
             }
         }
@@ -384,70 +357,23 @@ struct AccountDetailView: View {
                 ))
             }
         }
-        .sheet(isPresented: $showDepositActionsSheet) {
-            if let presentation = depositPresentation {
-                AccountActionsSheet(
-                    accountName: account.name,
-                    accountTypeTitle: account.kind.localizedTitle,
-                    items: depositActionSheetItems(presentation),
-                    onDismiss: { showDepositActionsSheet = false }
-                )
-            }
-        }
-        .sheet(isPresented: $showLoanActionsSheet) {
+        .sheet(isPresented: $showActionsSheet) {
             AccountActionsSheet(
                 accountName: account.name,
                 accountTypeTitle: account.kind.localizedTitle,
-                items: loanActionSheetItems,
-                onDismiss: { showLoanActionsSheet = false }
+                items: overflowItems,
+                onDismiss: { showActionsSheet = false }
             )
         }
-        .alert(
-            L("accounts_core.detail.delete_confirm.title"),
-            isPresented: $showArchiveConfirm
-        ) {
-            Button(archiveActionTitle, role: .destructive) {
-                archiveAccount()
-            }
-            Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
-        } message: {
-            Text(L("accounts_core.detail.delete_confirm.message"))
-        }
-        .alert(
-            L("accounts_core.detail.deposit.top_up_warning.title"),
-            isPresented: $showTopUpWarning
-        ) {
-            Button(L("accounts_core.detail.deposit.top_up_warning.confirm")) {
-                sheet = .income
-            }
-            Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
-        } message: {
-            Text(L("accounts_core.detail.deposit.top_up_warning.message"))
-        }
-        .alert(
-            L("accounts_core.detail.deposit.early_close_confirm.title"),
-            isPresented: $showEarlyCloseConfirm
-        ) {
-            Button(L("accounts_core.detail.deposit.action.early_close"), role: .destructive) {
-                sheet = .earlyClose
-            }
-            Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
-        } message: {
-            Text(L("accounts_core.detail.deposit.early_close_confirm.message"))
-        }
-        .alert(
-            L("accounts_core.detail.delete_nonzero_confirm.title"),
-            isPresented: $showNonZeroBalanceArchiveWarning
-        ) {
-            Button(L("accounts_core.detail.delete_nonzero_confirm.transfer_first")) {
-                sheet = .transfer
-            }
-            Button(L("accounts_core.detail.delete_nonzero_confirm.close_anyway"), role: .destructive) {
-                archiveAccount()
-            }
-            Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
-        } message: {
-            Text(L("accounts_core.detail.delete_nonzero_confirm.message"))
+        // Подтверждения — тем же листом снизу, что и «···»: последствие действия читается
+        // второй строкой пункта, а не в системном алерте посреди экрана.
+        .sheet(item: $confirmation) { request in
+            AccountActionsSheet(
+                accountName: account.name,
+                accountTypeTitle: confirmationTitle(request),
+                items: confirmationItems(request),
+                onDismiss: { confirmation = nil }
+            )
         }
         .alert(
             L("accounts_core.detail.error.title"),
@@ -843,118 +769,144 @@ struct AccountDetailView: View {
 
     // MARK: - Actions
 
-    @ViewBuilder
+    /// Архивный, удалённый и read-only счёт панель действий не показывает — раньше это же
+    /// условие стояло прямо в `body`.
+    private var isActionsRowVisible: Bool {
+        account.archivedAt == nil && account.deletedAt == nil
+            && (debitSnapshot?.canWrite ?? true)
+            && !actionItems.isEmpty
+    }
+
+    /// Панель действий — одна на все типы счетов (`AccountActionsRow`, круглые 46pt).
+    /// Главные операции стоят в ряд, остальное уходит в «···» → `AccountActionsSheet`:
+    /// у вклада и кредита раньше до любого действия было три тапа.
     private var actionsRow: some View {
-        if account.kind == .marketInvestment {
-            marketActions
-        } else {
-            genericActions
+        AccountActionsRow(items: actionItems)
+    }
+
+    private var actionItems: [AccountActionItem] {
+        switch account.kind {
+        case .marketInvestment: marketActionItems
+        case .deposit: depositActionItems
+        case .loan: loanActionItems
+        default: genericActionItems
         }
     }
 
-    /// Круглые действия (вариант A, утверждён): только «Купить» окрашена акцентом — это основной
-    /// путь пользователя на этом экране. «Продать»/«Дивиденд»/«Ещё» — одинаковый тёмный нейтральный
-    /// круг, чтобы не читаться как три равнозначных предупреждения (был баг: жёлтый/оранжевый).
-    private var marketActions: some View {
-        HStack(spacing: AppSpacing.m) {
-            circularMarketAction(L("accounts_core.detail.market.action.buy"), icon: "plus", prominent: true) {
-                sheet = .buy
-            }
-            circularMarketAction(L("accounts_core.detail.market.action.sell"), icon: "minus") {
-                sheet = .sell
-            }
-            circularMarketAction(L("accounts_core.detail.market.action.dividend"), icon: "banknote") {
-                sheet = .dividend
-            }
-            Menu {
-                Button(L("accounts_core.detail.market.action.fee"), systemImage: "minus.circle") { sheet = .fee }
-                Button(L("accounts_core.detail.action.edit"), systemImage: "pencil") { sheet = .editDetails }
-                Button(archiveActionTitle, systemImage: "archivebox", role: .destructive) { requestArchiveConfirmation() }
-            } label: {
-                circularActionLabel(icon: "ellipsis", prominent: false, title: L("accounts_core.detail.market.action.more"))
-            }
-            .accessibilityLabel(L("accounts_core.detail.action.edit"))
-            Spacer(minLength: 0)
+    /// Акцентом окрашена только «Купить» — это основной путь пользователя на этом экране.
+    /// Остальные круги нейтральные, чтобы не читаться как равнозначные предупреждения.
+    private var marketActionItems: [AccountActionItem] {
+        [
+            .init(title: L("accounts_core.detail.market.action.buy"), icon: "plus", isProminent: true) { sheet = .buy },
+            .init(title: L("accounts_core.detail.market.action.sell"), icon: "minus") { sheet = .sell },
+            .init(title: L("accounts_core.detail.market.action.dividend"), icon: "banknote") { sheet = .dividend },
+            moreActionItem
+        ]
+    }
+
+    private var depositActionItems: [AccountActionItem] {
+        guard let presentation = depositPresentation else { return [] }
+        var items: [AccountActionItem] = []
+        if presentation.actions.contains(.topUp) {
+            items.append(.init(title: DepositDetailAction.topUp.title, icon: DepositDetailAction.topUp.icon, isProminent: true) {
+                sheet = .depositTopUp
+            })
+        }
+        if presentation.actions.contains(.adjustBalance) {
+            items.append(.init(title: DepositDetailAction.adjustBalance.title, icon: DepositDetailAction.adjustBalance.icon) {
+                sheet = .depositAdjustBalance
+            })
+        }
+        if presentation.actions.contains(.withdrawAtMaturity) {
+            items.append(.init(title: DepositDetailAction.withdrawAtMaturity.title, icon: DepositDetailAction.withdrawAtMaturity.icon) {
+                sheet = .depositMaturity
+            })
+        }
+        if !overflowItems.isEmpty { items.append(moreActionItem) }
+        return items
+    }
+
+    /// «Внести платёж» гаснет, пока графика платежей нет, а досрочка — при нулевом остатке:
+    /// то же условие, что раньше выключало pill-кнопки внутри `LoanDetailSection`.
+    private var loanActionItems: [AccountActionItem] {
+        guard let presentation = loanPresentation else { return [] }
+        return [
+            .init(
+                title: L("accounts_core.loan.detail.action.payment"),
+                icon: "creditcard",
+                isProminent: true,
+                isEnabled: presentation.nextPayment != nil
+            ) { sheet = .loanPayment },
+            .init(
+                title: L("accounts_core.loan.detail.action.prepayment"),
+                icon: "bolt.fill",
+                isEnabled: presentation.outstandingPrincipal > 0
+            ) { sheet = .loanPrepayment },
+            .init(title: L("accounts_core.loan.detail.schedule"), icon: "list.bullet.rectangle") { showLoanSchedule = true },
+            moreActionItem
+        ]
+    }
+
+    private var genericActionItems: [AccountActionItem] {
+        if account.kind == .manualAsset {
+            return [
+                .init(title: L("accounts_core.detail.manual_asset.action.revalue"), icon: "arrow.triangle.2.circlepath", isProminent: true) {
+                    sheet = .revalue
+                },
+                moreActionItem
+            ]
+        }
+        return [
+            .init(title: incomeActionTitle, icon: "plus", isProminent: true) { requestTopUpOrOpenIncomeSheet() },
+            .init(title: expenseActionTitle, icon: "minus") { sheet = .expense },
+            .init(title: L("accounts_core.detail.action.transfer"), icon: "arrow.left.arrow.right") { sheet = .transfer },
+            moreActionItem
+        ]
+    }
+
+    private var moreActionItem: AccountActionItem {
+        .init(title: L("accounts_core.detail.market.action.more"), icon: "ellipsis") { showActionsSheet = true }
+    }
+
+    /// Хвост действий, не поместившийся в ряд, — один bottom sheet на все типы счетов.
+    /// Единственная точка «···»: пока ряд на экране, дублирующей кнопки в toolbar нет.
+    private var overflowItems: [AccountActionItem] {
+        switch account.kind {
+        case .marketInvestment:
+            return [
+                .init(title: L("accounts_core.detail.market.action.fee"), icon: "minus.circle") { sheet = .fee },
+                .init(title: L("accounts_core.detail.action.edit"), icon: "pencil") { sheet = .editDetails },
+                .init(title: archiveActionTitle, icon: "archivebox", isDestructive: true) { requestArchiveConfirmation() }
+            ]
+        case .deposit:
+            return depositPresentation.map(depositActionSheetItems) ?? []
+        case .loan:
+            return loanActionSheetItems
+        default:
+            return genericOverflowItems
         }
     }
 
-    private func circularMarketAction(_ title: String, icon: String, prominent: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            circularActionLabel(icon: icon, prominent: prominent, title: title)
+    private var genericOverflowItems: [AccountActionItem] {
+        var items: [AccountActionItem] = []
+        if isDebitProduct {
+            items.append(.init(title: L("debit_card.action.fee"), icon: "banknote") { sheet = .fee })
+            items.append(.init(title: L("debit_card.action.refund"), icon: "arrow.uturn.backward.circle") { sheet = .refund })
         }
-        .buttonStyle(.plain)
+        if account.kind != .manualAsset {
+            items.append(.init(title: adjustBalanceActionTitle, icon: "slider.horizontal.3") { sheet = .adjustBalance })
+        }
+        items.append(.init(title: L("accounts_core.detail.action.edit"), icon: "pencil") { sheet = .editDetails })
+        items.append(.init(title: archiveActionTitle, icon: "archivebox.fill", isDestructive: true) { requestArchiveConfirmation() })
+        return items
     }
 
-    /// Круг 46pt + подпись 11,5pt под ним. `#1C1C1E` — тот же ad-hoc hex, что уже использует этот
-    /// экран для рыночных акцентов (`Color(hex: "FFD166")` было здесь же) — токена под точный
-    /// нейтральный круг из мока в `AppColors` нет.
-    private func circularActionLabel(icon: String, prominent: Bool, title: String? = nil) -> some View {
-        VStack(spacing: AppSpacing.xs) {
-            Image(systemName: icon)
-                .font(.millioBodySemibold)
-                .foregroundStyle(prominent ? Color.white : AppColors.textPrimary)
-                .frame(width: 46, height: 46)
-                .background(Circle().fill(prominent ? AppColors.positiveColor : Color(hex: "1C1C1E")))
-            if let title {
-                Text(title)
-                    .font(.millioCaption2Medium)
-                    .foregroundStyle(AppColors.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-        }
-    }
-
-    private var genericActions: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: AppSpacing.s) {
-                switch account.kind {
-                case .manualAsset:
-                    actionButton(L("accounts_core.detail.manual_asset.action.revalue"), icon: "arrow.triangle.2.circlepath") {
-                        sheet = .revalue
-                    }
-                default:
-                    actionButton(incomeActionTitle, icon: "plus.circle.fill") {
-                        requestTopUpOrOpenIncomeSheet()
-                    }
-                    actionButton(expenseActionTitle, icon: "minus.circle.fill") {
-                        sheet = .expense
-                    }
-                    if isDebitProduct {
-                        actionButton(L("debit_card.action.fee"), icon: "banknote") {
-                            sheet = .fee
-                        }
-                        actionButton(L("debit_card.action.refund"), icon: "arrow.uturn.backward.circle") {
-                            sheet = .refund
-                        }
-                    }
-                    actionButton(account.productType == .creditCard ? "Изменить сумму долга" : L("accounts_core.detail.action.adjust_balance"), icon: "slider.horizontal.3") {
-                        sheet = .adjustBalance
-                    }
-                    actionButton(L("accounts_core.detail.action.transfer"), icon: "arrow.left.arrow.right") {
-                        sheet = .transfer
-                    }
-                    if account.kind == .loan {
-                        actionButton(L("accounts_core.detail.loan.action.terms"), icon: "doc.text") {
-                            sheet = .loanTerms
-                        }
-                    }
-                    if account.kind == .deposit, account.depositMeta?.allowsEarlyClose == true {
-                        actionButton(L("accounts_core.detail.deposit.action.early_close"), icon: "xmark.circle.fill", isDestructive: true) {
-                            showEarlyCloseConfirm = true
-                        }
-                    }
-                }
-                if account.productType != .creditCard {
-                    actionButton(L("accounts_core.detail.action.edit"), icon: "pencil") {
-                        sheet = .editDetails
-                    }
-                    actionButton(archiveActionTitle, icon: "archivebox.fill", isDestructive: true) {
-                        requestArchiveConfirmation()
-                    }
-                }
-            }
-        }
+    /// У кредитки «изменить баланс» = поправить сумму долга: слово «баланс» на экране
+    /// обязательства читается как остаток денег, а не как задолженность.
+    private var adjustBalanceActionTitle: String {
+        account.productType == .creditCard
+            ? L("accounts_core.detail.action.adjust_debt")
+            : L("accounts_core.detail.action.adjust_balance")
     }
 
     private var archiveActionTitle: String {
@@ -964,57 +916,70 @@ struct AccountDetailView: View {
     }
 
     /// Ненулевой баланс (S8): сначала показываем выбор «перевести остаток / закрыть как есть»,
-    /// вместо простого confirm — обычный `showArchiveConfirm` остаётся для счетов с нулём.
+    /// вместо простого confirm — обычное подтверждение остаётся для счетов с нулём.
     private func requestArchiveConfirmation() {
-        if AccountArchivePolicy.shouldWarnBeforeArchiving(balance: balanceToday) {
-            showNonZeroBalanceArchiveWarning = true
-        } else {
-            showArchiveConfirm = true
-        }
+        confirmation = AccountArchivePolicy.shouldWarnBeforeArchiving(balance: balanceToday)
+            ? .archiveNonZeroBalance
+            : .archive
     }
 
     /// Непополняемый вклад (Фаза 3, брифинг п.3): попытка пополнения — предупреждение с
     /// подтверждением, НЕ жёсткий запрет («да, всё равно» открывает обычную форму дохода).
     private func requestTopUpOrOpenIncomeSheet() {
         if account.kind == .deposit, account.depositMeta?.allowsTopUp == false {
-            showTopUpWarning = true
+            confirmation = .depositTopUp
         } else {
             sheet = .income
         }
     }
 
-    private func actionButton(
-        _ title: String,
-        icon: String,
-        isDestructive: Bool = false,
-        tint: Color? = nil,
-        isProminent: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        let foreground = isDestructive ? AppColors.error : (isProminent ? Color.white : (tint ?? AppColors.textPrimary))
-        let background = isProminent
-            ? (tint ?? AppColors.brandPrimary)
-            : (tint ?? Color.white).opacity(tint == nil ? 0.2 : 0.14)
-        return Button(action: action) {
-            VStack(spacing: AppSpacing.xs) {
-                Image(systemName: icon)
-                    .font(.millioHeadline)
-                Text(title)
-                    .font(.millioCaptionRegular)
-            }
-            .foregroundStyle(foreground)
-            .padding(.horizontal, AppSpacing.m)
-            .padding(.vertical, AppSpacing.s)
-            .background(
-                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                    .fill(background)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppSpacing.m, style: .continuous)
-                    .stroke(isProminent ? Color.white.opacity(0.14) : (tint ?? Color.clear).opacity(0.28), lineWidth: 1)
-            )
+    // MARK: - Подтверждения
+
+    private func confirmationTitle(_ request: Confirmation) -> String {
+        switch request {
+        case .archive: L("accounts_core.detail.delete_confirm.title")
+        case .archiveNonZeroBalance: L("accounts_core.detail.delete_nonzero_confirm.title")
+        case .depositTopUp: L("accounts_core.detail.deposit.top_up_warning.title")
+        case .depositEarlyClose: L("accounts_core.detail.deposit.early_close_confirm.title")
         }
-        .buttonStyle(.plain)
+    }
+
+    private func confirmationItems(_ request: Confirmation) -> [AccountActionItem] {
+        switch request {
+        case .archive:
+            return [.init(
+                title: archiveActionTitle,
+                subtitle: L("accounts_core.detail.delete_confirm.message"),
+                icon: "archivebox",
+                isDestructive: true
+            ) { archiveAccount() }]
+        case .archiveNonZeroBalance:
+            return [
+                .init(
+                    title: L("accounts_core.detail.delete_nonzero_confirm.transfer_first"),
+                    subtitle: L("accounts_core.detail.delete_nonzero_confirm.message"),
+                    icon: "arrow.left.arrow.right"
+                ) { sheet = .transfer },
+                .init(
+                    title: L("accounts_core.detail.delete_nonzero_confirm.close_anyway"),
+                    icon: "archivebox",
+                    isDestructive: true
+                ) { archiveAccount() }
+            ]
+        case .depositTopUp:
+            return [.init(
+                title: L("accounts_core.detail.deposit.top_up_warning.confirm"),
+                subtitle: L("accounts_core.detail.deposit.top_up_warning.message"),
+                icon: "plus"
+            ) { sheet = .income }]
+        case .depositEarlyClose:
+            return [.init(
+                title: L("accounts_core.detail.deposit.action.early_close"),
+                subtitle: L("accounts_core.detail.deposit.early_close_confirm.message"),
+                icon: "xmark.circle",
+                isDestructive: true
+            ) { sheet = .earlyClose }]
+        }
     }
 
     // MARK: - Прогноз вклада «грязными/чистыми» (Фаза 3)
@@ -1063,32 +1028,55 @@ struct AccountDetailView: View {
         }
     }
 
-    private func formattedAmount(_ amount: Decimal) -> String {
+    /// Форматтеры живут статически: `NumberFormatter()` в теле метода пересоздавался на КАЖДУЮ
+    /// строку истории (сотни строк на пересчёт body). Локаль присваивается при каждом вызове —
+    /// иначе смена языка в приложении не доехала бы до уже созданного форматтера.
+    private static let amountFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.usesGroupingSeparator = true
         formatter.groupingSeparator = " "
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 2
+        return formatter
+    }()
+
+    private static let signedAmountFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = true
+        formatter.groupingSeparator = " "
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        formatter.positivePrefix = "+"
+        return formatter
+    }()
+
+    private func formattedAmount(_ amount: Decimal) -> String {
+        let formatter = Self.amountFormatter
+        formatter.locale = AppLocalization.currentAppLocale
         return formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "0"
     }
 
     // MARK: - History
 
+    /// `sortedEvents` — фильтрация + сортировка всей истории счёта; берём срез ОДИН раз на
+    /// пересчёт секции, а не по разу на заголовок, счётчик, список и разделители.
     private var historySection: some View {
-        AccountDetailPlaqueSection(
+        let events = sortedEvents
+        return AccountDetailPlaqueSection(
             title: L("accounts_core.detail.history_title"),
-            caption: sortedEvents.isEmpty ? nil : L("cashflow.month_workspace.transaction_count \(sortedEvents.count)")
+            caption: events.isEmpty ? nil : L("cashflow.month_workspace.transaction_count \(events.count)")
         ) {
-            if sortedEvents.isEmpty {
+            if events.isEmpty {
                 Text(L("accounts_core.detail.no_events"))
                     .font(.millioCalloutRegular)
                     .foregroundStyle(AppColors.textTertiary)
             } else {
                 VStack(spacing: 0) {
-                    ForEach(sortedEvents, id: \.id) { event in
+                    ForEach(events, id: \.id) { event in
                         eventRow(event)
-                        if event.id != sortedEvents.last?.id {
+                        if event.id != events.last?.id {
                             Divider().background(Color.white.opacity(0.08))
                         }
                     }
@@ -1137,13 +1125,8 @@ struct AccountDetailView: View {
     }
 
     private func signedAmountText(_ amount: Decimal, type: AccountEventType) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.usesGroupingSeparator = true
-        formatter.groupingSeparator = " "
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-        formatter.positivePrefix = "+"
+        let formatter = Self.signedAmountFormatter
+        formatter.locale = AppLocalization.currentAppLocale
         return formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "0"
     }
 
@@ -1216,7 +1199,7 @@ struct AccountDetailView: View {
             let debt = max(0, creditLimit - balanceToday)
             AccountAdjustBalanceSheet(
                 currentBalance: isCreditCard ? debt : balanceToday,
-                titleOverride: isCreditCard ? "Изменить сумму долга" : nil,
+                titleOverride: isCreditCard ? L("accounts_core.detail.action.adjust_debt") : nil,
                 onSave: { newValue in
                     perform {
                         if isDebitProduct {
@@ -1323,7 +1306,7 @@ struct AccountDetailView: View {
                         }
                     },
                     onProductTransitionCommitted: productTransitionCommitted,
-                    onRequestEarlyClose: { showEarlyCloseConfirm = true },
+                    onRequestEarlyClose: { confirmation = .depositEarlyClose },
                     onRequestDelete: { requestArchiveConfirmation() }
                 )
             } else if account.productType == .creditCard {
@@ -1610,17 +1593,6 @@ struct AccountDetailView: View {
         }
     }
 
-    private func handleDepositAction(_ action: DepositDetailAction) {
-        switch action {
-        case .topUp: sheet = .depositTopUp
-        case .adjustBalance: sheet = .depositAdjustBalance
-        case .editTerms: sheet = .depositTerms
-        case .earlyClose: showEarlyCloseConfirm = true
-        case .withdrawAtMaturity: sheet = .depositMaturity
-        case .archive: requestArchiveConfirmation()
-        }
-    }
-
     private func handleLoanAction(_ action: LoanDetailAction) {
         switch action {
         case .payment: sheet = .loanPayment
@@ -1661,8 +1633,8 @@ struct AccountDetailView: View {
 
     /// Пункты «···» кредита. «Внести платёж» сюда не дублируем — кнопка уже на экране
     /// (`LoanDetailSection`), в меню только то, чего на экране нет.
-    private var loanActionSheetItems: [AccountActionSheetItem] {
-        var items: [AccountActionSheetItem] = [
+    private var loanActionSheetItems: [AccountActionItem] {
+        var items: [AccountActionItem] = [
             .init(
                 title: L("accounts_core.detail.loan.action.terms"),
                 icon: "doc.text",
@@ -1694,16 +1666,12 @@ struct AccountDetailView: View {
         account.archivedAt == nil && account.deletedAt == nil
     }
 
-    private func depositOverflowActions(_ presentation: DepositDetailPresentation) -> [DepositDetailAction] {
-        presentation.actions.filter { $0 != .topUp && $0 != .adjustBalance }
-    }
-
     /// Пункты bottom-sheet меню вклада (Коммит 1, `AccountActionsSheet`). «Реквизиты счёта» и
     /// «Изменить условия» слиты в один пункт — экран `.editDetails` для вклада сам показывает
     /// условия (Коммит 2). «Пополнить» сюда не добавляем — кнопка уже есть на экране
     /// (`DepositDetailSection.actions`).
-    private func depositActionSheetItems(_ presentation: DepositDetailPresentation) -> [AccountActionSheetItem] {
-        var items: [AccountActionSheetItem] = []
+    private func depositActionSheetItems(_ presentation: DepositDetailPresentation) -> [AccountActionItem] {
+        var items: [AccountActionItem] = []
         if canEditDepositDetails {
             items.append(.init(
                 title: L("accounts_core.detail.action.edit_details"),
@@ -1718,7 +1686,7 @@ struct AccountDetailView: View {
                 // штраф — доля от УЖЕ начисленных процентов, будущие начисления просто теряются.
                 subtitle: L("accounts_core.detail.deposit.early_close_confirm.message"),
                 icon: "xmark.circle",
-                action: { showEarlyCloseConfirm = true }
+                action: { confirmation = .depositEarlyClose }
             ))
         }
         if presentation.actions.contains(.archive) {

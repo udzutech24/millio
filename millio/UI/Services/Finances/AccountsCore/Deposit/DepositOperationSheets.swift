@@ -47,6 +47,7 @@ struct DepositTopUpSheet: View {
                 }
             }
         }
+        .accountSheetChrome()
     }
 }
 
@@ -100,6 +101,7 @@ struct DepositCloseSheet: View {
                 }
             }
         }
+        .accountSheetChrome()
     }
 
     private func row(_ title: String, _ value: Decimal) -> some View {
@@ -168,6 +170,7 @@ struct DepositBalanceAdjustmentSheet: View {
                 }
             }
         }
+        .accountSheetChrome()
     }
 }
 
@@ -304,6 +307,7 @@ struct DepositTermsEditSheet: View {
             }
             .safeAreaInset(edge: .bottom) { saveBar }
         }
+        .accountSheetChrome()
     }
 
     // MARK: - Секции

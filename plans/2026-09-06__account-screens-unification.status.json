@@ -1,0 +1,16 @@
+{
+  "planFile": "2026-09-06__account-screens-unification.md",
+  "title": "Экраны счетов: стиль + декомпозиция + типы",
+  "updated": "2026-09-06T20:00:00+03:00",
+  "phases": [
+    { "name": "Ф0 Единый стиль", "status": "in_progress", "note": "код готов (7 коммитов, ветка feature/account-screens-unify-style, 80bdd1e..5c8bf6b); билд зелёный, тесты 2710/23 = baseline; ждём device-проверку владельца" },
+    { "name": "Ф1 Декомпозиция AccountDetailView/FinanceAddAccountView", "status": "pending" },
+    { "name": "Ф2 Наличные (пресет + DetailSection)", "status": "pending" },
+    { "name": "Ф3 Кредит Ф9b (UI по макету)", "status": "pending", "note": "ответы владельца получены 06.09" },
+    { "name": "Ф4 Дебетовая + банк. счёт", "status": "pending", "note": "ждём скрины для макета" },
+    { "name": "Ф5 Долг", "status": "pending" },
+    { "name": "Ф6 Недвижимость/бизнес/авто/другое", "status": "pending" }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}

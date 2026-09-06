@@ -194,11 +194,9 @@ struct DepositHeroContent: View {
 struct DepositDetailSection: View {
     let presentation: DepositDetailPresentation
     var taxPresentation: DepositTaxPresentation? = nil
-    let onAction: (DepositDetailAction) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.l) {
-            if !presentation.actions.isEmpty { actions }
             if presentation.state == .incomplete { incompleteNotice }
             if let taxPresentation { taxSection(taxPresentation) }
         }
@@ -235,50 +233,18 @@ struct DepositDetailSection: View {
         .accessibilityElement(children: .combine)
     }
 
-    // MARK: - Действия
-
-    private var actions: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: AppSpacing.s)], spacing: AppSpacing.s) {
-            ForEach(primaryActions, id: \.self) { action in
-                Button { onAction(action) } label: {
-                    Label(actionTitle(action), systemImage: actionIcon(action))
-                        .font(.millioBodySemibold)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                        .padding(.horizontal, AppSpacing.s)
-                        .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(actionBackground(action)))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(actionForeground(action))
-            }
-        }
-    }
-
-    /// «Пополнить» — заливная акцентная (это основной путь пользователя на этом экране), «Изменить
-    /// баланс» — тише (контурная логика через полупрозрачную заливку), чтобы кнопки не читались как
-    /// два равнозначных действия.
-    private func actionBackground(_ action: DepositDetailAction) -> Color {
-        action == .topUp ? AppColors.positiveColor : AppColors.iconBackground
-    }
-
-    private func actionForeground(_ action: DepositDetailAction) -> Color {
-        if action == .earlyClose || action == .archive { return AppColors.error }
-        return action == .topUp ? .white : AppColors.textPrimary
-    }
-
-    /// Frequent money operations stay discoverable. Lifecycle and destructive actions live in the
-    /// detail toolbar, where `AccountDetailView` preserves their confirmations.
-    private var primaryActions: [DepositDetailAction] {
-        presentation.actions.filter { $0 == .topUp || $0 == .adjustBalance }
-    }
-
     private var incompleteNotice: some View {
         Label(L("accounts_core.deposit.detail.incomplete"), systemImage: "exclamationmark.triangle.fill")
             .font(.millioCalloutRegular)
             .foregroundStyle(AppColors.warning)
     }
+}
 
-    private func actionTitle(_ action: DepositDetailAction) -> String {
-        switch action {
+/// Подпись и иконка действия вклада живут у самого действия: их читают и панель
+/// (`AccountActionsRow`), и «···» (`AccountActionsSheet`) — раньше это был приватный switch секции.
+extension DepositDetailAction {
+    var title: String {
+        switch self {
         case .topUp: L("accounts_core.deposit.action.top_up")
         case .adjustBalance: L("accounts_core.detail.action.adjust_balance")
         case .editTerms: L("accounts_core.deposit.action.edit_terms")
@@ -288,14 +254,14 @@ struct DepositDetailSection: View {
         }
     }
 
-    private func actionIcon(_ action: DepositDetailAction) -> String {
-        switch action {
-        case .topUp: "plus.circle.fill"
+    var icon: String {
+        switch self {
+        case .topUp: "plus"
         case .adjustBalance: "slider.horizontal.3"
         case .editTerms: "pencil"
-        case .earlyClose: "xmark.circle.fill"
-        case .withdrawAtMaturity: "arrow.right.circle.fill"
-        case .archive: "archivebox.fill"
+        case .earlyClose: "xmark.circle"
+        case .withdrawAtMaturity: "arrow.right.circle"
+        case .archive: "archivebox"
         }
     }
 }

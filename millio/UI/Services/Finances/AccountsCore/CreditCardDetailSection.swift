@@ -44,35 +44,37 @@ struct CreditCardDetailSection: View {
         // над секцией — здесь остались только метрики, специфичные для кредитки.
         VStack(alignment: .leading, spacing: AppSpacing.m) {
             if let overpayment = snapshot?.overpayment, overpayment > 0 {
-                Label("Overpayment \(displayAmount(overpayment))", systemImage: "checkmark.circle.fill")
+                Label(String(format: L("credit_card.detail.overpayment_format"), displayAmount(overpayment)), systemImage: "checkmark.circle.fill")
                     .font(.millioCalloutRegular).foregroundStyle(AppColors.toggleOnGreen)
             }
 
             if let snapshot {
                 VStack(alignment: .leading, spacing: AppSpacing.s) {
-                    adaptiveRow("Available limit", value: displayAmount(snapshot.availableLimit))
-                    adaptiveRow("Credit limit", value: displayAmount(snapshot.creditLimit))
-                    adaptiveRow("Utilization", value: percent(snapshot.utilization))
+                    adaptiveRow(L("credit_card.detail.available_limit"), value: displayAmount(snapshot.availableLimit))
+                    adaptiveRow(L("credit_card.detail.credit_limit"), value: displayAmount(snapshot.creditLimit))
+                    adaptiveRow(L("credit_card.detail.utilization"), value: percent(snapshot.utilization))
                     ProgressView(value: min(max(Double(truncating: snapshot.utilization as NSNumber), 0), 1))
                         .tint(snapshot.isOverLimit ? AppColors.error : AppColors.brandPrimary)
-                        .accessibilityLabel("Credit utilization")
+                        .accessibilityLabel(L("credit_card.detail.utilization.accessibility"))
                         .accessibilityValue(percent(snapshot.utilization))
-                    if snapshot.accruedInterest > 0 { adaptiveRow("Accrued interest", value: displayAmount(snapshot.accruedInterest)) }
-                    if snapshot.accruedFees > 0 { adaptiveRow("Fees", value: displayAmount(snapshot.accruedFees)) }
+                    if snapshot.accruedInterest > 0 { adaptiveRow(L("credit_card.detail.accrued_interest"), value: displayAmount(snapshot.accruedInterest)) }
+                    if snapshot.accruedFees > 0 { adaptiveRow(L("credit_card.detail.accrued_fees"), value: displayAmount(snapshot.accruedFees)) }
                 }
                 .padding(AppSpacing.m)
                 .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.iconBackground))
             } else {
-                ContentUnavailableView("Credit terms unavailable", systemImage: "creditcard.trianglebadge.exclamationmark")
+                ContentUnavailableView(L("credit_card.detail.terms_unavailable"), systemImage: "creditcard.trianglebadge.exclamationmark")
             }
 
             if let paymentStatus {
                 VStack(alignment: .leading, spacing: AppSpacing.s) {
-                    Label(paymentStatus.isOverdue ? "Платёж просрочен" : "Ближайший платёж", systemImage: paymentStatus.isOverdue ? "exclamationmark.triangle.fill" : "calendar.badge.clock")
+                    Label(paymentStatus.isOverdue ? L("credit_card.detail.payment_overdue") : L("credit_card.detail.payment_next"), systemImage: paymentStatus.isOverdue ? "exclamationmark.triangle.fill" : "calendar.badge.clock")
                         .font(.millioHeadline)
                         .foregroundStyle(paymentStatus.isOverdue ? AppColors.error : AppColors.textPrimary)
-                    adaptiveRow("Дата платежа", value: paymentStatus.dueDate.formatted(date: .long, time: .omitted))
-                    Text(paymentStatus.isOverdue ? "Просрочено на \(-paymentStatus.daysRemaining) дн." : "Осталось \(paymentStatus.daysRemaining) дн.")
+                    adaptiveRow(L("credit_card.detail.payment_date"), value: paymentStatus.dueDate.formatted(date: .long, time: .omitted))
+                    Text(paymentStatus.isOverdue
+                        ? String(format: L("credit_card.detail.payment_overdue_days_format"), -paymentStatus.daysRemaining)
+                        : String(format: L("credit_card.detail.payment_days_left_format"), paymentStatus.daysRemaining))
                         .font(.millioCalloutRegular).foregroundStyle(AppColors.textSecondary)
                     if canExportPaymentToCalendar {
                         Button {
@@ -102,23 +104,27 @@ struct CreditCardDetailSection: View {
                 .padding(AppSpacing.m)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppSpacing.m))
             } else {
-                ContentUnavailableView("Дата платежа не настроена", systemImage: "calendar.badge.exclamationmark")
+                ContentUnavailableView(L("credit_card.detail.payment_date_not_set"), systemImage: "calendar.badge.exclamationmark")
             }
         }
-        .confirmationDialog(
-            L("credit_card.calendar_export.confirmation.title", defaultValue: "Add payment to Calendar?"),
-            isPresented: $showCalendarExportConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(L("credit_card.calendar_export.confirmation.action", defaultValue: "Continue")) {
-                beginCalendarExport()
-            }
-            Button(L("cashflow.common.cancel"), role: .cancel) {}
-        } message: {
-            Text(L(
-                "credit_card.calendar_export.confirmation.message",
-                defaultValue: "Millio will open Apple Calendar. Later changes to this payment will not update the exported event."
-            ))
+        // Подтверждение — тот же `AccountActionsSheet`, что и «···» счёта: в зоне счетов
+        // системных диалогов не осталось, всё подтверждается листом снизу.
+        .sheet(isPresented: $showCalendarExportConfirmation) {
+            AccountActionsSheet(
+                accountName: account.name,
+                accountTypeTitle: L("credit_card.calendar_export.confirmation.title", defaultValue: "Add payment to Calendar?"),
+                items: [
+                    AccountActionItem(
+                        title: L("credit_card.calendar_export.confirmation.action", defaultValue: "Continue"),
+                        subtitle: L(
+                            "credit_card.calendar_export.confirmation.message",
+                            defaultValue: "Millio will open Apple Calendar. Later changes to this payment will not update the exported event."
+                        ),
+                        icon: "calendar.badge.plus"
+                    ) { beginCalendarExport() }
+                ],
+                onDismiss: { showCalendarExportConfirmation = false }
+            )
         }
         .sheet(item: $calendarExportPayload) { payload in
             AppleCalendarEventEditorSheet(eventStore: calendarEventStore, payload: payload) { action in
@@ -182,17 +188,30 @@ struct CreditCardDetailSection: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func displayAmount(_ value: Decimal) -> String {
+    /// Статические форматтеры: обе функции зовутся по нескольку раз на каждый пересчёт body.
+    private static let amountFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 2
+        return formatter
+    }()
+
+    private static let percentFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .percent
+        formatter.maximumFractionDigits = 1
+        return formatter
+    }()
+
+    private func displayAmount(_ value: Decimal) -> String {
+        let formatter = Self.amountFormatter
+        formatter.locale = AppLocalization.currentAppLocale
         return "\(formatter.string(from: value as NSNumber) ?? "0") \(account.currency)"
     }
 
     private func percent(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .percent
-        formatter.maximumFractionDigits = 1
+        let formatter = Self.percentFormatter
+        formatter.locale = AppLocalization.currentAppLocale
         return formatter.string(from: value as NSNumber) ?? "0%"
     }
 }

@@ -68,7 +68,7 @@ struct DebitCardRefundSheet: View {
     @State private var note = ""
 
     private var amount: Decimal? {
-        Decimal(string: amountText.replacingOccurrences(of: ",", with: ".")).flatMap { $0 > 0 ? $0 : nil }
+        Decimal(string: AmountTextField.canonical(from: amountText)).flatMap { $0 > 0 ? $0 : nil }
     }
 
     var body: some View {
@@ -84,8 +84,10 @@ struct DebitCardRefundSheet: View {
                                 .tag(expense.sourceTransactionID)
                         }
                     }
-                    TextField(L("accounts_core.detail.sheet.amount_placeholder"), text: $amountText)
-                        .keyboardType(.decimalPad)
+                    AmountTextField(
+                        placeholder: L("accounts_core.detail.sheet.amount_placeholder"),
+                        value: $amountText
+                    )
                     DatePicker(L("accounts_core.detail.sheet.date_label"), selection: $date, displayedComponents: .date)
                     TextField(L("accounts_core.detail.sheet.note_placeholder"), text: $note)
                 }
@@ -105,6 +107,7 @@ struct DebitCardRefundSheet: View {
                 }
             }
         }
+        .accountSheetChrome()
         .onAppear { selectedOperationID = selectedOperationID ?? expenses.first?.sourceTransactionID }
     }
 }

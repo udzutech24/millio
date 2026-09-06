@@ -17,7 +17,6 @@ struct LoanDetailSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.l) {
             termsChips
-            actions
             breakdown
         }
         .accessibilityElement(children: .contain)
@@ -58,48 +57,6 @@ struct LoanDetailSection: View {
         case .annuity: L("accounts_core.loan.detail.schedule_type.annuity")
         case .differentiated: L("accounts_core.loan.detail.schedule_type.differentiated")
         }
-    }
-
-    // MARK: - Кнопки
-
-    private var actions: some View {
-        HStack(spacing: AppSpacing.s) {
-            Button { onAction(.payment) } label: {
-                actionLabel(
-                    L("accounts_core.loan.detail.action.payment"),
-                    foreground: LoanScreenStyle.accentContrast,
-                    background: LoanScreenStyle.accent
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(presentation.nextPayment == nil)
-            .opacity(presentation.nextPayment == nil ? 0.4 : 1)
-
-            // Досрочка доступна, пока долг не погашен: лист сам решит, досрочное это погашение
-            // или недоплата, — но при нулевом остатке вносить уже нечего.
-            Button { onAction(.prepayment) } label: {
-                actionLabel(
-                    L("accounts_core.loan.detail.action.prepayment"),
-                    foreground: AppColors.textPrimary,
-                    background: LoanScreenStyle.quietFill
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(presentation.outstandingPrincipal <= 0)
-            .opacity(presentation.outstandingPrincipal <= 0 ? 0.4 : 1)
-        }
-    }
-
-    private func actionLabel(_ title: String, foreground: Color, background: Color) -> some View {
-        Text(title)
-            .font(.millioBodySemibold)
-            .foregroundStyle(foreground)
-            .frame(maxWidth: .infinity, minHeight: LoanScreenStyle.buttonHeight)
-            .padding(.horizontal, AppSpacing.s)
-            .background(
-                RoundedRectangle(cornerRadius: LoanScreenStyle.buttonCornerRadius, style: .continuous)
-                    .fill(background)
-            )
     }
 
     // MARK: - Разбивка платежа
