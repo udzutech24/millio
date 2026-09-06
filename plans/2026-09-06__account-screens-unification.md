@@ -83,6 +83,37 @@
 **Осталось по Ф0:** device-скрины трёх переработанных типов (вклад, кредит, кредитка) — без владельца
 не закрывается.
 
+### Ф1 Декомпозиция — `[x]` РЕАЛИЗОВАН (ждёт мержа)
+Ветка `feature/account-screens-decompose`, 2 коммита `a3d5ff9`, `98cd0fe`. Не смержено, не запушено.
+
+- `[x]` **Ф1.1** `a3d5ff9` — `AccountDetailView` 1789 → 294 строки каркаса (состояние, `ActiveSheet`/
+  `Confirmation`, `body`) + 9 файлов рядом: Header 130 · Liability 77 · Deposit 122 · Market 167 ·
+  Actions 220 · Forecast 55 · History 93 · Support 38 (общие форматтеры) · `View+Sheets` 640.
+- `[x]` **Ф1.2** `98cd0fe` — `FinanceAddAccountView` 1650 → 406 строк каркаса + 6 файлов:
+  FormSections 500 · CoreCreate 379 · Validation 142 · Entitlements 135 · RealEstate 67 · Statement 59.
+
+**Что пришлось изменить сверх перемещения** (иначе не компилируется): у членов обоих типов снят
+`private` — в Swift он не проходит границу файла, а тип теперь живёт в расширениях. По той же причине
+`InvestmentCategory.isMarketTickerCategory` перестал быть `private extension`. Логика не менялась.
+Отдельного `AccountDetailDepositSection`-дубля не возникло: существующий `Deposit/DepositDetailSection.swift`
+— это View, а вынесенный файл — вычисления вклада для экрана.
+
+**Гейт:** `** BUILD SUCCEEDED **`; `millioTests` 2705 passed / 28 failed. Passed внутри baseline
+(2690–2720). Красных больше верхней границы baseline (23), но набор имён плавает от прогона к прогону
+(25 в первом, 28 во втором, пересечение неполное) — изоляционные флаки параллельных клонов: 24 из 25
+красных первого прогона проходят при изолированном перезапуске. Единственный стабильно красный —
+`QuickSetupApplierTests.testApplyCreatesSelectedGroupsAndAssignsProductsToThem` — воспроизведён на
+`develop`, к Ф1 отношения не имеет.
+
+**Найдено по пути (не чинил, Ф1 — только перенос):**
+1. `AccountDetailForecastSection.depositForecastSection` — мёртвый код: в `body` не вызывается
+   (одноимённый метод `FinanceDynamicsView:1600` — другой). Кандидат на снос в Ф2.
+2. `.dd-*/` (локальные derivedDataPath) не были в `.gitignore` — добавлены.
+
+**Инцидент:** параллельная сессия сделала `git merge feature/entry-screen-simplify` на моей ветке
+(reflog `HEAD@{4}`), приняв её за `develop`. Ветка перебазирована на `develop` — чужие 9 коммитов
+остались в `feature/entry-screen-simplify`, ничего не потеряно, но их мерж в `develop` так и не сделан.
+
 ## Открытые вопросы
 1. Скрины текущих экранов дебетовой карты и наличных — для макетов Ф2/Ф4 (владелец пришлёт).
 2. `AccountProductTransitionSection:132` — `confirmationDialog` внутри формы правки. Намеренно не тронут
