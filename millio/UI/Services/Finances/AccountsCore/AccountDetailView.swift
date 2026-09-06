@@ -12,16 +12,9 @@ struct AccountDetailView: View {
 
     @State private var refreshToken = UUID()
     @State private var sheet: ActiveSheet?
-    @State private var showArchiveConfirm = false
     @State private var errorMessage: String?
-    /// Предупреждение при попытке пополнить непополняемый вклад (брифинг Фазы 3, п.3) — НЕ жёсткий
-    /// запрет, alert с подтверждением («да, всё равно» открывает обычную форму дохода).
-    @State private var showTopUpWarning = false
-    @State private var showEarlyCloseConfirm = false
-    /// S8 (риск плана): архивация ненулевого счёта «прячет деньги» на графике без объяснения.
-    /// Вместо прямого архивирования — выбор «перевести остаток» (тогда ступеньки не будет)
-    /// или «закрыть с остатком» (архивировать как есть, осознанно).
-    @State private var showNonZeroBalanceArchiveWarning = false
+    /// Одно состояние на все подтверждения экрана — раньше это были четыре отдельных `.alert`.
+    @State private var confirmation: Confirmation?
     /// Один bottom sheet «···» на все типы счетов — заменил системные `Menu` у верхнего края
     /// и три отдельных состояния (вклад / кредит / кредитка).
     @State private var showActionsSheet = false
@@ -54,6 +47,18 @@ struct AccountDetailView: View {
         case fee
         case refund
         case revalue
+
+        var id: Int { hashValue }
+    }
+
+    /// Что именно подтверждает пользователь. `archiveNonZeroBalance` — отдельный случай:
+    /// архивация счёта с остатком «прячет деньги» на графике, поэтому предлагаем сначала
+    /// перевести остаток (S8 плана ядра счетов).
+    private enum Confirmation: Identifiable {
+        case archive
+        case archiveNonZeroBalance
+        case depositTopUp
+        case depositEarlyClose
 
         var id: Int { hashValue }
     }
@@ -360,52 +365,15 @@ struct AccountDetailView: View {
                 onDismiss: { showActionsSheet = false }
             )
         }
-        .alert(
-            L("accounts_core.detail.delete_confirm.title"),
-            isPresented: $showArchiveConfirm
-        ) {
-            Button(archiveActionTitle, role: .destructive) {
-                archiveAccount()
-            }
-            Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
-        } message: {
-            Text(L("accounts_core.detail.delete_confirm.message"))
-        }
-        .alert(
-            L("accounts_core.detail.deposit.top_up_warning.title"),
-            isPresented: $showTopUpWarning
-        ) {
-            Button(L("accounts_core.detail.deposit.top_up_warning.confirm")) {
-                sheet = .income
-            }
-            Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
-        } message: {
-            Text(L("accounts_core.detail.deposit.top_up_warning.message"))
-        }
-        .alert(
-            L("accounts_core.detail.deposit.early_close_confirm.title"),
-            isPresented: $showEarlyCloseConfirm
-        ) {
-            Button(L("accounts_core.detail.deposit.action.early_close"), role: .destructive) {
-                sheet = .earlyClose
-            }
-            Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
-        } message: {
-            Text(L("accounts_core.detail.deposit.early_close_confirm.message"))
-        }
-        .alert(
-            L("accounts_core.detail.delete_nonzero_confirm.title"),
-            isPresented: $showNonZeroBalanceArchiveWarning
-        ) {
-            Button(L("accounts_core.detail.delete_nonzero_confirm.transfer_first")) {
-                sheet = .transfer
-            }
-            Button(L("accounts_core.detail.delete_nonzero_confirm.close_anyway"), role: .destructive) {
-                archiveAccount()
-            }
-            Button(L("accounts_core.detail.sheet.cancel"), role: .cancel) {}
-        } message: {
-            Text(L("accounts_core.detail.delete_nonzero_confirm.message"))
+        // Подтверждения — тем же листом снизу, что и «···»: последствие действия читается
+        // второй строкой пункта, а не в системном алерте посреди экрана.
+        .sheet(item: $confirmation) { request in
+            AccountActionsSheet(
+                accountName: account.name,
+                accountTypeTitle: confirmationTitle(request),
+                items: confirmationItems(request),
+                onDismiss: { confirmation = nil }
+            )
         }
         .alert(
             L("accounts_core.detail.error.title"),
@@ -948,22 +916,69 @@ struct AccountDetailView: View {
     }
 
     /// Ненулевой баланс (S8): сначала показываем выбор «перевести остаток / закрыть как есть»,
-    /// вместо простого confirm — обычный `showArchiveConfirm` остаётся для счетов с нулём.
+    /// вместо простого confirm — обычное подтверждение остаётся для счетов с нулём.
     private func requestArchiveConfirmation() {
-        if AccountArchivePolicy.shouldWarnBeforeArchiving(balance: balanceToday) {
-            showNonZeroBalanceArchiveWarning = true
-        } else {
-            showArchiveConfirm = true
-        }
+        confirmation = AccountArchivePolicy.shouldWarnBeforeArchiving(balance: balanceToday)
+            ? .archiveNonZeroBalance
+            : .archive
     }
 
     /// Непополняемый вклад (Фаза 3, брифинг п.3): попытка пополнения — предупреждение с
     /// подтверждением, НЕ жёсткий запрет («да, всё равно» открывает обычную форму дохода).
     private func requestTopUpOrOpenIncomeSheet() {
         if account.kind == .deposit, account.depositMeta?.allowsTopUp == false {
-            showTopUpWarning = true
+            confirmation = .depositTopUp
         } else {
             sheet = .income
+        }
+    }
+
+    // MARK: - Подтверждения
+
+    private func confirmationTitle(_ request: Confirmation) -> String {
+        switch request {
+        case .archive: L("accounts_core.detail.delete_confirm.title")
+        case .archiveNonZeroBalance: L("accounts_core.detail.delete_nonzero_confirm.title")
+        case .depositTopUp: L("accounts_core.detail.deposit.top_up_warning.title")
+        case .depositEarlyClose: L("accounts_core.detail.deposit.early_close_confirm.title")
+        }
+    }
+
+    private func confirmationItems(_ request: Confirmation) -> [AccountActionItem] {
+        switch request {
+        case .archive:
+            return [.init(
+                title: archiveActionTitle,
+                subtitle: L("accounts_core.detail.delete_confirm.message"),
+                icon: "archivebox",
+                isDestructive: true
+            ) { archiveAccount() }]
+        case .archiveNonZeroBalance:
+            return [
+                .init(
+                    title: L("accounts_core.detail.delete_nonzero_confirm.transfer_first"),
+                    subtitle: L("accounts_core.detail.delete_nonzero_confirm.message"),
+                    icon: "arrow.left.arrow.right"
+                ) { sheet = .transfer },
+                .init(
+                    title: L("accounts_core.detail.delete_nonzero_confirm.close_anyway"),
+                    icon: "archivebox",
+                    isDestructive: true
+                ) { archiveAccount() }
+            ]
+        case .depositTopUp:
+            return [.init(
+                title: L("accounts_core.detail.deposit.top_up_warning.confirm"),
+                subtitle: L("accounts_core.detail.deposit.top_up_warning.message"),
+                icon: "plus"
+            ) { sheet = .income }]
+        case .depositEarlyClose:
+            return [.init(
+                title: L("accounts_core.detail.deposit.action.early_close"),
+                subtitle: L("accounts_core.detail.deposit.early_close_confirm.message"),
+                icon: "xmark.circle",
+                isDestructive: true
+            ) { sheet = .earlyClose }]
         }
     }
 
@@ -1273,7 +1288,7 @@ struct AccountDetailView: View {
                         }
                     },
                     onProductTransitionCommitted: productTransitionCommitted,
-                    onRequestEarlyClose: { showEarlyCloseConfirm = true },
+                    onRequestEarlyClose: { confirmation = .depositEarlyClose },
                     onRequestDelete: { requestArchiveConfirmation() }
                 )
             } else if account.productType == .creditCard {
@@ -1653,7 +1668,7 @@ struct AccountDetailView: View {
                 // штраф — доля от УЖЕ начисленных процентов, будущие начисления просто теряются.
                 subtitle: L("accounts_core.detail.deposit.early_close_confirm.message"),
                 icon: "xmark.circle",
-                action: { showEarlyCloseConfirm = true }
+                action: { confirmation = .depositEarlyClose }
             ))
         }
         if presentation.actions.contains(.archive) {
