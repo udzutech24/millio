@@ -10,17 +10,27 @@ import CoreGraphics
 @testable import millio
 
 struct CashflowCategoryGridLayoutTests {
-    @Test("На узком экране у расходов 3 колонки")
-    func expenseUsesThreeColumnsOnCompactWidth() {
+    @Test("На ширине 320 pt у расходов базовая сетка 3 колонки")
+    func expenseUsesRegularColumnsOnCompactWidth() {
         let count = CashflowCategoryGridLayout.columnCount(
             for: .expense,
             containerWidth: CGFloat(320)
         )
 
+        #expect(count == CashflowCategoryGridLayout.regularColumns)
+    }
+
+    @Test("На экране уже 280 pt сетка падает до 2 колонок")
+    func veryNarrowWidthFallsBackToCompactColumns() {
+        let count = CashflowCategoryGridLayout.columnCount(
+            for: .expense,
+            containerWidth: CGFloat(260)
+        )
+
         #expect(count == CashflowCategoryGridLayout.compactColumns)
     }
 
-    @Test("На обычном экране у расходов 4 колонки")
+    @Test("На обычном экране у расходов базовая сетка")
     func expenseUsesFourColumnsOnRegularWidth() {
         let count = CashflowCategoryGridLayout.columnCount(
             for: .expense,
@@ -30,18 +40,18 @@ struct CashflowCategoryGridLayoutTests {
         #expect(count == CashflowCategoryGridLayout.regularColumns)
     }
 
-    @Test("При включенных лимитах у расходов на ширине телефона 3 колонки")
-    func expenseWithBudgetUsesThreeColumnsOnPhoneWidth() {
+    @Test("При включенных лимитах на ширине телефона сетка тоже 3 колонки")
+    func expenseWithBudgetUsesRegularColumnsOnPhoneWidth() {
         let count = CashflowCategoryGridLayout.columnCount(
             for: .expense,
             containerWidth: CGFloat(393),
             showsBudgetDetails: true
         )
 
-        #expect(count == CashflowCategoryGridLayout.compactColumns)
+        #expect(count == CashflowCategoryGridLayout.regularColumns)
     }
 
-    @Test("При включенных лимитах на широком экране у расходов остается 4 колонки")
+    @Test("При включенных лимитах на широком экране сетка не меняется")
     func expenseWithBudgetKeepsFourColumnsOnWideWidth() {
         let count = CashflowCategoryGridLayout.columnCount(
             for: .expense,
@@ -52,14 +62,14 @@ struct CashflowCategoryGridLayoutTests {
         #expect(count == CashflowCategoryGridLayout.regularColumns)
     }
 
-    @Test("На узком экране доходы тоже переходят на 3 колонки")
-    func incomeUsesThreeColumnsOnCompactWidth() {
+    @Test("У доходов сетка такая же, как у расходов")
+    func incomeUsesRegularColumnsOnCompactWidth() {
         let count = CashflowCategoryGridLayout.columnCount(
             for: .income,
             containerWidth: CGFloat(320)
         )
 
-        #expect(count == CashflowCategoryGridLayout.compactColumns)
+        #expect(count == CashflowCategoryGridLayout.regularColumns)
     }
 
     @Test("Карточки категорий сохраняют одинаковую высоту с лимитом и без")
@@ -116,19 +126,5 @@ struct CashflowCategoryGridLayoutTests {
         )
 
         #expect(style == .compactBadge)
-    }
-
-    @Test("Компактный pinned badge рендерится inline в верхнем ряду карточки")
-    func compactPinnedBadgeUsesInlinePlacement() {
-        let placement = CashflowCategoryGridLayout.pinPlacement(for: .compactBadge)
-
-        #expect(placement == .inlineBadge)
-    }
-
-    @Test("Обычная pin-кнопка остаётся overlay-элементом")
-    func regularPinButtonUsesOverlayPlacement() {
-        let placement = CashflowCategoryGridLayout.pinPlacement(for: .regularButton)
-
-        #expect(placement == .overlayButton)
     }
 }

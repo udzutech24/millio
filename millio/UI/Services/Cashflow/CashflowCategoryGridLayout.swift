@@ -27,12 +27,6 @@ struct CashflowCategoryGridLayout {
         case regularButton
     }
 
-    enum PinPlacement {
-        case hidden
-        case inlineBadge
-        case overlayButton
-    }
-
     static let compactColumns = 2
     static let regularColumns = 3
     static let compactWidthThreshold: CGFloat = 280
@@ -111,14 +105,4 @@ struct CashflowCategoryGridLayout {
         }
     }
 
-    static func pinPlacement(for style: PinAffordanceStyle) -> PinPlacement {
-        switch style {
-        case .hidden:
-            return .hidden
-        case .compactBadge:
-            return .inlineBadge
-        case .regularButton:
-            return .overlayButton
-        }
-    }
 }

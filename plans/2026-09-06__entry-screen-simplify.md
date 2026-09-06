@@ -1,6 +1,6 @@
 # План: упрощение экрана ввода операций (Расходы / Доходы)
 
-**Дата:** 2026-09-06 · **Владелец:** Алексей · **Исполнитель:** Александр · **Статус:** В РАБОТЕ — Ф1 и Ф2 РЕАЛИЗОВАНЫ (ветка `feature/entry-screen-simplify`)
+**Дата:** 2026-09-06 · **Владелец:** Алексей · **Исполнитель:** Александр · **Статус:** В РАБОТЕ — Ф1–Ф4 РЕАЛИЗОВАНЫ, ждут device-проверки; открыта Ф5 (ветка `feature/entry-screen-simplify`)
 **Макет:** https://claude.ai/code/artifact/308226c9-680b-4aca-98c9-77aa4fa34e46 (артборды «Расходы», «Доходы», «Меню …»)
 **Ветка:** `feature/entry-screen-simplify` от `develop` (НЕ от `feature/planned-operations-applied-notice`)
 
@@ -25,29 +25,29 @@
 
 ## Фазы
 
-### [x] Ф1 — Лист «…» (bottom sheet) — фундамент — РЕАЛИЗОВАН (`4359c04`)
+### ✅ [x] Ф1 — Лист «…» (bottom sheet) — РЕАЛИЗОВАН (`4359c04`)
 - Новый `CashflowEntryMoreSheet.swift`: секции «Операции» (Найти · Плановые · Повторяющиеся или Импорт списком по типу) · «Месяц» (План на месяц) · «Категории» (Сортировка · Порядок и закрепление · Настройки экрана · Новая категория).
 - Каждый пункт дёргает существующий стейт (`showPlannedManagement`, `showRecurringManagement`, `showBulkExpenseImportSheet`, `showBudgetSetupSheet`, `sortMode`, `showReorderSheet`, `showSettingsSheet`, `showCreateCategorySheet`, `isSearchExpanded`).
 - Правило владельца: лист снизу, детент фиксированной высоты ([[feedback-bottom-sheet-under-thumb]]).
 - Критерий: каждый из 9 пунктов открывает то же, что открывала старая кнопка. Старые кнопки ещё на месте.
 
-### [x] Ф2 — Шапка и блок суммы — РЕАЛИЗОВАН (`8ffb969`)
+### ✅ [x] Ф2 — Шапка и блок суммы — РЕАЛИЗОВАН (`b9028b4`)
 - Убрать пилюли «История операций», три иконки, кнопку «План», кольцо.
 - Месяц: текст со стрелками по центру. Сумма 44 pt на фоне, под ней полоска плана 6 pt с градиентом типа (`AppColors` income/expense), строка «N% от плана X · осталось Y». Нет плана → полоска скрыта, строка «Плана нет».
 - Тап по блоку суммы → `showTransactionsHistory = true`.
 - Критерий: экран без плана и с планом; сумма 0.
 
-### [x] Ф3 — Категории и операции — РЕАЛИЗОВАН
+### ✅ [x] Ф3 — Категории и операции — РЕАЛИЗОВАН (`781b4cd`)
 - `LazyVGrid` 3 колонки, плитка: иконка в круге 40 pt · имя · сумма. Последняя плитка «Новая» (пунктир) → `showCreateCategorySheet`.
 - Заголовок секции «Категории» + текстовая «Все» → `showAllCategories`.
 - История: убрать сегмент All/Upcoming/Paid, показывать 3 последних (paid + upcoming вперемешку по дате), у upcoming подпись «· план» и серый цвет суммы; «История» в заголовке → `onOpenPaidHistory`.
 - Критерий: long-press и pin работают как раньше; 0 категорий и 0 операций не ломают верстку.
 
-### [ ] Ф4 — Чистка и локализация
+### ✅ [x] Ф4 — Чистка и локализация — РЕАЛИЗОВАН
 - Удалить мёртвый код старых кнопок и `CashflowManagementEntry`, если он больше нигде не используется (grep).
 - Строки ru/en/zh-Hans в `Localizable.xcstrings`; проверить `git diff` файла после сборки на устройство ([[feedback-xcodebuild-xcstrings-corruption]]).
 
-### Ф5 — Декомпозиция `CashflowUnifiedEntryView.swift` (1539 строк) — ОДОБРЕНО, отдельной сессией
+### [ ] Ф5 — Декомпозиция `CashflowUnifiedEntryView.swift` (1539 строк) — ОДОБРЕНО, отдельной сессией
 - Разнести на `…Header.swift` (шапка + месяц + сумма), `…CategoryGrid.swift` (сетка + плитка + overlay действий), `…MoreSheet.swift` (из Ф1), корень ≤400 строк.
 - Чистый рефакторинг без изменения поведения: гейт = тот же набор тестов, device-проверка не нужна.
 
@@ -82,3 +82,14 @@
   `showReorderSheet` перевешен на общий список sheet'ов. История: сегмент All/Upcoming/Paid убран, 3 строки вперемешку по дате,
   у плановых подпись «дата · план» и серая сумма, заголовок «Операции» + текстовая «История». Новых ключей 3.
   Мёртвыми стали `categoryBudgetBadgeText`, `categoryBudgetLimitLabel`, `CashflowEntryHistoryFilter`, `pinPlacement` — сносим в Ф4.
+- **2026-09-06, Ф4**: стресс-тест — `thoughts/research/2026-09-06-entry-simplify-stress-test.md`.
+  Снесены `categoryBudgetBadgeText`, `categoryBudgetLimitLabel`, `monthlyBudgetUsageText`, `categoryStrokeStyle`,
+  `CashflowEntryHistoryFilter` + `filteredAndSorted`, `PinPlacement` + `pinPlacement`, ключи `cashflow.category.show_all`
+  и `cashflow.category.quick_select`. Тесты правились точечно: сняты 2 кейса про `filteredAndSorted` и 2 про `pinPlacement`,
+  три кейса сетки переведены на 3 колонки (+ новый кейс «<280 pt → 2 колонки»), тест локализации заголовка переехал
+  на `cashflow.entry.more.section.categories`.
+  НЕ снесено осознанно (обосновано в стресс-тесте): `CashflowManagementEntry` (жив — его использует лист «…»),
+  `CashflowEntryHistoryStatusPolicy` и `pinAffordanceStyle` (предсуществующий тестируемый код, кандидаты на Ф5),
+  `CashflowBudgetLocalization.categoryBadgeText/categoryBudgetLimitLabel` и их ключи — чтобы вернуть бейдж лимита
+  стоило 5 строк, если владельцу полоски 3 pt окажется мало.
+  Гейт: сборка exit=0; целевые тесты 46/46 passed, 0 failed (`xcresulttool`, 7 классов Cashflow/UnifiedEntry).

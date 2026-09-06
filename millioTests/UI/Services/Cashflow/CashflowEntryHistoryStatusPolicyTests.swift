@@ -64,36 +64,6 @@ struct CashflowEntryHistoryStatusPolicyTests {
         ) == .upcoming)
     }
 
-    @Test("All groups upcoming first and paid below newest first")
-    func allOrderingIsDeterministic() {
-        let items: [CashflowEntryHistoryStatusPolicy.Item] = [
-            .actual(date: date(day: 2)),
-            .oneTimePlan(date: date(day: 8), hasAppliedEffect: false),
-            .actual(date: date(day: 6)),
-            .oneTimePlan(date: date(day: 7), hasAppliedEffect: false)
-        ]
-        let result = CashflowEntryHistoryStatusPolicy.filteredAndSorted(
-            items,
-            filter: .all,
-            calendar: calendar
-        )
-        #expect(result.map(\.date) == [date(day: 7), date(day: 8), date(day: 6), date(day: 2)])
-    }
-
-    @Test("Paid filter excludes unapplied plans")
-    func paidFilter() {
-        let result = CashflowEntryHistoryStatusPolicy.filteredAndSorted(
-            [
-                .actual(date: date(day: 2)),
-                .oneTimePlan(date: date(day: 3), hasAppliedEffect: false),
-                .oneTimePlan(date: date(day: 4), hasAppliedEffect: true)
-            ],
-            filter: .paid,
-            calendar: calendar
-        )
-        #expect(result.map(\.date) == [date(day: 4), date(day: 2)])
-    }
-
     private func date(day: Int, hour: Int = 12) -> Date {
         calendar.date(from: DateComponents(year: 2026, month: 8, day: day, hour: hour))!
     }

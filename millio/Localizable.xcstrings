@@ -30311,30 +30311,6 @@
         }
       }
     },
-    "cashflow.category.quick_select" : {
-      "comment" : "Header above the category grid on the unified entry screen",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quick select"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Быстрый выбор"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "快速选择"
-          }
-        }
-      }
-    },
     "cashflow.category.reorder.edit" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -30613,30 +30589,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "分类设置"
-          }
-        }
-      }
-    },
-    "cashflow.category.show_all" : {
-      "comment" : "Link/button that expands the capped category grid to the full catalog",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All categories"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Все категории"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "所有分类"
           }
         }
       }

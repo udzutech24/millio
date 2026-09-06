@@ -1135,13 +1135,6 @@ struct CashflowCategoryTransactionSheet: View {
         return amount
     }
 
-    private func categoryBudgetLimitLabel(_ value: Double) -> String {
-        CashflowBudgetLocalization.categoryBudgetLimitLabel(
-            for: kind.categoryKind,
-            amount: formattedAmount(value)
-        )
-    }
-
     private func handleCreateCategory(_ name: String, icon: String) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
@@ -1307,10 +1300,6 @@ struct CashflowCategoryTransactionSheet: View {
         budgetStatusTintToken(status).color
     }
 
-    private func categoryBudgetBadgeText(_ status: BudgetStatus) -> String? {
-        CashflowBudgetLocalization.categoryBadgeText(for: status)
-    }
-
     private func monthlyBudgetStatusText(_ snapshot: BudgetProgressSnapshot) -> String {
         let currency = cashflowCurrencyCodeLabel(viewModel.state.displayCurrency)
         return CashflowBudgetLocalization.monthlyStatus(
@@ -1318,18 +1307,6 @@ struct CashflowCategoryTransactionSheet: View {
             remaining: snapshot.remaining,
             currency: currency
         )
-    }
-
-    private func monthlyBudgetUsageText(_ snapshot: BudgetProgressSnapshot) -> String {
-        let usedPercent = Int((min(max(snapshot.progress, 0), 1) * 100).rounded())
-        return CashflowBudgetLocalization.monthlyUsage(for: kind, percent: usedPercent)
-    }
-
-    private func categoryStrokeStyle(for option: CashflowCategoryOption) -> AnyShapeStyle {
-        if let summary = categoryBudgetSummary(for: option) {
-            return AnyShapeStyle(budgetStatusColor(summary.status).opacity(0.8))
-        }
-        return AnyShapeStyle(kind.strokeGradient.opacity(0.62))
     }
 
     private func handleBudgetThresholdHaptics(
