@@ -1028,32 +1028,55 @@ struct AccountDetailView: View {
         }
     }
 
-    private func formattedAmount(_ amount: Decimal) -> String {
+    /// Форматтеры живут статически: `NumberFormatter()` в теле метода пересоздавался на КАЖДУЮ
+    /// строку истории (сотни строк на пересчёт body). Локаль присваивается при каждом вызове —
+    /// иначе смена языка в приложении не доехала бы до уже созданного форматтера.
+    private static let amountFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.usesGroupingSeparator = true
         formatter.groupingSeparator = " "
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 2
+        return formatter
+    }()
+
+    private static let signedAmountFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = true
+        formatter.groupingSeparator = " "
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        formatter.positivePrefix = "+"
+        return formatter
+    }()
+
+    private func formattedAmount(_ amount: Decimal) -> String {
+        let formatter = Self.amountFormatter
+        formatter.locale = AppLocalization.currentAppLocale
         return formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "0"
     }
 
     // MARK: - History
 
+    /// `sortedEvents` — фильтрация + сортировка всей истории счёта; берём срез ОДИН раз на
+    /// пересчёт секции, а не по разу на заголовок, счётчик, список и разделители.
     private var historySection: some View {
-        AccountDetailPlaqueSection(
+        let events = sortedEvents
+        return AccountDetailPlaqueSection(
             title: L("accounts_core.detail.history_title"),
-            caption: sortedEvents.isEmpty ? nil : L("cashflow.month_workspace.transaction_count \(sortedEvents.count)")
+            caption: events.isEmpty ? nil : L("cashflow.month_workspace.transaction_count \(events.count)")
         ) {
-            if sortedEvents.isEmpty {
+            if events.isEmpty {
                 Text(L("accounts_core.detail.no_events"))
                     .font(.millioCalloutRegular)
                     .foregroundStyle(AppColors.textTertiary)
             } else {
                 VStack(spacing: 0) {
-                    ForEach(sortedEvents, id: \.id) { event in
+                    ForEach(events, id: \.id) { event in
                         eventRow(event)
-                        if event.id != sortedEvents.last?.id {
+                        if event.id != events.last?.id {
                             Divider().background(Color.white.opacity(0.08))
                         }
                     }
@@ -1102,13 +1125,8 @@ struct AccountDetailView: View {
     }
 
     private func signedAmountText(_ amount: Decimal, type: AccountEventType) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.usesGroupingSeparator = true
-        formatter.groupingSeparator = " "
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-        formatter.positivePrefix = "+"
+        let formatter = Self.signedAmountFormatter
+        formatter.locale = AppLocalization.currentAppLocale
         return formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "0"
     }
 

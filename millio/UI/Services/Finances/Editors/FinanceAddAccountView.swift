@@ -58,6 +58,9 @@ struct FinanceAddAccountView: View {
     @State private var showProductPicker = false
     @State private var hasConfirmedProductSelection = false
     @State private var didInitializePresentationState = false
+    /// Список счетов нужен форме один раз — на возврате с пушенного экрана `onAppear`
+    /// срабатывает снова и без этого флага перечитывал бы весь стор заново.
+    @State private var didLoadAccounts = false
     @State private var draftIconName: String? = nil
     @State private var draftIconColor: String? = nil
     @State private var showIconPicker = false
@@ -810,7 +813,10 @@ struct FinanceAddAccountView: View {
             } else {
                 selectedGroupID = nil
             }
-            viewModel.handle(.loadAccounts)
+            if !didLoadAccounts {
+                didLoadAccounts = true
+                viewModel.handle(.loadAccounts)
+            }
         }
         .premiumUpsellAlert(
             isPresented: $showPaywallAlert,

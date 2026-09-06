@@ -188,17 +188,30 @@ struct CreditCardDetailSection: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func displayAmount(_ value: Decimal) -> String {
+    /// Статические форматтеры: обе функции зовутся по нескольку раз на каждый пересчёт body.
+    private static let amountFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 2
+        return formatter
+    }()
+
+    private static let percentFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .percent
+        formatter.maximumFractionDigits = 1
+        return formatter
+    }()
+
+    private func displayAmount(_ value: Decimal) -> String {
+        let formatter = Self.amountFormatter
+        formatter.locale = AppLocalization.currentAppLocale
         return "\(formatter.string(from: value as NSNumber) ?? "0") \(account.currency)"
     }
 
     private func percent(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .percent
-        formatter.maximumFractionDigits = 1
+        let formatter = Self.percentFormatter
+        formatter.locale = AppLocalization.currentAppLocale
         return formatter.string(from: value as NSNumber) ?? "0%"
     }
 }
