@@ -107,6 +107,7 @@ struct DebitCardRefundSheet: View {
                 }
             }
         }
+        .accountSheetChrome()
         .onAppear { selectedOperationID = selectedOperationID ?? expenses.first?.sourceTransactionID }
     }
 }

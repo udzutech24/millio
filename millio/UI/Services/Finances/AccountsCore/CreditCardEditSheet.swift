@@ -123,10 +123,17 @@ struct CreditCardEditSheet: View {
             .navigationTitle(L("accounts_core.detail.sheet.edit.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel(L("accounts_core.detail.sheet.cancel")) }
-                ToolbarItem(placement: .confirmationAction) { Button { save() } label: { Image(systemName: "checkmark") }.accessibilityLabel(L("accounts_core.detail.sheet.save")).disabled(!isValid) }
+                // Текстовые «Отмена»/«Сохранить», как во всех остальных листах зоны счетов:
+                // иконки xmark/checkmark читались как отдельный, незнакомый экрану язык.
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("accounts_core.detail.sheet.cancel")) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("accounts_core.detail.sheet.save")) { save() }.disabled(!isValid)
+                }
             }
         }
+        .accountSheetChrome()
     }
 
     @ViewBuilder private func section<Content: View>(_ title: String?, @ViewBuilder content: () -> Content) -> some View {

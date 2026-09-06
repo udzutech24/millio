@@ -48,6 +48,7 @@ struct AccountEventEntrySheet: View {
                 }
             }
         }
+        .accountSheetChrome()
     }
 }
 
@@ -103,6 +104,7 @@ struct AccountAdjustBalanceSheet: View {
                 }
             }
         }
+        .accountSheetChrome()
     }
 }
 
@@ -177,6 +179,7 @@ struct AccountTransferSheet: View {
                 }
             }
         }
+        .accountSheetChrome()
     }
 }
 
@@ -300,6 +303,7 @@ struct AccountBuySellSheet: View {
                 }
             }
         }
+        .accountSheetChrome()
     }
 }
 
@@ -363,6 +367,7 @@ struct AccountEarlyCloseSheet: View {
                 }
             }
         }
+        .accountSheetChrome()
     }
 }
 
@@ -513,5 +518,6 @@ struct AccountEditDetailsSheet: View {
                 }
             }
         }
+        .accountSheetChrome()
     }
 }
