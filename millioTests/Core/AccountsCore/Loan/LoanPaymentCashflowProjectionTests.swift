@@ -3,8 +3,8 @@ import SwiftData
 import Testing
 @testable import millio
 
-/// Ф7 кредита: платёж по кредиту виден в Cashflow расходом, страховка — отдельной строкой,
-/// повторный прогон строк не задваивает (спека §9.1, критерий приёмки 4).
+/// Ф7 кредита: платёж по кредиту виден в Cashflow расходом, повторный прогон строк не задваивает
+/// (спека §9.1, критерий приёмки 4). Страховку кредит не проводит (решение владельца 07.09).
 @Suite(.serialized)
 @MainActor
 struct LoanPaymentCashflowProjectionTests {
@@ -68,24 +68,25 @@ struct LoanPaymentCashflowProjectionTests {
 
         let first = try LoanPaymentCashflowProjector.project(
             account: account, paymentID: paymentID, amount: 31_063,
-            insuranceAmount: 1_500, date: day(2026, 4, 15), context: context
+            date: day(2026, 4, 15), context: context
         )
         let second = try LoanPaymentCashflowProjector.project(
             account: account, paymentID: paymentID, amount: 31_063,
-            insuranceAmount: 1_500, date: day(2026, 4, 15), context: context
+            date: day(2026, 4, 15), context: context
         )
         try context.save()
 
-        #expect(first == 2)
+        #expect(first == 1)
         #expect(second == 0)
-        #expect(try loanRows(context).count == 2)
+        #expect(try loanRows(context).count == 1)
     }
 
-    @Test("Страховка — вторая строка, в сумму платежа она не входит")
-    func insuranceIsSeparateRow() throws {
+    @Test("Страховка в договоре строки не создаёт: кредит её не проводит")
+    func insuranceInContractCreatesNoRow() throws {
         let container = try AppMigrationPlan.makeInMemoryContainer()
         let context = container.mainContext
         let account = try makeLoan(context: context)
+        // Поле остаётся в схеме (V12 заморожена) и приезжает из бэкапа — но платёж его не читает.
         try LoanContractStore(context: context).upsert(accountID: account.id) {
             $0.principal = 1_200_000
             $0.annualRatePercent = 18.9
@@ -99,22 +100,19 @@ struct LoanPaymentCashflowProjectionTests {
         )
 
         let rows = try loanRows(context)
-        #expect(rows.count == 2)
-        let payment = try #require(rows.first { $0.expenseCategoryRaw == ExpenseCategory.other.rawValue })
-        let insurance = try #require(rows.first { $0.expenseCategoryRaw == ExpenseCategory.insurance.rawValue })
-        #expect(payment.amount == 31_063)
-        #expect(insurance.amount == 1_500)
-        #expect(insurance.importReferenceKey != payment.importReferenceKey)
+        #expect(rows.count == 1)
+        #expect(try #require(rows.first).amount == 31_063)
+        #expect(rows.allSatisfy { $0.expenseCategoryRaw != ExpenseCategory.insurance.rawValue })
 
-        // Страховка не гасит долг: тело уменьшилось ровно на 13 151.
+        // Долг двигает только тело: страховка на него не влияла и раньше.
         let balance = AccountBalanceEngine.balanceAt(
             events: account.events ?? [], kind: .loan, on: day(2026, 4, 15)
         )
         #expect(balance == -1_186_849)
     }
 
-    @Test("Досрочное погашение страховку не начисляет и даёт строку на внесённое тело")
-    func prepaymentDoesNotChargeInsurance() throws {
+    @Test("Досрочное погашение даёт одну строку на внесённое тело")
+    func prepaymentCreatesSingleRow() throws {
         let container = try AppMigrationPlan.makeInMemoryContainer()
         let context = container.mainContext
         let account = try makeLoan(context: context)

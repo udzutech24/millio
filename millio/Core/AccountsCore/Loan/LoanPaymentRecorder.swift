@@ -76,18 +76,10 @@ struct LoanPaymentRecorder {
         // Расход идёт ПЕРВЫМ шагом: закрытый месяц Cashflow должен отбить платёж целиком, пока в
         // контексте ещё ничего не изменено. Сумма — фактически внесённая (тело + проценты, после
         // клампа по остатку), а не запрошенная: в Cashflow попадает то, что реально ушло из кармана.
-        //
-        // Страховая премия начисляется только на платежах, которые расходуют период графика.
-        // Досрочка периода не расходует — она гасит тело вне графика, и страховку за неё не платят.
-        let paymentID = UUID()
-        let insuranceAmount = entry.consumesPeriod
-            ? try LoanContractStore(context: modelContext).contract(for: account.id)?.insuranceAmount
-            : nil
         try LoanPaymentCashflowProjector.project(
             account: account,
-            paymentID: paymentID,
+            paymentID: UUID(),
             amount: principalPart + max(entry.interestPart, 0),
-            insuranceAmount: insuranceAmount,
             date: date,
             context: modelContext
         )
