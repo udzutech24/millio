@@ -81,6 +81,8 @@ struct LoanPrepaymentSheet: View {
         }
         .padding(.top, AppSpacing.xl)
         .background(GradientBackground())
+        // `accountSheetChrome()` здесь не годится: он фиксирует ОДИН детент, а лист растёт с
+        // компактного до полного по мере того, как ядру есть что показать. Драг-индикатор общий.
         .presentationDetents([.height(Self.compactHeight), .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .onChange(of: isExpanded) { _, expanded in
@@ -190,7 +192,10 @@ struct LoanPrepaymentSheet: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: LoanScreenStyle.buttonCornerRadius, style: .continuous)
-                    .strokeBorder(isSelected ? LoanScreenStyle.accent : .clear, lineWidth: 1)
+                    .strokeBorder(
+                        isSelected ? LoanScreenStyle.accent : .clear,
+                        lineWidth: LoanScreenStyle.borderWidth
+                    )
             )
             .contentShape(Rectangle())
         }
@@ -202,7 +207,7 @@ struct LoanPrepaymentSheet: View {
             Circle()
                 .strokeBorder(
                     isSelected ? LoanScreenStyle.accent : AppColors.textTertiary,
-                    lineWidth: 1.5
+                    lineWidth: LoanScreenStyle.radioBorderWidth
                 )
                 .frame(width: LoanScreenStyle.radioSize, height: LoanScreenStyle.radioSize)
             if isSelected {
@@ -244,7 +249,7 @@ struct LoanPrepaymentSheet: View {
                     .foregroundStyle(AppColors.textTertiary)
             }
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: LoanScreenStyle.diffRowMinHeight)
         .padding(.horizontal, AppSpacing.l)
     }
 

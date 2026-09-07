@@ -5,6 +5,9 @@ import SwiftUI
 /// Строки рисуются целиком (до 60 у стандартного кредита) обычным `VStack`: ленивая загрузка на
 /// таком объёме экономила бы нечего, а `LazyVStack` внутри `ScrollView` ломает подсветку
 /// текущего периода при возврате на экран.
+///
+/// Экран открывается пушем (`navigationDestination`), а не листом, — `accountSheetChrome()` к нему
+/// не применяется: детентов и «язычка» у пуша нет.
 struct LoanScheduleView: View {
     let presentation: LoanSchedulePresentation
 
@@ -59,7 +62,8 @@ struct LoanScheduleView: View {
 
     private func legendItem(color: Color, title: String) -> some View {
         HStack(spacing: AppSpacing.s) {
-            Circle().fill(color).frame(width: 8, height: 8)
+            Circle().fill(color)
+                .frame(width: LoanScreenStyle.legendDotSize, height: LoanScreenStyle.legendDotSize)
             Text(title)
                 .font(.millioCaptionRegular)
                 .foregroundStyle(AppColors.textSecondary)
