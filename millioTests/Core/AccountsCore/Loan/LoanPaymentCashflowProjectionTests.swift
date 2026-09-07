@@ -99,9 +99,11 @@ struct LoanPaymentCashflowProjectionTests {
             account: account, principalPart: 13_151, interestPart: 17_912, date: day(2026, 4, 15)
         )
 
+        // Строк две: факт платежа и плановая операция следующего (Ф3.3) — страховки нет ни в одной.
         let rows = try loanRows(context)
-        #expect(rows.count == 1)
-        #expect(try #require(rows.first).amount == 31_063)
+        let facts = rows.filter { !LoanPlannedPaymentScheduler.isPlannedRow($0) }
+        #expect(facts.count == 1)
+        #expect(try #require(facts.first).amount == 31_063)
         #expect(rows.allSatisfy { $0.expenseCategoryRaw != ExpenseCategory.insurance.rawValue })
 
         // Долг двигает только тело: страховка на него не влияла и раньше.

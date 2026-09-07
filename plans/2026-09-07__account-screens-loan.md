@@ -1,7 +1,7 @@
 # План: Ф3 «Кредит» — дельта до решений владельца
 
-Дата: 2026-09-07 · Статус: **В РАБОТЕ** — сессия A (Ф3.1 · Ф3.2 · Ф3.5) закрыта, сессия B
-(Ф3.3 · Ф3.4) не начата
+Дата: 2026-09-07 · Статус: **В РАБОТЕ** — сессия A (Ф3.1 · Ф3.2 · Ф3.5) и Ф3.3 закрыты,
+осталась Ф3.4 (UI)
 Спека: [`specs/2026-09-07-loan-screen-unification.md`](../specs/2026-09-07-loan-screen-unification.md)
 Research: [`thoughts/research/2026-09-07-loan-screen-delta.md`](../thoughts/research/2026-09-07-loan-screen-delta.md)
 Родительский план: [`plans/2026-09-06__account-screens-unification.md`](2026-09-06__account-screens-unification.md) (Ф3)
@@ -58,7 +58,7 @@ Sidecar: `2026-09-07__account-screens-loan.status.json`
 **Гейт:** тест «платёж не создаёт строку `.insurance` даже при заполненном `insuranceAmount`» ·
 `LoanPaymentCashflowProjectionTests` + `LoanPaymentRecorderTests` зелёные · build зелёный.
 
-## Ф3.3 — Плановая операция платежа: ядро `[ ]` (L, ~0,8 сессии) — БЛОКИРОВАНА вопросами 1–2
+## Ф3.3 — Плановая операция платежа: ядро `[x]` (L, ~0,8 сессии)
 
 **Новый файл:** `Core/AccountsCore/Loan/LoanPlannedPaymentScheduler.swift` — единственная точка
 жизненного цикла плановой операции кредита: `sync(contract:account:context:)` (создать / обновить
@@ -152,6 +152,37 @@ Sidecar: `2026-09-07__account-screens-loan.status.json`
 | Ф3.1 досрочка без предвыбора | `a49d206` | build ✅ · `LoanPrepaymentPresentationTests` 14/14 + `LoanPrepaymentPlannerTests` 6/6 ✅ · xcstrings +44/−0 |
 | Ф3.2 страховка вне кредита | `26cebfe` | build ✅ · Projection 5/5 + Recorder 4/4 + BackupIntegration 4/4 + LocalizationKeys ✅ · xcstrings +0/−22 (объяснено) |
 | Ф3.5 аудит стиля | `0b41249` | build ✅ · grep-чек чистый · xcstrings без изменений |
+
+### 2026-09-07 · сессия B: Ф3.3 плановая операция платежа
+
+**Что сделано.** `Core/AccountsCore/Loan/LoanPlannedPaymentScheduler.swift` — жизненный цикл
+плановой операции (`sync` / `remove` / `applyPlannedPayment`, маппинг периодичности). `sync`
+вызывается из `LoanContractStore.upsert`/`delete` (choke point), из `LoanPaymentRecorder` после
+записи платежа, из архивирования/мягкого удаления/восстановления счёта и из
+`LoanContractBackfill` (самолечение при открытии деталки). Хук в
+`CashflowScheduledService.applyDuePlannedTransactionsIfNeeded`: строка с ключом `plan:<accountID>:<N>`
+идёт через `LoanPaymentRecorder`, остальные — прежним `onApplyDuePlannedEffect`. Кейс
+`every2Months` добавлен в `CashflowRecurrenceRule` (+ ключ `cashflow.recurrence.every2months`,
+7 языков).
+
+**Решения, отличные от буквы плана:**
+- **Плановая операция — разовая строка (`recurrenceRule == .none`), а не recurring-шаблон.**
+  У шаблона `shouldAffectCashflowTotals == false` — кредит снова выпал бы из бюджета, ровно та
+  беда, ради которой фаза и делается; плюс сумма платежа каждый период своя и график кончается.
+  Периодичность договора выражает `LoanPlannedPaymentScheduler.recurrenceRule(for:)`; `every2Months`
+  в модели заведён (решение владельца 1) и доступен пользователю для его собственных операций.
+- **`sync` резолвит счёт и договор сам по `accountID`** вместо `sync(contract:account:)`: «счёт
+  удалён» и «договора нет» становятся одним путём снятия плана, сирот не остаётся по построению.
+- **Строка плана после применения не удаляется, а становится фактом** (её ключ передаётся в
+  `LoanPaymentCashflowProjector`, дедуп гасит вторую вставку) — иначе журнал сводки строил бы
+  запись по удалённому объекту.
+- **Ошибка синхронизации плана не роняет платёж и правку условий** — логируется, инвариант
+  чинится следующим касанием договора или открытием деталки.
+
+**Правки чужих тестов (объяснены):** `LoanPaymentCashflowProjectionTests` — строк по кредиту
+теперь две (факт + план), считаем факты; `LoanPrepaymentPresentationTests` — два сравнения долга
+переведены на точность до копейки: платёж синхронизирует план, лишний round-trip в стор поднимает
+`Decimal`-пыль double-хранилища (кламп `LoanOutstanding.fromLedger` для того и существует).
 
 **Гейт сессии:** полный `millioTests` — 2691 тест, 2662 passed / 23 failed / 6 expected failures.
 В baseline (18–23 красных, список известных флаков), ни одного падения в кластере `Loan*`.

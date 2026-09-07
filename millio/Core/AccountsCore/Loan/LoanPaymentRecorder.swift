@@ -32,7 +32,8 @@ struct LoanPaymentRecorder {
         principalPart: Decimal,
         interestPart: Decimal,
         date: Date = Date(),
-        note: String? = nil
+        note: String? = nil,
+        cashflowReferenceKey: String? = nil
     ) throws -> AccountEvent {
         guard account.kind == .loan else { throw LoanPaymentError.notALoanAccount }
         guard principalPart > 0 else { throw LoanPaymentError.nonPositivePrincipalPart }
@@ -43,7 +44,13 @@ struct LoanPaymentRecorder {
             consumesPeriod: true,
             pinnedPayment: nil
         )
-        guard let event = try record(entry, on: account, date: date, note: note) else {
+        guard let event = try record(
+            entry,
+            on: account,
+            date: date,
+            note: note,
+            cashflowReferenceKey: cashflowReferenceKey
+        ) else {
             // Недостижимо: тело положительное, значит событие создаётся всегда.
             throw LoanPaymentError.nonPositivePrincipalPart
         }
@@ -60,7 +67,8 @@ struct LoanPaymentRecorder {
         _ entry: LoanExtraPaymentEntry,
         on account: Account,
         date: Date = Date(),
-        note: String? = nil
+        note: String? = nil,
+        cashflowReferenceKey: String? = nil
     ) throws -> AccountEvent? {
         guard account.kind == .loan else { throw LoanPaymentError.notALoanAccount }
         guard entry.principalPart >= 0 else { throw LoanPaymentError.nonPositivePrincipalPart }
@@ -78,7 +86,8 @@ struct LoanPaymentRecorder {
         // клампа по остатку), а не запрошенная: в Cashflow попадает то, что реально ушло из кармана.
         try LoanPaymentCashflowProjector.project(
             account: account,
-            paymentID: UUID(),
+            referenceKey: cashflowReferenceKey
+                ?? LoanPaymentCashflowProjector.paymentReferenceKey(paymentID: UUID()),
             amount: principalPart + max(entry.interestPart, 0),
             date: date,
             context: modelContext
@@ -97,16 +106,39 @@ struct LoanPaymentRecorder {
             // Договор и строки Cashflow изменились, а события нет — сохраняем сами: `recordEvent`
             // в этой ветке не вызывается, и без save правки остались бы только в памяти контекста.
             try modelContext.save()
+            syncPlannedPayment(accountID: account.id)
             return nil
         }
 
-        return try AccountsCoreService(modelContext: modelContext).recordEvent(
+        let event = try AccountsCoreService(modelContext: modelContext).recordEvent(
             account: account,
             type: .income,
             amount: principalPart,
             date: date,
             note: note
         )
+        syncPlannedPayment(accountID: account.id)
+        return event
+    }
+
+    /// Пересчёт плановой операции ПОСЛЕ записи платежа: до события остаток в ленте ещё старый, и
+    /// план встал бы на тот же период с той же суммой (`LoanContractStore.upsert` внутри платежа
+    /// синхронизирует именно такое промежуточное состояние — этот вызов его исправляет).
+    ///
+    /// Ошибка синхронизации плана не роняет платёж: он уже сохранён, бросать после сохранения
+    /// нечего. Инвариант «ровно одна плановая операция» восстановится при следующем касании
+    /// договора; расхождение попадает в лог.
+    private func syncPlannedPayment(accountID: UUID) {
+        do {
+            try LoanPlannedPaymentScheduler.sync(accountID: accountID, context: modelContext)
+            try modelContext.save()
+        } catch {
+            AppLogger.log(
+                .error,
+                category: "AccountsCore",
+                "Failed to sync loan planned payment: \(error.localizedDescription)"
+            )
+        }
     }
 }
 

@@ -52,6 +52,9 @@ enum CashflowRecurrenceRule: String, Codable, CaseIterable {
     case none = "none"
     case weekly = "weekly"
     case monthly = "monthly"
+    /// Раз в два месяца. Заведено под периодичность кредита (`LoanPaymentFrequency.every2Months`):
+    /// подгонять кредит под квартал значило бы врать про дату платежа каждый второй период.
+    case every2Months = "every2Months"
     case quarterly = "quarterly"
     case semiannual = "semiannual"
     case yearly = "yearly"
@@ -66,6 +69,12 @@ enum CashflowRecurrenceRule: String, Codable, CaseIterable {
                 comment: "Weekly recurrence rule label"
             )
         case .monthly: return CashflowLocalization.recurrenceMonthly
+        case .every2Months:
+            return String(
+                localized: "cashflow.recurrence.every2months",
+                defaultValue: "Every 2 months",
+                comment: "Bi-monthly recurrence rule label"
+            )
         case .quarterly:
             return String(
                 localized: "cashflow.recurrence.quarterly",
@@ -95,6 +104,8 @@ enum CashflowRecurrenceRule: String, Codable, CaseIterable {
             return nil
         case .monthly:
             return 1
+        case .every2Months:
+            return 2
         case .quarterly:
             return 3
         case .semiannual:

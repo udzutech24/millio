@@ -30,8 +30,27 @@ enum LoanPaymentCashflowProjector {
         date: Date,
         context: ModelContext
     ) throws -> Int {
+        try project(
+            account: account,
+            referenceKey: paymentReferenceKey(paymentID: paymentID),
+            amount: amount,
+            date: date,
+            context: context
+        )
+    }
+
+    /// Тот же контракт с готовым ключом. Нужен применению плановой операции: её строка в Cashflow
+    /// уже существует (это и есть план), и по своему ключу дедуп гасит вторую вставку — иначе
+    /// платёж по плану лёг бы в ленту расходов дважды.
+    @discardableResult
+    static func project(
+        account: Account,
+        referenceKey key: String,
+        amount: Decimal,
+        date: Date,
+        context: ModelContext
+    ) throws -> Int {
         guard amount > 0 else { return 0 }
-        let key = paymentReferenceKey(paymentID: paymentID)
         let alreadyProjected = try context.fetch(FetchDescriptor<CashflowTransaction>())
             .contains { $0.importSourceRaw == importSource && $0.importReferenceKey == key }
         guard !alreadyProjected else { return 0 }
