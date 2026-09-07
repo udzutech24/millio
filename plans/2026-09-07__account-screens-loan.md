@@ -1,0 +1,148 @@
+# План: Ф3 «Кредит» — дельта до решений владельца
+
+Дата: 2026-09-07 · Статус: **НЕ НАЧАТ** — вопросы владельца сняты 07.09 (см. «Решения владельца»),
+ждёт guard phrase на код и мержа `feature/planned-operations-applied-notice` в `develop`
+Спека: [`specs/2026-09-07-loan-screen-unification.md`](../specs/2026-09-07-loan-screen-unification.md)
+Research: [`thoughts/research/2026-09-07-loan-screen-delta.md`](../thoughts/research/2026-09-07-loan-screen-delta.md)
+Родительский план: [`plans/2026-09-06__account-screens-unification.md`](2026-09-06__account-screens-unification.md) (Ф3)
+Sidecar: `2026-09-07__account-screens-loan.status.json`
+
+**Ветка:** `feature/account-screens-loan` от `feature/account-screens-decompose` (Ф1).
+**Правила прогона:** коммит после каждой зелёной под-фазы · merge / push / установка на устройство —
+только с явного разрешения владельца · симулятор один: iPhone 17 Pro · сборка
+`xcodebuild ... -derivedDataPath /tmp/dd-loan -quiet 2>&1 | tail -20` · перед каждым коммитом
+`git diff --numstat -- millio/Localizable.xcstrings` (только вставки).
+
+---
+
+## Переоценка объёма (важно)
+
+Ф3 в родительском плане оценена в 2 сессии как «пишем UI кредита». **UI кредита уже написан и уже
+в `develop`** (`dcf4cd6`, план 09-04, фазы Ф1–Ф7). Реальная работа Ф3 — три пункта дельты:
+плановая операция платежа (крупный, трогает Cashflow), досрочка без предвыбора (мелкий), страховка
+вне кредита (мелкий) + аудит стиля.
+
+**Оценка: 1,3–1,7 сессии.** Резать на две сессии: сессия A — Ф3.1/Ф3.2/Ф3.5 (безопасная дельта,
+кредит целиком в своей папке), сессия B — Ф3.3/Ф3.4 (интеграция с Cashflow, единственная рискованная
+часть). Сессия B без ответов на открытые вопросы 1–2 не стартует.
+
+---
+
+## Ф3.1 — Досрочка без предвыбора `[ ]` (S, ~0,3 сессии)
+
+**Файлы:** `UI/Services/Finances/AccountsCore/Loan/LoanPrepaymentSheet.swift` (:16 `@State strategy`),
+`LoanPrepaymentPresentation.swift` (:199-234 `options(for:)`, :180 `selectedStrategy`),
+`millioTests/UI/Services/Finances/LoanPrepaymentPresentationTests.swift`.
+
+- `strategy` становится `LoanPrepaymentStrategy?` = `nil`; подтверждение `disabled` пока `nil`.
+- Тег выгоды у опции — абсолютный `preview.savings`, а не разница экономий двух сценариев.
+- Подпись под вариантом: «срок» → дельта платежей и дата закрытия; «платёж» → новый платёж против старого.
+- Единственная опция (дифференцированный / полное погашение / недоплата) — выбор скрыт, подтверждение активно.
+
+**Гейт:** build зелёный · `LoanPrepaymentPresentationTests` расширены (нет предвыбора; абсолютные
+экономии обоих вариантов на эталоне: «срок» 226 771 ₽, «платёж» 100 455 ₽; одна опция → авто-выбор)
+· диф xcstrings только вставки.
+
+## Ф3.2 — Страховка вне кредита `[ ]` (S, ~0,2 сессии)
+
+**Файлы:** `Core/AccountsCore/Loan/LoanPaymentRecorder.swift` (:83-90),
+`Core/AccountsCore/Loan/LoanPaymentCashflowProjector.swift` (:22 `insuranceReferenceKey`, :85 `insuranceNote`),
+`millioTests/Core/AccountsCore/Loan/LoanPaymentCashflowProjectionTests.swift`.
+
+- Снять ветку `.insurance` из recorder и проектора; `insuranceReferenceKey`/`insuranceNote` удалить.
+- `LoanContract.insuranceAmount` **оставить** — схема V12 заморожена, удаление поля = миграция ради
+  ничего (из UI туда никогда не писали, только импорт бэкапа).
+- Ключ `accounts_core.loan.cashflow.insurance_note` осиротеет — снять вместе с кодом (правка
+  xcstrings при этом будет с удалениями: отметить явно в коммите и проверить `LocalizationKeysTests`).
+
+**Гейт:** тест «платёж не создаёт строку `.insurance` даже при заполненном `insuranceAmount`» ·
+`LoanPaymentCashflowProjectionTests` + `LoanPaymentRecorderTests` зелёные · build зелёный.
+
+## Ф3.3 — Плановая операция платежа: ядро `[ ]` (L, ~0,8 сессии) — БЛОКИРОВАНА вопросами 1–2
+
+**Новый файл:** `Core/AccountsCore/Loan/LoanPlannedPaymentScheduler.swift` — единственная точка
+жизненного цикла плановой операции кредита: `sync(contract:account:context:)` (создать / обновить
+сумму и дату / снять), маппинг `LoanPaymentFrequency → CashflowRecurrenceRule`.
+
+**Правки:**
+- `LoanContractStore` — вызывать `sync` при upsert договора.
+- `LoanPaymentRecorder` — после записи платежа синхронизировать план (новая дата, `pinnedPayment`).
+- `CashflowScheduledService.applyDuePlannedTransactionsIfNeeded` (:376) — хук: применённая операция
+  с `importSourceRaw == "loanPayment"` проходит через `LoanPaymentRecorder.recordScheduledPayment`.
+- `LoanPaymentCashflowProjector` — не дублировать строку для платежа, пришедшего из применения.
+
+**Порядок операций сохраняется как в Ф7 плана 09-04:** Cashflow первым, договор и событие следом,
+одно сохранение, общий `rollback()`.
+
+**Тесты (новый `millioTests/Core/AccountsCore/Loan/LoanPlannedPaymentSchedulerTests.swift`):**
+создание договора → ровно одна плановая операция с верной суммой/датой/правилом · применение →
+тело уменьшилось на `principalPart`, проценты в договоре, одна строка в Cashflow · повторное
+применение не задваивает · досрочка со сменой платежа обновила сумму плана · полное погашение сняло
+план · удаление счёта не оставило сироту · `every2Months` ведёт себя по выбранному варианту ·
+закрытый месяц Cashflow отбивает платёж целиком.
+
+**Гейт:** build · новые тесты зелёные · `LoanNetWorthContributionTests` и весь кластер `Loan*`
+зелёные · полный `millioTests` в baseline.
+
+## Ф3.4 — UI: платёж через план `[ ]` (M, ~0,4 сессии)
+
+**Файлы:** `AccountDetailActions.swift:75`, `AccountDetailView+Sheets.swift:91,455`,
+`Loan/LoanPaymentConfirmSheet.swift`, `Loan/LoanDetailPresentation.swift`, `LoanDetailSection.swift`.
+
+- «Внести платёж» = применить ближайшую плановую операцию сейчас; лист подтверждения показывает,
+  что именно применяется (дата, сумма, тело/проценты).
+- В разбивке платежа — строка «следующий платёж · дата» с пометкой, что он запланирован в Cashflow.
+- Нет договора / кредит закрыт → кнопка скрыта (как сейчас для счёта без условий).
+- Новые строки — только через `L()`, ru/en/zh-Hans.
+
+**Гейт:** build · `LoanDetailPresentationTests` расширены · device-скрины деталки, листа платежа и
+листа досрочки.
+
+## Ф3.5 — Аудит стиля трёх экранов кредита `[ ]` (S, ~0,2 сессии)
+
+`LoanScheduleView`, `LoanPrepaymentSheet`, `LoanTermsEditSheet`: детенты и drag indicator через
+`accountSheetChrome`, автофокус `autofocusAfterPresentation`, текстовые Save/Cancel, ноль
+`Font.system(size:)` и числовых литералов в padding/spacing (grep-чек в отчёте фазы).
+
+## Ф3.6 — Гейт фазы и сдача `[ ]`
+
+Полный `millioTests` против baseline · `git diff --numstat Localizable.xcstrings` · сводка изменений
+владельцу + список того, что проверить на устройстве · вопрос о мерже. Ничего не мержим и не пушим
+до явного «да».
+
+---
+
+## Риски
+
+| Риск | Митигация |
+|---|---|
+| Применение плановой операции спишет расход, но не уменьшит долг | Ф3.3 хук через `LoanPaymentRecorder`; тест «тело уменьшилось» — гейт фазы |
+| Двойной учёт: ручная кнопка + авто-применение | Один путь записи (Ф3.4): кнопка применяет план, а не создаёт платёж |
+| `every2Months` не мапится в recurrence | Открытый вопрос 1; по умолчанию — разовая пересоздаваемая операция |
+| Правка `CashflowScheduledService` задевает общий Cashflow | Хук по `importSourceRaw`, поведение прочих операций не меняется; регресс-сьют Cashflow в гейте |
+| Плановая операция-сирота после удаления счёта | Тест на удаление в Ф3.3 |
+| Ветка растёт от несмерженной Ф1 | Как и Ф2: мерж цепочкой Ф0→Ф1→Ф2→Ф3 после device-проверок |
+
+## Решения владельца (2026-09-07)
+
+1. **`every2Months`** → добавить правило в `CashflowRecurrenceRule` (расширить модель плановых
+   операций Cashflow, не подгонять кредит под существующие правила).
+2. **«Внести платёж»** → применяет ближайшую плановую операцию (единый путь записи, без независимой
+   факт-транзакции).
+3. **Досрочка меняет план** → пересоздание плана в Cashflow **с подтверждением владельца** в листе
+   досрочки (не молча).
+4. **Ветка `feature/planned-operations-applied-notice`** (Ф0–Ф5) → **мержится в `develop` первой**,
+   Ф3.3 стартует поверх обновлённого `develop`/цепочки веток, не параллельно ей.
+
+**Следствие для Ф3.3 (обновить перед стартом):**
+- В `LoanPlannedPaymentScheduler.sync()` — маппинг `every2Months → CashflowRecurrenceRule` как
+  полноценное правило, не как разовая операция (пункт «every2Months ведёт себя по выбранному
+  варианту» в тестах — реализовать именно так, старая пометка «рекомендую разовую» снята).
+- Ф3.4: лист подтверждения досрочки получает шаг «план платежей изменится — подтвердить» перед
+  применением новой суммы/срока в Cashflow.
+- Порядок веток: сначала проверить/смержить `feature/planned-operations-applied-notice` в `develop`,
+  и только затем создавать `feature/account-screens-loan` от актуальной цепочки Ф0→Ф1.
+
+## Журнал
+
+_Пусто — фаза не начата._

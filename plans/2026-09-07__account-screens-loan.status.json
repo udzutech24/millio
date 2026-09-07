@@ -1,0 +1,15 @@
+{
+  "planFile": "2026-09-07__account-screens-loan.md",
+  "title": "Ф3 Кредит — дельта до решений владельца",
+  "updated": "2026-09-07T18:00:00Z",
+  "phases": [
+    { "name": "Ф3.1 Досрочка без предвыбора", "status": "pending", "note": "S · LoanPrepaymentSheet:16 + витрина" },
+    { "name": "Ф3.2 Страховка вне кредита", "status": "pending", "note": "S · снять ветку .insurance из recorder+projector" },
+    { "name": "Ф3.3 Плановая операция платежа (ядро)", "status": "pending", "note": "L · вопросы сняты 07.09; ждёт мержа planned-operations-applied-notice в develop" },
+    { "name": "Ф3.4 UI: платёж через план", "status": "pending", "note": "M · кнопка применяет ближайшую плановую" },
+    { "name": "Ф3.5 Аудит стиля 3 экранов кредита", "status": "pending", "note": "S · детенты, автофокус, токены" },
+    { "name": "Ф3.6 Гейт и сдача", "status": "pending", "note": "millioTests baseline + device" }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}
