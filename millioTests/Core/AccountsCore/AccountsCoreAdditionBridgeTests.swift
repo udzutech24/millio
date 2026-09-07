@@ -13,9 +13,17 @@ struct AccountsCoreAdditionBridgeTests {
 
     // MARK: - cardKind
 
+    /// Ф2: эвристика «карта без банка = наличные» окончательно мертва — у наличных свой пресет
+    /// (`moneyKind(.investment, .cash)`), а пустой банк остаётся картой. Тест был красным и до
+    /// этой фазы: production перестал угадывать наличные по банку раньше, чем поправили ожидание.
     @Test
-    func cardKindOtherBankIsCash() {
-        #expect(AccountsCoreAdditionBridge.cardKind(bank: .other) == .cash)
+    func cardKindOtherBankStaysDebitCard() {
+        #expect(AccountsCoreAdditionBridge.cardKind(bank: .other) == .debitCard)
+        #expect(
+            AccountsCoreAdditionBridge.moneyKind(
+                accountType: .investment, investmentPreset: .cash, bank: .other, isEditingLegacy: false
+            ) == .cash
+        )
     }
 
     @Test
