@@ -219,6 +219,7 @@ struct millioApp: App {
                             unlockWithBiometrics: unlockWithBiometricsIfEnabled
                         )
                         presentNextIncomingStatementIfReady()
+                        presentAppliedPlannedNoticeIfReady()
 
                         await financeStartupWarmupUseCase?.warmupIfNeeded()
                         await runHistoricalMaintenancePipeline()
@@ -236,8 +237,27 @@ struct millioApp: App {
                 }
                 .onChange(of: appState.lifecycle) { _, _ in
                     presentNextIncomingStatementIfReady()
+                    presentAppliedPlannedNoticeIfReady()
                 }
                 .onChange(of: appState.isAppLocked) { _, _ in
+                    presentNextIncomingStatementIfReady()
+                    presentAppliedPlannedNoticeIfReady()
+                }
+                // Сводка стоит в очереди ПОСЛЕ листа выписки: пока выписка занимает экран,
+                // решение — .wait, и повторная попытка нужна ровно в момент её закрытия.
+                .onChange(of: appState.pendingIncomingStatementItem == nil) { _, _ in
+                    presentAppliedPlannedNoticeIfReady()
+                }
+                .onChange(of: appState.appliedPlannedNoticeRequestToken) { _, _ in
+                    presentAppliedPlannedNoticeIfReady()
+                }
+                // Закрытие листа сводки: журнал очищается ТОЛЬКО здесь (не в момент показа —
+                // иначе убитое с открытым листом приложение стёрло бы непрочитанную сводку),
+                // и здесь же освобождается очередь для листа выписки.
+                .onChange(of: appState.pendingAppliedPlannedNotice) { previous, current in
+                    if current == nil, let previous {
+                        appliedPlannedNoticeStore()?.finishPresentation(previous.digest)
+                    }
                     presentNextIncomingStatementIfReady()
                 }
             } else {
@@ -278,7 +298,10 @@ struct millioApp: App {
                 readiness = .locked
             } else if appState.lifecycle != .ready || activeModelContainer == nil {
                 readiness = .storeUnavailable
-            } else if appState.isRestoreInProgress || isSwitchingScope || isReconciling {
+            } else if appState.isRestoreInProgress || isSwitchingScope || isReconciling
+                        || appState.pendingAppliedPlannedNotice != nil {
+                // Сводка уже на экране: выписка ждёт её закрытия. Без этой ветки оба листа
+                // оказались бы взаимно заблокированы биндингами RootTabView.
                 readiness = .modalBusy
             } else {
                 readiness = .ready
@@ -287,6 +310,39 @@ struct millioApp: App {
         } catch {
             AppLogger.log(.error, category: "StatementIngress", "Statement inbox unavailable code=inbox_failed")
         }
+    }
+
+    /// Единственная точка показа сводки применённых плановых операций: и после цикла применения
+    /// (через `appState.appliedPlannedNoticeRequestToken`), и на `didBecomeActive`. Второго пути
+    /// презентации нет намеренно — два листа одновременно SwiftUI глотает молча.
+    @MainActor
+    private func presentAppliedPlannedNoticeIfReady() {
+        // Скриншот-режим и UI-тесты сеются данными с плановыми операциями: лист поверх экрана
+        // ломает и съёмку скриншотов, и сценарии тестов.
+        guard !runtimeEnvironment.isAnyTesting else { return }
+        guard let store = appliedPlannedNoticeStore() else { return }
+
+        let readiness = AppliedPlannedNoticePresentation.Readiness(
+            isAppLocked: appState.isAppLocked,
+            isStoreReady: appState.lifecycle == .ready,
+            isModalBusy: appState.isRestoreInProgress || isSwitchingScope || isReconciling,
+            hasPendingStatement: appState.pendingIncomingStatementItem != nil,
+            isAlreadyPresenting: appState.pendingAppliedPlannedNotice != nil
+        )
+
+        guard let item = AppliedPlannedNoticePresentation.makeItem(
+            store: store,
+            readiness: readiness
+        ) else { return }
+        appState.pendingAppliedPlannedNotice = item
+    }
+
+    /// Журнал сводки. Scope берётся тем же способом, что у `CashflowViewModel.dataScopeIdentifier`,
+    /// иначе журнал писался бы под одним ключом, а читался под другим.
+    @MainActor
+    private func appliedPlannedNoticeStore() -> AppliedPlannedNoticeStore? {
+        guard let scopeIdentifier = activeModelContainer?.configurations.first?.name else { return nil }
+        return AppliedPlannedNoticeStore(defaults: .standard, scopeIdentifier: scopeIdentifier)
     }
 
     @MainActor

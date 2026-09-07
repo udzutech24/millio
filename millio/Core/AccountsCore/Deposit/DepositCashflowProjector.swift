@@ -8,8 +8,24 @@ enum DepositCashflowProjectionDiagnostic: Equatable {
 }
 
 struct DepositCashflowProjectionReport: Equatable {
-    var insertedCount = 0
+
+    /// Материализованная строка процентов — ровно те данные, что ушли в `CashflowTransaction`.
+    /// Нужна вызывающей стороне, чтобы рассказать пользователю ЧТО начислилось: сам проектор
+    /// ни имени счёта, ни суммы наружу раньше не отдавал, только счётчик.
+    struct InsertedRow: Equatable {
+        let amount: Decimal
+        let currencyCode: String
+        let date: Date
+        let accountID: UUID
+        let accountName: String
+    }
+
+    var inserted: [InsertedRow] = []
     var diagnostics: [DepositCashflowProjectionDiagnostic] = []
+
+    /// Сохранено вычисляемым ради обратной совместимости вызывающих: смысл прежний —
+    /// сколько строк реально вставлено за прогон.
+    var insertedCount: Int { inserted.count }
 }
 
 /// Purely policy-driven projection from confirmed deposit interest into Cashflow.
@@ -64,7 +80,13 @@ enum DepositCashflowProjector {
                 importReferenceKey: sourceID,
                 affectsCardBalance: false
             ))
-            report.insertedCount += 1
+            report.inserted.append(DepositCashflowProjectionReport.InsertedRow(
+                amount: amount,
+                currencyCode: account.currency,
+                date: event.date,
+                accountID: account.id,
+                accountName: account.name
+            ))
         }
         return report
     }
