@@ -1,13 +1,13 @@
 # План: Ф3 «Кредит» — дельта до решений владельца
 
-Дата: 2026-09-07 · Статус: **НЕ НАЧАТ** — вопросы владельца сняты 07.09 (см. «Решения владельца»),
-ждёт guard phrase на код и мержа `feature/planned-operations-applied-notice` в `develop`
+Дата: 2026-09-07 · Статус: **В РАБОТЕ** — сессия A (Ф3.1 · Ф3.2 · Ф3.5) закрыта, сессия B
+(Ф3.3 · Ф3.4) не начата
 Спека: [`specs/2026-09-07-loan-screen-unification.md`](../specs/2026-09-07-loan-screen-unification.md)
 Research: [`thoughts/research/2026-09-07-loan-screen-delta.md`](../thoughts/research/2026-09-07-loan-screen-delta.md)
 Родительский план: [`plans/2026-09-06__account-screens-unification.md`](2026-09-06__account-screens-unification.md) (Ф3)
 Sidecar: `2026-09-07__account-screens-loan.status.json`
 
-**Ветка:** `feature/account-screens-loan` от `feature/account-screens-decompose` (Ф1).
+**Ветка:** `feature/account-screens-loan` от `develop` (Ф1 уже смержена — цепочка не нужна).
 **Правила прогона:** коммит после каждой зелёной под-фазы · merge / push / установка на устройство —
 только с явного разрешения владельца · симулятор один: iPhone 17 Pro · сборка
 `xcodebuild ... -derivedDataPath /tmp/dd-loan -quiet 2>&1 | tail -20` · перед каждым коммитом
@@ -28,7 +28,7 @@ Sidecar: `2026-09-07__account-screens-loan.status.json`
 
 ---
 
-## Ф3.1 — Досрочка без предвыбора `[ ]` (S, ~0,3 сессии)
+## Ф3.1 — Досрочка без предвыбора `[x]` (S, ~0,3 сессии)
 
 **Файлы:** `UI/Services/Finances/AccountsCore/Loan/LoanPrepaymentSheet.swift` (:16 `@State strategy`),
 `LoanPrepaymentPresentation.swift` (:199-234 `options(for:)`, :180 `selectedStrategy`),
@@ -43,7 +43,7 @@ Sidecar: `2026-09-07__account-screens-loan.status.json`
 экономии обоих вариантов на эталоне: «срок» 226 771 ₽, «платёж» 100 455 ₽; одна опция → авто-выбор)
 · диф xcstrings только вставки.
 
-## Ф3.2 — Страховка вне кредита `[ ]` (S, ~0,2 сессии)
+## Ф3.2 — Страховка вне кредита `[x]` (S, ~0,2 сессии)
 
 **Файлы:** `Core/AccountsCore/Loan/LoanPaymentRecorder.swift` (:83-90),
 `Core/AccountsCore/Loan/LoanPaymentCashflowProjector.swift` (:22 `insuranceReferenceKey`, :85 `insuranceNote`),
@@ -98,7 +98,7 @@ Sidecar: `2026-09-07__account-screens-loan.status.json`
 **Гейт:** build · `LoanDetailPresentationTests` расширены · device-скрины деталки, листа платежа и
 листа досрочки.
 
-## Ф3.5 — Аудит стиля трёх экранов кредита `[ ]` (S, ~0,2 сессии)
+## Ф3.5 — Аудит стиля трёх экранов кредита `[x]` (S, ~0,2 сессии)
 
 `LoanScheduleView`, `LoanPrepaymentSheet`, `LoanTermsEditSheet`: детенты и drag indicator через
 `accountSheetChrome`, автофокус `autofocusAfterPresentation`, текстовые Save/Cancel, ноль
@@ -145,4 +145,31 @@ Sidecar: `2026-09-07__account-screens-loan.status.json`
 
 ## Журнал
 
-_Пусто — фаза не начата._
+### 2026-09-07 · сессия A: Ф3.1 + Ф3.2 + Ф3.5 (ветка `feature/account-screens-loan` от `develop`)
+
+| Под-фаза | Коммит | Итог |
+|---|---|---|
+| Ф3.1 досрочка без предвыбора | `a49d206` | build ✅ · `LoanPrepaymentPresentationTests` 14/14 + `LoanPrepaymentPlannerTests` 6/6 ✅ · xcstrings +44/−0 |
+| Ф3.2 страховка вне кредита | `26cebfe` | build ✅ · Projection 5/5 + Recorder 4/4 + BackupIntegration 4/4 + LocalizationKeys ✅ · xcstrings +0/−22 (объяснено) |
+| Ф3.5 аудит стиля | `0b41249` | build ✅ · grep-чек чистый · xcstrings без изменений |
+
+**Гейт сессии:** полный `millioTests` — 2691 тест, 2662 passed / 23 failed / 6 expected failures.
+В baseline (18–23 красных, список известных флаков), ни одного падения в кластере `Loan*`.
+
+**Решения по ходу, отличные от буквы плана:**
+- **Таблица «что изменится» и карточка итога скрыты, пока сценарий не выбран.** Считать «стало»
+  не от чего: показывать её от `.term` = вернуть предвыбор через заднюю дверь. Все цифры выбора
+  живут в подписях вариантов, поэтому пустоты на экране нет.
+- **Радио-группу из одной строки прячет вью, а не витрина.** `options` остаётся полным списком
+  доступных сценариев (это правда о плане), а «выбор без выбора» не рисуется — так живой остаётся
+  и подпись дифференцированного сценария, и ключ `term_note_differentiated_format`.
+- **Подпись «платежа» оставлена прежней** («Срок прежний, платёж падает до 25 600 ₽»): «падает до»
+  уже читается против старого платежа, а ради явного «31 063 → 25 600» пришлось бы заводить ключ и
+  осиротить существующий. Дата закрытия добавлена только «сроку» — там она несёт смысл.
+- **`.foregroundStyle(.white)` в тулбаре `LoanTermsEditSheet` не тронут:** это общий приём пилюли
+  на `brandPrimary` в 10 файлах `AccountsCore`, точечная правка развела бы кнопки по виду.
+
+**Проверить на устройстве (владелец):** лист досрочки — обе строки с тегами экономии и
+заблокированная кнопка до выбора; выбор варианта разворачивает таблицу; дифференцированный кредит
+и полное погашение подтверждаются без выбора; лист «Условия кредита» открывается с общим детентом
+и «язычком».

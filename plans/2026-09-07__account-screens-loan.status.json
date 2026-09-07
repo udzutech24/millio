@@ -1,14 +1,14 @@
 {
   "planFile": "2026-09-07__account-screens-loan.md",
   "title": "Ф3 Кредит — дельта до решений владельца",
-  "updated": "2026-09-07T18:00:00Z",
+  "updated": "2026-09-07T19:30:00Z",
   "phases": [
-    { "name": "Ф3.1 Досрочка без предвыбора", "status": "pending", "note": "S · LoanPrepaymentSheet:16 + витрина" },
-    { "name": "Ф3.2 Страховка вне кредита", "status": "pending", "note": "S · снять ветку .insurance из recorder+projector" },
-    { "name": "Ф3.3 Плановая операция платежа (ядро)", "status": "pending", "note": "L · вопросы сняты 07.09; ждёт мержа planned-operations-applied-notice в develop" },
+    { "name": "Ф3.1 Досрочка без предвыбора", "status": "done", "note": "a49d206 · тесты 14/14 · нужна device-проверка" },
+    { "name": "Ф3.2 Страховка вне кредита", "status": "done", "note": "26cebfe · projection 5/5, xcstrings −1 ключ" },
+    { "name": "Ф3.3 Плановая операция платежа (ядро)", "status": "pending", "note": "L · сессия B, стартует от актуального develop" },
     { "name": "Ф3.4 UI: платёж через план", "status": "pending", "note": "M · кнопка применяет ближайшую плановую" },
-    { "name": "Ф3.5 Аудит стиля 3 экранов кредита", "status": "pending", "note": "S · детенты, автофокус, токены" },
-    { "name": "Ф3.6 Гейт и сдача", "status": "pending", "note": "millioTests baseline + device" }
+    { "name": "Ф3.5 Аудит стиля 3 экранов кредита", "status": "done", "note": "0b41249 · chrome листу условий, литералы в LoanScreenStyle" },
+    { "name": "Ф3.6 Гейт и сдача", "status": "in_progress", "note": "millioTests 2662/23 в baseline; device-проверка и мерж — за владельцем" }
   ],
   "costUsd": null,
   "etaMinutes": null
