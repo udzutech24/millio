@@ -61,7 +61,10 @@ struct CashflowScheduledCheckpointTests {
             onTransactionsMutated: {},
             onResolveExchangeInfo: { _ in CashflowExchangeInfo(rate: nil, rateDate: nil, rateCurrency: nil) },
             onApplyRecurringToCard: { _ in },
-            onApplyDuePlannedEffect: onApply
+            onApplyDuePlannedEffect: onApply,
+            appliedNoticeStore: AppliedPlannedNoticeStore(defaults: defaults, scopeIdentifier: scope),
+            noticeAccountNameResolver: { _ in "" },
+            noticeTitleResolver: { _ in "" }
         )
     }
 

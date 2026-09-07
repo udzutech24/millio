@@ -131,6 +131,13 @@ final class AppState {
     /// App-owned, validated statement copy. Presentation is deferred until unlock and store readiness.
     var pendingIncomingStatementItem: IncomingStatementInboxItem?
     var isStatementOnboardingActive = false
+    /// Сводка применённых плановых операций, готовая к показу. Заполняется только через гейт
+    /// готовности в `millioApp` — писать сюда напрямую из экранов нельзя, иначе сводка всплывёт
+    /// поверх экрана блокировки или второго листа.
+    var pendingAppliedPlannedNotice: AppliedPlannedNoticeItem?
+    /// Счётчик запросов «проверь журнал применённых операций». Инкремент — единственный способ
+    /// для Cashflow-слоя попросить показ: сам он не видит ни блокировки, ни смены scope.
+    var appliedPlannedNoticeRequestToken: Int = 0
     var backendRegionCode: String = ""
     var backendBaseURLString: String = ""
     var isBackendFallbackActive: Bool = false
