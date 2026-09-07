@@ -35,6 +35,18 @@ struct FinanceAddAccountProductPickerTests {
         #expect(selection.title == "Счет")
     }
 
+    @Test("Опция наличных маппится в собственный preset и не путается со счётом")
+    func cashOptionMapsToDedicatedPreset() {
+        let selection = FinanceAddAccountProductOption.cash.selection(locale: Locale(identifier: "ru"))
+
+        #expect(selection.accountType == .investment)
+        #expect(selection.investmentCategory == .other)
+        #expect(selection.investmentPreset == .cash)
+        #expect(selection.title == "Наличные")
+        #expect(FinanceAddAccountProductOption.cash.title(locale: Locale(identifier: "en")) == "Cash")
+        #expect(FinanceAddAccountProductOption.cash.title(locale: Locale(identifier: "zh-Hans")) == "现金")
+    }
+
     @Test("Опция вклада маппится в отдельный preset без конфликта с активом")
     func depositOptionMapsToDedicatedPreset() {
         let selection = FinanceAddAccountProductOption.deposit.selection(locale: Locale(identifier: "ru"))
@@ -73,7 +85,7 @@ struct FinanceAddAccountProductPickerTests {
         let sections = FinanceAddAccountProductOption.visibleSections
 
         #expect(sections.map(\.section) == [.money, .liabilities, .assets])
-        #expect(sections[0].options == [.card, .account, .deposit])
+        #expect(sections[0].options == [.card, .account, .cash, .deposit])
         #expect(sections[1].options == [.credit, .debt])
         #expect(sections[2].options == [.investment, .house, .stocks, .business, .crypto])
     }
@@ -111,6 +123,13 @@ struct FinanceAddAccountProductPickerTests {
                 investmentCategory: .other,
                 investmentPreset: .account
             ) == .account
+        )
+        #expect(
+            FinanceAddAccountProductOption.currentSelection(
+                accountType: .investment,
+                investmentCategory: .other,
+                investmentPreset: .cash
+            ) == .cash
         )
         #expect(
             FinanceAddAccountProductOption.currentSelection(

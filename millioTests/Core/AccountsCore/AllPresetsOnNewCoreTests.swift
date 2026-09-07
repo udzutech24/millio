@@ -29,6 +29,9 @@ struct AllPresetsOnNewCoreTests {
         case .account:
             return (.init(option: option, name: "Account", currency: "RUB", amount: 100, date: date),
                     .init(product: .bankAccount, kind: .bankAccount, meta: nil, balance: 100, hasBuy: false))
+        case .cash:
+            return (.init(option: option, name: "Cash", currency: "RUB", amount: 100, date: date),
+                    .init(product: .cash, kind: .cash, meta: nil, balance: 100, hasBuy: false))
         case .deposit:
             let termEnd = Calendar(identifier: .gregorian).date(byAdding: .month, value: 3, to: date)
             let meta = DepositMeta(
@@ -82,7 +85,7 @@ struct AllPresetsOnNewCoreTests {
 
     @Test
     func everyVisiblePresetPersistsExpectedCompleteGraph() throws {
-        #expect(FinanceAddAccountProductOption.visibleOptions.count == 10)
+        #expect(FinanceAddAccountProductOption.visibleOptions.count == 11)
         #expect(!FinanceAddAccountProductOption.visibleOptions.contains(.other))
         let date = Date(timeIntervalSince1970: 1_700_000_000)
 
@@ -159,7 +162,7 @@ struct AllPresetsOnNewCoreTests {
 
     @Test("Membership flag survives resolver and factory for every product shape", arguments: [
         FinanceAddAccountProductOption.card,
-        .account, .deposit, .credit, .debt, .investment, .house, .stocks, .business, .crypto, .other
+        .account, .cash, .deposit, .credit, .debt, .investment, .house, .stocks, .business, .crypto, .other
     ])
     func excludedProductStaysExcluded(option: FinanceAddAccountProductOption) throws {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
