@@ -128,7 +128,34 @@ enum LoanPlannedPaymentScheduler {
         for row in try openPlannedRows(accountID: accountID, context: context) { context.delete(row) }
     }
 
+    /// Ближайшая непринятая плановая операция счёта — то, что деталка показывает строкой
+    /// «запланирован в Cashflow» и что применяет кнопка «Внести платёж».
+    static func openPlannedRow(accountID: UUID, context: ModelContext) throws -> CashflowTransaction? {
+        try openPlannedRows(accountID: accountID, context: context).first
+    }
+
     // MARK: - Применение
+
+    /// «Внести платёж» с экрана: применяет ближайшую плановую операцию сейчас.
+    ///
+    /// Плана нет (сбой синхронизации, восстановление бэкапа старого формата) — сначала
+    /// восстанавливаем его, и только потом применяем: заводить в обход плана «просто платёж»
+    /// значило бы вернуть второй путь записи, ради устранения которого фаза и делалась.
+    @MainActor
+    static func applyNextPlannedPayment(
+        accountID: UUID,
+        context: ModelContext,
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) throws {
+        var row = try openPlannedRow(accountID: accountID, context: context)
+        if row == nil {
+            row = try sync(accountID: accountID, context: context, calendar: calendar)
+            try context.save()
+        }
+        guard let row else { throw LoanPlannedPaymentError.nothingToPay }
+        try applyPlannedPayment(row, context: context, calendar: calendar)
+        try context.save()
+    }
 
     /// Применение плановой операции: тело — в ленту счёта, проценты — в договор, план сдвигается на
     /// следующий платёж. Единственный путь, которым плановая операция кредита превращается в деньги.

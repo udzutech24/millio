@@ -147,6 +147,99 @@ struct LoanDetailPresentationTests {
         #expect(result.nextPaymentDate == firstPaymentDate)
     }
 
+    // MARK: - Ф3.4: витрина плановой операции
+
+    @Test("Без плана в Cashflow витрина не обещает платёж — кнопка «Внести платёж» скрыта")
+    func presentationWithoutPlanHidesPaymentAction() {
+        let terms = LoanTerms(
+            principal: 1_200_000, annualRatePercent: 18.9, termPeriods: 60,
+            firstPaymentDate: firstPaymentDate
+        )
+        let result = LoanDetailPresentation.make(
+            terms: terms, outstandingPrincipal: 1_200_000, paymentsMade: 0,
+            paidInterestTotal: 0, currency: "RUB", calendar: calendar
+        )
+
+        #expect(result.plannedPaymentDate == nil)
+        // Ближайший платёж по графику при этом существует: витрина различает «график знает дату»
+        // и «в Cashflow лежит операция, которую можно применить».
+        #expect(result.nextPaymentDate != nil)
+    }
+
+    @Test("Дата плановой операции доезжает до витрины и совпадает с ближайшим платежом графика")
+    func plannedPaymentDateMatchesSchedule() throws {
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let context = container.mainContext
+        let (account, contract) = try makeReferenceLoan(context: context)
+
+        let plannedRow = try #require(
+            try LoanPlannedPaymentScheduler.openPlannedRow(accountID: account.id, context: context)
+        )
+        let view = LoanDetailPresentation.make(
+            terms: contract.terms,
+            outstandingPrincipal: 1_200_000,
+            paymentsMade: contract.paymentsMade,
+            paidInterestTotal: contract.paidInterestTotal,
+            currency: account.currency,
+            plannedPaymentDate: plannedRow.transactionDate,
+            calendar: calendar
+        )
+
+        #expect(view.plannedPaymentDate == plannedRow.transactionDate)
+        // Сравнение по дню, а не по мгновению: план собирается календарём системной зоны
+        // (`LoanContractStore.upsert` → `sync`), а витрина в этом тесте считает в UTC. На экране
+        // это один и тот же день, и именно он — обещание пользователю.
+        #expect(Calendar(identifier: .gregorian).isDate(
+            try #require(view.plannedPaymentDate),
+            inSameDayAs: try #require(view.nextPaymentDate)
+        ))
+        // Шаг плана — та же периодичность, что у договора, словами Cashflow.
+        #expect(view.plannedRecurrenceTitle == CashflowRecurrenceRule.monthly.displayName)
+    }
+
+    @Test("Двухмесячный кредит показывает шаг плана «раз в 2 месяца»")
+    func everyTwoMonthsShowsOwnRecurrenceTitle() {
+        let terms = LoanTerms(
+            principal: 1_200_000, annualRatePercent: 18.9, termPeriods: 30,
+            firstPaymentDate: firstPaymentDate, scheduleType: .annuity, frequency: .every2Months
+        )
+        let result = LoanDetailPresentation.make(
+            terms: terms, outstandingPrincipal: 1_200_000, paymentsMade: 0,
+            paidInterestTotal: 0, currency: "RUB",
+            plannedPaymentDate: firstPaymentDate, calendar: calendar
+        )
+
+        #expect(result.plannedRecurrenceTitle == CashflowRecurrenceRule.every2Months.displayName)
+    }
+
+    @Test("«Внести платёж» применяет плановую операцию: долг падает, план встаёт на следующий период")
+    func paymentButtonAppliesPlannedOperation() throws {
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let context = container.mainContext
+        let (account, contract) = try makeReferenceLoan(context: context)
+        let before = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .loan, on: .distantFuture)
+        let plannedBefore = try #require(
+            try LoanPlannedPaymentScheduler.openPlannedRow(accountID: account.id, context: context)
+        )
+
+        // Тот же вызов, что делает кнопка на деталке.
+        try LoanPlannedPaymentScheduler.applyNextPlannedPayment(accountID: account.id, context: context)
+
+        let after = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .loan, on: .distantFuture)
+        #expect(after > before) // долг-обязательство лежит минусом, платёж двигает его к нулю
+        #expect(contract.paymentsMade == 1)
+        #expect(plannedBefore.hasAppliedBalanceEffect)
+
+        let plannedAfter = try #require(
+            try LoanPlannedPaymentScheduler.openPlannedRow(accountID: account.id, context: context)
+        )
+        #expect(plannedAfter.transactionDate > plannedBefore.transactionDate)
+        // Второй строки расхода на тот же платёж не появилось: план стал фактом.
+        let facts = try context.fetch(FetchDescriptor<CashflowTransaction>())
+            .filter { $0.importSourceRaw == LoanPaymentCashflowProjector.importSource }
+        #expect(facts.count == 2) // применённый факт + следующий план
+    }
+
     // MARK: - Границы
 
     @Test("Закрытый кредит: платежей впереди нет, кнопка платежа гаснет")

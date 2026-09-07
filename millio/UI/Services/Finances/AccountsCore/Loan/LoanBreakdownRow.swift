@@ -10,15 +10,26 @@ struct LoanBreakdownRow: View {
     let value: String
     /// Цвет точки-легенды. `nil` — строка без точки (нейтральная величина, не часть платежа).
     var legendColor: Color?
+    /// Пояснение под названием. Нужно строке плана: «дата» без «запланирован в Cashflow» читалась
+    /// бы как ещё одна справочная цифра, а не как обещание автоматического списания.
+    var caption: String?
 
     var body: some View {
         HStack(spacing: AppSpacing.s) {
             if let legendColor {
                 Circle().fill(legendColor).frame(width: 8, height: 8)
             }
-            Text(title)
-                .font(.millioBody)
-                .foregroundStyle(AppColors.textPrimary)
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text(title)
+                    .font(.millioBody)
+                    .foregroundStyle(AppColors.textPrimary)
+                if let caption {
+                    Text(caption)
+                        .font(.millioCaptionRegular)
+                        .foregroundStyle(AppColors.textTertiary)
+                        .lineLimit(2)
+                }
+            }
             Spacer(minLength: AppSpacing.s)
             Text(value)
                 .font(.millioBody)

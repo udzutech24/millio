@@ -62,17 +62,20 @@ extension AccountDetailView {
         return items
     }
 
-    /// «Внести платёж» гаснет, пока графика платежей нет, а досрочка — при нулевом остатке:
-    /// то же условие, что раньше выключало pill-кнопки внутри `LoanDetailSection`.
+    /// «Внести платёж» = применить плановую операцию Cashflow, поэтому без живого плана (нет
+    /// договора, кредит закрыт) кнопки нет вовсе: гасить её нечем — применять нечего.
+    /// Досрочка гаснет при нулевом остатке.
     var loanActionItems: [AccountActionItem] {
         guard let presentation = loanPresentation else { return [] }
-        return [
-            .init(
+        var items: [AccountActionItem] = []
+        if presentation.plannedPaymentDate != nil {
+            items.append(.init(
                 title: L("accounts_core.loan.detail.action.payment"),
                 icon: "creditcard",
-                isProminent: true,
-                isEnabled: presentation.nextPayment != nil
-            ) { sheet = .loanPayment },
+                isProminent: true
+            ) { sheet = .loanPayment })
+        }
+        items.append(contentsOf: [
             .init(
                 title: L("accounts_core.loan.detail.action.prepayment"),
                 icon: "bolt.fill",
@@ -80,7 +83,8 @@ extension AccountDetailView {
             ) { sheet = .loanPrepayment },
             .init(title: L("accounts_core.loan.detail.schedule"), icon: "list.bullet.rectangle") { showLoanSchedule = true },
             moreActionItem
-        ]
+        ])
+        return items
     }
 
     var genericActionItems: [AccountActionItem] {
