@@ -60,14 +60,18 @@ struct AccountAdjustBalanceSheet: View {
     /// Заголовок формы — по умолчанию «Изменить баланс», но эта же форма переиспользуется для
     /// переоценки ручного актива (Фаза 4: «Переоценить» — тот же ввод «новое значение целиком»).
     var titleOverride: String?
+    /// Подпись под полем: зачем вводить сумму целиком. Нужна там, где действие называется не
+    /// «изменить баланс» (сверка наличных), иначе смысл «разницу запишем сами» негде объяснить.
+    var hint: String?
 
     @Environment(\.dismiss) private var dismiss
     @State private var amountText: String
     @FocusState private var isAmountFocused: Bool
 
-    init(currentBalance: Decimal, titleOverride: String? = nil, onSave: @escaping (Decimal) -> Void) {
+    init(currentBalance: Decimal, titleOverride: String? = nil, hint: String? = nil, onSave: @escaping (Decimal) -> Void) {
         self.currentBalance = currentBalance
         self.titleOverride = titleOverride
+        self.hint = hint
         self.onSave = onSave
         _amountText = State(initialValue: NSDecimalNumber(decimal: currentBalance).stringValue)
     }
@@ -86,6 +90,12 @@ struct AccountAdjustBalanceSheet: View {
                         value: $amountText
                     )
                     .focused($isAmountFocused)
+                } footer: {
+                    if let hint {
+                        Text(hint)
+                            .font(.millioCaptionRegular)
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
                 }
             }
             .autofocusAfterPresentation($isAmountFocused)

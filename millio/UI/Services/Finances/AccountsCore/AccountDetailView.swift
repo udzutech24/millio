@@ -204,6 +204,13 @@ struct AccountDetailView: View {
                         )
                     } else if let loanPresentation {
                         LoanDetailSection(presentation: loanPresentation, onAction: handleLoanAction)
+                    } else if account.kind == .cash {
+                        CashDetailSection(
+                            lastReconciliation: CashReconciliationPresentation.lastReconciliationDate(
+                                events: sortedEvents
+                            ),
+                            onReconcile: { sheet = .adjustBalance }
+                        )
                     } else if account.productType == .creditCard {
                         CreditCardDetailSection(account: account, rawBalance: balanceToday)
                     } else if let snapshot = debitSnapshot {
