@@ -12,8 +12,9 @@ struct LoanPrepaymentSheet: View {
     let currency: String
     let onConfirm: (LoanExtraPaymentEntry) -> Void
 
-    /// Предвыбран «Срок» — решение владельца (спека §4.4): он математически выгоднее.
-    @State private var strategy: LoanPrepaymentStrategy = .term
+    /// Предвыбора нет (решение владельца 07.09): пока человек не выбрал «срок» или «платёж»,
+    /// подтверждать нечего — иначе он вносит досрочку по сценарию, который за него выбрал экран.
+    @State private var strategy: LoanPrepaymentStrategy?
     @State private var amountText = ""
     @FocusState private var amountFocused: Bool
     @State private var detent: PresentationDetent = .height(Self.compactHeight)
@@ -49,7 +50,9 @@ struct LoanPrepaymentSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.xl) {
                     amountField(presentation)
-                    if !presentation.options.isEmpty {
+                    // Единственный доступный сценарий витрина выбирает сама — радио-группа из одной
+                    // строки была бы выбором без выбора.
+                    if presentation.options.count > 1 {
                         section(L("accounts_core.loan.prepayment.section.what_reduce")) {
                             VStack(spacing: AppSpacing.s) {
                                 ForEach(presentation.options) { option in
