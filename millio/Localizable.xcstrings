@@ -645,19 +645,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reconcile"
+            "value" : "Change"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сверка"
+            "value" : "Изменить"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "核对"
+            "value" : "修改"
           }
         }
       }
@@ -691,19 +691,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Last reconciled: %@"
+            "value" : "Changed: %@"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Последняя сверка: %@"
+            "value" : "Меняли: %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "上次核对：%@"
+            "value" : "上次修改：%@"
           }
         }
       }
@@ -714,19 +714,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Not reconciled yet"
+            "value" : "Not changed yet"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сверки ещё не было"
+            "value" : "Сумму ещё не меняли"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "尚未核对"
+            "value" : "尚未修改"
           }
         }
       }
@@ -737,19 +737,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Count your cash and enter the actual amount — the difference is recorded as an adjustment"
+            "value" : "Enter the current amount — the difference is recorded as an adjustment"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Пересчитайте деньги и введите фактическую сумму — разница запишется корректировкой"
+            "value" : "Укажите текущую сумму — разница запишется корректировкой"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "清点现金并输入实际金额——差额将记为调整"
+            "value" : "输入当前金额——差额将记为调整"
           }
         }
       }
@@ -760,19 +760,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cash reconciliation"
+            "value" : "Cash amount"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сверка наличных"
+            "value" : "Сумма наличных"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "现金核对"
+            "value" : "现金金额"
           }
         }
       }
