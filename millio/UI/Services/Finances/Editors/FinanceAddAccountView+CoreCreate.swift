@@ -110,7 +110,7 @@ extension FinanceAddAccountView {
         var cardMeta: CardMeta?
 
         switch kind {
-        case .cash, .debitCard:
+        case .debitCard:
             guard let cardData else { return }
             currency = cardData.currency
             openingBalance = Decimal(cardData.balance)
@@ -119,7 +119,7 @@ extension FinanceAddAccountView {
                 last4: cardData.cardNumber.isEmpty ? nil : cardData.cardNumber,
                 creditLimit: cardData.cardType == .credit ? cardData.creditLimit.map { Decimal($0) } : nil
             )
-        default: // .bankAccount
+        default: // .bankAccount, .cash — обе формы денежные и без реквизитов карты
             guard let investmentData else { return }
             currency = investmentData.currency
             openingBalance = Decimal(investmentData.amount)
@@ -161,7 +161,7 @@ extension FinanceAddAccountView {
         var cardMeta: CardMeta?
 
         switch kind {
-        case .cash, .debitCard:
+        case .debitCard:
             guard let cardData else { throw AccountStatementOnboardingError.unsupportedProduct }
             currency = cardData.currency
             openingBalance = Decimal(cardData.balance)

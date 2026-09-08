@@ -114,6 +114,49 @@
 (reflog `HEAD@{4}`), приняв её за `develop`. Ветка перебазирована на `develop` — чужие 9 коммитов
 остались в `feature/entry-screen-simplify`, ничего не потеряно, но их мерж в `develop` так и не сделан.
 
+### Ф2 Наличные — `[x]` РЕАЛИЗОВАН (ждёт device-проверки владельцем)
+Ветка `feature/account-screens-cash` от `feature/account-screens-decompose` (= Ф0+Ф1, уже
+в `develop`: `0bb273d`, `6ef5333`). 4 коммита `68db3e4`, `be5b583`, `953eb92` (+ фикс теста).
+Не смержено, не запушено.
+
+- `[x]` **Ф2.1** `68db3e4` — пресет «Наличные» в пикере создания (блокер снят). Продукт `.cash`
+  в ядре существовал давно, входа в UI не было. Реализовано по образцу «Счёта»: новый
+  `FinanceAddAccountInvestmentPreset.cash` + опция `FinanceAddAccountProductOption.cash`
+  (секция «Деньги», порядок `card, account, cash, deposit`) → `FinanceProductCreationCommandResolver`
+  отдаёт `AccountProductType.cash` **с пустой метадатой** (без `CardMeta`: банк/last4/овердрафт
+  наличным не нужны). Форма — та же денежная (`InlineInvestmentCreateForm`: имя, сумма, валюта,
+  группа), новых экранов не заведено. Побочно: `createMoneyAccountOnNewCore` больше не пытается
+  читать `cardData` для `.cash` — ветка была мёртвой с тех пор, как `cardKind` перестал угадывать
+  наличные по пустому банку. 13 ключей локализации (ru/en/zh-Hans), правка `xcstrings` строго
+  аддитивная (`+299 / −0`).
+- `[x]` **Ф2.2** `be5b583` — `CashDetailSection` (66 строк, `AccountsCore/Cash/`): плашка
+  `.ultraThinMaterial` с датой последней сверки и кнопкой «Сверка». Лист — существующий
+  `AccountAdjustBalanceSheet` (уже `AmountTextField` + снизу + автофокус), у него появился
+  необязательный `hint`. Сверка = `AccountsCoreService.adjustBalance` → одно событие `.adjustment`
+  на разницу; дублирующей операции задним числом не создаётся. Пункт «Изменить баланс» у наличных
+  из «···» снят — вёл в тот же лист. Витрина вынесена в чистый `CashReconciliationPresentation`
+  (3 unit-теста: «сверки не было», последняя = самая поздняя `.adjustment`, дельта −180 без
+  income/expense).
+- `[x]` **Ф2.3** `953eb92` — снесён `AccountDetailForecastSection.swift` целиком
+  (`depositForecastSection` + его `forecastRow`; одноимённый `FinanceDynamicsView:1600` не тронут).
+
+**Гейт:** `xcodebuild build` exit 0, 0 ошибок; `millioTests` **2706 passed / 27 failed** — passed
+внутри baseline (2690–2720), красные в диапазоне флак-разброса Ф1 (25–28), состав совпадает с
+известным списком. Один красный оказался НЕ флаком, а протухшим ожиданием:
+`AccountsCoreAdditionBridgeTests.cardKindOtherBankIsCash` требовал «карта без банка = наличные»,
+хотя production отказался от этой эвристики раньше (тест был красным и на `develop`). После Ф2
+эвристика мертва окончательно — тест переписан на текущий контракт
+(`cardKind(.other) == .debitCard`, наличные приходят своим пресетом).
+
+**Найдено по пути (не чинил):** после сноса Ф2.3 осиротела цепочка вычислений вклада в
+`AccountDetailDepositSection.swift:27–121` (`accruedInterestTotal`, `monthlyForecastGross`,
+`termForecastGross`, `depositTaxAllocationForThisAccount`, `effectiveNetTaxRate`,
+`yearlyTaxEstimateForThisAccount`, `netAmount`) — она использовалась ТОЛЬКО удалённой вьюхой.
+Компилируется, но не вызывается ниоткуда. Это налоговая математика вклада, снос — решение
+владельца/фазы вклада, не Ф2.
+
+**Осталось по Ф2:** device-проверка владельцем (создание наличных из пикера + сверка на экране).
+
 ## Открытые вопросы
 1. Скрины текущих экранов дебетовой карты и наличных — для макетов Ф2/Ф4 (владелец пришлёт).
 2. `AccountProductTransitionSection:132` — `confirmationDialog` внутри формы правки. Намеренно не тронут

@@ -129,7 +129,9 @@ extension AccountDetailView {
             items.append(.init(title: L("debit_card.action.fee"), icon: "banknote") { sheet = .fee })
             items.append(.init(title: L("debit_card.action.refund"), icon: "arrow.uturn.backward.circle") { sheet = .refund })
         }
-        if account.kind != .manualAsset {
+        // У наличных этот же вход уже стоит на экране кнопкой «Сверка» (`CashDetailSection`) —
+        // второй пункт в «···» был бы дубликатом того же листа.
+        if account.kind != .manualAsset, account.kind != .cash {
             items.append(.init(title: adjustBalanceActionTitle, icon: "slider.horizontal.3") { sheet = .adjustBalance })
         }
         items.append(.init(title: L("accounts_core.detail.action.edit"), icon: "pencil") { sheet = .editDetails })

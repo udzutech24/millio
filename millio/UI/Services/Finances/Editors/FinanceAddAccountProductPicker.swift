@@ -76,6 +76,7 @@ struct FinanceAddAccountProductSectionModel: Identifiable, Equatable {
 enum FinanceAddAccountProductOption: String, CaseIterable, Identifiable {
     case card
     case account
+    case cash
     case deposit
     case credit
     case investment
@@ -90,7 +91,7 @@ enum FinanceAddAccountProductOption: String, CaseIterable, Identifiable {
 
     var section: FinanceAddAccountProductSection {
         switch self {
-        case .card, .account, .deposit:
+        case .card, .account, .cash, .deposit:
             return .money
         case .credit, .debt:
             return .liabilities
@@ -105,6 +106,8 @@ enum FinanceAddAccountProductOption: String, CaseIterable, Identifiable {
             return FinanceAccountType.card.icon
         case .account:
             return "building.columns.fill"
+        case .cash:
+            return "banknote.fill"
         case .deposit:
             return "building.columns.circle.fill"
         case .credit:
@@ -136,6 +139,8 @@ enum FinanceAddAccountProductOption: String, CaseIterable, Identifiable {
             return financeAddAccountCopy("finances.add_account.product.card.title", locale: locale)
         case .account:
             return financeAddAccountCopy("finances.add_account.product.account.title", locale: locale)
+        case .cash:
+            return financeAddAccountCopy("finances.add_account.product.cash.title", locale: locale)
         case .deposit:
             return financeAddAccountCopy("finances.add_account.product.deposit.title", locale: locale)
         case .credit:
@@ -163,6 +168,8 @@ enum FinanceAddAccountProductOption: String, CaseIterable, Identifiable {
             return financeAddAccountCopy("finances.add_account.product.card.subtitle", locale: locale)
         case .account:
             return financeAddAccountCopy("finances.add_account.product.account.subtitle", locale: locale)
+        case .cash:
+            return financeAddAccountCopy("finances.add_account.product.cash.subtitle", locale: locale)
         case .deposit:
             return financeAddAccountCopy("finances.add_account.product.deposit.subtitle", locale: locale)
         case .credit:
@@ -202,6 +209,13 @@ enum FinanceAddAccountProductOption: String, CaseIterable, Identifiable {
                 accountType: .investment,
                 investmentCategory: .other,
                 investmentPreset: .account,
+                title: title(locale: locale)
+            )
+        case .cash:
+            return FinanceAddAccountProductSelection(
+                accountType: .investment,
+                investmentCategory: .other,
+                investmentPreset: .cash,
                 title: title(locale: locale)
             )
         case .deposit:
@@ -282,6 +296,11 @@ enum FinanceAddAccountProductOption: String, CaseIterable, Identifiable {
                 .init(titleKey: "finances.add_account.product.account.recommendation.1.title", subtitleKey: "finances.add_account.product.account.recommendation.1.subtitle", iconName: "building.columns.fill", accentHex: "60A5FA"),
                 .init(titleKey: "finances.add_account.product.account.recommendation.2.title", subtitleKey: "finances.add_account.product.account.recommendation.2.subtitle", iconName: "lifepreserver.fill", accentHex: "38BDF8")
             ]
+        case .cash:
+            return [
+                .init(titleKey: "finances.add_account.product.cash.recommendation.1.title", subtitleKey: "finances.add_account.product.cash.recommendation.1.subtitle", iconName: "banknote.fill", accentHex: "34D399"),
+                .init(titleKey: "finances.add_account.product.cash.recommendation.2.title", subtitleKey: "finances.add_account.product.cash.recommendation.2.subtitle", iconName: "wallet.pass.fill", accentHex: "10B981")
+            ]
         case .deposit:
             return [
                 .init(titleKey: "finances.add_account.product.deposit.recommendation.1.title", subtitleKey: "finances.add_account.product.deposit.recommendation.1.subtitle", iconName: "building.columns.circle.fill", accentHex: "38BDF8"),
@@ -331,7 +350,7 @@ enum FinanceAddAccountProductOption: String, CaseIterable, Identifiable {
     }
 
     static var visibleOptions: [FinanceAddAccountProductOption] {
-        [.card, .account, .deposit, .credit, .debt, .investment, .house, .stocks, .business, .crypto]
+        [.card, .account, .cash, .deposit, .credit, .debt, .investment, .house, .stocks, .business, .crypto]
     }
 
     static var visibleSections: [FinanceAddAccountProductSectionModel] {
@@ -355,6 +374,9 @@ enum FinanceAddAccountProductOption: String, CaseIterable, Identifiable {
         case .investment:
             if investmentCategory == .other, investmentPreset == .account {
                 return .account
+            }
+            if investmentCategory == .other, investmentPreset == .cash {
+                return .cash
             }
             if investmentCategory == .other, investmentPreset == .deposit {
                 return .deposit
@@ -535,6 +557,8 @@ struct FinanceAddAccountProductPickerSheet: View {
             return Color(hex: "3B82F6")
         case .account:
             return Color(hex: "60A5FA")
+        case .cash:
+            return Color(hex: "34D399")
         case .deposit:
             return Color(hex: "38BDF8")
         case .credit:
@@ -580,6 +604,8 @@ struct FinanceAddAccountProductPickerSheet: View {
             return financeAddAccountCopy("finances.add_account.product.card.compact_subtitle", locale: locale)
         case .account:
             return financeAddAccountCopy("finances.add_account.product.account.compact_subtitle", locale: locale)
+        case .cash:
+            return financeAddAccountCopy("finances.add_account.product.cash.compact_subtitle", locale: locale)
         case .deposit:
             return financeAddAccountCopy("finances.add_account.product.deposit.compact_subtitle", locale: locale)
         case .credit:

@@ -19,6 +19,8 @@ enum AccountsCoreAdditionBridge {
             return cardType == .credit ? .creditCard : .debitCard
         case .investment where investmentPreset == .account:
             return .bankAccount
+        case .investment where investmentPreset == .cash:
+            return .cash
         default:
             return nil
         }
@@ -85,6 +87,8 @@ enum AccountsCoreAdditionBridge {
             return cardKind(bank: bank)
         case .investment where investmentPreset == .account:
             return .bankAccount
+        case .investment where investmentPreset == .cash:
+            return .cash
         default:
             return nil
         }

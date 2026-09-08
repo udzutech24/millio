@@ -143,6 +143,11 @@ enum FinanceProductCreationCommandResolver {
         case .account:
             return common(.bankAccount, input.amount, .init(), nil)
 
+        // Наличные: пустая метадата намеренно — банк/last4/овердрафт у денег в кошельке
+        // не существуют, а `CardMeta` заставила бы экран показывать пустые реквизиты.
+        case .cash:
+            return common(.cash, input.amount, .init(), nil)
+
         case .deposit:
             guard let meta = input.depositMeta else {
                 throw FinanceProductCreationCommandError.missingDepositMeta

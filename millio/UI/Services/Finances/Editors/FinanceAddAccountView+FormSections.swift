@@ -71,6 +71,9 @@ extension FinanceAddAccountView {
             if selectedInvestmentCategory == .other, selectedInvestmentPreset == .account {
                 return L("finances.add_account.placeholder.account")
             }
+            if selectedInvestmentCategory == .other, selectedInvestmentPreset == .cash {
+                return L("finances.add_account.placeholder.cash")
+            }
             switch selectedInvestmentCategory {
             case .house:
                 return L("finances.add_account.placeholder.investment.house")

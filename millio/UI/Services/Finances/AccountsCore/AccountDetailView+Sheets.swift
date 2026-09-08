@@ -48,9 +48,15 @@ extension AccountDetailView {
             let isCreditCard = account.productType == .creditCard
             let creditLimit = account.cardMeta?.creditLimit ?? 0
             let debt = max(0, creditLimit - balanceToday)
+            // Наличные: та же корректировка, но на языке пользователя это «сверка» — он не
+            // «меняет баланс», а пересчитывает кошелёк, и разница записывается за него.
+            let isCash = account.kind == .cash
             AccountAdjustBalanceSheet(
                 currentBalance: isCreditCard ? debt : balanceToday,
-                titleOverride: isCreditCard ? L("accounts_core.detail.action.adjust_debt") : nil,
+                titleOverride: isCreditCard
+                    ? L("accounts_core.detail.action.adjust_debt")
+                    : (isCash ? L("accounts_core.detail.cash.reconcile.title") : nil),
+                hint: isCash ? L("accounts_core.detail.cash.reconcile.hint") : nil,
                 onSave: { newValue in
                     perform {
                         if isDebitProduct {
