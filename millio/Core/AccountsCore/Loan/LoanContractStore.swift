@@ -35,11 +35,32 @@ struct LoanContractStore {
         }
         mutate(target)
         target.updatedAt = Date()
+        syncPlannedPayment(accountID: accountID)
         return target
     }
 
     func delete(accountID: UUID) throws {
         for row in try existingRows(for: accountID) { context.delete(row) }
+        syncPlannedPayment(accountID: accountID)
+    }
+
+    /// Плановая операция кредита синхронизируется ЗДЕСЬ, а не у каждого вызывающего: договор
+    /// правят четыре экрана и импорт, и любой из них мог бы забыть — тогда инвариант «ровно одна
+    /// незакрытая плановая операция» держался бы на дисциплине, а не на коде.
+    ///
+    /// Ошибка синхронизации не отменяет правку договора: невозможность починить план не должна
+    /// мешать пользователю сохранить условия кредита. Расхождение уходит в лог и чинится
+    /// следующим касанием договора.
+    private func syncPlannedPayment(accountID: UUID) {
+        do {
+            try LoanPlannedPaymentScheduler.sync(accountID: accountID, context: context)
+        } catch {
+            AppLogger.log(
+                .error,
+                category: "AccountsCore",
+                "Failed to sync loan planned payment: \(error.localizedDescription)"
+            )
+        }
     }
 
     /// Строки, отсортированные так, что первой идёт самая свежая — тот же победитель, что в `upsert`.

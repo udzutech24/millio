@@ -17,6 +17,9 @@ enum LoanScreenStyle {
 
     static let buttonCornerRadius: CGFloat = AppSpacing.m
     static let buttonHeight: CGFloat = 52
+    /// Рамка выбранной карточки и обводка радио — волосяная линия макета.
+    static let borderWidth: CGFloat = 1
+    static let radioBorderWidth: CGFloat = 1.5
 
     // MARK: - Досрочное погашение (ЭКРАН 4)
 
@@ -27,6 +30,9 @@ enum LoanScreenStyle {
     static let negativeFill = AppColors.negativeColor.opacity(0.10)
     static let radioSize: CGFloat = 20
     static let radioDotSize: CGFloat = 10
+    /// Строка «что изменится» держит минимум удобного касания (44 pt HIG), иначе таблица из
+    /// однострочных значений слипается.
+    static let diffRowMinHeight: CGFloat = 44
 
     // MARK: - График платежей (ЭКРАН 3)
 
@@ -37,6 +43,8 @@ enum LoanScreenStyle {
     /// с тем, что видно на экране.
     static let paidRowOpacity: Double = 0.45
     static let shareBarHeight: CGFloat = 8
+    /// Кружок легенды — тот же размер, что и высота полосы доли: они читаются как одна единица.
+    static let legendDotSize: CGFloat = AppSpacing.s
     /// Колонки строки графика фиксированы, иначе полосы 60 строк встали бы «лесенкой»
     /// (у дифференцированного графика сумма платежа в каждой строке своя).
     static let scheduleMonthColumnWidth: CGFloat = 62

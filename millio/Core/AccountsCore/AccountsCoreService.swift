@@ -805,6 +805,7 @@ final class AccountsCoreService {
         account.archivedAt = date
         invalidateCache(for: account, from: date)
         HistoricalValuationRevisionTracker.bump([.accountSet, .events], on: account)
+        syncLoanPlannedPaymentIfNeeded(account)
     }
 
     func restoreAccount(_ account: Account) throws {
@@ -814,6 +815,9 @@ final class AccountsCoreService {
             invalidateCache(for: account, from: previousArchivedAt)
         }
         HistoricalValuationRevisionTracker.bump([.accountSet, .events], on: account)
+        // Возврат из архива возвращает и плановый платёж: счёт снова активен, а без плана
+        // единственный путь внести платёж (Ф3.3) исчез бы вместе с архивом.
+        syncLoanPlannedPaymentIfNeeded(account)
         try saveOrRollback()
     }
 
@@ -829,7 +833,24 @@ final class AccountsCoreService {
     func softDelete(_ account: Account, on date: Date = Date()) throws {
         account.deletedAt = date
         HistoricalValuationRevisionTracker.bump([.accountSet, .events], on: account)
+        syncLoanPlannedPaymentIfNeeded(account)
         try saveOrRollback()
+    }
+
+    /// Плановый платёж удалённого или архивного кредита снимается: иначе в «Предстоящих» остался бы
+    /// расход по счёту, которого пользователь уже не видит. Договор при этом не трогаем — мягкое
+    /// удаление и архив обратимы, и условия должны пережить возврат счёта.
+    private func syncLoanPlannedPaymentIfNeeded(_ account: Account) {
+        guard account.kind == .loan else { return }
+        do {
+            try LoanPlannedPaymentScheduler.sync(accountID: account.id, context: modelContext)
+        } catch {
+            AppLogger.log(
+                .error,
+                category: "AccountsCore",
+                "Failed to sync loan planned payment: \(error.localizedDescription)"
+            )
+        }
     }
 
     // MARK: - Физическое удаление (дедуп-двойники LegacyAccountConverter; истории для сохранения нет)
@@ -898,6 +919,10 @@ final class AccountsCoreService {
         )
         profiles.forEach(modelContext.delete)
         attachments.forEach(modelContext.delete)
+        // Договор кредита и его плановая операция живут по `accountID` (без реляции — та сдвинула бы
+        // checksum `Account`), поэтому уходят вместе со счётом руками: иначе в «Предстоящих» остался
+        // бы платёж по счёту, которого больше нет.
+        try LoanContractStore(context: modelContext).delete(accountID: accountID)
         modelContext.delete(account) // каскад .cascade удалит events + snapshots самого счёта
         try saveOrRollback()
     }

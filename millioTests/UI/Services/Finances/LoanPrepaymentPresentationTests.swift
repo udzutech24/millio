@@ -57,7 +57,7 @@ struct LoanPrepaymentPresentationTests {
 
     private func sheet(
         amount: Decimal,
-        strategy: LoanPrepaymentStrategy = .term,
+        strategy: LoanPrepaymentStrategy? = nil,
         terms: LoanTerms? = nil,
         outstanding: Decimal? = nil,
         paymentsMade: Int = 5
@@ -92,18 +92,33 @@ struct LoanPrepaymentPresentationTests {
         #expect(!result.hint.isEmpty)
     }
 
-    @Test("Досрочно 200 000 ₽: две опции, предвыбран «Срок», тег выгоды у него")
-    func prepaymentSheetMatchesMockup() throws {
+    @Test("Досрочно 200 000 ₽: предвыбора нет, обе опции с абсолютной экономией")
+    func prepaymentSheetHasNoPreselection() throws {
         let result = sheet(amount: 200_000)
 
         #expect(result.mode == .prepayment)
-        #expect(result.selectedStrategy == .term)
-        #expect(result.options.map(\.strategy) == [.term, .payment])
-        // «выгоднее на N ₽» — только у выгодного сценария, у второго тега нет.
-        #expect(result.options[0].tag != nil)
-        #expect(result.options[1].tag == nil)
-        #expect(result.options.allSatisfy { !$0.note.isEmpty })
+        // Ничего не выбрано — подтверждать нечего.
+        #expect(result.selectedStrategy == nil)
+        #expect(result.entry == nil)
+        #expect(result.canConfirm == false)
+        // «Что изменится» и карточка итога считаются от выбранного сценария — до выбора их нет.
+        #expect(result.diff.isEmpty)
+        #expect(result.outcome == nil)
 
+        #expect(result.options.map(\.strategy) == [.term, .payment])
+        // Тег у каждого варианта — его собственная экономия, а не перевес над соседом.
+        #expect(try #require(result.options[0].tag).contains(money(226_771)))
+        #expect(try #require(result.options[1].tag).contains(money(100_455)))
+        #expect(result.options.allSatisfy { !$0.note.isEmpty })
+        // Подпись «срока» несёт дату закрытия — таблицы «что изменится» до выбора нет.
+        #expect(result.options[0].note.contains("2030"))
+    }
+
+    @Test("Выбран «Срок»: таблица и экономия 226 771 ₽ как в макете")
+    func termStrategySheetMatchesMockup() throws {
+        let result = sheet(amount: 200_000, strategy: .term)
+
+        #expect(result.selectedStrategy == .term)
         #expect(result.diff.map(\.id) == ["debt", "payment", "payoff", "interest"])
         #expect(result.diff[0].before == money(1_137_241))
         #expect(result.diff[0].after == money(937_241))
@@ -194,10 +209,21 @@ struct LoanPrepaymentPresentationTests {
         #expect(result.mode == .prepayment)
         #expect(result.options.map(\.strategy) == [.term])
         #expect(result.selectedStrategy == .term)
-        // Единственный сценарий не сравнивается ни с чем — тега выгоды нет.
-        #expect(result.options[0].tag == nil)
         #expect(try #require(result.outcome).value == money(159_075))
         #expect(try #require(result.entry).pinnedPayment == nil)
+    }
+
+    @Test("Единственный сценарий выбирается сам: подтверждение активно без касания")
+    func singleOptionIsAutoSelected() throws {
+        var terms = referenceTerms
+        terms.scheduleType = .differentiated
+        // Выбор не сделан (`nil`), но альтернативы «платёж» у дифференцированного графика нет —
+        // иначе кнопка осталась бы заблокированной навсегда.
+        let result = sheet(amount: 200_000, terms: terms)
+
+        #expect(result.selectedStrategy == .term)
+        #expect(result.canConfirm)
+        #expect(!result.diff.isEmpty)
     }
 
     // MARK: - Путь подтверждения
@@ -274,7 +300,10 @@ struct LoanPrepaymentPresentationTests {
         )
 
         // Долг уменьшился ровно на внесённую сумму — проценты в досрочке не участвуют.
-        #expect(before - outstanding(account) == 200_000)
+        // Сравнение с точностью до копейки: платёж синхронизирует плановую операцию (Ф3.3), а её
+        // сохранение поднимает суммы событий из стора, где `Decimal` лежит через double, — та самая
+        // пыль ~1e-11, из-за которой и существует кламп `LoanOutstanding.fromLedger`.
+        #expect(abs(before - outstanding(account) - 200_000) < Decimal(1) / 100)
         #expect(rubles(outstanding(account)) == 937_241)
         // Период не израсходован: ближайший платёж остаётся шестым.
         #expect(contract.paymentsMade == 5)
@@ -365,8 +394,9 @@ struct LoanPrepaymentPresentationTests {
         // и сумма события полного погашения возвращается из стора с пылью ~1e-9 от миллиона.
         // Продуктовый ноль обеспечивает кламп `AccountDetailView.loanOutstandingPrincipal`.
         #expect(outstanding(account) < Decimal(1) / 100)
-        // Счёт-обязательство не имеет права стать активом: баланс не уходит в плюс.
-        #expect(AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .loan, on: asOf) <= .zero)
+        // Счёт-обязательство не имеет права стать активом: баланс не уходит в плюс дальше той же
+        // копеечной пыли (абсолютный ноль недостижим — см. комментарий выше).
+        #expect(AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .loan, on: asOf) < Decimal(1) / 100)
         #expect(detail(account, contract).paymentsAhead == 0)
         // То, что увидит экран: остаток ровно ноль, а значит и «Досрочно» уже не нажать.
         let ledger = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: .loan, on: asOf)

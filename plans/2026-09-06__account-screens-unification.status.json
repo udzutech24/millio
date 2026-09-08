@@ -1,32 +1,32 @@
 {
   "planFile": "2026-09-06__account-screens-unification.md",
   "title": "Экраны счетов: стиль + декомпозиция + типы",
-  "updated": "2026-09-07T09:10:00+03:00",
+  "updated": "2026-09-08T00:00:00+03:00",
   "phases": [
     {
       "name": "Ф0 Единый стиль",
       "status": "done",
-      "note": "device-проверка пройдена, смержено в develop 0bb273d (9 коммитов, не запушено)"
+      "note": "device-ок, в develop 0bb273d"
     },
     {
       "name": "Ф1 Декомпозиция AccountDetailView/FinanceAddAccountView",
       "status": "done",
-      "note": "смержено в develop 6ef5333"
+      "note": "device-ок, в develop 6ef5333; 1789→294 и 1650→406 строк"
     },
     {
       "name": "Ф2 Наличные (пресет + DetailSection)",
       "status": "done",
-      "note": "ветка feature/account-screens-cash, 4 коммита; тесты 2706/27 в baseline; ждёт device-проверки"
+      "note": "смержено в develop (feature/account-screens-cash, ef94d6c); ждёт device-проверки на релиз-кандидате"
     },
     {
       "name": "Ф3 Кредит Ф9b (UI по макету)",
-      "status": "pending",
-      "note": "ответы владельца получены 06.09"
+      "status": "done",
+      "note": "смержено в develop (feature/account-screens-loan, cbdcd8a); ждёт device-проверки на релиз-кандидате"
     },
     {
       "name": "Ф4 Дебетовая + банк. счёт",
       "status": "pending",
-      "note": "макеты нарисованы, ждут правок владельца"
+      "note": "макеты нарисованы, ждут правок владельца; + фикс неформатированной суммы DebitCardDetailSection:83"
     },
     {
       "name": "Ф5 Долг",

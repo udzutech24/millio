@@ -84,7 +84,7 @@ extension AccountDetailView {
                 onSaved: {
                     // Договор перечитываем сразу: `loanContract` грузится один раз в `.task`,
                     // и без перечитывания экран показывал бы старые условия до переоткрытия.
-                    loanContract = try? LoanContractStore(context: modelContext).contract(for: account.id)
+                    refreshLoanState()
                     refreshToken = UUID()
                 }
             )
@@ -459,21 +459,34 @@ extension AccountDetailView {
         }
     }
 
-    /// Плановый платёж: долг уменьшает только тело, проценты копятся в договоре (спека Р6).
-    /// Обе записи — одна транзакция внутри `LoanPaymentRecorder`.
+    /// Плановый платёж = применение ближайшей плановой операции Cashflow (решение владельца 2).
+    /// Независимой факт-транзакции кнопка не создаёт: иначе ручной платёж и авто-применение
+    /// списали бы долг дважды. Долг уменьшает только тело, проценты копятся в договоре (спека Р6).
     func recordLoanPayment(_ presentation: LoanDetailPresentation) {
-        guard let principalPart = presentation.nextPaymentPrincipal,
-              let interestPart = presentation.nextPaymentInterest,
-              let date = presentation.nextPaymentDate else { return }
         perform {
-            try LoanPaymentRecorder(modelContext: modelContext).recordScheduledPayment(
-                account: account,
-                principalPart: principalPart,
-                interestPart: interestPart,
-                date: date
+            try LoanPlannedPaymentScheduler.applyNextPlannedPayment(
+                accountID: account.id,
+                context: modelContext
             )
-            loanContract = try? LoanContractStore(context: modelContext).contract(for: account.id)
+            refreshLoanState()
         }
+    }
+
+    /// Перечитывает договор и дату плановой операции. Одной точкой, потому что после платежа,
+    /// досрочки и правки условий меняются обе величины, а забытая половина оставляла бы на экране
+    /// прошлый платёж.
+    func refreshLoanState() {
+        guard account.kind == .loan else {
+            loanContract = nil
+            loanPlannedPaymentDate = nil
+            return
+        }
+        loanContract = try? LoanContractStore(context: modelContext).contract(for: account.id)
+        let plannedRow = try? LoanPlannedPaymentScheduler.openPlannedRow(
+            accountID: account.id,
+            context: modelContext
+        )
+        loanPlannedPaymentDate = plannedRow?.transactionDate
     }
 
     /// Досрочное погашение и недоплата (Ф6): что уходит в тело, что в проценты и расходуется ли
@@ -484,7 +497,7 @@ extension AccountDetailView {
     func recordLoanExtraPayment(_ entry: LoanExtraPaymentEntry) {
         perform {
             try LoanPaymentRecorder(modelContext: modelContext).record(entry, on: account)
-            loanContract = try? LoanContractStore(context: modelContext).contract(for: account.id)
+            refreshLoanState()
         }
     }
 

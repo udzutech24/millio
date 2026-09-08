@@ -417,7 +417,13 @@ final class CashflowScheduledService {
                     return false
                 }
                 guard transaction.recurrenceRule == .none else { return false }
-                guard transaction.affectsCardBalance else { return false }
+                // Плановый платёж по кредиту баланс счёта-источника не двигает
+                // (`affectsCardBalance == false`: с какого счёта уйдут деньги, кредит не знает),
+                // но применить его обязаны — долг уменьшает `LoanPaymentRecorder`, а не
+                // balance-эффект. Фактические проводки платежа под этот признак не попадают:
+                // у них другой префикс ключа.
+                guard transaction.affectsCardBalance
+                    || LoanPlannedPaymentScheduler.isPlannedRow(transaction) else { return false }
                 guard !transaction.hasAppliedBalanceEffect else { return false }
                 return transaction.transactionDate > previousCheckpoint
                     && transaction.transactionDate <= referenceNow
@@ -449,7 +455,14 @@ final class CashflowScheduledService {
                 continue
             }
             do {
-                try await onApplyDuePlannedEffect(transaction)
+                if LoanPlannedPaymentScheduler.isPlannedRow(transaction) {
+                    // Кредит применяется своим путём: тело — в ленту счёта, проценты — в договор,
+                    // план сдвигается на следующий платёж. Общий balance-эффект списал бы расход,
+                    // не тронув долг.
+                    try LoanPlannedPaymentScheduler.applyPlannedPayment(transaction, context: modelContext)
+                } else {
+                    try await onApplyDuePlannedEffect(transaction)
+                }
                 transaction.hasAppliedBalanceEffect = true
                 transaction.updatedAt = referenceNow
                 pendingNotices.append(

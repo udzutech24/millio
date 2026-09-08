@@ -157,6 +157,42 @@
 
 **Осталось по Ф2:** device-проверка владельцем (создание наличных из пикера + сверка на экране).
 
+### Ф3 Кредит — `[x]` код готов в ветке, ждёт device-проверки (07.09)
+Оценка «2 сессии на UI кредита» **устарела**: весь UI кредита написан планом
+`2026-09-04__credit-account-type.md` (Ф1–Ф7 ✅) и уже в `develop` (`dcf4cd6`). Реальная Ф3 —
+дельта до решений владельца 06.09: плановая операция платежа (не сделано, трогает Cashflow),
+досрочка без предвыбора (сделано на 80 %), страховка вне кредита (в UI поля нет, но мёртвая ветка
+в recorder/projector жива), net worth (уже доказан тестом), стиль (закрыт Ф0/Ф1).
+Оценка — **1,3–1,7 сессии**, резать на две.
+Артефакты: `thoughts/research/2026-09-07-loan-screen-delta.md` ·
+`specs/2026-09-07-loan-screen-unification.md` · `plans/2026-09-07__account-screens-loan.md`.
+**Решения владельца получены 07.09** (блокер снят, см. «Решения владельца» в плане Ф3):
+`every2Months` → добавить правило в `CashflowRecurrenceRule` · «Внести платёж» → применяет ближайшую
+плановую · досрочка меняет план → с подтверждением, не молча · `feature/planned-operations-applied-notice`
+мержится в `develop` первой.
+
+**Ветка Ф3:** `feature/account-screens-loan` создана **от `develop`**, а не от Ф1 —
+`feature/account-screens-decompose` (Ф0+Ф1) уже смержена в `develop`, цепочка веток не нужна.
+
+**Итог Ф3 (07.09, вечер):** все под-фазы Ф3.1–Ф3.5 закрыты — подтв. 07.09: `a49d206` досрочка ·
+`26cebfe` страховка · `0b41249` стиль · `b238f21` ядро плановой операции · `cbdcd8a` UI платежа.
+`feature/planned-operations-applied-notice` смержена в `develop` (`8617e6a`, запушено), обе ветки
+запушены, билд 2.0 (2) стоит на iPhone владельца. Открыта только Ф3.6 = device-проверка +
+решение о мерже. ⚠️ Отклонение, ждёт слова владельца: плановый платёж — разовая пересоздаваемая
+строка (`recurrenceRule == .none`), а не recurring-шаблон (у шаблона `shouldAffectCashflowTotals
+== false` → кредит выпал бы из бюджета). Детали — `plans/2026-09-07__account-screens-loan.md`.
+
+### Уборка веток 07.09
+22 локальных ветки → 15, worktree 3 → 1. Удалены 13 полностью смерженных в `develop`
+(`account-appearance-*`, `account-card-row-redesign`, `account-screens-decompose`,
+`account-screens-unify-style`, `cashflow-account-picker-redesign`, `cashflow-core-account-save-fix`,
+`credit-account-type`, `deposit-detail-unified-card`, `deposit-form-redesign`, `entry-screen-simplify`,
+`fix/deposit-format-group-sort`, `perf/scroll-navigation`) + сняты два устаревших worktree
+(`credit-account-type`, `entry-screen-simplify`) — внутри была только виджетная возня со `status.json`,
+кода ноль. Осталось 14 несмерженных веток, из них 8 протухших (отстают от `develop` на 100–390 коммитов)
+— решение по ним за владельцем.
+
+
 ## Открытые вопросы
 1. Скрины текущих экранов дебетовой карты и наличных — для макетов Ф2/Ф4 (владелец пришлёт).
 2. `AccountProductTransitionSection:132` — `confirmationDialog` внутри формы правки. Намеренно не тронут

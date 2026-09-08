@@ -75,6 +75,17 @@ struct LoanDetailSection: View {
                 value: presentation.nextPaymentInterest.map(presentation.money) ?? emptyValue,
                 legendColor: LoanScreenStyle.interestColor
             )
+            if let plannedDate = presentation.plannedPaymentDate {
+                AccountDetailsDivider()
+                LoanBreakdownRow(
+                    title: L("accounts_core.loan.detail.next_payment"),
+                    value: plannedDate.formatted(date: .abbreviated, time: .omitted),
+                    caption: String(
+                        format: L("accounts_core.loan.detail.planned_in_cashflow_format"),
+                        presentation.plannedRecurrenceTitle
+                    )
+                )
+            }
             AccountDetailsDivider()
             scheduleRow
             AccountDetailsDivider()

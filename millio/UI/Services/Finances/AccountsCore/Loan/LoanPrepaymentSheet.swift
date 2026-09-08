@@ -12,11 +12,15 @@ struct LoanPrepaymentSheet: View {
     let currency: String
     let onConfirm: (LoanExtraPaymentEntry) -> Void
 
-    /// Предвыбран «Срок» — решение владельца (спека §4.4): он математически выгоднее.
-    @State private var strategy: LoanPrepaymentStrategy = .term
+    /// Предвыбора нет (решение владельца 07.09): пока человек не выбрал «срок» или «платёж»,
+    /// подтверждать нечего — иначе он вносит досрочку по сценарию, который за него выбрал экран.
+    @State private var strategy: LoanPrepaymentStrategy?
     @State private var amountText = ""
     @FocusState private var amountFocused: Bool
     @State private var detent: PresentationDetent = .height(Self.compactHeight)
+    /// Шаг подтверждения изменения плана (решение владельца 3): досрочка пересобирает плановую
+    /// операцию в Cashflow, и человек должен это подтвердить, а не узнать постфактум.
+    @State private var isConfirmingPlanChange = false
 
     /// Компактная высота: шапка + поле суммы с подсказкой + кнопка. Держим числом, потому что
     /// `.presentationDetents` требует высоту до layout-прохода. Пока сумма не введена, лист не
@@ -49,7 +53,9 @@ struct LoanPrepaymentSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.xl) {
                     amountField(presentation)
-                    if !presentation.options.isEmpty {
+                    // Единственный доступный сценарий витрина выбирает сама — радио-группа из одной
+                    // строки была бы выбором без выбора.
+                    if presentation.options.count > 1 {
                         section(L("accounts_core.loan.prepayment.section.what_reduce")) {
                             VStack(spacing: AppSpacing.s) {
                                 ForEach(presentation.options) { option in
@@ -69,20 +75,26 @@ struct LoanPrepaymentSheet: View {
                         }
                     }
                     if let outcome = presentation.outcome { outcomeCard(outcome) }
+                    if isConfirmingPlanChange { planChangeNotice }
                 }
                 .padding(.horizontal, AppSpacing.l)
                 .padding(.bottom, AppSpacing.l)
             }
             .scrollDismissesKeyboard(.interactively)
             confirmButton(presentation)
+            if isConfirmingPlanChange { backButton }
         }
         .padding(.top, AppSpacing.xl)
         .background(GradientBackground())
+        // `accountSheetChrome()` здесь не годится: он фиксирует ОДИН детент, а лист растёт с
+        // компактного до полного по мере того, как ядру есть что показать. Драг-индикатор общий.
         .presentationDetents([.height(Self.compactHeight), .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .onChange(of: isExpanded) { _, expanded in
             detent = expanded ? .large : .height(Self.compactHeight)
         }
+        .onChange(of: amountText) { _, _ in isConfirmingPlanChange = false }
+        .onChange(of: strategy) { _, _ in isConfirmingPlanChange = false }
         .autofocusAfterPresentation($amountFocused)
         .toolbar {
             // Цифровая клавиатура не имеет клавиши подтверждения — без этой кнопки поле суммы
@@ -187,7 +199,10 @@ struct LoanPrepaymentSheet: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: LoanScreenStyle.buttonCornerRadius, style: .continuous)
-                    .strokeBorder(isSelected ? LoanScreenStyle.accent : .clear, lineWidth: 1)
+                    .strokeBorder(
+                        isSelected ? LoanScreenStyle.accent : .clear,
+                        lineWidth: LoanScreenStyle.borderWidth
+                    )
             )
             .contentShape(Rectangle())
         }
@@ -199,7 +214,7 @@ struct LoanPrepaymentSheet: View {
             Circle()
                 .strokeBorder(
                     isSelected ? LoanScreenStyle.accent : AppColors.textTertiary,
-                    lineWidth: 1.5
+                    lineWidth: LoanScreenStyle.radioBorderWidth
                 )
                 .frame(width: LoanScreenStyle.radioSize, height: LoanScreenStyle.radioSize)
             if isSelected {
@@ -241,7 +256,7 @@ struct LoanPrepaymentSheet: View {
                     .foregroundStyle(AppColors.textTertiary)
             }
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: LoanScreenStyle.diffRowMinHeight)
         .padding(.horizontal, AppSpacing.l)
     }
 
@@ -281,12 +296,48 @@ struct LoanPrepaymentSheet: View {
 
     // MARK: - Подтверждение
 
+    /// Карточка «план платежей изменится». Цифры не свои: показываем ту же таблицу «что изменится»,
+    /// которую человек уже видел, — расхождение между шагом подтверждения и предпросмотром означало
+    /// бы, что где-то считается второй раз.
+    private var planChangeNotice: some View {
+        AccountDetailsBoxCard {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text(L("accounts_core.loan.prepayment.plan_change.title"))
+                    .font(.millioBodySemibold)
+                    .foregroundStyle(AppColors.textPrimary)
+                Text(L("accounts_core.loan.prepayment.plan_change.note"))
+                    .font(.millioCaptionRegular)
+                    .foregroundStyle(AppColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(AppSpacing.l)
+        }
+    }
+
+    private var backButton: some View {
+        Button(L("accounts_core.loan.prepayment.plan_change.back")) { isConfirmingPlanChange = false }
+            .font(.millioBodySemibold)
+            .foregroundStyle(AppColors.textPrimary)
+            .frame(maxWidth: .infinity, minHeight: LoanScreenStyle.buttonHeight)
+            .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(LoanScreenStyle.quietFill))
+            .padding(.horizontal, AppSpacing.l)
+            .padding(.bottom, AppSpacing.m)
+    }
+
     private func confirmButton(_ presentation: LoanPrepaymentPresentation) -> some View {
         Button {
             guard let entry = presentation.entry else { return }
+            guard isConfirmingPlanChange else {
+                isConfirmingPlanChange = true
+                amountFocused = false
+                return
+            }
             onConfirm(entry)
         } label: {
-            Text(presentation.confirmTitle)
+            Text(isConfirmingPlanChange
+                 ? L("accounts_core.loan.prepayment.plan_change.confirm")
+                 : presentation.confirmTitle)
                 .font(.millioBodySemibold)
                 .foregroundStyle(LoanScreenStyle.accentContrast)
                 .frame(maxWidth: .infinity, minHeight: LoanScreenStyle.buttonHeight)

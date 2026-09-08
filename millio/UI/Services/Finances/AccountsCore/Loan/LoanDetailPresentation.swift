@@ -30,6 +30,14 @@ struct LoanDetailPresentation: Equatable {
     let annualRatePercent: Decimal
     let scheduleType: LoanScheduleType
     let frequency: LoanPaymentFrequency
+    /// Дата плановой операции, реально лежащей в Cashflow (Ф3.3). `nil` — плана нет, а значит и
+    /// применять кнопке «Внести платёж» нечего: второго пути записи у кредита не осталось.
+    let plannedPaymentDate: Date?
+
+    /// Шаг плана словами Cashflow — та же периодичность, что у договора.
+    var plannedRecurrenceTitle: String {
+        LoanPlannedPaymentScheduler.recurrenceRule(for: frequency).displayName
+    }
 
     static func make(
         terms: LoanTerms,
@@ -37,6 +45,7 @@ struct LoanDetailPresentation: Equatable {
         paymentsMade: Int,
         paidInterestTotal: Decimal,
         currency: String,
+        plannedPaymentDate: Date? = nil,
         calendar: Calendar = Calendar(identifier: .gregorian)
     ) -> LoanDetailPresentation {
         let principal = max(terms.principal, .zero)
@@ -73,7 +82,8 @@ struct LoanDetailPresentation: Equatable {
             termMonths: termPeriods * terms.frequency.stepMonths,
             annualRatePercent: terms.annualRatePercent,
             scheduleType: terms.scheduleType,
-            frequency: terms.frequency
+            frequency: terms.frequency,
+            plannedPaymentDate: plannedPaymentDate
         )
     }
 

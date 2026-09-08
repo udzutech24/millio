@@ -868,6 +868,241 @@
         }
       }
     },
+    "accounts_core.loan.detail.planned_in_cashflow_format" : {
+      "comment" : "Planned payment note on loan detail: %@ is the recurrence title",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Cashflow geplant · %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scheduled in Cashflow · %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Programado en Cashflow · %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planifié dans Cashflow · %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запланирован в Cashflow · %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cashflow'da planlandı · %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在 Cashflow 中计划 · %@"
+          }
+        }
+      }
+    },
+    "accounts_core.loan.prepayment.plan_change.back" : {
+      "comment" : "Prepayment step back button",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurück"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atrás"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retour"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geri"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回"
+          }
+        }
+      }
+    },
+    "accounts_core.loan.prepayment.plan_change.confirm" : {
+      "comment" : "Prepayment step confirm button",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestätigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmer"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подтвердить"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Onayla"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "确认"
+          }
+        }
+      }
+    },
+    "accounts_core.loan.prepayment.plan_change.note" : {
+      "comment" : "Prepayment step note explaining the Cashflow planned operation rebuild",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die geplante Operation in Cashflow wird für die neuen Bedingungen neu erstellt: Betrag und Datum der nächsten Zahlung ändern sich."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The planned operation in Cashflow will be rebuilt for the new terms: the amount and date of the next payment will change."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La operación planificada en Cashflow se recalculará con las nuevas condiciones: cambiarán el importe y la fecha del próximo pago."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'opération planifiée dans Cashflow sera recalculée selon les nouvelles conditions : le montant et la date du prochain paiement changeront."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Плановая операция в Cashflow пересоберётся под новые условия: сумма и дата ближайшего платежа изменятся."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cashflow'daki planlı işlem yeni koşullara göre yeniden oluşturulur: sonraki ödemenin tutarı ve tarihi değişir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cashflow 中的计划操作将按新条件重建：下次还款的金额和日期都会改变。"
+          }
+        }
+      }
+    },
+    "accounts_core.loan.prepayment.plan_change.title" : {
+      "comment" : "Prepayment step title: payment plan will change",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Zahlungsplan ändert sich"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The payment plan will change"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El plan de pagos cambiará"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le plan de paiement va changer"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "План платежей изменится"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ödeme planı değişecek"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还款计划将会变更"
+          }
+        }
+      }
+    },
     "backup.access.requires_sign_in.message" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8699,28 +8934,6 @@
         }
       }
     },
-    "accounts_core.loan.cashflow.insurance_note" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Loan insurance"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Страховка по кредиту"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "贷款保险"
-          }
-        }
-      }
-    },
     "accounts_core.loan.detail.error.not_a_loan" : {
       "localizations" : {
         "en" : {
@@ -9337,6 +9550,28 @@
         }
       }
     },
+    "accounts_core.loan.prepayment.note_payoff_format" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · paid off %2$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · закроется %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@ 结清"
+          }
+        }
+      }
+    },
     "accounts_core.loan.prepayment.option.payment" : {
       "localizations" : {
         "en" : {
@@ -9573,6 +9808,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "将节省利息"
+          }
+        }
+      }
+    },
+    "accounts_core.loan.prepayment.saves_format" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "saves %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "экономия %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "省 %@"
           }
         }
       }
@@ -42358,6 +42615,53 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开完整编辑器"
+          }
+        }
+      }
+    },
+    "cashflow.recurrence.every2months" : {
+      "comment" : "Bi-monthly recurrence rule label",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle 2 Monate"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Every 2 months"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cada 2 meses"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tous les 2 mois"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Каждые 2 месяца"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Her 2 ayda bir"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每 2 个月"
           }
         }
       }

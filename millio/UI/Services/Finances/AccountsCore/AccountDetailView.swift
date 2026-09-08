@@ -26,6 +26,9 @@ struct AccountDetailView: View {
     /// Договор кредита (V12) — грузится тем же одним заходом, что и оформление. Через него
     /// `LoanTermsResolver` отдаёт условия; напрямую `account.loanMeta` экран больше не читает.
     @State var loanContract: LoanContract?
+    /// Дата плановой операции кредита. Держим состоянием, а не считаем в `loanPresentation`:
+    /// выборка плана ходит в стор, а витрина пересчитывается на каждый проход `body`.
+    @State var loanPlannedPaymentDate: Date?
 
     enum ActiveSheet: Identifiable {
         case income
@@ -141,7 +144,8 @@ struct AccountDetailView: View {
             outstandingPrincipal: loanOutstandingPrincipal,
             paymentsMade: loanContract?.paymentsMade ?? 0,
             paidInterestTotal: loanContract?.paidInterestTotal ?? 0,
-            currency: account.currency
+            currency: account.currency,
+            plannedPaymentDate: loanPlannedPaymentDate
         )
     }
 
@@ -289,9 +293,10 @@ struct AccountDetailView: View {
                 .loadSnapshots()[account.id]
             // Ленивый перевод в детальный режим (спека Р5): счёт `.loan`, заведённый старой формой,
             // получает договор из легаси-меты ровно здесь — при первом открытии деталки.
-            loanContract = account.kind == .loan
-                ? try? LoanContractBackfill.ensureContract(for: account, context: modelContext)
-                : nil
+            if account.kind == .loan {
+                _ = try? LoanContractBackfill.ensureContract(for: account, context: modelContext)
+            }
+            refreshLoanState()
             guard account.kind == .marketInvestment else { return }
             await AccountMarketPriceService(modelContext: modelContext).refreshTodayPrices()
             refreshToken = UUID()

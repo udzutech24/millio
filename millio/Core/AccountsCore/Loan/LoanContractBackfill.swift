@@ -23,7 +23,12 @@ enum LoanContractBackfill {
         calendar: Calendar = Calendar(identifier: .gregorian)
     ) throws -> LoanContract? {
         let store = LoanContractStore(context: context)
-        if let existing = try store.contract(for: account.id) { return existing }
+        if let existing = try store.contract(for: account.id) {
+            // Самолечение инварианта Ф3.3: открытие деталки восстанавливает плановую операцию, если
+            // её снесло руками, сбоем синхронизации или восстановлением бэкапа старого формата.
+            try? LoanPlannedPaymentScheduler.sync(accountID: account.id, context: context)
+            return existing
+        }
         guard account.kind == .loan else { return nil }
         guard let terms = LoanTermsResolver.terms(for: account, contract: nil, calendar: calendar) else { return nil }
 

@@ -94,6 +94,7 @@ struct CashflowScheduledTransactionsView: View {
             let monthly: Double
             switch t.recurrenceRule {
             case .monthly:     monthly = t.amount
+            case .every2Months: monthly = t.amount / 2
             case .quarterly:   monthly = t.amount / 3
             case .semiannual:  monthly = t.amount / 6
             case .yearly:      monthly = t.amount / 12

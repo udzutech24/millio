@@ -34,7 +34,8 @@ struct LoanPrepaymentPresentation: Equatable {
         let strategy: LoanPrepaymentStrategy
         let title: String
         let note: String
-        /// «выгоднее на 126 316 ₽» — только у выгодного сценария.
+        /// «экономия 226 771 ₽» — абсолютная выгода САМОГО сценария, а не его перевес над соседним:
+        /// пока ничего не выбрано, сравнивать не с чем, и человек должен видеть цену каждого выбора.
         let tag: String?
 
         var id: String { strategy.rawValue }
@@ -62,8 +63,9 @@ struct LoanPrepaymentPresentation: Equatable {
     let currency: String
     let hint: String
     let options: [Option]
-    /// Сценарий, который реально применится: у дифференцированного графика «платёж» не определён,
-    /// и выбор молча падает обратно на «срок».
+    /// Сценарий, который реально применится. `nil` — выбор ещё не сделан: предвыбора нет, и до
+    /// касания радио-строки подтверждать нечего. Единственный доступный сценарий выбирается сам
+    /// (дифференцированный график), при полном погашении и недоплате выбора нет вовсе.
     let selectedStrategy: LoanPrepaymentStrategy?
     let diff: [DiffRow]
     let outcome: Outcome?
@@ -78,7 +80,7 @@ struct LoanPrepaymentPresentation: Equatable {
         outstandingPrincipal: Decimal,
         paymentsMade: Int,
         amount: Decimal,
-        strategy: LoanPrepaymentStrategy,
+        strategy: LoanPrepaymentStrategy?,
         currency: String,
         calendar: Calendar = Calendar(identifier: .gregorian),
         locale: Locale = AppLocalization.currentAppLocale
@@ -120,14 +122,27 @@ struct LoanPrepaymentPresentation: Equatable {
 
     private static func make(
         plan: LoanPrepaymentPlan,
-        strategy: LoanPrepaymentStrategy,
+        strategy: LoanPrepaymentStrategy?,
         frequency: LoanPaymentFrequency,
         currency: String,
         locale: Locale
     ) -> LoanPrepaymentPresentation {
-        let effective = plan.preview(for: strategy) != nil ? strategy : .term
-        // `term` есть всегда — им и закрывается полное погашение, где выбора нет.
-        let preview = plan.preview(for: effective) ?? plan.term
+        // Предвыбора нет (решение владельца): выбор «срок / платёж» человек делает сам. Сам собой
+        // сценарий определяется только там, где альтернативы нет: у дифференцированного графика
+        // «платёж» не существует, при полном погашении платить дальше нечего.
+        let effective: LoanPrepaymentStrategy?
+        if plan.closesLoan {
+            effective = nil
+        } else if plan.payment == nil {
+            effective = .term
+        } else {
+            effective = strategy.flatMap { plan.preview(for: $0) != nil ? $0 : nil }
+        }
+        // `term` есть всегда — им и закрывается полное погашение, где выбора нет. Пока сценарий не
+        // выбран, показывать «стало» не от чего: таблица и карточка итога скрыты.
+        let preview: LoanPrepaymentPreview? = plan.closesLoan
+            ? plan.term
+            : effective.flatMap { plan.preview(for: $0) }
         let money = { (value: Decimal) in LoanMoneyFormat.money(value, currency: currency) }
 
         let hint = plan.closesLoan
@@ -137,7 +152,38 @@ struct LoanPrepaymentPresentation: Equatable {
                 dayMonth(plan.nextPaymentDate, locale: locale)
             )
 
-        let diff = [
+        let diff = preview.map { preview in diffRows(plan: plan, preview: preview, money: money, locale: locale) } ?? []
+
+        return LoanPrepaymentPresentation(
+            mode: plan.closesLoan ? .payoff : .prepayment,
+            currency: currency,
+            hint: hint,
+            options: options(for: plan, frequency: frequency, currency: currency, locale: locale),
+            selectedStrategy: effective,
+            diff: diff,
+            outcome: (preview?.savings ?? 0) > 0
+                ? Outcome(
+                    title: L("accounts_core.loan.prepayment.savings_title"),
+                    value: money(preview?.savings ?? 0),
+                    detail: nil,
+                    style: .positive
+                )
+                : nil,
+            confirmTitle: String(
+                format: L("accounts_core.loan.prepayment.confirm_format"), money(plan.appliedAmount)
+            ),
+            // Полное погашение закрывается «сроком» — выбирать там нечего, кнопка активна сразу.
+            entry: plan.closesLoan ? plan.entry(for: .term) : effective.flatMap { plan.entry(for: $0) }
+        )
+    }
+
+    private static func diffRows(
+        plan: LoanPrepaymentPlan,
+        preview: LoanPrepaymentPreview,
+        money: (Decimal) -> String,
+        locale: Locale
+    ) -> [DiffRow] {
+        [
             DiffRow(
                 id: "debt",
                 title: L("accounts_core.loan.prepayment.row.debt"),
@@ -171,51 +217,32 @@ struct LoanPrepaymentPresentation: Equatable {
                 afterStyle: preview.savings > 0 ? .positive : .neutral
             )
         ]
-
-        return LoanPrepaymentPresentation(
-            mode: plan.closesLoan ? .payoff : .prepayment,
-            currency: currency,
-            hint: hint,
-            options: options(for: plan, frequency: frequency, currency: currency),
-            selectedStrategy: plan.closesLoan ? nil : effective,
-            diff: diff,
-            outcome: preview.savings > 0
-                ? Outcome(
-                    title: L("accounts_core.loan.prepayment.savings_title"),
-                    value: money(preview.savings),
-                    detail: nil,
-                    style: .positive
-                )
-                : nil,
-            confirmTitle: String(
-                format: L("accounts_core.loan.prepayment.confirm_format"), money(plan.appliedAmount)
-            ),
-            entry: plan.entry(for: effective)
-        )
     }
 
     /// Радио-строки. При полном погашении выбирать нечего, у дифференцированного графика сценарий
     /// «платёж» не определён — тогда строка одна.
     private static func options(
-        for plan: LoanPrepaymentPlan, frequency: LoanPaymentFrequency, currency: String
+        for plan: LoanPrepaymentPlan, frequency: LoanPaymentFrequency, currency: String, locale: Locale
     ) -> [Option] {
         guard !plan.closesLoan else { return [] }
         let money = { (value: Decimal) in LoanMoneyFormat.money(value, currency: currency) }
 
-        // «Выгоднее на N ₽» — разница экономий двух сценариев, а не разница платежей: сравнивать
-        // надо то, ради чего досрочку и вносят.
-        let advantage: Decimal? = plan.payment.map { plan.term.savings - $0.savings }
-        func tag(_ value: Decimal) -> String? {
-            guard value > 0 else { return nil }
-            return String(format: L("accounts_core.loan.prepayment.better_by_format"), money(value))
+        // Тег — АБСОЛЮТНАЯ экономия сценария. Разница экономий («выгоднее на N ₽») имела смысл при
+        // предвыборе: она объясняла, почему выбран «срок». Без предвыбора сравнивать нечего с чем —
+        // человеку нужна цена каждого варианта, а не перевес одного над другим.
+        func tag(_ preview: LoanPrepaymentPreview) -> String? {
+            guard preview.savings > 0 else { return nil }
+            return String(
+                format: L("accounts_core.loan.prepayment.saves_format"), money(preview.savings)
+            )
         }
 
         var options = [
             Option(
                 strategy: .term,
                 title: L("accounts_core.loan.prepayment.option.term"),
-                note: termNote(plan: plan, frequency: frequency, currency: currency),
-                tag: advantage.flatMap { tag($0) }
+                note: termNote(plan: plan, frequency: frequency, currency: currency, locale: locale),
+                tag: tag(plan.term)
             )
         ]
         if let payment = plan.payment {
@@ -227,7 +254,7 @@ struct LoanPrepaymentPresentation: Equatable {
                         format: L("accounts_core.loan.prepayment.payment_note_format"),
                         money(payment.payment)
                     ),
-                    tag: advantage.flatMap { tag(-$0) }
+                    tag: tag(payment)
                 )
             )
         }
@@ -237,7 +264,7 @@ struct LoanPrepaymentPresentation: Equatable {
     /// «…закроется на 13 месяцев раньше» макета: сокращение считается в МЕСЯЦАХ, а не в платежах —
     /// при квартальной периодичности «на 13 платежей» человеку ни о чём не говорит.
     private static func termNote(
-        plan: LoanPrepaymentPlan, frequency: LoanPaymentFrequency, currency: String
+        plan: LoanPrepaymentPlan, frequency: LoanPaymentFrequency, currency: String, locale: Locale
     ) -> String {
         let shortened = -plan.term.paymentsDelta
         guard shortened > 0 else {
@@ -249,13 +276,19 @@ struct LoanPrepaymentPresentation: Equatable {
         let earlier = L("accounts_core.loan_form.term_months \(shortened * frequency.stepMonths)")
         // У дифференцированного графика платёж убывает сам — «платёж остаётся» было бы неправдой,
         // постоянная величина в нём другая: тело в периоде.
-        guard plan.payment != nil else {
-            return String(format: L("accounts_core.loan.prepayment.term_note_differentiated_format"), earlier)
-        }
+        let base = plan.payment == nil
+            ? String(format: L("accounts_core.loan.prepayment.term_note_differentiated_format"), earlier)
+            : String(
+                format: L("accounts_core.loan.prepayment.term_note_format"),
+                LoanMoneyFormat.money(plan.term.payment, currency: currency),
+                earlier
+            )
+        // Дата закрытия — прямо в подписи варианта: без предвыбора таблица «что изменится» до
+        // выбора пуста, и «на 13 месяцев раньше» не с чем соотнести.
+        guard let payoffDate = plan.term.payoffDate else { return base }
         return String(
-            format: L("accounts_core.loan.prepayment.term_note_format"),
-            LoanMoneyFormat.money(plan.term.payment, currency: currency),
-            earlier
+            format: L("accounts_core.loan.prepayment.note_payoff_format"),
+            base, monthYear(payoffDate, locale: locale)
         )
     }
 

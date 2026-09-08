@@ -12,7 +12,7 @@ struct LoanPaymentConfirmSheet: View {
 
     /// Высота листа фиксированная: состав строк известен заранее, а `.medium` оставил бы пустой
     /// хвост снизу (тот же приём, что в `AccountActionsSheet`).
-    private var sheetHeight: CGFloat { 430 }
+    private var sheetHeight: CGFloat { 460 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.l) {
@@ -57,10 +57,20 @@ struct LoanPaymentConfirmSheet: View {
                 .foregroundStyle(AppColors.textPrimary)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
-            if let date = presentation.nextPaymentDate {
+            if let date = presentation.plannedPaymentDate ?? presentation.nextPaymentDate {
                 Text(date.formatted(date: .long, time: .omitted))
                     .font(.millioCalloutRegular)
                     .foregroundStyle(AppColors.textSecondary)
+            }
+            // Человек должен видеть, что кнопка применяет уже существующую плановую операцию,
+            // а не заводит вторую запись рядом с ней (решение владельца 2).
+            if presentation.plannedPaymentDate != nil {
+                Text(String(
+                    format: L("accounts_core.loan.detail.planned_in_cashflow_format"),
+                    presentation.plannedRecurrenceTitle
+                ))
+                .font(.millioCaptionRegular)
+                .foregroundStyle(AppColors.textTertiary)
             }
         }
     }
