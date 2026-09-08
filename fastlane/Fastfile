@@ -56,7 +56,8 @@ platform :ios do
       ipa: "build/testflight/millio.ipa",
       skip_waiting_for_build_processing: true,
       distribute_external: false,
-      notify_external_testers: false
+      notify_external_testers: false,
+      changelog: options[:changelog]
     )
 
     git_commit(

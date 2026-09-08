@@ -1,7 +1,6 @@
-What's new in 1.9:
+What's new in 2.0:
 
-• Real estate and debit cards — new account types for a complete picture of your net worth
-• Redesigned Accounts screen — assets and liabilities separated, balance breakdown, flexible grouping
-• Credit cards — full operations and payments support
-• Upcoming section in Cashflow — see payments and income ahead of time
-• Unified amount input and dozens of stability fixes
+• Cash — a new account type in the Accounts section
+• Loan — early repayment with a choice of scenario (shorten term or reduce payment)
+• Scheduled loan payments now appear as planned operations in Cashflow
+• Stability fixes
