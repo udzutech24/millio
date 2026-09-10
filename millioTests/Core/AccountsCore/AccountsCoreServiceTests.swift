@@ -675,4 +675,47 @@ struct AccountsCoreServiceTests {
         }
         #expect((account.events ?? []).allSatisfy { $0.sourceTransactionID != "cashflow-tx-1" })
     }
+
+    // MARK: - Ревью round 1: isWritable + LocalizedError
+
+    /// `isWritable` — read-only обёртка для check-before-mutate у вызывающих (мост Cashflow,
+    /// A1): должна отражать ровно то же условие, что и `requireWritable`, без побочных эффектов.
+    @Test
+    func isWritableReflectsArchivedAndDeletedState() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let live = try service.createAccount(name: "Карта", kind: .cash, currency: "RUB", openingBalance: 0)
+        let archived = try service.createAccount(name: "Архив", kind: .cash, currency: "RUB", openingBalance: 0)
+        try service.archiveAccount(archived)
+
+        #expect(service.isWritable(live))
+        #expect(service.isWritable(archived) == false)
+    }
+
+    /// A3/A4: замена `error.localizedDescription` на человекочитаемый текст не должна тихо родить
+    /// case без текста — иначе UI откатится к тому же системному «Операция не может быть завершена».
+    @Test
+    func everyErrorCaseHasNonEmptyLocalizedDescription() {
+        let cases: [AccountsCoreServiceError] = [
+            .dirtyContext,
+            .unsupportedEventType(.income),
+            .sameAccountTransfer,
+            .missingFxRate,
+            .eventWithoutAccount,
+            .missingProductIdentity,
+            .unknownLegacySemanticMutation,
+            .eventNotAllowed(.cash, .income),
+            .capabilityNotAllowed(.cash, .transfers),
+            .invalidCreditCardAmount,
+            .archivedCreditCard,
+            .unsupportedOperationForDeposit,
+            .accountNotWritable,
+        ]
+        for error in cases {
+            let description = error.errorDescription
+            #expect(description != nil, "\(error) должен иметь errorDescription")
+            #expect(description?.isEmpty == false, "\(error) не должен иметь пустой errorDescription")
+        }
+    }
 }

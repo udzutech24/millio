@@ -207,12 +207,17 @@ struct AccountDetailView: View {
                             taxPresentation: depositTaxPresentation
                         )
                     } else if let loanPresentation {
-                        LoanDetailSection(presentation: loanPresentation, onAction: handleLoanAction)
+                        LoanDetailSection(
+                            presentation: loanPresentation,
+                            isEditable: canEditAccountDetails,
+                            onAction: handleLoanAction
+                        )
                     } else if account.kind == .cash {
                         CashDetailSection(
                             lastReconciliation: CashReconciliationPresentation.lastReconciliationDate(
                                 events: sortedEvents
                             ),
+                            canReconcile: canEditAccountDetails,
                             onReconcile: { sheet = .adjustBalance }
                         )
                     } else if account.productType == .creditCard {

@@ -164,6 +164,15 @@ final class AccountsCoreCashflowBridge {
                 )
                 return
             }
+            // ПРОВЕРКА ДО МУТАЦИИ (A1, ревью round 1): `deleteEvents` ниже необратимо удаляет обе
+            // ноги старого перевода, а `accountsCoreService.transfer` вставляет новые ТОЛЬКО если
+            // оба счёта writable — если бы guard стоял после delete, правка перевода с архивной
+            // стороной удаляла бы обе ноги и падала на transfer, не восстанавливая их (регрессия
+            // потери данных). Порядок операций в этой ветке — инвариант, не трогать: между guard
+            // и deleteEvents НЕ должно быть await (иначе открывается окно гонки).
+            guard accountsCoreService.isWritable(source), accountsCoreService.isWritable(destination) else {
+                throw AccountsCoreServiceError.accountNotWritable
+            }
             // Пересоздаём пару целиком (просто и корректно для правок задним числом — сумма/курс
             // всегда пересчитываются заново; стабильность transferID между правками не нужна).
             try accountsCoreService.deleteEvents(bySourceTransactionID: transaction.uniqueID)

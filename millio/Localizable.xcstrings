@@ -110604,6 +110604,258 @@
           }
         }
       }
+    },
+    "accounts_core.error.account_not_writable" : {
+      "extractionState" : "manual",
+      "comment" : "AccountsCoreServiceError.accountNotWritable — человекочитаемый текст (A3)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivierte Konten können nicht bearbeitet werden. Stelle es zuerst aus dem Archiv wieder her."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archived accounts can't be edited. Restore it from the archive first."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pueden editar las cuentas archivadas. Restáurala primero desde el archivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Архивный счёт нельзя изменить. Сначала верните его из архива."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已归档的账户无法编辑。请先从归档中恢复。"
+          }
+        }
+      }
+    },
+    "accounts_core.error.missing_fx_rate" : {
+      "extractionState" : "manual",
+      "comment" : "AccountsCoreServiceError.missingFxRate — человекочитаемый текст",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Wechselkurs für diese Überweisung zwischen Währungen konnte nicht ermittelt werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't determine the exchange rate for this transfer between currencies."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo determinar el tipo de cambio para esta transferencia entre monedas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось определить курс обмена для перевода между валютами."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法确定此跨币种转账的汇率。"
+          }
+        }
+      }
+    },
+    "accounts_core.error.same_account_transfer" : {
+      "extractionState" : "manual",
+      "comment" : "AccountsCoreServiceError.sameAccountTransfer — человекочитаемый текст",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du kannst kein Geld auf dasselbe Konto überweisen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can't transfer money to the same account."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No puedes transferir dinero a la misma cuenta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нельзя перевести деньги на тот же счёт."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法向同一账户转账。"
+          }
+        }
+      }
+    },
+    "accounts_core.error.invalid_credit_card_amount" : {
+      "extractionState" : "manual",
+      "comment" : "AccountsCoreServiceError.invalidCreditCardAmount — человекочитаемый текст",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Betrag der Kreditkartentransaktion muss größer als null sein."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The credit card operation amount must be greater than zero."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El importe de la operación con la tarjeta de crédito debe ser mayor que cero."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сумма операции по кредитке должна быть больше нуля."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "信用卡操作金额必须大于零。"
+          }
+        }
+      }
+    },
+    "accounts_core.error.archived_credit_card" : {
+      "extractionState" : "manual",
+      "comment" : "AccountsCoreServiceError.archivedCreditCard — человекочитаемый текст",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine archivierte Kreditkarte kann keine neuen Transaktionen aufnehmen. Der Verlauf bleibt sichtbar."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An archived credit card can't record new operations. Its history remains viewable."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una tarjeta de crédito archivada no puede registrar nuevas operaciones. Su historial sigue siendo visible."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Архивная кредитка недоступна для новых операций. История осталась доступной для просмотра."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已归档的信用卡无法记录新操作。历史记录仍可查看。"
+          }
+        }
+      }
+    },
+    "accounts_core.error.unsupported_operation_for_deposit" : {
+      "extractionState" : "manual",
+      "comment" : "AccountsCoreServiceError.unsupportedOperationForDeposit — человекочитаемый текст",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Vorgang ist für ein Sparkonto nicht verfügbar — nutze stattdessen Einzahlung, Abhebung oder vorzeitige Kündigung."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This operation isn't available for a deposit — use top-up, withdrawal, or early closing instead."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta operación no está disponible para un depósito. Usa el ingreso, el retiro o el cierre anticipado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Эта операция недоступна для вклада — используйте пополнение, снятие или закрытие вклада."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此操作不适用于存款账户——请改用充值、提取或提前支取。"
+          }
+        }
+      }
+    },
+    "accounts_core.error.generic" : {
+      "extractionState" : "manual",
+      "comment" : "AccountsCoreServiceError — общий fallback для внутренних инвариантов (dirtyContext/unsupportedEventType/eventWithoutAccount/missingProductIdentity/unknownLegacySemanticMutation/eventNotAllowed/capabilityNotAllowed) — пользователь не должен видеть техническую детализацию этих случаев",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Vorgang konnte nicht abgeschlossen werden. Versuche es erneut oder wende dich an den Support, wenn der Fehler weiterhin auftritt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The operation couldn't be completed. Try again, or contact support if this keeps happening."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo completar la operación. Vuelve a intentarlo o contacta con soporte si el error persiste."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Операция не выполнена. Попробуйте ещё раз или обратитесь в поддержку, если ошибка повторится."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "操作未能完成。请重试，如果问题持续出现，请联系支持团队。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

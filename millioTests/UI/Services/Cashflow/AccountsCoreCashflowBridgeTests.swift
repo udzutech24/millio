@@ -348,4 +348,59 @@ struct AccountsCoreCashflowBridgeTests {
         #expect(event.amount == 1600) // 20 * 80 (курс даты события), не 20 * 999
         #expect(event.fxRateToBase == 80)
     }
+
+    // MARK: - A1 (ревью round 1): регрессия с потерей данных — правка перевода с архивной стороной
+
+    /// До фикса: `syncTransfer` сначала звал `deleteEvents(bySourceTransactionID:)` (удаляет и
+    /// СОХРАНЯЕТ обе ноги), и только потом `transfer()`, который бросал `accountNotWritable` на
+    /// архивном счёте — обе ноги оказывались удалены навсегда, новых взамен не появлялось.
+    /// Полный путь создания (не руками расставленные `AccountEvent`): создать перевод через
+    /// реальный `service.transfer`, сохранить, архивировать один счёт, затем отредактировать
+    /// сумму существующей транзакции через мост — как это делает `CashflowTransactionEditorView`.
+    @Test
+    func editingTransferWithArchivedSideThrowsAndKeepsBothLegs() async throws {
+        let (container, ctx, service, bridge) = try makeContext()
+        _ = container
+        let source = try service.createAccount(name: "Карта", kind: .cash, currency: "RUB", openingBalance: 1000)
+        let destination = try service.createAccount(name: "Счёт", kind: .bankAccount, currency: "RUB", openingBalance: 0)
+
+        let tx = makeTransaction(
+            type: .transfer, amount: 400, cardID: source.id.uuidString, toCardID: destination.id.uuidString
+        )
+        ctx.insert(tx)
+        try ctx.save()
+        let txID = tx.uniqueID
+
+        // Перевод создан через мост (тот же путь, что в проде) — ДО архивации.
+        try await bridge.sync(for: tx)
+        let legsBefore = try ctx.fetch(FetchDescriptor<AccountEvent>(
+            predicate: #Predicate<AccountEvent> { $0.sourceTransactionID == txID }
+        ))
+        #expect(legsBefore.count == 2)
+
+        // Архивируем ОДНУ сторону перевода — сценарий A1.
+        try service.archiveAccount(destination)
+
+        // Правка старого перевода задним числом (человек меняет сумму в ленте).
+        tx.amount = 500
+        var thrown: Error?
+        do {
+            try await bridge.sync(for: tx)
+        } catch {
+            thrown = error
+        }
+
+        guard case AccountsCoreServiceError.accountNotWritable = try #require(thrown) else {
+            Issue.record("Ожидали AccountsCoreServiceError.accountNotWritable, получили \(String(describing: thrown))")
+            return
+        }
+
+        // ГЛАВНАЯ ПРОВЕРКА (A1): обе ноги старого перевода на месте, ничего не удалено.
+        let legsAfter = try ctx.fetch(FetchDescriptor<AccountEvent>(
+            predicate: #Predicate<AccountEvent> { $0.sourceTransactionID == txID }
+        ))
+        #expect(legsAfter.count == 2)
+        #expect(legsAfter.allSatisfy { $0.amount == 400 }) // старая сумма, правка не применилась
+        #expect(Set(legsAfter.compactMap(\.transferID)).count == 1)
+    }
 }

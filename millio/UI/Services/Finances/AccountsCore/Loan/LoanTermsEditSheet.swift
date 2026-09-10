@@ -93,8 +93,21 @@ struct LoanTermsEditSheet: View {
     /// остаток долга суммой договора — на легаси-счёте это молча стёрло бы уже погашенную часть.
     private var principalChanged: Bool { draft.principal != seededPrincipal }
 
-    private func save() {
+    // Не `private`: тестируем архивный guard напрямую (LoanTermsEditSheetArchivedGuardTests) —
+    // тот же уровень доступа, что у `perform`/`handleLoanAction` в AccountDetailView+Sheets.
+    func save() {
         guard let terms = draft.terms else { return }
+        // Архивный/удалённый кредит read-only (A4). `LoanContractStore.upsert` ниже пишет НАПРЯМУЮ,
+        // в обход `AccountsCoreService.requireWritable` (тот охраняет только `AccountEvent`, не
+        // `LoanContract`) — без этой проверки ветка `principalChanged == false` (правка ставки/
+        // графика без суммы) вообще ничем не блокировалась: она сохраняет договор голым
+        // `modelContext.save()`, не заходя в `LoanPrincipalCorrection`/`recordEvent` вовсе.
+        // Второй слой защиты: UI-гейт (`canEditAccountDetails`) должен закрывать вход на этот экран
+        // раньше, но сервис как последняя точка записи не вправе полагаться только на UI.
+        guard account.archivedAt == nil, account.deletedAt == nil else {
+            errorMessage = AccountsCoreServiceError.accountNotWritable.localizedDescription
+            return
+        }
         do {
             // `upsert` трогает только условия: `paymentsMade`, `paidInterestTotal` и страховка —
             // факт погашения, а не условие договора, и правкой условий не сбрасываются.
@@ -123,6 +136,12 @@ struct LoanTermsEditSheet: View {
             onSaved()
             dismiss()
         } catch {
+            // Откатываем ЛЮБУЮ незавершённую мутацию этого save(): `upsert` уже применил правку
+            // договора В КОНТЕКСТЕ до того, как `LoanPrincipalCorrection` дошла до `recordEvent` и
+            // бросила — без rollback правка условий осталась бы «грязной» в main context до
+            // случайного следующего сохранения где-то ещё (A4). Тот же паттерн, что и в
+            // `CashflowPersistenceService` — откатывает ВЕСЬ контекст, не только этот вызов.
+            modelContext.rollback()
             errorMessage = error.localizedDescription
         }
     }

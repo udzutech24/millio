@@ -453,7 +453,12 @@ extension AccountDetailView {
     func handleLoanAction(_ action: LoanDetailAction) {
         switch action {
         case .payment: sheet = .loanPayment
-        case .terms: sheet = .loanTerms
+        case .terms:
+            // Defense-in-depth: чипы условий скрыты через `isEditable` в `LoanDetailSection`,
+            // но если что-то их всё же активирует (VoiceOver, будущий рефакторинг) — не открываем
+            // экран, который упрётся в `accountNotWritable` при попытке сохранить.
+            guard canEditAccountDetails else { return }
+            sheet = .loanTerms
         case .schedule: showLoanSchedule = true
         case .prepayment: sheet = .loanPrepayment
         }
@@ -503,18 +508,21 @@ extension AccountDetailView {
 
     /// Пункты «···» кредита. «Внести платёж» сюда не дублируем — кнопка уже на экране
     /// (`LoanDetailSection`), в меню только то, чего на экране нет.
+    ///
+    /// «Условия» и «Реквизиты» видны только на редактируемом (не архивном/удалённом) кредите:
+    /// `LoanTermsEditSheet` пишет в `LoanContract` напрямую и заходит в `AccountsCoreService` для
+    /// `LoanPrincipalCorrection` — на архиве сервис откажет, но пункт меню не должен вести в тупик.
     var loanActionSheetItems: [AccountActionItem] {
-        var items: [AccountActionItem] = [
-            .init(
-                title: L("accounts_core.detail.loan.action.terms"),
-                icon: "doc.text",
-                action: { sheet = .loanTerms }
-            )
-        ]
+        var items: [AccountActionItem] = []
         // «Изменить баланс» кредиту намеренно не даём: поле суммы отбрасывает минус
         // (`AmountInputFormatter.sanitize`), и сохранение перевернуло бы знак долга — счёт-
         // обязательство ушёл бы в net worth активом. Ремонт остатка — отдельная задача.
-        if account.archivedAt == nil && account.deletedAt == nil {
+        if canEditAccountDetails {
+            items.append(.init(
+                title: L("accounts_core.detail.loan.action.terms"),
+                icon: "doc.text",
+                action: { sheet = .loanTerms }
+            ))
             items.append(.init(
                 title: L("accounts_core.detail.action.edit_details"),
                 icon: "square.and.pencil",
@@ -530,9 +538,10 @@ extension AccountDetailView {
         return items
     }
 
-    /// Правка реквизитов вклада (имя, группа, учёт в тотале) — те же условия, что и у actionsRow
-    /// остальных типов счетов: архивный/удалённый счёт не редактируется.
-    var canEditDepositDetails: Bool {
+    /// Правка реквизитов/условий счёта (вклад, кредит) — те же условия, что и у actionsRow
+    /// остальных типов счетов: архивный/удалённый счёт не редактируется. Один общий геттер —
+    /// чтобы `archivedAt == nil && deletedAt == nil` не расползалось по третьим местам.
+    var canEditAccountDetails: Bool {
         account.archivedAt == nil && account.deletedAt == nil
     }
 
@@ -542,7 +551,7 @@ extension AccountDetailView {
     /// (`DepositDetailSection.actions`).
     func depositActionSheetItems(_ presentation: DepositDetailPresentation) -> [AccountActionItem] {
         var items: [AccountActionItem] = []
-        if canEditDepositDetails {
+        if canEditAccountDetails {
             items.append(.init(
                 title: L("accounts_core.detail.action.edit_details"),
                 icon: "square.and.pencil",

@@ -85,6 +85,12 @@ final class AccountsCoreService {
         }
     }
 
+    /// Read-only обёртка над `requireWritable` для вызывающих, которым нужно проверить писуемость
+    /// ДО мутации (например, мост Cashflow — check-before-delete, а не check-after-delete).
+    func isWritable(_ account: Account) -> Bool {
+        (try? requireWritable(account)) != nil
+    }
+
     // MARK: - Создание счёта
 
     #if DEBUG
@@ -970,6 +976,34 @@ final class AccountsCoreService {
         guard let stale = try? modelContext.fetch(descriptor) else { return }
         for snapshot in stale {
             modelContext.delete(snapshot)
+        }
+    }
+}
+
+// MARK: - Человекочитаемые сообщения об ошибках (A3/A4)
+
+/// Только 6 case видны пользователю в обычном сценарии (архив, кредитка, вклад, перевод, курс) —
+/// у каждого свой текст. Остальные 7 case — внутренние инварианты движка (грязный контекст,
+/// нераспознанный тип события/продукта), которые не должны всплывать в UI в норме; вместо 13
+/// уникальных ключей ради галочки у них один общий fallback-текст.
+extension AccountsCoreServiceError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .accountNotWritable:
+            L("accounts_core.error.account_not_writable")
+        case .missingFxRate:
+            L("accounts_core.error.missing_fx_rate")
+        case .sameAccountTransfer:
+            L("accounts_core.error.same_account_transfer")
+        case .invalidCreditCardAmount:
+            L("accounts_core.error.invalid_credit_card_amount")
+        case .archivedCreditCard:
+            L("accounts_core.error.archived_credit_card")
+        case .unsupportedOperationForDeposit:
+            L("accounts_core.error.unsupported_operation_for_deposit")
+        case .dirtyContext, .unsupportedEventType, .eventWithoutAccount, .missingProductIdentity,
+             .unknownLegacySemanticMutation, .eventNotAllowed, .capabilityNotAllowed:
+            L("accounts_core.error.generic")
         }
     }
 }

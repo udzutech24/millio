@@ -445,6 +445,18 @@ final class CashflowPersistenceService {
                 AppLogger.log(.error, category: "Cashflow", "Debit operation failed: sync_graph")
                 return false
             }
+            // A2 (ревью round 1): архивный/удалённый counterpart-счёт БЛОКИРУЕТ правку легаси-
+            // транзакции — та же read-only-политика архива, что уже управляет `canEditAccountDetails`
+            // в карточке счёта, а не негласное «мосту можно писать в архив» (наименьшее удивление:
+            // человек видит, что правка не прошла, а не молчаливое расхождение между лентой и ядром).
+            // МАЯЧОК: сопоставление конкретно с этим case — если мост когда-нибудь станет заворачивать
+            // «архивный счёт» в другой тип ошибки, эта ветка перестанет ловить и молча откатится
+            // к «не блокируем» ниже. Меняя источник ошибки в мосте — обнови и это сравнение.
+            if case AccountsCoreServiceError.accountNotWritable = error {
+                modelContext.rollback()
+                AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge sync failed: account archived")
+                return false
+            }
             // Не блокируем сохранение легаси-транзакции (источник истины ленты/бюджетов) —
             // событие нового ядра можно досинхронизировать следующей правкой (риск №8: offline).
             AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge sync failed")
