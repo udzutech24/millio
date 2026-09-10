@@ -55341,43 +55341,43 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empfohlen: Kreditbetrag eingeben (0 ist erlaubt)"
+            "value" : "Empfohlen: Kreditbetrag eingeben"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recommended: set credit amount (0 is allowed)"
+            "value" : "Recommended: set credit amount"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recomendado: establece el importe del crédito (se permite 0)"
+            "value" : "Recomendado: establece el importe del crédito"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recommandé : indiquez le montant du crédit (0 accepté)"
+            "value" : "Recommandé : indiquez le montant du crédit"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Рекомендуется ввести сумму кредита (можно 0)"
+            "value" : "Рекомендуется ввести сумму кредита"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Önerilir: kredi tutarını belirtin (0 kabul edilir)"
+            "value" : "Önerilir: kredi tutarını belirtin"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "建议填写贷款金额（可填0）"
+            "value" : "建议填写贷款金额"
           }
         }
       }

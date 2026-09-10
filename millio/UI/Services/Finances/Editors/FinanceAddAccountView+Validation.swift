@@ -18,7 +18,14 @@ extension FinanceAddAccountView {
             }
             return true
         case .credit:
-            return creditData != nil
+            guard let creditData else { return false }
+            // Обе суммы нулевые — форма несёт только название, ни одной цифры (Баг 1, буква
+            // требования: пустой остаток при известной сумме кредита уже не даёт 0 ₽ выше в
+            // `RemainingAmountAutoSync.resolvedRemainingAmount`, но если сумма кредита ТОЖЕ не
+            // введена — подставлять просто нечего). Явный «0» в одном поле при заполненном другом
+            // (кредит без начисленного остатка/только что выданный без указанной суммы) — легитимный
+            // случай и не блокируется, как и `quantity == 0` у акций/крипты.
+            return creditData.amount != 0 || creditData.remainingAmount != 0
         case .investment:
             if selectedInvestmentPreset == .deposit {
                 return depositData != nil
@@ -49,12 +56,11 @@ extension FinanceAddAccountView {
             return cardData.balance != 0
         case .credit:
             guard let creditData else { return false }
-            // Читаем `remainingAmount` — то же значение, что уходит в `openingBalance`
-            // (`AccountCreationCoordinator.finalizeObligationAccount`), а не отображаемую сумму
-            // кредита: до фикса подсказка «заполните сумму» могла молчать, хотя счёт создастся
-            // на 0 ₽ (Баг 1 — форма, а не эта подсказка, теперь гарантирует непустой remainingAmount,
-            // но подсказка обязана смотреть на то же поле).
-            return creditData.remainingAmount != 0
+            // OR, не только remainingAmount: явный «0» в остатке при заполненной сумме кредита
+            // (кредит уже погашен) — легитимное состояние, подсказка «введите сумму» не должна
+            // срабатывать, если сумма уже введена (ревью round 2 — до фикса смотрели только на
+            // remainingAmount и просили ввести уже заполненное поле).
+            return creditData.amount != 0 || creditData.remainingAmount != 0
         case .investment:
             if selectedInvestmentPreset == .deposit {
                 return (depositData?.amount ?? 0) != 0

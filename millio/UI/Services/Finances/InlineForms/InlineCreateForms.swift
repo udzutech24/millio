@@ -516,17 +516,14 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     // Решение владельца 10.09: тумблер «Приоритет» (Low/Normal/High) убран из ВСЕХ форм создания —
     // для новых core-счетов он ничего не хранит (нет поля в `AccountAppearance`) и ни на что не
     // влияет, декоративный переключатель обманывал пользователя. «Избранное» реально сохраняется
-    // (`AccountAppearancePersister`) — единственный тумблер секции. Заголовок секции («Приоритет»)
-    // не трогаем — тот же паттерн уже был в форме кредита (её `prioritySection` ниже) до этого
-    // фикса, теперь все три формы консистентны друг с другом.
+    // (`AccountAppearancePersister`) — единственный тумблер секции. Заголовок «Приоритет» тоже убран
+    // (ревью round 2 — слово, которое решили убрать, оставалось над одним тумблером): у тумблера уже
+    // есть собственная подпись, отдельный заголовок секции не нужен.
     private var prioritySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: L("finances.add_account.section.priority"))
-            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
-                Toggle(L("finances.add_account.favorite.single"), isOn: $card.isFavorite)
-                    .tint(AppColors.toggleOnGreen)
-                    .foregroundStyle(AppColors.textPrimary)
-            }
+        FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
+            Toggle(L("finances.add_account.favorite.single"), isOn: $card.isFavorite)
+                .tint(AppColors.toggleOnGreen)
+                .foregroundStyle(AppColors.textPrimary)
         }
     }
 
@@ -644,7 +641,10 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     func getCreditData() -> (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)? {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         let amount = loanDraft.principal.map { NSDecimalNumber(decimal: $0).doubleValue } ?? 0
-        let remainingAmount = parseNumber(remainingAmountText) ?? 0
+        // Пустой/нечитаемый остаток подставляет сумму кредита здесь, а не в самом поле — переписывать
+        // `remainingAmountText` посреди ввода на пустом символе воспроизводило Баг 1 повторно (см.
+        // `RemainingAmountAutoSync.shouldResumeSyncing`).
+        let remainingAmount = RemainingAmountAutoSync.resolvedRemainingAmount(text: remainingAmountText, principalAmount: amount)
         let monthlyPayment = loanPayment ?? (amount / 12.0)
         let endDate = loanTermEnd ?? (Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date())
         let dayOfMonth = Calendar.current.component(.day, from: loanDraft.firstPaymentDate)
@@ -697,16 +697,13 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         }
         .onChange(of: name) { _, _ in emitCreditDataChange() }
         .onChange(of: remainingAmountText) { _, newValue in
-            let resolved = RemainingAmountAutoSync.resolvedText(
-                afterEditingTo: newValue,
-                principalText: loanDraft.principalText,
-                isCurrentlyAutoSynced: isRemainingAmountAutoSynced
-            )
-            isRemainingAmountAutoSynced = resolved.isAutoSynced
-            // Пишем себя же только если решение реально поменяло текст (снэп-бэк на уже известную
-            // сумму кредита) — иначе задели бы `remainingAmountText` на каждый ввод без нужды.
-            if resolved.text != newValue {
-                remainingAmountText = resolved.text
+            // Только флаг синка — саму строку поля здесь НЕ переписываем (см. doc-комментарий
+            // `RemainingAmountAutoSync.shouldResumeSyncing`: переписать её тут — значит снова
+            // склеить старое значение с новыми цифрами на последнем стёртом символе).
+            if RemainingAmountAutoSync.shouldResumeSyncing(newText: newValue) {
+                isRemainingAmountAutoSynced = true
+            } else if RemainingAmountAutoSync.shouldStopSyncing(afterEditingTo: newValue, principalText: loanDraft.principalText) {
+                isRemainingAmountAutoSynced = false
             }
             emitCreditDataChange()
         }
@@ -923,14 +920,13 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         }
     }
     
+    // Заголовок секции («Приоритет») убран (ревью round 2, см. комментарий у `prioritySection`
+    // `InlineCardCreateForm`) — у тумблера уже есть своя подпись.
     private var prioritySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: L("finances.add_account.section.priority"))
-            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
-                Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
-                    .tint(AppColors.toggleOnGreen)
-                    .foregroundStyle(AppColors.textPrimary)
-            }
+        FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
+            Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
+                .tint(AppColors.toggleOnGreen)
+                .foregroundStyle(AppColors.textPrimary)
         }
     }
 
@@ -1542,15 +1538,13 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         }
     }
     
-    // Решение владельца 10.09: см. комментарий у `prioritySection` `InlineCardCreateForm` — тот же фикс.
+    // Заголовок секции («Приоритет») убран (ревью round 2, см. комментарий у `prioritySection`
+    // `InlineCardCreateForm`) — у тумблера уже есть своя подпись.
     private var prioritySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: L("finances.add_account.section.priority"))
-            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
-                Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
-                    .tint(AppColors.toggleOnGreen)
-                    .foregroundStyle(AppColors.textPrimary)
-            }
+        FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
+            Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
+                .tint(AppColors.toggleOnGreen)
+                .foregroundStyle(AppColors.textPrimary)
         }
     }
 
