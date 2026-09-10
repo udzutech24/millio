@@ -282,4 +282,110 @@ struct LoanMissedPaymentsCatchUpTests {
         #expect(ordinaryApplyCount == 1)
         #expect(ordinary.hasAppliedBalanceEffect)
     }
+
+    /// Ревью на L1: прямой fetch внутри цикла (замена `transactionsProvider()`) на проходах 2+ видит
+    /// не только новую plan-строку кредита (ожидаемо — ради неё и сделан обход), но и ЛЮБУЮ другую
+    /// незавершённую строку, которую успела вставить ПАРАЛЛЕЛЬНАЯ MainActor-задача генерации
+    /// повторяющихся операций (`scheduleRecurringGeneration` в том же тике `loadTransactions()`,
+    /// см. `CashflowViewModel.swift:438-439`): та делает `insert()` сразу, а
+    /// `hasAppliedBalanceEffect` выставляет только после `await` конвертации валюты
+    /// (`CashflowPersistenceService.swift:567,578`). Если обе MainActor-задачи чередуются между
+    /// этими точками, догонка подхватила бы чужую строку и применила бы её ЕЩЁ РАЗ здесь же —
+    /// двойное списание. Тест симулирует гонку синхронно (без реального Task-чередования): во время
+    /// apply обычной due-строки на первом проходе в контекст вставляется вторая, ранее не входившая
+    /// в due-список строка — ровно то же самое, что видел бы прямой fetch следующего прохода, если
+    /// бы её успел вставить параллельный генератор.
+    @Test("Строка, появившаяся в контексте между проходами цикла, не подхватывается этим же вызовом")
+    func rowInsertedMidCallByAnotherTaskIsNotSweptUpWithinSameCall() async throws {
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let context = container.mainContext
+
+        let account = try AccountsCoreService(modelContext: context).createAccount(
+            name: "Автокредит",
+            kind: .loan,
+            currency: "RUB",
+            openingBalance: 1_200_000,
+            date: day(2026, 3, 15)
+        )
+        let contract = try LoanContractStore(context: context).upsert(accountID: account.id) { contract in
+            contract.principal = 1_200_000
+            contract.annualRatePercent = 12
+            contract.termPeriods = 60
+            // Три пропущенных периода — нужно НЕСКОЛЬКО проходов цикла, иначе гонка (строка
+            // появляется МЕЖДУ проходами) не воспроизводится вообще.
+            contract.firstPaymentDate = day(2026, 5, 5)
+            contract.scheduleType = .annuity
+            contract.frequency = .monthly
+        }
+        // Обычная due-строка первого прохода — во время её apply симулируем гонку.
+        let ordinary = CashflowTransaction(
+            transactionType: .expense,
+            amount: 500,
+            currency: "RUB",
+            transactionDate: day(2026, 5, 10),
+            expenseCategory: .other
+        )
+        context.insert(ordinary)
+        try context.save()
+
+        let referenceNow = day(2026, 8, 1)
+        let suiteName = "tests.loan.race.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let scope = "millio_user_owner"
+        defaults.set(
+            day(2026, 4, 1),
+            forKey: CashflowScheduledService.dueAutoApplyCheckpointKeyPrefix + scope
+        )
+
+        // "Чужая" строка — как будто её вставил параллельный генератор повторяющихся операций, но
+        // применить ещё не успел (в реальности — не дошёл до `await` конвертации валюты). Дата в
+        // окне [previousCheckpoint, referenceNow], как у любой настоящей due-строки.
+        var raceRowInserted = false
+        var raceRowApplyCount = 0
+        let raceRowDate = day(2026, 5, 12)
+        var raceRow: CashflowTransaction?
+
+        let service = CashflowScheduledService(
+            modelContext: context,
+            defaults: defaults,
+            scopeIdentifier: scope,
+            now: { referenceNow },
+            transactionsProvider: { try! context.fetch(FetchDescriptor<CashflowTransaction>()) },
+            onTransactionsMutated: {},
+            onResolveExchangeInfo: { _ in CashflowExchangeInfo(rate: nil, rateDate: nil, rateCurrency: nil) },
+            onApplyRecurringToCard: { _ in },
+            onApplyDuePlannedEffect: { transaction in
+                if transaction.persistentModelID == ordinary.persistentModelID, !raceRowInserted {
+                    raceRowInserted = true
+                    let row = CashflowTransaction(
+                        transactionType: .expense,
+                        amount: 777,
+                        currency: "RUB",
+                        transactionDate: raceRowDate,
+                        expenseCategory: .other
+                    )
+                    context.insert(row)
+                    raceRow = row
+                }
+                if let raceRow, transaction.persistentModelID == raceRow.persistentModelID {
+                    raceRowApplyCount += 1
+                }
+            },
+            appliedNoticeStore: AppliedPlannedNoticeStore(defaults: defaults, scopeIdentifier: scope),
+            noticeAccountNameResolver: { _ in account.name },
+            noticeTitleResolver: { _ in account.name }
+        )
+
+        let didApply = await service.applyDuePlannedTransactionsIfNeeded(referenceNow: referenceNow)
+
+        #expect(didApply)
+        // Кредитная догонка при этом отрабатывает как прежде — фикс её не трогает.
+        #expect(contract.paymentsMade == 3)
+        // Ключевая проверка: строка, появившаяся МЕЖДУ проходами и не являющаяся кредитной
+        // plan-строкой, этим же вызовом не применяется — её увидит только следующий отдельный вызов
+        // (когда её реально доведёт до конца свой генератор).
+        #expect(raceRowApplyCount == 0)
+        #expect(raceRow?.hasAppliedBalanceEffect != true)
+    }
 }

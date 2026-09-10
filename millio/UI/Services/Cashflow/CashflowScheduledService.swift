@@ -411,7 +411,16 @@ final class CashflowScheduledService {
             defaults.set(previousCheckpoint, forKey: dueAutoApplyCheckpointKey)
         }
 
-        func fetchDueTransactions() -> [CashflowTransaction] {
+        // Прямой fetch на проходах 2+ видит не только новую plan-строку кредита (ожидаемо), но и
+        // ЛЮБУЮ другую незавершённую строку, вставленную параллельной MainActor-задачей генерации
+        // повторяющихся операций (`scheduleRecurringGeneration`, тот же тик `loadTransactions()`):
+        // она делает `insert()` СРАЗУ, а `hasAppliedBalanceEffect` выставляет только после `await`
+        // конвертации валюты. Если задачи на MainActor чередуются между этими точками, догонка
+        // подхватила бы чужую строку и применила бы её ещё раз здесь. Единственная строка, которая
+        // ЗАКОНОМЕРНО появляется в базе между проходами этого цикла — новая plan-строка кредита от
+        // `LoanPlannedPaymentScheduler.sync`. Поэтому начиная со второго прохода фильтр допускает
+        // только её; всё остальное новое — чужая гонка, её применит следующий отдельный вызов.
+        func fetchDueTransactions(onlyLoanPlanRows: Bool) -> [CashflowTransaction] {
             // Прямой fetch, а не `transactionsProvider()`: провайдер в приложении отдаёт
             // замороженный снимок `state.transactions`, обновляемый только после выхода из этой
             // функции (см. `onTransactionsMutated`). Внутри цикла ниже `LoanPlannedPaymentScheduler
@@ -434,12 +443,14 @@ final class CashflowScheduledService {
                         || LoanPlannedPaymentScheduler.isPlannedRow(transaction) else { return false }
                     guard !transaction.hasAppliedBalanceEffect else { return false }
                     guard transaction.transactionDate <= referenceNow else { return false }
+                    let isLoanPlanRow = LoanPlannedPaymentScheduler.isPlannedRow(transaction)
+                    guard !onlyLoanPlanRows || isLoanPlanRow else { return false }
                     // Решение владельца 10.09: кредитная plan-строка, застрявшая ЗА чекпойнтом из-за
                     // старого бага снимка (см. комментарий выше), всё равно догоняется — нижнюю
                     // границу окна для неё не проверяем. Идемпотентность держится на
                     // `hasAppliedBalanceEffect` двумя строками выше, а не на границе окна.
                     // Некредитные строки эту нижнюю границу сохраняют как прежде.
-                    if LoanPlannedPaymentScheduler.isPlannedRow(transaction) { return true }
+                    if isLoanPlanRow { return true }
                     return transaction.transactionDate > previousCheckpoint
                 }
                 .sorted { $0.transactionDate < $1.transactionDate }
@@ -459,9 +470,11 @@ final class CashflowScheduledService {
         // а окно [previousCheckpoint, referenceNow] фиксировано — значит на них нужен ещё один
         // проход с ТЕМ ЖЕ чекпойнтом. Цикл сходится: sync() даёт не больше одной новой строки на
         // счёт за проход, а число пропущенных периодов конечно.
+        var isFirstPass = true
         while true {
-            let dueTransactions = fetchDueTransactions()
+            let dueTransactions = fetchDueTransactions(onlyLoanPlanRows: !isFirstPass)
             guard !dueTransactions.isEmpty else { break }
+            isFirstPass = false
             foundAnyDue = true
 
             // Буфер сводки согласован с логикой провалов: сюда попадают только операции, чей apply
