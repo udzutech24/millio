@@ -9,6 +9,7 @@ struct AccountDetailView: View {
     let modelContext: ModelContext
 
     @Environment(\.dismiss) var dismiss
+    @Environment(\.diContainer) var diContainer
 
     @State var refreshToken = UUID()
     @State var sheet: ActiveSheet?
@@ -20,6 +21,8 @@ struct AccountDetailView: View {
     @State var showActionsSheet = false
     /// График платежей кредита — отдельный экран пушем (Ф5), как «Тип продукта» у вклада.
     @State var showLoanSchedule = false
+    /// Обзор портфеля рыночных позиций — пушем, как график платежей кредита.
+    @State var showPortfolioDigest = false
     /// Оформление счёта грузится ОДИН раз на открытие экрана, а не из тела `body`: `body`
     /// пересчитывается на каждую мутацию, а редактора оформления на этом экране нет.
     @State var appearance: AccountAppearanceSnapshot?
@@ -223,6 +226,10 @@ struct AccountDetailView: View {
                     if isActionsRowVisible {
                         actionsRow
                     }
+                    // Обзор портфеля — ниже панели действий: информация отдельно от сделок.
+                    if account.kind == .marketInvestment {
+                        AIPortfolioDigestEntryRow { showPortfolioDigest = true }
+                    }
                     historySection
                 }
                 .padding(AppSpacing.l)
@@ -258,6 +265,14 @@ struct AccountDetailView: View {
                     currency: account.currency
                 ))
             }
+        }
+        // Дайджест создаётся только здесь, по нажатию: каждый запрос к модели платный.
+        .navigationDestination(isPresented: $showPortfolioDigest) {
+            AIPortfolioDigestView(
+                currency: account.currency,
+                modelContext: modelContext,
+                client: AIPortfolioDigestView.makeClient(diContainer: diContainer)
+            )
         }
         .sheet(isPresented: $showActionsSheet) {
             AccountActionsSheet(

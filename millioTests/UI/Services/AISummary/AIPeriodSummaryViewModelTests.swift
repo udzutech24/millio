@@ -93,7 +93,7 @@ final class AIPeriodSummaryViewModelTests: XCTestCase {
     // MARK: - Цифры всегда есть
 
     func testFiguresAreComputedLocallyBeforeAnyNetworkCall() {
-        let client = SpyClient(result: .failure(AIPeriodSummaryClientError.transport))
+        let client = SpyClient(result: .failure(AICopilotClientError.transport))
         let viewModel = makeViewModel(client: client, cache: makeCache())
 
         viewModel.refresh()
@@ -106,7 +106,7 @@ final class AIPeriodSummaryViewModelTests: XCTestCase {
     }
 
     func testOfflineKeepsFiguresAndReportsTextUnavailable() async {
-        let client = SpyClient(result: .failure(AIPeriodSummaryClientError.transport))
+        let client = SpyClient(result: .failure(AICopilotClientError.transport))
         let viewModel = makeViewModel(client: client, cache: makeCache())
 
         viewModel.refresh()
@@ -119,7 +119,7 @@ final class AIPeriodSummaryViewModelTests: XCTestCase {
     }
 
     func testUnavailableClientDoesNotSpin() async {
-        let client = SpyClient(isAvailable: false, result: .failure(AIPeriodSummaryClientError.unavailable))
+        let client = SpyClient(isAvailable: false, result: .failure(AICopilotClientError.unavailable))
         let viewModel = makeViewModel(client: client, cache: makeCache())
 
         viewModel.refresh()
@@ -171,7 +171,7 @@ final class AIPeriodSummaryViewModelTests: XCTestCase {
     }
 
     func testFailedKeyIsNotRetriedInTheSameSession() async {
-        let client = SpyClient(result: .failure(AIPeriodSummaryClientError.transport))
+        let client = SpyClient(result: .failure(AICopilotClientError.transport))
         let viewModel = makeViewModel(client: client, cache: makeCache())
 
         viewModel.refresh()
@@ -185,7 +185,7 @@ final class AIPeriodSummaryViewModelTests: XCTestCase {
     // MARK: - Переключение периода
 
     func testSwitchingToQuarterRecomputesFiguresOverThreeMonths() {
-        let client = SpyClient(result: .failure(AIPeriodSummaryClientError.transport))
+        let client = SpyClient(result: .failure(AICopilotClientError.transport))
         let viewModel = makeViewModel(client: client, cache: makeCache())
 
         viewModel.refresh()

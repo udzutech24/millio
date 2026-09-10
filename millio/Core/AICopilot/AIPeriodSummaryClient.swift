@@ -12,20 +12,12 @@ protocol AIPeriodSummaryClient: Sendable {
     func summarize(_ request: AIPeriodSummaryRequest) async throws -> AIPeriodSummaryText
 }
 
-enum AIPeriodSummaryClientError: Error, Equatable {
-    case unavailable
-    case unauthorized
-    case rateLimited
-    case transport
-    case invalidContract
-}
-
 /// Заглушка на случай, когда DI-контейнера ещё нет: экран обязан показать цифры без текста,
 /// а не пустоту и не спиннер (образец — `UnavailableCashflowStatementImportClient`).
 struct UnavailableAIPeriodSummaryClient: AIPeriodSummaryClient {
     var isAvailable: Bool { false }
 
     func summarize(_ request: AIPeriodSummaryRequest) async throws -> AIPeriodSummaryText {
-        throw AIPeriodSummaryClientError.unavailable
+        throw AICopilotClientError.unavailable
     }
 }

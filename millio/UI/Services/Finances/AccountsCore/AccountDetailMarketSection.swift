@@ -127,41 +127,13 @@ extension AccountDetailView {
         return formatter
     }()
 
-    /// Та же цепочка фолбэков, что у `currentUnitPrice`, но параметризованная — нужна для чужих
-    /// позиций в `portfolioSharePercent` (там не годится завязка на `account.marketMeta`).
-    func liveOrCachedPrice(symbol: String, events: [AccountEvent]) -> Decimal {
-        let upper = symbol.uppercased()
-        let dayKey = AccountEvent.dayKey(for: Date())
-        let todayDescriptor = FetchDescriptor<HistoricalAssetPrice>(
-            predicate: #Predicate<HistoricalAssetPrice> { $0.symbol == upper && $0.dayKey == dayKey }
-        )
-        if let today = try? modelContext.fetch(todayDescriptor).first { return today.price }
-        let cachedDescriptor = FetchDescriptor<HistoricalAssetPrice>(
-            predicate: #Predicate<HistoricalAssetPrice> { $0.symbol == upper },
-            sortBy: [SortDescriptor(\.dayKey, order: .reverse)]
-        )
-        if let cached = try? modelContext.fetch(cachedDescriptor).first { return cached.price }
-        return events
-            .sorted { $0.date < $1.date }
-            .last(where: { ($0.type == .buy || $0.type == .sell) && $0.unitPrice != nil })?
-            .unitPrice ?? 0
-    }
-
     /// Доля позиции в общей стоимости открытых рыночных счетов ТОЙ ЖЕ валюты. Кросс-валютные
     /// позиции сюда не подмешиваем без конвертации — это была бы неверная цифра, а не «примерная»
     /// (см. брифинг: «если источника нет — не выдумывай»). `nil`, если сравнивать не с чем.
+    /// Расчёт живёт в `MarketPortfolioValuation`: обзор портфеля обязан показывать ту же долю.
     var portfolioSharePercent: Decimal? {
         guard account.kind == .marketInvestment else { return nil }
-        let descriptor = FetchDescriptor<Account>(predicate: #Predicate<Account> { $0.kindRaw == "marketInvestment" })
-        guard let candidates = try? modelContext.fetch(descriptor) else { return nil }
-        let currency = account.currency
-        let peers = candidates.filter { $0.currency == currency && $0.archivedAt == nil && $0.deletedAt == nil }
-        let total = peers.reduce(Decimal.zero) { sum, acc in
-            guard let symbol = acc.marketMeta?.symbol, !symbol.isEmpty,
-                  let snapshot = try? StockLotEngine.replay(events: acc.events ?? [], on: Date()) else { return sum }
-            return sum + snapshot.quantity * liveOrCachedPrice(symbol: symbol, events: acc.events ?? [])
-        }
-        guard total > 0 else { return nil }
-        return (balanceToday / total) * 100
+        return MarketPortfolioValuation(modelContext: modelContext)
+            .sharePercent(of: balanceToday, currency: account.currency)
     }
 }
