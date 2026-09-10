@@ -974,19 +974,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What's next"
+            "value" : "When the deposit ends"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Что дальше"
+            "value" : "Когда вклад закончится"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "接下来"
+            "value" : "存款到期时"
           }
         }
       }
