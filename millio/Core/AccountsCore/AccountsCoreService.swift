@@ -27,6 +27,9 @@ enum AccountsCoreServiceError: Error {
     /// (`DepositOperationCoordinator.adjustBalance` — operationID, идемпотентность, пересборка
     /// расписания начислений). Не переадресация: этих данных у сервиса нет.
     case unsupportedOperationForDeposit
+    /// Архивный/удалённый счёт (кроме кредитки — см. `archivedCreditCard`) read-only:
+    /// история остаётся читаемой, но новые события и правки карточки счёта запрещены.
+    case accountNotWritable
 }
 
 /// Единственная точка записи в новое ядро счетов (event-sourcing). Любое изменение баланса —
@@ -69,6 +72,16 @@ final class AccountsCoreService {
               productType != .unknownLegacy,
               ProductDefinitionCatalog.hasCapability(capability, for: productType) else {
             throw AccountsCoreServiceError.capabilityNotAllowed(account.productType, capability)
+        }
+    }
+
+    /// Архив/удаление счёта = read-only (БАГ 6): история сохраняется, но сервис — «единственная
+    /// точка записи» — обязан отказывать в новых событиях и правках карточки сам, а не полагаться
+    /// на то, что каждый вызывающий код (UI, CSV-импорт, Cashflow-мост) сам об этом вспомнит.
+    /// Кредитка не сюда: у неё свой guard и своя ошибка `archivedCreditCard` в `recordCreditCardEvent`.
+    private func requireWritable(_ account: Account) throws {
+        guard account.archivedAt == nil, account.deletedAt == nil else {
+            throw AccountsCoreServiceError.accountNotWritable
         }
     }
 
@@ -168,6 +181,7 @@ final class AccountsCoreService {
         guard type == .income || type == .expense || type == .adjustment else {
             throw AccountsCoreServiceError.unsupportedEventType(type)
         }
+        try requireWritable(account)
         try requireEventAllowed(type, for: account)
 
         let event = AccountEvent(
@@ -236,6 +250,7 @@ final class AccountsCoreService {
         // Но генерик-дельта считалась бы от СЫРОГО баланса, включая прогнозные начисления, и молча
         // разошлась бы с confirmed-контрактом вклада.
         guard account.kind != .deposit else { throw AccountsCoreServiceError.unsupportedOperationForDeposit }
+        try requireWritable(account)
         try requireEventAllowed(.adjustment, for: account)
         let current = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: account.kind, on: date)
         let delta = newValue - current
@@ -262,6 +277,7 @@ final class AccountsCoreService {
         note: String? = nil
     ) throws -> AccountEvent {
         guard account.kind == .marketInvestment else { throw AccountsCoreServiceError.unsupportedEventType(.buy) }
+        try requireWritable(account)
         try requireEventAllowed(.buy, for: account)
         let event = AccountEvent(
             account: nil,
@@ -294,6 +310,7 @@ final class AccountsCoreService {
         note: String? = nil
     ) throws -> AccountEvent {
         guard account.kind == .marketInvestment else { throw AccountsCoreServiceError.unsupportedEventType(.sell) }
+        try requireWritable(account)
         try requireEventAllowed(.sell, for: account)
         let event = AccountEvent(
             account: nil,
@@ -328,6 +345,7 @@ final class AccountsCoreService {
         guard account.kind == .marketInvestment, type == .dividend || type == .fee else {
             throw AccountsCoreServiceError.unsupportedEventType(type)
         }
+        try requireWritable(account)
         try requireEventAllowed(type, for: account)
         let event = AccountEvent(account: account, date: date, type: type, amount: amount, note: note)
         modelContext.insert(event)
@@ -354,6 +372,7 @@ final class AccountsCoreService {
         guard account.productType == .marketStock, account.kind == .marketInvestment else {
             throw AccountsCoreServiceError.unsupportedEventType(.adjustment)
         }
+        try requireWritable(account)
         try requireEventAllowed(.adjustment, for: account)
         guard targetQuantity >= 0 else { throw StockLotEngineError.invalidQuantity }
         if targetQuantity > 0 {
@@ -396,6 +415,7 @@ final class AccountsCoreService {
     @discardableResult
     func revalue(account: Account, newValue: Decimal, date: Date = Date(), note: String? = nil) throws -> AccountEvent {
         guard account.kind == .manualAsset else { throw AccountsCoreServiceError.unsupportedEventType(.revaluation) }
+        try requireWritable(account)
         try requireEventAllowed(.revaluation, for: account)
         let event = AccountEvent(account: account, date: date, type: .revaluation, amount: newValue, note: note)
         modelContext.insert(event)
@@ -428,6 +448,7 @@ final class AccountsCoreService {
         guard type == .income || type == .expense || type == .adjustment else {
             throw AccountsCoreServiceError.unsupportedEventType(type)
         }
+        try requireWritable(account)
         try requireEventAllowed(type, for: account)
 
         let descriptor = FetchDescriptor<AccountEvent>(
@@ -603,6 +624,8 @@ final class AccountsCoreService {
         guard source.id != destination.id else {
             throw AccountsCoreServiceError.sameAccountTransfer
         }
+        try requireWritable(source)
+        try requireWritable(destination)
         try requireCapability(.transfers, for: source)
         try requireCapability(.transfers, for: destination)
         try requireEventAllowed(.transferOut, for: source)
@@ -746,6 +769,7 @@ final class AccountsCoreService {
         guard !modelContext.hasChanges else {
             throw AccountsCoreServiceError.dirtyContext
         }
+        try requireWritable(account)
         guard let productType = account.productType else {
             throw AccountsCoreServiceError.missingProductIdentity
         }
