@@ -85,13 +85,7 @@ enum AIPeriodSummaryPayloadBuilder {
         calendar: Calendar = .current
     ) -> AIPeriodSummaryRequest {
         let range = period.effectiveRange(now: now, calendar: calendar)
-        let byCategory = categoryTotals
-            .filter { $0.value.rounded() != 0 }
-            .sorted { lhs, rhs in
-                lhs.value == rhs.value ? lhs.key < rhs.key : lhs.value > rhs.value
-            }
-            .prefix(maxCategories)
-            .map { AIPeriodSummaryRequest.CategoryTotal(categoryId: String($0.key.prefix(128)), amount: round2($0.value)) }
+        let byCategory = categoryTotalsPayload(categoryTotals)
 
         return AIPeriodSummaryRequest(
             schemaVersion: schemaVersion,
@@ -108,13 +102,25 @@ enum AIPeriodSummaryPayloadBuilder {
                 net: round2(figures.net),
                 balanceEnd: round2(figures.balanceEnd)
             ),
-            byCategory: Array(byCategory),
+            byCategory: byCategory,
             previousPeriod: AIPeriodSummaryRequest.PreviousPeriod(
                 income: round2(figures.previousIncome),
                 expense: round2(figures.previousExpense),
                 net: round2(figures.previousNet)
             )
         )
+    }
+
+    /// Разбивка по категориям в контракт: нули отбрасываем, сортируем по убыванию суммы и режем
+    /// хвост. Общая для итогов и чата — на бэкенде это один и тот же `PeriodSummaryCategoryTotalDto`.
+    static func categoryTotalsPayload(_ categoryTotals: [String: Double]) -> [AIPeriodSummaryRequest.CategoryTotal] {
+        categoryTotals
+            .filter { $0.value.rounded() != 0 }
+            .sorted { lhs, rhs in
+                lhs.value == rhs.value ? lhs.key < rhs.key : lhs.value > rhs.value
+            }
+            .prefix(maxCategories)
+            .map { AIPeriodSummaryRequest.CategoryTotal(categoryId: String($0.key.prefix(128)), amount: round2($0.value)) }
     }
 
     /// Ключ кэша «период + цифры». Разбивку по категориям в ключ НЕ берём намеренно: она считается
@@ -157,7 +163,7 @@ enum AIPeriodSummaryPayloadBuilder {
         return formatter.string(from: date)
     }
 
-    private static func round2(_ value: Double) -> Double {
+    static func round2(_ value: Double) -> Double {
         guard value.isFinite else { return 0 }
         return (value * 100).rounded() / 100
     }

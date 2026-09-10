@@ -17,6 +17,7 @@ enum FinancesStackRoute: Hashable {
 /// иначе экран итогов пришлось бы объявлять и в стеке «Финансы», где его VM нет.
 enum DashboardStackRoute: Hashable {
     case aiPeriodSummary
+    case aiChat
 }
 
 // MARK: - Root Tab View
@@ -36,6 +37,10 @@ struct RootTabView: View {
     @State private var financeViewModel: FinanceViewModel?
     @State private var cashflowViewModel: CashflowViewModel?
     @State private var aiSummaryViewModel: AIPeriodSummaryViewModel?
+    @State private var aiChatViewModel: AIChatViewModel?
+    /// Один источник агрегатов на оба AI-экрана: чат обязан отвечать ровно по тем цифрам,
+    /// которые владелец видит в итогах.
+    @State private var aiDataSource: AIPeriodSummaryDataSource?
 
     // FAB menu
     @State private var showFABMenu = false
@@ -308,11 +313,13 @@ struct RootTabView: View {
 
     @ViewBuilder
     private var dashboardTab: some View {
-        if let fvm = financeViewModel, let cvm = cashflowViewModel, let avm = aiSummaryViewModel {
+        if let fvm = financeViewModel, let cvm = cashflowViewModel, let avm = aiSummaryViewModel,
+           let chatVM = aiChatViewModel {
             DashboardTabHostView(
                 financeViewModel: fvm,
                 cashflowViewModel: cvm,
                 aiSummaryViewModel: avm,
+                aiChatViewModel: chatVM,
                 path: $dashboardPath,
                 onAddIncome: { ensureCashflowViewModel(); showIncomeSheet = true },
                 onAddExpense: { ensureCashflowViewModel(); showExpenseSheet = true },
@@ -463,7 +470,7 @@ struct RootTabView: View {
     private func ensureViewModels() {
         ensureFinanceViewModel()
         ensureCashflowViewModel()
-        ensureAISummaryViewModel()
+        ensureAICopilotViewModels()
     }
 
     private func ensureFinanceViewModel() {
@@ -471,46 +478,81 @@ struct RootTabView: View {
         financeViewModel = FinanceViewModel(modelContext: modelContext)
     }
 
-    /// Сводка живёт поверх уже готовых агрегатов кэшфлоу и общего баланса — своих расчётов и
-    /// своего доступа к SwiftData у неё нет.
-    private func ensureAISummaryViewModel() {
-        guard aiSummaryViewModel == nil,
-              let financeVM = financeViewModel,
-              let cashflowVM = cashflowViewModel
-        else { return }
+    /// Сводка и чат живут поверх уже готовых агрегатов кэшфлоу и общего баланса — своих расчётов и
+    /// своего доступа к SwiftData у них нет.
+    private func ensureAICopilotViewModels() {
+        guard let financeVM = financeViewModel, let cashflowVM = cashflowViewModel else { return }
 
-        let client: any AIPeriodSummaryClient = {
-            guard let diContainer else { return UnavailableAIPeriodSummaryClient() }
-            return BackendAIPeriodSummaryClient(
-                authService: diContainer.authService,
-                configurationProvider: diContainer.apiClientFactory.authConfigurationProvider()
+        let dataSource = aiDataSource ?? makeAIDataSource(financeVM: financeVM, cashflowVM: cashflowVM)
+        if aiDataSource == nil { aiDataSource = dataSource }
+
+        if aiSummaryViewModel == nil {
+            let client: any AIPeriodSummaryClient = {
+                guard let diContainer else { return UnavailableAIPeriodSummaryClient() }
+                return BackendAIPeriodSummaryClient(
+                    authService: diContainer.authService,
+                    configurationProvider: diContainer.apiClientFactory.authConfigurationProvider()
+                )
+            }()
+            aiSummaryViewModel = AIPeriodSummaryViewModel(dataSource: dataSource, client: client)
+        }
+
+        if aiChatViewModel == nil, let summaryVM = aiSummaryViewModel {
+            let client: any AIChatClient = {
+                guard let diContainer else { return UnavailableAIChatClient() }
+                return BackendAIChatClient(
+                    authService: diContainer.authService,
+                    configurationProvider: diContainer.apiClientFactory.authConfigurationProvider()
+                )
+            }()
+
+            aiChatViewModel = AIChatViewModel(
+                // Срез чата собирается из уже посчитанных цифр итогов: два экрана не должны
+                // расходиться в суммах за один и тот же период.
+                contextProvider: {
+                    let period = summaryVM.period
+                    let categories = await dataSource.expenseCategoryTotals(period.months())
+                    return AIChatContextSnapshot(
+                        period: period,
+                        figures: summaryVM.figures,
+                        currency: summaryVM.currency,
+                        categoryTotals: categories
+                    )
+                },
+                client: client,
+                // Переписка ключуется активным scope: в гостевом режиме диалог владельца не виден.
+                store: AIChatHistoryStore(
+                    storageKey: AIChatHistoryStore.storageKey(forScopeKey: appState.activeScopeKey)
+                )
             )
-        }()
+        }
+    }
 
-        aiSummaryViewModel = AIPeriodSummaryViewModel(
-            dataSource: AIPeriodSummaryDataSource(
-                entries: { cashflowVM.state.convertedTransactions },
-                currency: { cashflowVM.state.displayCurrency },
-                balance: { financeVM.state.totalAmount },
-                expenseCategoryTotals: { months in
-                    var totals: [String: Double] = [:]
-                    for month in months {
-                        let raw = await cashflowVM.analyticsService.monthlyCategoryTotals(
-                            for: .expense,
-                            month: month,
-                            displayCurrency: cashflowVM.state.displayCurrency
-                        )
-                        for (rawCategory, amount) in raw {
-                            // Ключ — отображаемое имя категории, а не rawValue: модель пишет текст
-                            // на языке пользователя, и сырое "food" утекло бы в русскую фразу.
-                            let title = cashflowVM.expenseCategoryDisplayName(for: rawCategory)
-                            totals[title, default: 0] += amount
-                        }
+    private func makeAIDataSource(
+        financeVM: FinanceViewModel,
+        cashflowVM: CashflowViewModel
+    ) -> AIPeriodSummaryDataSource {
+        AIPeriodSummaryDataSource(
+            entries: { cashflowVM.state.convertedTransactions },
+            currency: { cashflowVM.state.displayCurrency },
+            balance: { financeVM.state.totalAmount },
+            expenseCategoryTotals: { months in
+                var totals: [String: Double] = [:]
+                for month in months {
+                    let raw = await cashflowVM.analyticsService.monthlyCategoryTotals(
+                        for: .expense,
+                        month: month,
+                        displayCurrency: cashflowVM.state.displayCurrency
+                    )
+                    for (rawCategory, amount) in raw {
+                        // Ключ — отображаемое имя категории, а не rawValue: модель пишет текст
+                        // на языке пользователя, и сырое "food" утекло бы в русскую фразу.
+                        let title = cashflowVM.expenseCategoryDisplayName(for: rawCategory)
+                        totals[title, default: 0] += amount
                     }
-                    return totals
                 }
-            ),
-            client: client
+                return totals
+            }
         )
     }
 
@@ -545,6 +587,7 @@ private struct DashboardTabHostView: View {
     @ObservedObject var financeViewModel: FinanceViewModel
     @ObservedObject var cashflowViewModel: CashflowViewModel
     @ObservedObject var aiSummaryViewModel: AIPeriodSummaryViewModel
+    @ObservedObject var aiChatViewModel: AIChatViewModel
     @Binding var path: NavigationPath
     @Environment(AppState.self) private var appState
 
@@ -601,7 +644,15 @@ private struct DashboardTabHostView: View {
             }
             .navigationDestination(for: DashboardStackRoute.self) { route in
                 switch route {
-                case .aiPeriodSummary: AIPeriodSummaryView(viewModel: aiSummaryViewModel)
+                case .aiPeriodSummary:
+                    // Вход в чат — отсюда, а не отдельной карточкой на дашборде: срез чата берётся
+                    // из этого же экрана, а второй виджет «millio» делил бы место с итогами.
+                    AIPeriodSummaryView(
+                        viewModel: aiSummaryViewModel,
+                        onOpenChat: { path.append(DashboardStackRoute.aiChat) }
+                    )
+                case .aiChat:
+                    AIChatView(viewModel: aiChatViewModel)
                 }
             }
         }

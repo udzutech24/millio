@@ -9,6 +9,8 @@ import SwiftUI
 /// офлайн и ошибка сети убирают только формулировку, но не содержимое экрана.
 struct AIPeriodSummaryView: View {
     @ObservedObject var viewModel: AIPeriodSummaryViewModel
+    /// Переход в чат. Экран не знает про маршруты стека — их знает хост дашборда.
+    var onOpenChat: (() -> Void)? = nil
     @AppStorage("finance_amount_hidden") private var isAmountHidden: Bool = false
 
     private var peak: Double { max(viewModel.figures.income, viewModel.figures.expense) }
@@ -20,6 +22,7 @@ struct AIPeriodSummaryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.l) {
                     periodPicker
+                    chatEntry
                     figuresCard
                     textSection
                 }
@@ -70,6 +73,48 @@ struct AIPeriodSummaryView: View {
         switch kind {
         case .month: return L("ai.summary.period.month")
         case .quarter: return L("ai.summary.period.quarter")
+        }
+    }
+
+    // MARK: - Вход в чат
+
+    @ViewBuilder
+    private var chatEntry: some View {
+        if let onOpenChat {
+            Button(action: onOpenChat) {
+                HStack(spacing: AppSpacing.m) {
+                    AIChatOrb(diameter: 28, isActive: false)
+
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                        Text(L("ai.chat.entry.title"))
+                            .font(Font.millioCalloutSemibold)
+                            .foregroundStyle(AppColors.textPrimary)
+                        Text(L("ai.chat.entry.subtitle"))
+                            .font(Font.millioCaption2Regular)
+                            .foregroundStyle(AppColors.textSecondary.opacity(0.7))
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: AppSpacing.xs)
+
+                    Image(systemName: "chevron.right")
+                        .font(Font.millioCaption2)
+                        .foregroundStyle(AppColors.textSecondary.opacity(0.6))
+                }
+                .padding(.horizontal, AppSpacing.l)
+                .padding(.vertical, AppSpacing.m)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: FinanceScreenChrome.sectionCornerRadius, style: .continuous)
+                        .fill(Color.white.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: FinanceScreenChrome.sectionCornerRadius, style: .continuous)
+                                .stroke(Color.white.opacity(0.10), lineWidth: 0.7)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("aiSummary.openChat")
         }
     }
 
