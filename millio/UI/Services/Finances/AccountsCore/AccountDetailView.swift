@@ -77,25 +77,11 @@ struct AccountDetailView: View {
         DebitCardContract.products.contains(account.productType ?? .unknownLegacy)
     }
 
-    /// Провайдер живых цен нового ядра (Фаза 4) — синхронный снэпшот append-only кэша
-    /// `HistoricalAssetPrice`, читается один раз на пересчёт body. `nil` для не-рыночных счетов.
-    var priceProviderForThisAccount: MarketPriceProviding? {
-        guard account.kind == .marketInvestment, let meta = account.marketMeta else { return nil }
-        return AccountMarketPriceService(modelContext: modelContext).makeSnapshotProvider(symbols: [meta.symbol])
-    }
-
     var balanceToday: Decimal {
         _ = refreshToken // читаем @State, чтобы body пересчитывался после мутаций
         // Ф1: шапка «Остаток» = подтверждённый баланс, тот же, что в строке списка и в тоталах.
-        return AccountBalanceEngine.balanceAt(
-            events: DepositConfirmedBalanceResolver.confirmedEvents(
-                account.events ?? [], accountID: account.id, kind: account.kind
-            ),
-            kind: account.kind,
-            on: Date(),
-            priceProvider: priceProviderForThisAccount,
-            marketMeta: account.marketMeta
-        )
+        // Формула одна с AI-дайджестом: копия здесь развела бы главную цифру экрана и обзор портфеля.
+        return MarketPortfolioValuation(modelContext: modelContext).positionValue(of: account)
     }
 
     var sortedEvents: [AccountEvent] {

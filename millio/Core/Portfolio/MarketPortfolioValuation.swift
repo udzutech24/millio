@@ -42,8 +42,9 @@ struct MarketPortfolioValuation {
         return (value / total) * 100
     }
 
-    /// «Стоимость позиции» из hero экрана (`AccountDetailView.balanceToday`): тот же движок и тот же
-    /// снэпшот кэша цен. Второй формулы стоимости позиции быть не должно.
+    /// Подтверждённый баланс счёта на `now`: hero экрана любого счёта (`AccountDetailView.balanceToday`),
+    /// у рыночного — «Стоимость позиции» с тем же снэпшотом кэша цен. Формула одна для экрана и
+    /// дайджеста; рыночных сокращений сюда не добавлять — ею же считаются вклад, карта и наличные.
     func positionValue(of account: Account) -> Decimal {
         AccountBalanceEngine.balanceAt(
             events: confirmedEvents(of: account),

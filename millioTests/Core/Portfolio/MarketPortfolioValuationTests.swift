@@ -111,6 +111,44 @@ final class MarketPortfolioValuationTests: XCTestCase {
         XCTAssertEqual(yndx.portfolioSharePercent, Decimal(8_000) / 14_000 * 100)
     }
 
+    /// Hero любого счёта теперь идёт через `positionValue` — у не-рыночных счетов цифра обязана
+    /// остаться прежней формулой подтверждённого баланса (без провайдера цен).
+    func testHeroBalanceOfNonMarketAccountsKeepsConfirmedBalanceFormula() throws {
+        let service = AccountsCoreService(modelContext: context)
+        let cash = try service.createAccount(
+            name: "Наличные", kind: .cash, currency: "RUB", openingBalance: 12_345, date: daysAgo(30)
+        )
+        let deposit = try service.createAccount(
+            name: "Вклад", kind: .deposit, currency: "RUB", openingBalance: 100_000,
+            depositMeta: DepositMeta(
+                rate: 12, capitalization: .monthly,
+                termEnd: Calendar.current.date(byAdding: .month, value: 6, to: now),
+                payoutDay: nil, allowsTopUp: false, allowsEarlyClose: false, earlyClosePenalty: nil,
+                remindEnd: false, autoRollover: false
+            ),
+            date: daysAgo(40)
+        )
+        try context.save()
+
+        for account in [cash, deposit] {
+            let preExtraction = AccountBalanceEngine.balanceAt(
+                events: DepositConfirmedBalanceResolver.confirmedEvents(
+                    account.events ?? [], accountID: account.id, kind: account.kind
+                ),
+                kind: account.kind,
+                on: Date(),
+                priceProvider: nil,
+                marketMeta: account.marketMeta
+            )
+            XCTAssertEqual(
+                AccountDetailView(account: account, modelContext: context).balanceToday,
+                preExtraction,
+                "\(account.kind)"
+            )
+        }
+        XCTAssertEqual(AccountDetailView(account: cash, modelContext: context).balanceToday, 12_345)
+    }
+
     // MARK: - Изменение за окно
 
     func testPriceChangeUsesCachedPriceAtWindowStartAndPurchasePriceInsideWindow() throws {
