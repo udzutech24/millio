@@ -68,6 +68,39 @@ struct DepositPresentationTests {
         #expect(renderer.cgImage != nil)
     }
 
+    @Test @MainActor
+    func nudgeCardRendersEveryNudgeAtPhoneSizeWithAccessibilityText() {
+        let size = CGSize(width: 375, height: 812)
+        let view = ScrollView {
+            DepositDetailSection(
+                presentation: .make(snapshot: renderSnapshot(state: .maturedNeedsAction)),
+                nudges: [
+                    .maturedNeedsAction(daysSinceMaturity: 4),
+                    .maturityApproaching(daysRemaining: 12),
+                    .rolloverIsManual,
+                    .reminderOff
+                ],
+                onNudgeAction: { _ in }
+            ).padding()
+        }
+        .frame(width: size.width, height: size.height)
+        .environment(\.dynamicTypeSize, .accessibility3)
+        let renderer = ImageRenderer(content: view)
+        renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+
+        #expect(renderer.cgImage != nil)
+    }
+
+    /// Пустой список подсказок не должен рисовать пустую плашку «Что дальше».
+    @Test @MainActor
+    func nudgeCardIsInvisibleWithoutNudges() {
+        let renderer = ImageRenderer(
+            content: DepositNudgeCard(nudges: [], onAction: { _ in }).frame(width: 375)
+        )
+
+        #expect((renderer.cgImage?.height ?? 0) == 0)
+    }
+
     private func renderSnapshot(state: DepositLifecycleState) -> DepositPresentationSnapshot {
         .init(
             asOf: Date(), currency: "RUB", principal: .confirmed(100_000),

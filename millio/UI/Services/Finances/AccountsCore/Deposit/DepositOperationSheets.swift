@@ -56,6 +56,9 @@ struct DepositCloseSheet: View {
     let modelContext: ModelContext
     let preview: DepositEarlyClosePreview?
     let isMaturity: Bool
+    /// Итог «что дальше» — только для выплаты по окончании срока. У досрочного закрытия свой
+    /// расчёт (`preview`): там теряются будущие проценты и удерживается штраф.
+    var outcome: DepositMaturityOutcome? = nil
     let onSave: (Account) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -80,6 +83,7 @@ struct DepositCloseSheet: View {
                         row(L("accounts_core.deposit.close.net_proceeds"), preview.netProceeds)
                     }
                 }
+                if isMaturity, let outcome { maturitySummary(outcome) }
                 Section(L("accounts_core.detail.sheet.transfer.destination")) {
                     if destinations.isEmpty { Text(L("accounts_core.detail.transfer.no_destinations")) }
                     else {
@@ -106,6 +110,47 @@ struct DepositCloseSheet: View {
 
     private func row(_ title: String, _ value: Decimal) -> some View {
         HStack { Text(title); Spacer(); Text("\(NSDecimalNumber(decimal: value).stringValue) \(source.currency)") }
+    }
+
+    /// «Что дальше» по вкладу с вышедшим сроком: сколько заберём, сколько из этого проценты и
+    /// сколько налога за год отнесено на этот вклад.
+    @ViewBuilder
+    private func maturitySummary(_ outcome: DepositMaturityOutcome) -> some View {
+        Section(L("accounts_core.deposit.maturity.summary_title")) {
+            moneyRow(L("accounts_core.deposit.maturity.payout"), outcome.payoutAmount, currency: outcome.currency)
+            if outcome.accruedInterest > 0 {
+                moneyRow(
+                    L("accounts_core.deposit.maturity.accrued_interest"),
+                    outcome.accruedInterest,
+                    currency: outcome.currency
+                )
+            }
+            if let tax = outcome.estimatedTaxRUB {
+                // Налог всегда рублёвый — лимит НДФЛ по вкладам считается в ₽ (`DepositTaxCalculator`).
+                moneyRow(L("accounts_core.deposit.maturity.tax_estimate"), tax, currency: "RUB")
+                if let net = outcome.netPayout {
+                    moneyRow(L("accounts_core.deposit.maturity.net_payout"), net, currency: outcome.currency)
+                } else {
+                    Text(L("accounts_core.deposit.maturity.tax_currency_note"))
+                        .font(.millioCaptionRegular)
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+            }
+        }
+    }
+
+    private func moneyRow(_ title: String, _ value: Decimal, currency: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer(minLength: AppSpacing.s)
+            Text(DepositAmountTextFormatter.string(
+                value,
+                currency: currency,
+                symbol: MonetaCurrency(rawValue: currency)?.symbol ?? currency,
+                locale: AppLocalization.currentAppLocale
+            ))
+            .font(.millioCalloutSemibold)
+        }
     }
 }
 

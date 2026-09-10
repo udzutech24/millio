@@ -85,10 +85,14 @@ extension FinanceAddAccountView {
                 note: depositData.comment.isEmpty ? nil : depositData.comment
             ))
             _ = try factory.create(command)
-            if meta.remindEnd, let maturity = meta.termEnd {
+            if let reminder = DepositReminderPlanner.request(
+                accountID: command.accountID, accountName: resolvedName, meta: meta, now: Date()
+            ) {
                 Task { @MainActor in
                     _ = await NotificationManager.shared.scheduleAccountDepositMaturityReminder(
-                        accountID: command.accountID, accountName: resolvedName, maturityDate: maturity
+                        accountID: reminder.accountID,
+                        accountName: reminder.accountName,
+                        maturityDate: reminder.maturityDate
                     )
                 }
             }

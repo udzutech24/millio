@@ -23,6 +23,36 @@ extension AccountDetailView {
         return lines
     }
 
+    /// Подсказки по вкладу — движок правил на устройстве (`DepositNudgeEngine`), без сети.
+    /// Считается из уже готовой витрины: своих денежных расчётов здесь нет.
+    var depositNudges: [DepositNudge] {
+        guard let presentation = depositPresentation else { return [] }
+        return DepositNudgeEngine.nudges(
+            snapshot: presentation.snapshot,
+            meta: account.depositMeta,
+            calendarPolicy: DepositCalendarPolicy(timeZone: .current)
+        )
+    }
+
+    /// Сумма и налог для листа «Получить по окончании» — «что дальше» по вкладу с вышедшим сроком.
+    var depositMaturityOutcome: DepositMaturityOutcome? {
+        guard let presentation = depositPresentation else { return nil }
+        return DepositMaturityOutcome.make(
+            snapshot: presentation.snapshot,
+            taxAllocation: depositTaxAllocationForThisAccount
+        )
+    }
+
+    /// Подсказка ведёт только в уже существующее действие экрана — своих переходов у неё нет,
+    /// поэтому остальные случаи `DepositDetailAction` сюда не доходят.
+    func handleDepositNudgeAction(_ action: DepositDetailAction) {
+        switch action {
+        case .withdrawAtMaturity: sheet = .depositMaturity
+        case .editTerms: sheet = .editDetails
+        default: break
+        }
+    }
+
     /// Начислено % всего (Σ interest ≤ сегодня) — не прогноз, факт.
     var accruedInterestTotal: Decimal {
         (account.events ?? [])

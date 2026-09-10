@@ -352,7 +352,10 @@ extension AccountDetailView {
             }
         case .depositMaturity:
             if depositPresentation?.snapshot != nil {
-                DepositCloseSheet(source: account, modelContext: modelContext, preview: nil, isMaturity: true) { destination in
+                DepositCloseSheet(
+                    source: account, modelContext: modelContext, preview: nil, isMaturity: true,
+                    outcome: depositMaturityOutcome
+                ) { destination in
                     performDepositAndDismiss {
                         let result = try DepositOperationCoordinator(modelContext: modelContext).mature(
                             depositID: account.id,
@@ -646,13 +649,17 @@ extension AccountDetailView {
     }
 
     func synchronizeDepositReminder(meta: DepositMeta) {
-        guard meta.remindEnd, let maturity = meta.termEnd else {
+        guard let reminder = DepositReminderPlanner.request(
+            accountID: account.id, accountName: account.name, meta: meta, now: Date()
+        ) else {
             NotificationManager.shared.cancelAccountDepositMaturityReminder(accountID: account.id)
             return
         }
         Task { @MainActor in
             _ = await NotificationManager.shared.scheduleAccountDepositMaturityReminder(
-                accountID: account.id, accountName: account.name, maturityDate: maturity
+                accountID: reminder.accountID,
+                accountName: reminder.accountName,
+                maturityDate: reminder.maturityDate
             )
         }
     }

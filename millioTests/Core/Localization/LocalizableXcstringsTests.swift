@@ -727,6 +727,41 @@ final class LocalizableXcstringsTests: XCTestCase {
         try assertLocalized(strings: strings, key: "common.cancel")
     }
 
+    func testDepositNudgeAndMaturityStringsAreLocalizedInENRUAndZhHans() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        guard
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        let keys = [
+            "accounts_core.deposit.maturity.accrued_interest",
+            "accounts_core.deposit.maturity.net_payout",
+            "accounts_core.deposit.maturity.payout",
+            "accounts_core.deposit.maturity.summary_title",
+            "accounts_core.deposit.maturity.tax_currency_note",
+            "accounts_core.deposit.maturity.tax_estimate",
+            "accounts_core.deposit.nudge.matured.message_format",
+            "accounts_core.deposit.nudge.matured.message_today",
+            "accounts_core.deposit.nudge.matured.title",
+            "accounts_core.deposit.nudge.maturity_approaching.message_format",
+            "accounts_core.deposit.nudge.maturity_approaching.title",
+            "accounts_core.deposit.nudge.reminder_off.message",
+            "accounts_core.deposit.nudge.reminder_off.title",
+            "accounts_core.deposit.nudge.rollover.message",
+            "accounts_core.deposit.nudge.rollover.title",
+            "accounts_core.deposit.nudge.section_title"
+        ]
+
+        for key in keys {
+            try assertLocalized(strings: strings, key: key, locales: ["en", "ru", "zh-Hans"])
+        }
+    }
+
     private static func localizableXcstringsURL() throws -> URL {
         var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         let fileManager = FileManager.default

@@ -639,6 +639,358 @@
         }
       }
     },
+    "accounts_core.deposit.maturity.tax_currency_note" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deposit tax is calculated in rubles for the whole year, so it is not deducted from a foreign-currency amount."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Налог по вкладам считается в рублях за весь год, поэтому из валютной суммы он не вычитается."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存款税按全年以卢布计算，因此不会从外币金额中扣除。"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.maturity.net_payout" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Left after tax"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Останется после налога"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "税后余额"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.maturity.tax_estimate" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estimated tax for the year"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Налог за год (оценка)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本年度预估税额"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.maturity.accrued_interest" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interest included"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В том числе проценты"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其中利息"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.maturity.payout" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amount on the deposit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сумма на вкладе"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存款金额"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.maturity.summary_title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You will receive"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "К получению"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可获得"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.nudge.reminder_off.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The app will not remind you when the term ends. Turn the reminder on in the deposit terms."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приложение не напомнит о конце срока. Включите напоминание в условиях вклада."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用不会提醒存期结束。请在存款条款中开启提醒。"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.nudge.reminder_off.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reminder is off"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Напоминание выключено"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提醒已关闭"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.nudge.rollover.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rollover is enabled in the terms, but the app does not renew the deposit by itself: open a new deposit manually after the payout."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В условиях включено продление, но приложение не продлевает вклад само: после выплаты откройте новый вклад вручную."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "条款中已开启续存，但应用不会自动续期：兑付后请手动开设新存款。"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.nudge.rollover.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rollover is not automatic"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пролонгация не автоматическая"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不会自动续存"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.nudge.matured.message_format" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The term ended %lld days ago. The money is still on the deposit — choose an account to transfer it to."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Срок вышел %lld дн. назад. Деньги ещё на вкладе — выберите счёт, куда их перевести."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存期已于 %lld 天前结束。资金仍在存款中——请选择转入账户。"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.nudge.matured.message_today" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The money is still on the deposit — choose an account to transfer it to."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Деньги ещё на вкладе — выберите счёт, куда их перевести."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "资金仍在存款中——请选择转入账户。"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.nudge.matured.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The deposit term has ended"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Срок вклада вышел"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存款已到期"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.nudge.maturity_approaching.message_format" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld days left. Decide in advance where the money will go."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "До конца срока %lld дн. Решите заранее, куда переведёте деньги."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还剩 %lld 天。请提前决定资金转到哪里。"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.nudge.maturity_approaching.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Term is ending soon"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Срок подходит к концу"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存期即将结束"
+          }
+        }
+      }
+    },
+    "accounts_core.deposit.nudge.section_title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What's next"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Что дальше"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接下来"
+          }
+        }
+      }
+    },
     "accounts_core.detail.action.reconcile_cash" : {
       "extractionState" : "manual",
       "localizations" : {

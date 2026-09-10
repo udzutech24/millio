@@ -204,7 +204,9 @@ struct AccountDetailView: View {
                     if let depositPresentation {
                         DepositDetailSection(
                             presentation: depositPresentation,
-                            taxPresentation: depositTaxPresentation
+                            taxPresentation: depositTaxPresentation,
+                            nudges: depositNudges,
+                            onNudgeAction: handleDepositNudgeAction
                         )
                     } else if let loanPresentation {
                         LoanDetailSection(presentation: loanPresentation, onAction: handleLoanAction)

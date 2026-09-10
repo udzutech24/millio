@@ -194,10 +194,14 @@ struct DepositHeroContent: View {
 struct DepositDetailSection: View {
     let presentation: DepositDetailPresentation
     var taxPresentation: DepositTaxPresentation? = nil
+    /// Подсказки движка правил (`DepositNudgeEngine`). Пустой список — блока «Что дальше» нет.
+    var nudges: [DepositNudge] = []
+    var onNudgeAction: (DepositDetailAction) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.l) {
             if presentation.state == .incomplete { incompleteNotice }
+            DepositNudgeCard(nudges: nudges, onAction: onNudgeAction)
             if let taxPresentation { taxSection(taxPresentation) }
         }
         .accessibilityElement(children: .contain)
