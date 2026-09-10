@@ -101,6 +101,11 @@ extension FinanceAddAccountView {
         let currency: String
         let openingBalance: Decimal
         var cardMeta: CardMeta?
+        // Тот же выбор по kind, что в `AccountCreationCoordinator.finalizeMoneyAccount` — этот
+        // метод его двойник для пути «Загрузить выписку» (F4), цепочка `cardData?.x ??
+        // investmentData?.x` так же тихо брала оформление брошенной формы.
+        let includeInTotal: Bool
+        let note: String?
 
         switch kind {
         case .debitCard:
@@ -112,10 +117,14 @@ extension FinanceAddAccountView {
                 last4: cardData.cardNumber.isEmpty ? nil : cardData.cardNumber,
                 creditLimit: cardData.cardType == .credit ? cardData.creditLimit.map { Decimal($0) } : nil
             )
+            includeInTotal = cardData.includeInTotal
+            note = cardData.note
         default:
             guard let investmentData else { throw AccountStatementOnboardingError.unsupportedProduct }
             currency = investmentData.currency
             openingBalance = Decimal(investmentData.amount)
+            includeInTotal = investmentData.includeInTotal
+            note = nil
         }
 
         let resolved = try FinanceProductCreationCommandResolver.resolve(.init(
@@ -123,7 +132,7 @@ extension FinanceAddAccountView {
             name: resolvedName,
             currency: currency,
             amount: openingBalance,
-            includeInTotal: cardData?.includeInTotal ?? investmentData?.includeInTotal ?? true,
+            includeInTotal: includeInTotal,
             groupID: targetGroup?.id,
             cardType: cardData?.cardType,
             bank: cardData?.bank,
@@ -133,7 +142,7 @@ extension FinanceAddAccountView {
             dueDay: cardData?.dueDay,
             minPayment: cardData?.minPayment.map { Decimal($0) },
             graceDays: cardData?.graceDays,
-            note: cardData?.note
+            note: note
         ))
         return CreateProductCommand(
             accountID: accountID,

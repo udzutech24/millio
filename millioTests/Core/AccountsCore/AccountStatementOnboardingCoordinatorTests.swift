@@ -55,7 +55,10 @@ struct AccountStatementOnboardingCoordinatorTests {
         onboardingID: String = "onboarding-1",
         balance: Decimal = 1_000,
         operations: ((UUID) -> [CashflowApprovedStatementOperation])? = nil,
-        periodTo: Date? = nil
+        periodTo: Date? = nil,
+        isFavorite: Bool = false,
+        iconName: String? = nil,
+        tintHex: String? = nil
     ) -> AccountStatementOnboardingCommand {
         let rows = operations?(accountID) ?? [
             operation(fingerprint: "expense-1", accountID: accountID),
@@ -75,7 +78,10 @@ struct AccountStatementOnboardingCoordinatorTests {
             balanceConfirmation: .manual(amount: balance, currency: "RUB", asOf: date(31)),
             statementPeriodFrom: date(1),
             statementPeriodTo: periodTo ?? date(31),
-            onboardingID: onboardingID
+            onboardingID: onboardingID,
+            isFavorite: isFavorite,
+            iconName: iconName,
+            tintHex: tintHex
         )
     }
 
@@ -118,6 +124,39 @@ struct AccountStatementOnboardingCoordinatorTests {
         #expect(try context.fetchCount(FetchDescriptor<Account>()) == 1)
         #expect(try context.fetchCount(FetchDescriptor<AccountEvent>()) == 1)
         #expect(try context.fetchCount(FetchDescriptor<CashflowTransaction>()) == 2)
+    }
+
+    /// F4 (ревью round 1/2): «Загрузить выписку» — единственный путь создания счёта, который не
+    /// проходит через `AccountCreationCoordinator`, у него свой `apply()`. Раньше избранное/иконка
+    /// применялись во `View`-обёртке (`AccountStatementOnboardingFlow`) отдельным вызовом
+    /// персистера, который ничей тест не видел — удалить его можно было незаметно. Теперь вызов
+    /// живёт внутри `apply()`, и этот тест ловит его напрямую.
+    @Test("Оформление доходит до стора вместе со счётом из выписки")
+    func appliesAppearanceOnFreshCreation() throws {
+        let (_, context, coordinator) = try makeStack()
+        let input = command(isFavorite: true, iconName: "star.fill", tintHex: "#00FF00")
+
+        let result = try coordinator.apply(input)
+
+        let appearance = try #require(try AccountAppearanceStore(context: context).appearance(for: result.accountID))
+        #expect(appearance.isFavorite == true)
+        #expect(appearance.iconName == "star.fill")
+        #expect(appearance.tintHex == "#00FF00")
+    }
+
+    /// Идемпотентный повтор — тот же класс защиты, что `idempotentRetry` выше, но для оформления:
+    /// повторный `apply()` с тем же онбордингом не должен ни падать, ни терять оформление.
+    @Test("Идемпотентный повтор тоже применяет оформление")
+    func appliesAppearanceOnIdempotentRetry() throws {
+        let (_, context, coordinator) = try makeStack()
+        let input = command(accountID: UUID(), onboardingID: "stable-appearance", isFavorite: true, iconName: "banknote")
+        _ = try coordinator.apply(input)
+
+        let retry = try coordinator.apply(input)
+
+        let appearance = try #require(try AccountAppearanceStore(context: context).appearance(for: retry.accountID))
+        #expect(appearance.isFavorite == true)
+        #expect(appearance.iconName == "banknote")
     }
 
     @Test("Two queued coordinators with one stable command converge through the MainActor writer")

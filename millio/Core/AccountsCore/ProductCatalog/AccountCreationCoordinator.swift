@@ -59,6 +59,14 @@ enum AccountCreationCoordinator {
         let currency: String
         let openingBalance: Decimal
         var cardMeta: CardMeta?
+        // includeInTotal/isFavorite/note выбираем ПО KIND, а не цепочкой `cardData?.x ??
+        // investmentData?.x`: та цепочка брала значение из брошенной формы, если экран не успел
+        // сбросить её `@State` при смене типа/пресета (Баг 2, третий заход после ревью) — например
+        // «Карта» → «Счёт» с ещё не обнулённым `cardData` тихо переносила её избранное/заметку
+        // на новый денежный счёт, у которого своя форма (`investmentData`).
+        let includeInTotal: Bool
+        let favorite: Bool
+        let note: String?
 
         switch kind {
         case .debitCard:
@@ -70,10 +78,16 @@ enum AccountCreationCoordinator {
                 last4: cardData.cardNumber.isEmpty ? nil : cardData.cardNumber,
                 creditLimit: cardData.cardType == .credit ? cardData.creditLimit.map { Decimal($0) } : nil
             )
+            includeInTotal = cardData.includeInTotal
+            favorite = cardData.isFavorite
+            note = cardData.note
         default: // .bankAccount, .cash — обе формы денежные и без реквизитов карты
             guard let investmentData else { return nil }
             currency = investmentData.currency
             openingBalance = Decimal(investmentData.amount)
+            includeInTotal = investmentData.includeInTotal
+            favorite = investmentData.isFavorite
+            note = nil // у формы «Счёт»/«Наличные» заметки нет — не путаем со старой картой
         }
 
         let factory = AccountProductFactory(modelContext: modelContext)
@@ -82,7 +96,7 @@ enum AccountCreationCoordinator {
             name: resolved,
             currency: currency,
             amount: openingBalance,
-            includeInTotal: cardData?.includeInTotal ?? investmentData?.includeInTotal ?? true,
+            includeInTotal: includeInTotal,
             groupID: groupID,
             cardType: cardData?.cardType,
             bank: cardData?.bank,
@@ -92,13 +106,13 @@ enum AccountCreationCoordinator {
             dueDay: cardData?.dueDay,
             minPayment: cardData?.minPayment.map { Decimal($0) },
             graceDays: cardData?.graceDays,
-            note: cardData?.note
+            note: note
         ))
         _ = try factory.create(command)
         AccountAppearancePersister.persistIfNeeded(
             context: modelContext,
             accountID: command.accountID,
-            isFavorite: cardData?.isFavorite ?? investmentData?.isFavorite ?? false,
+            isFavorite: favorite,
             iconName: draftIconName,
             tintHex: draftIconColor
         )

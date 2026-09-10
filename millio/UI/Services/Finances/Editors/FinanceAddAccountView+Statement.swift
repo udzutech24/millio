@@ -48,11 +48,13 @@ extension FinanceAddAccountView {
         guard validateEntitlementsForSave(),
               let kind = newCoreMoneyKindForCurrentSelection,
               let command = try? moneyCreateCommand(kind: kind) else { return }
-        // Ф5 уже сбрасывает брошенную форму при смене типа (`onChange(of: selectedAccountType)`),
-        // так что `cardData?.x ?? investmentData?.x` здесь однозначен — та же пара, что в CoreCreate.
+        // Выбираем по `kind`, а не цепочкой `cardData?.x ?? investmentData?.x` — та цепочка брала
+        // избранное брошенной формы, если сброс `@State` при смене типа/пресета не успел
+        // отработать (тот же класс бага, что и в `AccountCreationCoordinator.finalizeMoneyAccount`).
+        let isFavorite = kind == .debitCard ? (cardData?.isFavorite ?? false) : (investmentData?.isFavorite ?? false)
         statementDraft = AccountStatementCreateDraft(
             createTemplate: command,
-            isFavorite: cardData?.isFavorite ?? investmentData?.isFavorite ?? false,
+            isFavorite: isFavorite,
             iconName: draftIconName,
             tintHex: draftIconColor
         )

@@ -403,25 +403,20 @@ struct AccountStatementOnboardingFlow: View {
                 accountID: command.accountID.uuidString
             )
             controller.markApplying()
+            // Оформление (F4) теперь несёт сама команда и применяет его `apply()` изнутри —
+            // это тестируемый тип без View (ревью round 2: раньше вызов персистера здесь был
+            // ничем не покрыт, `AccountStatementOnboardingCoordinatorTests` его не видели).
             let result = try AccountStatementOnboardingCoordinator(modelContext: modelContext).apply(.init(
                 create: command,
                 operations: operations,
                 balanceConfirmation: confirmation,
                 statementPeriodFrom: from,
                 statementPeriodTo: to,
-                onboardingID: command.accountID.uuidString
-            ))
-            // `apply()` строит счёт и импортированные операции в одном графе фабрики (см. её
-            // doc-комментарий: «committed exactly once») — если мы дошли сюда без throw, счёт уже
-            // закоммичен целиком, откатов на полпути нет. Тот же паттерн, что 6 остальных точек
-            // создания в `AccountCreationCoordinator.swift`.
-            AccountAppearancePersister.persistIfNeeded(
-                context: modelContext,
-                accountID: result.accountID,
+                onboardingID: command.accountID.uuidString,
                 isFavorite: draft.isFavorite,
                 iconName: draft.iconName,
                 tintHex: draft.tintHex
-            )
+            ))
             controller.markCompleted(result: .init(
                 insertedFingerprints: result.insertedFingerprints,
                 skippedFingerprints: result.skippedFingerprints

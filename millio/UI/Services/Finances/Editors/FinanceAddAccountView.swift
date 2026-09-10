@@ -335,6 +335,19 @@ struct FinanceAddAccountView: View {
                 depositData = nil
                 focusNameFieldIfNeeded()
             }
+            .onChange(of: selectedInvestmentPreset) { _, _ in
+                // Тот же Баг 2 внутри `.investment`: «Наличные»/«Счёт»/«Долг» (нужный `if/else` в
+                // `createFormSections` пересоздаёт форму) и «Вклад» (другой View-тип) — переключение
+                // между ними меняет `selectedInvestmentPreset`, а не `selectedAccountType`, так что
+                // сброс выше не срабатывал. Путь «Наличные → Вклад → Счёт» брал избранное и сумму
+                // «Наличных» для нового «Счёта» (ревью round 2). Смена ТОЛЬКО категории при том же
+                // пресете (напр. «Долг» ↔ «Недвижимость») этой правкой не покрыта — там форма та же
+                // самая, её решает уже сама форма, а не этот экран (отдельная задача).
+                cardData = nil
+                investmentData = nil
+                creditData = nil
+                depositData = nil
+            }
             .onChange(of: selectedInvestmentCategory) { _, newValue in
                 if newValue == .stocks || newValue == .crypto {
                     if !canUseMarketCategory(newValue) {
