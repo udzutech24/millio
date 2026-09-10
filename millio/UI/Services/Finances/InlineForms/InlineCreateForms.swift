@@ -623,6 +623,10 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         firstPaymentDate: Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
     )
     @State private var remainingAmountText: String = ""
+    /// Пока `true` — «Остаток долга» тянется за суммой кредита автоматически (Баг 1: до фикса
+    /// поле было независимым и на новом кредите оставалось пустым → `openingBalance = 0`).
+    /// Гасится первой ручной правкой остатка, отличной от текущей суммы кредита.
+    @State private var isRemainingAmountAutoSynced: Bool = true
     @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var isFavorite: Bool = false
     @State private var reminderEnabled: Bool = false
@@ -709,12 +713,24 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
             loadAvailableCurrencies()
         }
         .onChange(of: name) { _, _ in emitCreditDataChange() }
-        .onChange(of: remainingAmountText) { _, _ in emitCreditDataChange() }
+        .onChange(of: remainingAmountText) { _, newValue in
+            if RemainingAmountAutoSync.shouldStopSyncing(afterEditingTo: newValue, principalText: loanDraft.principalText) {
+                isRemainingAmountAutoSynced = false
+            }
+            emitCreditDataChange()
+        }
         .onChange(of: selectedCurrency) { _, _ in emitCreditDataChange() }
         .onChange(of: isFavorite) { _, _ in emitCreditDataChange() }
         // Наблюдаем черновик целиком, а не каждое условие по отдельности — иначе на восьмом
         // `.onChange` этот `body` перестаёт проверяться типами за разумное время.
-        .onChange(of: loanDraft) { _, _ in emitCreditDataChange() }
+        .onChange(of: loanDraft) { _, newValue in
+            // Остаток тянется за суммой, пока пользователь не тронул его вручную — новый кредит
+            // не должен создаваться с балансом 0 при непустой сумме (Баг 1).
+            if isRemainingAmountAutoSynced {
+                remainingAmountText = newValue.principalText
+            }
+            emitCreditDataChange()
+        }
         .onChange(of: reminderEnabled) { _, enabled in
             if !enabled {
                 reminderDaysBeforeText = ""

@@ -85,6 +85,7 @@ extension FinanceAddAccountView {
                 note: depositData.comment.isEmpty ? nil : depositData.comment
             ))
             _ = try factory.create(command)
+            persistAppearanceIfNeeded(accountID: command.accountID, isFavorite: false) // у вклада нет поля «избранное»
             if meta.remindEnd, let maturity = meta.termEnd {
                 Task { @MainActor in
                     _ = await NotificationManager.shared.scheduleAccountDepositMaturityReminder(
@@ -146,6 +147,7 @@ extension FinanceAddAccountView {
                 note: cardData?.note
             ))
             _ = try factory.create(command)
+            persistAppearanceIfNeeded(accountID: command.accountID, isFavorite: cardData?.isFavorite ?? investmentData?.isFavorite ?? false)
             EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             dismiss()
         } catch {
@@ -254,6 +256,7 @@ extension FinanceAddAccountView {
                             contract.paymentOverride = terms.paymentOverride
                         }
                 })
+                persistAppearanceIfNeeded(accountID: command.accountID, isFavorite: creditData.isFavorite)
             case .debt:
                 guard let investmentData else { return }
                 let direction: DebtDirection = investmentData.investmentType == .positive ? .owedToMe : .owedByMe
@@ -267,6 +270,7 @@ extension FinanceAddAccountView {
                     debtDirection: direction
                 ))
                 _ = try factory.create(command)
+                persistAppearanceIfNeeded(accountID: command.accountID, isFavorite: investmentData.isFavorite)
             default:
                 return
             }
@@ -309,6 +313,7 @@ extension FinanceAddAccountView {
                     marketUnitPrice: unitPrice
                 ))
                 _ = try factory.create(command)
+                persistAppearanceIfNeeded(accountID: command.accountID, isFavorite: investmentData.isFavorite)
             case .manualAsset:
                 let command = try FinanceProductCreationCommandResolver.resolve(.init(
                     option: selectedProductOption,
@@ -339,6 +344,7 @@ extension FinanceAddAccountView {
                 } else {
                     _ = try factory.create(command)
                 }
+                persistAppearanceIfNeeded(accountID: command.accountID, isFavorite: investmentData.isFavorite)
             default:
                 return
             }
@@ -347,6 +353,21 @@ extension FinanceAddAccountView {
         } catch {
             AppLogger.log(.error, category: "AccountsCore", "Не удалось создать актив нового ядра: \(error)")
         }
+    }
+
+    /// Баг 2: тумблеры и пикер в формах существовали, но `FinanceProductCreationInput` таких полей
+    /// не несёт — избранное/иконка/цвет терялись молча на ЛЮБОМ типе счёта. Запись — сразу после
+    /// создания, через `AccountAppearancePersister` (см. его doc-комментарий, почему не метод
+    /// на `View`). Приоритет (`CardPriority`/`InvestmentPriority`) сюда осознанно не входит: у него
+    /// нет ни поля в `AccountAppearance`, ни одного потребителя для core-счетов — задача отдельная.
+    private func persistAppearanceIfNeeded(accountID: UUID, isFavorite: Bool) {
+        AccountAppearancePersister.persistIfNeeded(
+            context: viewModel.modelContext,
+            accountID: accountID,
+            isFavorite: isFavorite,
+            iconName: draftIconName,
+            tintHex: draftIconColor
+        )
     }
 
     func addAccount() {
