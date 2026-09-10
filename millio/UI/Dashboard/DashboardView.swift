@@ -32,6 +32,7 @@ struct DashboardView: View {
 
     var aiSummary: AISummaryCardModel = AISummaryCardModel()
     var onOpenAISummary: () -> Void = {}
+    var onAskAI: (() -> Void)? = nil
 
     var onOpenHistory: () -> Void = {}
     var onShowProfile: () -> Void = {}
@@ -192,7 +193,8 @@ struct DashboardView: View {
             AISummaryWidget(
                 model: aiSummary,
                 isAmountHidden: isAmountHidden,
-                onTap: onOpenAISummary
+                onTap: onOpenAISummary,
+                onAsk: onAskAI
             )
         case .quickActions:
             QuickActionsWidget(

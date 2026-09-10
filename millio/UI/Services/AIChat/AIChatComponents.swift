@@ -151,6 +151,8 @@ struct AIChatComposer: View {
     let canSend: Bool
     let onSend: () -> Void
     let onStop: () -> Void
+    /// Клавиатура сразу при появлении — вход «Спросить millio…» с дашборда.
+    var autofocus: Bool = false
 
     @FocusState private var isFocused: Bool
 
@@ -206,5 +208,6 @@ struct AIChatComposer: View {
         .padding(.horizontal, AppSpacing.l)
         .padding(.vertical, AppSpacing.m)
         .background(.ultraThinMaterial)
+        .autofocusAfterPresentation($isFocused, isEnabled: autofocus)
     }
 }

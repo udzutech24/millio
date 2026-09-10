@@ -9,6 +9,8 @@ import SwiftUI
 /// осмысленным: срез на месте, а вместо ответа стоит внятная причина и повтор.
 struct AIChatView: View {
     @ObservedObject var viewModel: AIChatViewModel
+    /// Вход «Спросить millio…» с дашборда: человек пришёл спросить — клавиатура поднимается сразу.
+    var focusesComposerOnAppear: Bool = false
     @AppStorage("finance_amount_hidden") private var isAmountHidden: Bool = false
     @State private var showsClearConfirmation = false
 
@@ -67,7 +69,8 @@ struct AIChatView: View {
                 isSending: viewModel.isSending,
                 canSend: viewModel.canSend,
                 onSend: { viewModel.send(viewModel.draft) },
-                onStop: { viewModel.stopGenerating() }
+                onStop: { viewModel.stopGenerating() },
+                autofocus: focusesComposerOnAppear
             )
         }
         .navigationTitle(Text(verbatim: "millio"))

@@ -30,11 +30,12 @@ extension View {
 private let sheetAutofocusDelayNanoseconds: UInt64 = 350_000_000
 
 extension View {
-    /// Поднимает клавиатуру сразу при открытии листа. `@FocusState` презентующего экрана через
-    /// границу презентации не работает — состояние должно жить ВНУТРИ листа, а фокус
-    /// запрашиваться после анимации презентации.
-    func autofocusAfterPresentation(_ isFocused: FocusState<Bool>.Binding) -> some View {
+    /// Поднимает клавиатуру сразу при открытии листа или экрана в стеке. `@FocusState` презентующего
+    /// экрана через границу презентации не работает — состояние должно жить ВНУТРИ листа, а фокус
+    /// запрашиваться после анимации презентации (у пуша та же проблема первого кадра).
+    func autofocusAfterPresentation(_ isFocused: FocusState<Bool>.Binding, isEnabled: Bool = true) -> some View {
         task {
+            guard isEnabled else { return }
             try? await Task.sleep(nanoseconds: sheetAutofocusDelayNanoseconds)
             isFocused.wrappedValue = true
         }

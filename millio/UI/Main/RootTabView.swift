@@ -17,7 +17,8 @@ enum FinancesStackRoute: Hashable {
 /// иначе экран итогов пришлось бы объявлять и в стеке «Финансы», где его VM нет.
 enum DashboardStackRoute: Hashable {
     case aiPeriodSummary
-    case aiChat
+    /// `focusesComposer` — вход со строки «Спросить millio…» на карточке дашборда: клавиатура сразу.
+    case aiChat(focusesComposer: Bool)
 }
 
 // MARK: - Root Tab View
@@ -628,6 +629,13 @@ private struct DashboardTabHostView: View {
                 cashflowPeriodLabel: cashflowViewModel.state.chartPeriod.displayName,
                 aiSummary: aiSummaryCardModel,
                 onOpenAISummary: { path.append(DashboardStackRoute.aiPeriodSummary) },
+                // Цифры пересчитываются так же, как при входе через итоги (`AIPeriodSummaryView.task`):
+                // срез чата читает `aiSummaryViewModel`, а перенос даты операции не меняет подпись
+                // дашборда — без пересчёта чат ответил бы на суммы, которых нет на экране итогов.
+                onAskAI: {
+                    aiSummaryViewModel.refresh()
+                    path.append(DashboardStackRoute.aiChat(focusesComposer: true))
+                },
                 onOpenHistory: onOpenHistory,
                 onShowProfile: onShowProfile,
                 onDaysChipTap: onDaysChipTap
@@ -645,14 +653,14 @@ private struct DashboardTabHostView: View {
             .navigationDestination(for: DashboardStackRoute.self) { route in
                 switch route {
                 case .aiPeriodSummary:
-                    // Вход в чат — отсюда, а не отдельной карточкой на дашборде: срез чата берётся
-                    // из этого же экрана, а второй виджет «millio» делил бы место с итогами.
                     AIPeriodSummaryView(
                         viewModel: aiSummaryViewModel,
-                        onOpenChat: { path.append(DashboardStackRoute.aiChat) }
+                        onOpenChat: { path.append(DashboardStackRoute.aiChat(focusesComposer: false)) }
                     )
-                case .aiChat:
-                    AIChatView(viewModel: aiChatViewModel)
+                case .aiChat(let focusesComposer):
+                    // Вход и из итогов, и со строки на карточке дашборда — VM и срез одни и те же,
+                    // поэтому цифры в чате совпадают с итогами при любом входе.
+                    AIChatView(viewModel: aiChatViewModel, focusesComposerOnAppear: focusesComposer)
                 }
             }
         }

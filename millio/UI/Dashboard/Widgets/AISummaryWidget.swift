@@ -22,26 +22,37 @@ struct AISummaryWidget: View {
     let model: AISummaryCardModel
     var isAmountHidden: Bool = false
     var onTap: (() -> Void)? = nil
+    /// Вход в диалог прямо с карточки. Отдельная кнопка, а не жест поверх карточки:
+    /// тап по остальной карточке по-прежнему ведёт в итоги.
+    var onAsk: (() -> Void)? = nil
 
     private var peak: Double { max(model.income, model.expense) }
 
     var body: some View {
-        Button {
-            onTap?()
-        } label: {
-            VStack(alignment: .leading, spacing: AppSpacing.m) {
-                header
-                headlineRow
-                amountsRow
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                onTap?()
+            } label: {
+                VStack(alignment: .leading, spacing: AppSpacing.m) {
+                    header
+                    headlineRow
+                    amountsRow
+                }
+                .padding(.horizontal, AppSpacing.xl)
+                .padding(.top, AppSpacing.l)
+                .padding(.bottom, onAsk == nil ? AppSpacing.l : AppSpacing.m)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, AppSpacing.xl)
-            .padding(.vertical, AppSpacing.l)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DashboardCardBackground())
+            .buttonStyle(.plain)
+            .disabled(onTap == nil)
+            .accessibilityIdentifier("dashboard.aiSummaryWidget")
+
+            if let onAsk {
+                askRow(action: onAsk)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(onTap == nil)
-        .accessibilityIdentifier("dashboard.aiSummaryWidget")
+        .background(DashboardCardBackground())
     }
 
     // MARK: - Header
@@ -87,6 +98,31 @@ struct AISummaryWidget: View {
                 .foregroundStyle(AppColors.textSecondary.opacity(0.75))
                 .lineLimit(1)
         }
+    }
+
+    // MARK: - Вход в диалог
+
+    private func askRow(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: AppSpacing.m) {
+                Divider().overlay(Color.white.opacity(0.08))
+
+                HStack(spacing: AppSpacing.s) {
+                    AIChatOrb(diameter: 20, isActive: false)
+                    Text(L("ai.chat.dashboard.ask"))
+                        .font(Font.millioCalloutRegular)
+                        .foregroundStyle(AppColors.textSecondary.opacity(0.85))
+                        .lineLimit(1)
+                    Spacer(minLength: AppSpacing.xs)
+                }
+            }
+            .padding(.horizontal, AppSpacing.xl)
+            .padding(.bottom, AppSpacing.l)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("dashboard.aiSummaryWidget.ask")
     }
 
     // MARK: - Суммы с полосами

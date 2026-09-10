@@ -7,6 +7,7 @@ final class AIChatLocalizationTests: XCTestCase {
         "ai.chat.clear",
         "ai.chat.clear.confirm",
         "ai.chat.context.title",
+        "ai.chat.dashboard.ask",
         "ai.chat.disclaimer",
         "ai.chat.empty.subtitle",
         "ai.chat.empty.title",
@@ -58,7 +59,7 @@ final class AIChatLocalizationTests: XCTestCase {
     /// Имя агента — «millio» строчными во всех языках: переводчик не должен его капитализировать.
     func testAgentNameStaysLowercaseInEveryLanguage() throws {
         let strings = try Self.strings()
-        for key in ["ai.chat.entry.title", "ai.chat.clear.confirm", "ai.chat.disclaimer"] {
+        for key in ["ai.chat.entry.title", "ai.chat.dashboard.ask", "ai.chat.clear.confirm", "ai.chat.disclaimer"] {
             let entry = try XCTUnwrap(strings[key] as? [String: Any])
             let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])
             for language in ["ru", "en", "zh-Hans"] {

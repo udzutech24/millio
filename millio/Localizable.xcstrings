@@ -1169,6 +1169,28 @@
         }
       }
     },
+    "ai.chat.dashboard.ask" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask millio…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Спросить millio…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "询问 millio…"
+          }
+        }
+      }
+    },
     "ai.chat.disclaimer" : {
       "localizations" : {
         "en" : {
