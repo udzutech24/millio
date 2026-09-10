@@ -202,21 +202,18 @@ final class AIChatViewModel: ObservableObject {
     }
 
     private func finalize(_ reply: AIChatReply, question: String, signature: String) {
-        // Финал несёт полный текст; накопленные куски — страховка на случай, если он пуст.
-        let text = (reply.reply?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 }
-            ?? pendingAnswer?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalText = reply.reply?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let streamed = pendingAnswer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         pendingAnswer = nil
 
         switch reply.status {
         case .ok:
-            guard let text, !text.isEmpty else {
-                retryQuestion = question
-                failure = .network
-                return
-            }
-            appendMessage(AIChatMessage(role: .assistant, text: text, date: now(), contextSignature: signature))
-            retryQuestion = nil
-            failure = nil
+            // Финал несёт полный текст; накопленные предложения — страховка на случай, если он пуст.
+            commitAnswer(finalText.isEmpty ? streamed : finalText, question: question, signature: signature)
+        case .filtered:
+            // Отказ заменяет пузырь целиком: пришедшие до него предложения — начало того самого
+            // ответа, который сервер отфильтровал, ни в ленте, ни в истории им не место.
+            commitAnswer(finalText, question: question, signature: signature)
         case .unavailable:
             retryQuestion = question
             failure = .unavailable
@@ -224,6 +221,17 @@ final class AIChatViewModel: ObservableObject {
             retryQuestion = question
             failure = .network
         }
+    }
+
+    private func commitAnswer(_ text: String, question: String, signature: String) {
+        guard !text.isEmpty else {
+            retryQuestion = question
+            failure = .network
+            return
+        }
+        appendMessage(AIChatMessage(role: .assistant, text: text, date: now(), contextSignature: signature))
+        retryQuestion = nil
+        failure = nil
     }
 
     private func map(_ error: Error) -> AIChatFailure {

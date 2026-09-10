@@ -352,6 +352,63 @@ final class AIChatViewModelTests: XCTestCase {
         XCTAssertEqual(vm.messages.map(\.role), [.user])
     }
 
+    // MARK: - Отказ фильтра и незнакомый статус
+
+    /// `filtered`: часть ответа уже напечаталась, но финал — отказ. Пузырь заменяется отказом
+    /// целиком, в историю ложится отказ, а не обрывок рекомендации.
+    func testFilteredReplyReplacesStreamedTextWithRefusal() async {
+        let refusal = "Я не даю инвестиционных рекомендаций."
+        let client = ControlledClient()
+        let store = makeStore()
+        let vm = makeViewModel(client: client, store: store)
+
+        vm.send("Какие акции купить?")
+        await waitUntil { client.continuation != nil }
+        client.continuation?.yield(.delta("Купите облигации."))
+        await waitUntil { vm.pendingAnswer == "Купите облигации." }
+
+        client.continuation?.yield(.done(AIChatReply(reply: refusal, status: .filtered)))
+        client.continuation?.finish()
+        await waitUntil { vm.messages.count == 2 }
+
+        XCTAssertNil(vm.pendingAnswer)
+        XCTAssertNil(vm.failure)
+        XCTAssertFalse(vm.canRetry)
+        XCTAssertEqual(vm.messages.map(\.text), ["Какие акции купить?", refusal])
+        XCTAssertEqual(store.load().map(\.text), ["Какие акции купить?", refusal])
+    }
+
+    func testFilteredWithoutRefusalNeverCommitsStreamedText() async {
+        let client = ScriptedClient(script: [.delta("Купите облигации."), .done(AIChatReply(reply: nil, status: .filtered))])
+        let vm = makeViewModel(client: client)
+
+        vm.send("Вопрос")
+        await waitUntil { vm.failure != nil }
+
+        XCTAssertNil(vm.pendingAnswer)
+        XCTAssertEqual(vm.messages.map(\.role), [.user])
+    }
+
+    /// Статус из будущего контракта не роняет разбор и не сохраняет обрывок: это `failed` с повтором.
+    func testUnknownStatusFromServerIsTreatedAsFailed() async throws {
+        let frame = AIChatSSEParser.Frame(event: "done", data: #"{"reply":"Купите","status":"moderated"}"#)
+        guard case .done(let reply)? = AIChatSSEParser.event(from: frame) else {
+            return XCTFail("Незнакомый статус уронил разбор финала")
+        }
+        XCTAssertEqual(reply.status, .failed)
+
+        let client = ScriptedClient(script: [.delta("Купите"), .done(reply)])
+        let store = makeStore()
+        let vm = makeViewModel(client: client, store: store)
+        vm.send("Вопрос")
+        await waitUntil { vm.failure != nil }
+
+        XCTAssertEqual(vm.failure, .network)
+        XCTAssertTrue(vm.canRetry)
+        XCTAssertEqual(vm.messages.map(\.role), [.user])
+        XCTAssertEqual(store.load().map(\.role), [.user])
+    }
+
     func testRateLimitIsRetryable() async {
         let client = ScriptedClient(script: [.fail(AIChatClientError.rateLimited)])
         let vm = makeViewModel(client: client)

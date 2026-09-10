@@ -73,6 +73,18 @@ final class AIChatSSEParserTests: XCTestCase {
         XCTAssertEqual(result, [.done(AIChatReply(reply: "x", status: .failed))])
     }
 
+    /// `filtered`: сервер оборвал ответ на инвестиционной рекомендации и прислал отказ в `reply`.
+    func testFilteredStatusCarriesRefusal() {
+        let result = events(from: [
+            "event: delta", "data: {\"text\":\"Купите облигации.\"}", "",
+            "event: done", "data: {\"reply\":\"Я не даю инвестиционных рекомендаций.\",\"status\":\"filtered\"}", ""
+        ])
+        XCTAssertEqual(result, [
+            .delta("Купите облигации."),
+            .done(AIChatReply(reply: "Я не даю инвестиционных рекомендаций.", status: .filtered))
+        ])
+    }
+
     func testEmptyDeltaIsDropped() {
         XCTAssertTrue(events(from: ["event: delta", "data: {\"text\":\"\"}", ""]).isEmpty)
     }

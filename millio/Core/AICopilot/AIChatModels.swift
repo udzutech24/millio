@@ -42,6 +42,9 @@ struct AIChatMessage: Codable, Equatable, Identifiable, Sendable {
 enum AIChatStatus: String, Codable, Sendable {
     /// Текст есть.
     case ok
+    /// Ответ ушёл в инвестиционные рекомендации: сервер оборвал его и прислал в `reply`
+    /// локализованный отказ. Уже пришедшие предложения — начало отфильтрованного ответа.
+    case filtered
     /// Модель не подключена — предлагать повтор бессмысленно.
     case unavailable
     /// Обрыв генерации или пустой ответ — повтор имеет смысл.
@@ -108,7 +111,7 @@ struct AIChatReply: Decodable, Equatable, Sendable {
     }
 }
 
-/// Событие потока: кусок текста по мере генерации либо финал.
+/// Событие потока: очередное целое предложение по мере генерации либо финал.
 enum AIChatEvent: Equatable, Sendable {
     case delta(String)
     case done(AIChatReply)
