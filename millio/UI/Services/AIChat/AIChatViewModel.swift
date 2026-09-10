@@ -102,9 +102,10 @@ final class AIChatViewModel: ObservableObject {
         }
     }
 
-    /// Остановка генерации: недописанный текст выбрасываем, вопрос остаётся с кнопкой повтора.
+    /// Остановка генерации: недописанный текст выбрасываем, вопрос остаётся в ленте.
+    /// Без гейта по `isSending`: экран, закрытый ещё до старта запроса (срез считается async),
+    /// тоже обязан его отменить.
     func stopGenerating() {
-        guard isSending else { return }
         sendTask?.cancel()
         sendTask = nil
         pendingAnswer = nil
@@ -126,6 +127,8 @@ final class AIChatViewModel: ObservableObject {
 
     private func ask(_ question: String, appendQuestion: Bool) async {
         snapshot = await contextProvider()
+        // Экран закрыли, пока считался срез: вопрос не уходит вовсе.
+        guard !Task.isCancelled else { return }
         let signature = AIChatPayloadBuilder.contextSignature(
             snapshot: snapshot,
             locale: locale(),

@@ -55,9 +55,30 @@ final class AIChatViewModelTests: XCTestCase {
     private final class ControlledClient: AIChatClient, @unchecked Sendable {
         var isAvailable: Bool { true }
         private(set) var continuation: AsyncThrowingStream<AIChatEvent, Error>.Continuation?
+        /// Поток закрыт со стороны экрана — у настоящего клиента это отмена SSE-запроса.
+        private(set) var isTerminated = false
 
         func stream(_ request: AIChatRequest) -> AsyncThrowingStream<AIChatEvent, Error> {
-            AsyncThrowingStream { continuation in self.continuation = continuation }
+            AsyncThrowingStream { continuation in
+                continuation.onTermination = { [weak self] _ in self?.isTerminated = true }
+                self.continuation = continuation
+            }
+        }
+    }
+
+    /// Срез, который отдаётся только по команде: имитирует долгий async-подсчёт категорий.
+    @MainActor
+    private final class ContextGate {
+        private var continuation: CheckedContinuation<Void, Never>?
+        var isWaiting: Bool { continuation != nil }
+
+        func wait() async {
+            await withCheckedContinuation { continuation = $0 }
+        }
+
+        func open() {
+            continuation?.resume()
+            continuation = nil
         }
     }
 
@@ -234,6 +255,61 @@ final class AIChatViewModelTests: XCTestCase {
         XCTAssertNil(vm.pendingAnswer)
         XCTAssertFalse(vm.isSending)
         XCTAssertEqual(vm.messages.map(\.role), [.user])
+    }
+
+    // MARK: - Уход с экрана
+
+    /// `onDisappear` экрана зовёт `stopGenerating()`: поток обязан закрыться, а поздний финал —
+    /// не попасть ни в ленту, ни в историю.
+    func testLeavingScreenMidAnswerClosesStreamAndIgnoresLateDone() async {
+        let client = ControlledClient()
+        let store = makeStore()
+        let vm = makeViewModel(client: client, store: store)
+
+        vm.send("На что ушло больше всего?")
+        await waitUntil { client.continuation != nil }
+        client.continuation?.yield(.delta("Больше всего ушло на продукты."))
+        await waitUntil { vm.pendingAnswer?.isEmpty == false }
+
+        vm.stopGenerating()
+        await waitUntil { client.isTerminated }
+
+        XCTAssertTrue(client.isTerminated, "Поток не закрыт — соединение и лимит горят дальше")
+        client.continuation?.yield(.done(okReply))
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertFalse(vm.isSending)
+        XCTAssertNil(vm.pendingAnswer)
+        XCTAssertEqual(vm.messages.map(\.role), [.user])
+        XCTAssertEqual(store.load().map(\.role), [.user])
+    }
+
+    /// Экран закрыли, пока считался срез: раньше `stopGenerating()` молча выходил по `!isSending`,
+    /// и запрос уходил уже без экрана.
+    func testLeavingScreenBeforeRequestStartsSendsNothing() async {
+        let client = ScriptedClient(script: [.done(okReply)])
+        let gate = ContextGate()
+        let period = AIPeriodSummaryPeriod(kind: .month, anchor: now)
+        let vm = AIChatViewModel(
+            contextProvider: {
+                await gate.wait()
+                return AIChatContextSnapshot(period: period, figures: .zero, currency: "RUB", categoryTotals: [:])
+            },
+            client: client,
+            store: makeStore(),
+            now: { [now] in now },
+            calendar: calendar,
+            locale: { Locale(identifier: "ru_RU") }
+        )
+
+        vm.send("Вопрос")
+        await waitUntil { gate.isWaiting }
+        vm.stopGenerating()
+        gate.open()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(client.requests.isEmpty)
+        XCTAssertTrue(vm.messages.isEmpty)
+        XCTAssertFalse(vm.isSending)
     }
 
     // MARK: - Сервер недоступен

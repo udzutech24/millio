@@ -97,6 +97,9 @@ struct AIChatView: View {
             Button(L("common.cancel"), role: .cancel) {}
         }
         .task { await viewModel.prepare() }
+        // Ушли с экрана — генерацию гасим: иначе поток держит SSE-соединение и тратит лимит
+        // запросов на ответ, который никто не прочитает.
+        .onDisappear { viewModel.stopGenerating() }
     }
 
     // MARK: - Пусто
