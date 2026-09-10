@@ -1218,19 +1218,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I answer using income, expenses and categories for the period from your summary. The amounts themselves come from the app."
+            "value" : "Income, expenses and categories for this period — ask anything."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Отвечаю по доходам, расходам и категориям за период из итогов. Сами суммы берутся из приложения."
+            "value" : "Доходы, расходы и категории за этот период — спрашивайте что угодно."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "我根据总结中该时段的收入、支出和分类来回答。金额本身来自应用。"
+            "value" : "本期的收入、支出和分类——想问什么都可以。"
           }
         }
       }
