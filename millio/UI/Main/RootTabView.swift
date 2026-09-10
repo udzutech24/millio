@@ -13,6 +13,12 @@ enum FinancesStackRoute: Hashable {
     case cashback
 }
 
+/// Маршруты, живущие только в стеке дашборда. Отдельный тип, а не кейс `FinancesStackRoute`:
+/// иначе экран итогов пришлось бы объявлять и в стеке «Финансы», где его VM нет.
+enum DashboardStackRoute: Hashable {
+    case aiPeriodSummary
+}
+
 // MARK: - Root Tab View
 
 struct RootTabView: View {
@@ -29,6 +35,7 @@ struct RootTabView: View {
     // ViewModels (ленивая инициализация)
     @State private var financeViewModel: FinanceViewModel?
     @State private var cashflowViewModel: CashflowViewModel?
+    @State private var aiSummaryViewModel: AIPeriodSummaryViewModel?
 
     // FAB menu
     @State private var showFABMenu = false
@@ -301,10 +308,11 @@ struct RootTabView: View {
 
     @ViewBuilder
     private var dashboardTab: some View {
-        if let fvm = financeViewModel, let cvm = cashflowViewModel {
+        if let fvm = financeViewModel, let cvm = cashflowViewModel, let avm = aiSummaryViewModel {
             DashboardTabHostView(
                 financeViewModel: fvm,
                 cashflowViewModel: cvm,
+                aiSummaryViewModel: avm,
                 path: $dashboardPath,
                 onAddIncome: { ensureCashflowViewModel(); showIncomeSheet = true },
                 onAddExpense: { ensureCashflowViewModel(); showExpenseSheet = true },
@@ -455,11 +463,55 @@ struct RootTabView: View {
     private func ensureViewModels() {
         ensureFinanceViewModel()
         ensureCashflowViewModel()
+        ensureAISummaryViewModel()
     }
 
     private func ensureFinanceViewModel() {
         guard financeViewModel == nil else { return }
         financeViewModel = FinanceViewModel(modelContext: modelContext)
+    }
+
+    /// Сводка живёт поверх уже готовых агрегатов кэшфлоу и общего баланса — своих расчётов и
+    /// своего доступа к SwiftData у неё нет.
+    private func ensureAISummaryViewModel() {
+        guard aiSummaryViewModel == nil,
+              let financeVM = financeViewModel,
+              let cashflowVM = cashflowViewModel
+        else { return }
+
+        let client: any AIPeriodSummaryClient = {
+            guard let diContainer else { return UnavailableAIPeriodSummaryClient() }
+            return BackendAIPeriodSummaryClient(
+                authService: diContainer.authService,
+                configurationProvider: diContainer.apiClientFactory.authConfigurationProvider()
+            )
+        }()
+
+        aiSummaryViewModel = AIPeriodSummaryViewModel(
+            dataSource: AIPeriodSummaryDataSource(
+                entries: { cashflowVM.state.convertedTransactions },
+                currency: { cashflowVM.state.displayCurrency },
+                balance: { financeVM.state.totalAmount },
+                expenseCategoryTotals: { months in
+                    var totals: [String: Double] = [:]
+                    for month in months {
+                        let raw = await cashflowVM.analyticsService.monthlyCategoryTotals(
+                            for: .expense,
+                            month: month,
+                            displayCurrency: cashflowVM.state.displayCurrency
+                        )
+                        for (rawCategory, amount) in raw {
+                            // Ключ — отображаемое имя категории, а не rawValue: модель пишет текст
+                            // на языке пользователя, и сырое "food" утекло бы в русскую фразу.
+                            let title = cashflowVM.expenseCategoryDisplayName(for: rawCategory)
+                            totals[title, default: 0] += amount
+                        }
+                    }
+                    return totals
+                }
+            ),
+            client: client
+        )
     }
 
     private func ensureCashflowViewModel() {
@@ -492,6 +544,7 @@ struct RootTabView: View {
 private struct DashboardTabHostView: View {
     @ObservedObject var financeViewModel: FinanceViewModel
     @ObservedObject var cashflowViewModel: CashflowViewModel
+    @ObservedObject var aiSummaryViewModel: AIPeriodSummaryViewModel
     @Binding var path: NavigationPath
     @Environment(AppState.self) private var appState
 
@@ -530,18 +583,45 @@ private struct DashboardTabHostView: View {
                 cashflowAssetChange: cashflowViewModel.state.assetValueChange,
                 cashflowCurrency: cashflowViewModel.state.displayCurrency,
                 cashflowPeriodLabel: cashflowViewModel.state.chartPeriod.displayName,
+                aiSummary: aiSummaryCardModel,
+                onOpenAISummary: { path.append(DashboardStackRoute.aiPeriodSummary) },
                 onOpenHistory: onOpenHistory,
                 onShowProfile: onShowProfile,
                 onDaysChipTap: onDaysChipTap
             )
             .navigationBarTitleDisplayMode(.inline)
+            // Ключ перезапуска — дешёвая подпись входных агрегатов: пересчитываем цифры сводки,
+            // когда журнал кэшфлоу, валюта отображения или общий баланс реально изменились.
+            .task(id: aiSummaryInputSignature) { aiSummaryViewModel.refresh() }
             .navigationDestination(for: FinancesStackRoute.self) { route in
                 switch route {
                 case .courses: CoursesView()
                 case .cashback: CashbackView()
                 }
             }
+            .navigationDestination(for: DashboardStackRoute.self) { route in
+                switch route {
+                case .aiPeriodSummary: AIPeriodSummaryView(viewModel: aiSummaryViewModel)
+                }
+            }
         }
+    }
+
+    private var aiSummaryCardModel: AISummaryCardModel {
+        AISummaryCardModel(
+            periodTitle: AIPeriodSummaryFormatting.periodTitle(for: aiSummaryViewModel.period),
+            headline: aiSummaryViewModel.text?.headline,
+            income: aiSummaryViewModel.figures.income,
+            expense: aiSummaryViewModel.figures.expense,
+            net: aiSummaryViewModel.figures.net,
+            currency: aiSummaryViewModel.currency,
+            isLoadingText: aiSummaryViewModel.isLoadingText
+        )
+    }
+
+    private var aiSummaryInputSignature: String {
+        let balance = Int(financeViewModel.state.totalAmount.rounded())
+        return "\(cashflowViewModel.state.convertedTransactions.count)|\(cashflowViewModel.state.displayCurrency)|\(balance)"
     }
 }
 

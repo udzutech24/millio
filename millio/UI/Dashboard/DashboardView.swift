@@ -30,6 +30,9 @@ struct DashboardView: View {
     var cashflowCurrency: String = "RUB"
     var cashflowPeriodLabel: String = L("dashboard.cashflow.default_period")
 
+    var aiSummary: AISummaryCardModel = AISummaryCardModel()
+    var onOpenAISummary: () -> Void = {}
+
     var onOpenHistory: () -> Void = {}
     var onShowProfile: () -> Void = {}
     var onDaysChipTap: (() -> Void)? = nil
@@ -184,6 +187,12 @@ struct DashboardView: View {
                 onTap: onOpenFinances,
                 onSparklineTap: onOpenDynamics,
                 onDaysChipTap: onDaysChipTap
+            )
+        case .aiSummary:
+            AISummaryWidget(
+                model: aiSummary,
+                isAmountHidden: isAmountHidden,
+                onTap: onOpenAISummary
             )
         case .quickActions:
             QuickActionsWidget(
