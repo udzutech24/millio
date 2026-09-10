@@ -368,7 +368,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                     }
                     if card.cardType == .credit {
                         FinancesRowDivider(leadingPadding: 16)
-                        Picker("Bank / issuer", selection: $card.bank) {
+                        Picker(L("finances.editor.card.bank_label", defaultValue: "Банк / эмитент"), selection: $card.bank) {
                             ForEach(Bank.allCases, id: \.self) { bank in Text(bank.displayName).tag(bank) }
                         }
                         .padding(.horizontal, 16)
@@ -563,13 +563,13 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                     .buttonStyle(.plain)
                     if showsCreditCardTerms {
                         FinancesRowDivider(leadingPadding: 16)
-                        Stepper("Statement day: \(statementDay)", value: $statementDay, in: 1...31)
+                        Stepper(String(format: L("credit_card.edit.statement_day_format"), statementDay), value: $statementDay, in: 1...31)
                             .padding(16)
                         FinancesRowDivider(leadingPadding: 16)
-                        Stepper("Payment day: \(dueDay)", value: $dueDay, in: 1...31)
+                        Stepper(String(format: L("credit_card.edit.due_day_format"), dueDay), value: $dueDay, in: 1...31)
                             .padding(16)
                         FinancesRowDivider(leadingPadding: 16)
-                        Stepper("Grace period: \(graceDays)", value: $graceDays, in: 0...365)
+                        Stepper(String(format: L("credit_card.edit.grace_days_format"), graceDays), value: $graceDays, in: 0...365)
                             .padding(16)
                         FinancesRowDivider(leadingPadding: 16)
                         HStack {

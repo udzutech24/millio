@@ -11289,6 +11289,12 @@
       "comment" : "Invalid Apple credentials toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not verify your Apple account. Try again."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11297,8 +11303,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Could not verify your Apple account. Try again."
+            "state" : "translated",
+            "value" : "Не удалось подтвердить аккаунт Apple. Попробуйте ещё раз."
           }
         },
         "tr" : {
@@ -11336,6 +11342,12 @@
       "comment" : "Forbidden auth toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This account cannot sign in here."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11344,8 +11356,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "This account cannot sign in here."
+            "state" : "translated",
+            "value" : "С этим аккаунтом сюда войти нельзя."
           }
         },
         "tr" : {
@@ -11360,6 +11372,12 @@
       "comment" : "Fallback auth error toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not complete sign in. Try again."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11368,8 +11386,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Could not complete sign in. Try again."
+            "state" : "translated",
+            "value" : "Не удалось войти. Попробуйте ещё раз."
           }
         },
         "tr" : {
@@ -11384,6 +11402,12 @@
       "comment" : "Invalid auth response toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auth response parse failed. Try again."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11392,8 +11416,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Auth response parse failed. Try again."
+            "state" : "translated",
+            "value" : "Не удалось разобрать ответ сервера авторизации. Попробуйте ещё раз."
           }
         },
         "tr" : {
@@ -11408,6 +11432,12 @@
       "comment" : "Generic network auth toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Network error. Try again."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11416,8 +11446,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Network error. Try again."
+            "state" : "translated",
+            "value" : "Ошибка сети. Попробуйте ещё раз."
           }
         },
         "tr" : {
@@ -11432,6 +11462,12 @@
       "comment" : "Offline auth toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No internet connection. Check your network and try again."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11440,8 +11476,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "No internet connection. Check your network and try again."
+            "state" : "translated",
+            "value" : "Нет подключения к интернету. Проверьте сеть и попробуйте снова."
           }
         },
         "tr" : {
@@ -11456,6 +11492,12 @@
       "comment" : "Post-login bootstrap failure toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Post-login bootstrap failed. Your session is active."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11464,8 +11506,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Post-login bootstrap failed. Your session is active."
+            "state" : "translated",
+            "value" : "Не удалось загрузить данные после входа, но сессия активна."
           }
         },
         "tr" : {
@@ -11480,6 +11522,12 @@
       "comment" : "Rate limited auth toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Too many attempts. Please wait a bit and try again."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11488,8 +11536,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Too many attempts. Please wait a bit and try again."
+            "state" : "translated",
+            "value" : "Слишком много попыток. Подождите немного и попробуйте снова."
           }
         },
         "tr" : {
@@ -11504,6 +11552,12 @@
       "comment" : "Server auth toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server error. Try again later."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11512,8 +11566,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Server error. Try again later."
+            "state" : "translated",
+            "value" : "Ошибка сервера. Попробуйте позже."
           }
         },
         "tr" : {
@@ -11528,6 +11582,12 @@
       "comment" : "Expired auth session toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your session expired. Sign in again."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11536,8 +11596,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Your session expired. Sign in again."
+            "state" : "translated",
+            "value" : "Сессия истекла. Войдите заново."
           }
         },
         "tr" : {
@@ -11552,6 +11612,12 @@
       "comment" : "TLS auth toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Secure connection failed. Check your network and try again."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11560,8 +11626,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Secure connection failed. Check your network and try again."
+            "state" : "translated",
+            "value" : "Не удалось установить защищённое соединение. Проверьте сеть и попробуйте снова."
           }
         },
         "tr" : {
@@ -11576,6 +11642,12 @@
       "comment" : "Token persistence failure toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Token persistence failed. Signed in, but failed to save your session."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11584,8 +11656,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Token persistence failed. Signed in, but failed to save your session."
+            "state" : "translated",
+            "value" : "Вход выполнен, но не удалось сохранить сессию."
           }
         },
         "tr" : {
@@ -11600,6 +11672,12 @@
       "comment" : "Auth service unavailable toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in is temporarily unavailable."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11608,8 +11686,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Sign in is temporarily unavailable."
+            "state" : "translated",
+            "value" : "Вход временно недоступен."
           }
         },
         "tr" : {
@@ -11624,6 +11702,12 @@
       "comment" : "Wrong backend/session namespace toast",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signed in, but the session belongs to a different backend or region."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -11632,8 +11716,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Signed in, but the session belongs to a different backend or region."
+            "state" : "translated",
+            "value" : "Вход выполнен, но сессия относится к другому серверу или региону."
           }
         },
         "tr" : {
@@ -27242,8 +27326,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Select an active card before saving."
+            "state" : "translated",
+            "value" : "Перед сохранением выберите активную карту."
           }
         },
         "tr" : {
@@ -27290,8 +27374,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Not enough funds: %1$@ %2$@ needed, %3$@ %4$@ available."
+            "state" : "translated",
+            "value" : "Недостаточно средств: нужно %1$@ %2$@, доступно %3$@ %4$@."
           }
         },
         "tr" : {
@@ -27338,8 +27422,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "The image could not be read."
+            "state" : "translated",
+            "value" : "Не удалось прочитать изображение."
           }
         },
         "tr" : {
@@ -27386,8 +27470,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "No expense rows were recognized."
+            "state" : "translated",
+            "value" : "Не удалось распознать ни одной строки расходов."
           }
         },
         "tr" : {
@@ -27434,8 +27518,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Add at least one valid expense row."
+            "state" : "translated",
+            "value" : "Добавьте хотя бы одну корректную строку расхода."
           }
         },
         "tr" : {
@@ -27482,8 +27566,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "No text was found on the screenshot."
+            "state" : "translated",
+            "value" : "На скриншоте не найден текст."
           }
         },
         "tr" : {
@@ -31369,8 +31453,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Reset"
+            "state" : "translated",
+            "value" : "Сбросить"
           }
         },
         "tr" : {
@@ -31463,8 +31547,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Expense order"
+            "state" : "translated",
+            "value" : "Порядок расходов"
           }
         },
         "tr" : {
@@ -31510,8 +31594,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Income order"
+            "state" : "translated",
+            "value" : "Порядок доходов"
           }
         },
         "tr" : {
@@ -31667,6 +31751,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "按名称"
+          }
+        }
+      }
+    },
+    "cashflow.category.undo.action" : {
+      "comment" : "Undo button label in the category mutation undo banner",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Undo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отменить"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤销"
           }
         }
       }
@@ -36030,8 +36138,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Exchange rate"
+            "state" : "translated",
+            "value" : "Курс обмена"
           }
         },
         "tr" : {
@@ -36078,8 +36186,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Enter a valid custom rate."
+            "state" : "translated",
+            "value" : "Введите корректный курс."
           }
         },
         "tr" : {
@@ -36126,8 +36234,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Loading current rate…"
+            "state" : "translated",
+            "value" : "Загружаем текущий курс…"
           }
         },
         "tr" : {
@@ -36174,8 +36282,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Current"
+            "state" : "translated",
+            "value" : "Текущий"
           }
         },
         "tr" : {
@@ -36222,8 +36330,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Custom"
+            "state" : "translated",
+            "value" : "Свой"
           }
         },
         "tr" : {
@@ -36270,8 +36378,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Current rate is unavailable. Enter your own rate to continue."
+            "state" : "translated",
+            "value" : "Текущий курс недоступен. Введите свой курс, чтобы продолжить."
           }
         },
         "tr" : {
@@ -36318,8 +36426,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Will receive: %1$@ %2$@"
+            "state" : "translated",
+            "value" : "Получите: %1$@ %2$@"
           }
         },
         "tr" : {
@@ -36366,8 +36474,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Your rate"
+            "state" : "translated",
+            "value" : "Ваш курс"
           }
         },
         "tr" : {
@@ -48284,10 +48392,16 @@
     "common.delete" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discard"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Discard"
+            "state" : "translated",
+            "value" : "Отклонить"
           }
         }
       }
@@ -69451,6 +69565,30 @@
         }
       }
     },
+    "finances.editor.card.bank_label" : {
+      "comment" : "Label for the credit card bank/issuer picker",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bank / issuer"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Банк / эмитент"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "银行 / 发卡机构"
+          }
+        }
+      }
+    },
     "finances.editor.card.edit_title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -82121,7 +82259,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ежедневенная сверка, корректировка и контроль"
+            "value" : "Ежедневная сверка, корректировка и контроль"
           }
         },
         "tr" : {

@@ -727,6 +727,76 @@ final class LocalizableXcstringsTests: XCTestCase {
         try assertLocalized(strings: strings, key: "common.cancel")
     }
 
+    /// Регрессия БАГ 7: у auth.error.* (экран входа) и common.delete ru-слот содержал английский
+    /// текст со статусом "new", а en-записи не было вообще. Чинить нужно ОБА языка сразу — если
+    /// поправить только ru и забыть en, экран входа сломается наоборот для EN-пользователей.
+    func testAuthErrorAndCommonDeleteAreTranslatedInENAndRU() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard
+            let root = jsonObject as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        let keys = [
+            "auth.error.apple_credentials",
+            "auth.error.forbidden",
+            "auth.error.generic",
+            "auth.error.invalid_response",
+            "auth.error.network",
+            "auth.error.offline",
+            "auth.error.post_login_bootstrap",
+            "auth.error.rate_limited",
+            "auth.error.server",
+            "auth.error.session_expired",
+            "auth.error.tls",
+            "auth.error.token_persistence",
+            "auth.error.unavailable",
+            "auth.error.wrong_session_namespace",
+            "common.delete"
+        ]
+
+        for key in keys {
+            try assertLocalized(strings: strings, key: key)
+            let entryLocalizations = try localizations(for: key, in: strings)
+
+            let en = try stringUnit(locale: "en", localizations: entryLocalizations, key: key)
+            let ru = try stringUnit(locale: "ru", localizations: entryLocalizations, key: key)
+
+            XCTAssertEqual(en.state, "translated", "`\(key)`: en должен быть в статусе translated.")
+            XCTAssertEqual(ru.state, "translated", "`\(key)`: ru должен быть в статусе translated, не new.")
+            XCTAssertFalse(ru.value.isEmpty, "`\(key)`: ru перевод не должен быть пустым.")
+            XCTAssertNotEqual(ru.value, en.value, "`\(key)`: ru не должен дублировать английский текст.")
+        }
+    }
+
+    /// Регрессия БАГ 7 (reorder) + БАГ 8 (новые ключи для кредитки и undo-баннера категорий):
+    /// эти ключи либо были в статусе "new" с английским текстом в ru, либо отсутствовали в
+    /// каталоге вообще (Picker/Undo-баннер показывали сырые Swift-литералы в RU-интерфейсе).
+    func testReorderAndNewCreditCardUndoKeysAreLocalized() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard
+            let root = jsonObject as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        try assertLocalized(strings: strings, key: "cashflow.category.reorder.reset")
+        try assertLocalized(strings: strings, key: "cashflow.category.reorder.title.expense")
+        try assertLocalized(strings: strings, key: "cashflow.category.reorder.title.income")
+
+        try assertLocalized(strings: strings, key: "finances.editor.card.bank_label", locales: ["en", "ru", "zh-Hans"])
+        try assertLocalized(strings: strings, key: "cashflow.category.undo.action", locales: ["en", "ru", "zh-Hans"])
+    }
+
     private static func localizableXcstringsURL() throws -> URL {
         var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         let fileManager = FileManager.default
@@ -769,6 +839,27 @@ final class LocalizableXcstringsTests: XCTestCase {
         for locale in locales {
             XCTAssertNotNil(localizations[locale], "Missing \(locale) localization for `\(key)`.")
         }
+    }
+
+    private func stringUnit(
+        locale: String,
+        localizations: [String: Any],
+        key: String
+    ) throws -> (state: String, value: String) {
+        guard
+            let localization = localizations[locale] as? [String: Any],
+            let stringUnit = localization["stringUnit"] as? [String: Any],
+            let state = stringUnit["state"] as? String,
+            let value = stringUnit["value"] as? String
+        else {
+            throw NSError(
+                domain: "LocalizableXcstringsTests",
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "Missing stringUnit for `\(key)` locale `\(locale)`."]
+            )
+        }
+
+        return (state, value)
     }
 
     private func localizations(for key: String, in strings: [String: Any]) throws -> [String: Any] {
