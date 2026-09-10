@@ -11287,12 +11287,24 @@
     },
     "auth.error.apple_credentials" : {
       "comment" : "Invalid Apple credentials toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Apple-Konto konnte nicht bestätigt werden. Versuche es erneut."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Could not verify your Apple account. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo verificar tu cuenta de Apple. Inténtalo de nuevo."
           }
         },
         "fr" : {
@@ -11311,6 +11323,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Apple hesabınız doğrulanamadı. Tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法验证您的 Apple 账户，请重试。"
           }
         }
       }
@@ -11340,12 +11358,24 @@
     },
     "auth.error.forbidden" : {
       "comment" : "Forbidden auth toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit diesem Konto ist keine Anmeldung möglich."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "This account cannot sign in here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede iniciar sesión con esta cuenta."
           }
         },
         "fr" : {
@@ -11357,7 +11387,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "С этим аккаунтом сюда войти нельзя."
+            "value" : "С этим аккаунтом войти нельзя."
           }
         },
         "tr" : {
@@ -11365,17 +11395,35 @@
             "state" : "translated",
             "value" : "Bu hesap buraya giriş yapamaz."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法使用此账户登录。"
+          }
         }
       }
     },
     "auth.error.generic" : {
       "comment" : "Fallback auth error toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmeldung konnte nicht abgeschlossen werden. Versuche es erneut."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Could not complete sign in. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo completar el inicio de sesión. Inténtalo de nuevo."
           }
         },
         "fr" : {
@@ -11395,17 +11443,35 @@
             "state" : "translated",
             "value" : "Giriş tamamlanamadı. Tekrar deneyin."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录未完成，请重试。"
+          }
         }
       }
     },
     "auth.error.invalid_response" : {
       "comment" : "Invalid auth response toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Antwort des Anmeldedienstes konnte nicht verarbeitet werden. Versuche es erneut."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Auth response parse failed. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo procesar la respuesta del servidor de inicio de sesión. Inténtalo de nuevo."
           }
         },
         "fr" : {
@@ -11425,17 +11491,35 @@
             "state" : "translated",
             "value" : "Kimlik doğrulama yanıtı ayrıştırılamadı. Tekrar deneyin."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法解析登录服务器的响应，请重试。"
+          }
         }
       }
     },
     "auth.error.network" : {
       "comment" : "Generic network auth toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Netzwerkfehler. Versuche es erneut."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Network error. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error de red. Inténtalo de nuevo."
           }
         },
         "fr" : {
@@ -11455,17 +11539,35 @@
             "state" : "translated",
             "value" : "Ağ hatası. Tekrar deneyin."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网络错误，请重试。"
+          }
         }
       }
     },
     "auth.error.offline" : {
       "comment" : "Offline auth toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Internetverbindung. Überprüfe dein Netzwerk und versuche es erneut."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "No internet connection. Check your network and try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin conexión a internet. Comprueba tu red e inténtalo de nuevo."
           }
         },
         "fr" : {
@@ -11485,17 +11587,35 @@
             "state" : "translated",
             "value" : "İnternet bağlantısı yok. Ağınızı kontrol edip tekrar deneyin."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有网络连接，请检查网络后重试。"
+          }
         }
       }
     },
     "auth.error.post_login_bootstrap" : {
       "comment" : "Post-login bootstrap failure toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daten nach der Anmeldung konnten nicht geladen werden. Deine Sitzung ist weiterhin aktiv."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Post-login bootstrap failed. Your session is active."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron cargar los datos tras iniciar sesión, pero tu sesión sigue activa."
           }
         },
         "fr" : {
@@ -11515,17 +11635,35 @@
             "state" : "translated",
             "value" : "Giriş sonrası başlatma başarısız. Oturumunuz aktif."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录后数据加载失败，但您的会话仍处于活动状态。"
+          }
         }
       }
     },
     "auth.error.rate_limited" : {
       "comment" : "Rate limited auth toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu viele Versuche. Warte einen Moment und versuche es erneut."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Too many attempts. Please wait a bit and try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demasiados intentos. Espera un momento e inténtalo de nuevo."
           }
         },
         "fr" : {
@@ -11545,17 +11683,35 @@
             "state" : "translated",
             "value" : "Çok fazla deneme. Lütfen biraz bekleyip tekrar deneyin."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尝试次数过多，请稍候再试。"
+          }
         }
       }
     },
     "auth.error.server" : {
       "comment" : "Server auth toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serverfehler. Versuche es später erneut."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Server error. Try again later."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error del servidor. Inténtalo de nuevo más tarde."
           }
         },
         "fr" : {
@@ -11575,17 +11731,35 @@
             "state" : "translated",
             "value" : "Sunucu hatası. Daha sonra tekrar deneyin."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务器错误，请稍后重试。"
+          }
         }
       }
     },
     "auth.error.session_expired" : {
       "comment" : "Expired auth session toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Sitzung ist abgelaufen. Melde dich erneut an."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Your session expired. Sign in again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu sesión ha caducado. Inicia sesión de nuevo."
           }
         },
         "fr" : {
@@ -11605,17 +11779,35 @@
             "state" : "translated",
             "value" : "Oturumunuz sona erdi. Tekrar giriş yapın."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录已过期，请重新登录。"
+          }
         }
       }
     },
     "auth.error.tls" : {
       "comment" : "TLS auth toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichere Verbindung fehlgeschlagen. Überprüfe dein Netzwerk und versuche es erneut."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Secure connection failed. Check your network and try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo establecer una conexión segura. Comprueba tu red e inténtalo de nuevo."
           }
         },
         "fr" : {
@@ -11635,17 +11827,35 @@
             "state" : "translated",
             "value" : "Güvenli bağlantı kurulamadı. Ağınızı kontrol edip tekrar deneyin."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安全连接失败，请检查网络后重试。"
+          }
         }
       }
     },
     "auth.error.token_persistence" : {
       "comment" : "Token persistence failure toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmeldung erfolgreich, aber die Sitzung konnte nicht gespeichert werden."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Token persistence failed. Signed in, but failed to save your session."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Has iniciado sesión, pero no se pudo guardar tu sesión."
           }
         },
         "fr" : {
@@ -11665,17 +11875,35 @@
             "state" : "translated",
             "value" : "Oturum kaydedilemedi. Giriş yapıldı ancak oturum kaydedilemedi."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已登录，但会话保存失败。"
+          }
         }
       }
     },
     "auth.error.unavailable" : {
       "comment" : "Auth service unavailable toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Anmeldung ist vorübergehend nicht verfügbar."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sign in is temporarily unavailable."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El inicio de sesión no está disponible temporalmente."
           }
         },
         "fr" : {
@@ -11695,17 +11923,35 @@
             "state" : "translated",
             "value" : "Giriş geçici olarak kullanılamıyor."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录功能暂时不可用。"
+          }
         }
       }
     },
     "auth.error.wrong_session_namespace" : {
       "comment" : "Wrong backend/session namespace toast",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmeldung erfolgreich, aber die Sitzung gehört zu einem anderen Server oder einer anderen Region."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Signed in, but the session belongs to a different backend or region."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Has iniciado sesión, pero la sesión pertenece a otro servidor o región."
           }
         },
         "fr" : {
@@ -11724,6 +11970,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Giriş yapıldı ancak oturum farklı bir arka uca veya bölgeye ait."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已登录，但该会话属于其他服务器或地区。"
           }
         }
       }
@@ -27298,7 +27550,7 @@
     },
     "cashflow.bulk_expense.error.card_not_found" : {
       "comment" : "Bulk expense import save error without card",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -27327,7 +27579,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Перед сохранением выберите активную карту."
+            "value" : "Перед сохранением выбери активную карту."
           }
         },
         "tr" : {
@@ -27346,7 +27598,7 @@
     },
     "cashflow.bulk_expense.error.insufficient_funds" : {
       "comment" : "Bulk expense import insufficient funds error",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -27394,7 +27646,7 @@
     },
     "cashflow.bulk_expense.error.invalid_image" : {
       "comment" : "Bulk expense screenshot import invalid image error",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -27442,7 +27694,7 @@
     },
     "cashflow.bulk_expense.error.no_rows" : {
       "comment" : "Bulk expense screenshot import no rows error",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -27490,7 +27742,7 @@
     },
     "cashflow.bulk_expense.error.no_rows_to_save" : {
       "comment" : "Bulk expense import save error without rows",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -27519,7 +27771,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Добавьте хотя бы одну корректную строку расхода."
+            "value" : "Добавь хотя бы одну корректную строку расхода."
           }
         },
         "tr" : {
@@ -27538,7 +27790,7 @@
     },
     "cashflow.bulk_expense.error.no_text" : {
       "comment" : "Bulk expense screenshot import no text error",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -31759,10 +32011,22 @@
       "comment" : "Undo button label in the category mutation undo banner",
       "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rückgängig"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Undo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deshacer"
           }
         },
         "ru" : {
@@ -36110,7 +36374,7 @@
     },
     "cashflow.editor.transfer.exchange_rate" : {
       "comment" : "Section title for transfer exchange rate\nTransfer exchange rate picker title",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -36158,7 +36422,7 @@
     },
     "cashflow.editor.transfer.rate_custom_invalid" : {
       "comment" : "Transfer custom exchange rate validation message",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -36206,7 +36470,7 @@
     },
     "cashflow.editor.transfer.rate_loading" : {
       "comment" : "Transfer exchange rate loading state",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -36254,7 +36518,7 @@
     },
     "cashflow.editor.transfer.rate_mode.current" : {
       "comment" : "Transfer exchange rate mode title for current rate",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -36302,7 +36566,7 @@
     },
     "cashflow.editor.transfer.rate_mode.custom" : {
       "comment" : "Transfer exchange rate mode title for custom rate",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -36350,7 +36614,7 @@
     },
     "cashflow.editor.transfer.rate_unavailable" : {
       "comment" : "Transfer exchange rate unavailable state",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -36398,7 +36662,7 @@
     },
     "cashflow.editor.transfer.received_amount" : {
       "comment" : "Preview text for received amount in transfer destination currency",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -36427,7 +36691,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Получите: %1$@ %2$@"
+            "value" : "Поступит: %1$@ %2$@"
           }
         },
         "tr" : {
@@ -36446,7 +36710,7 @@
     },
     "cashflow.editor.transfer.your_rate" : {
       "comment" : "Label for custom exchange rate input",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -36475,7 +36739,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ваш курс"
+            "value" : "Свой курс"
           }
         },
         "tr" : {
@@ -48390,18 +48654,36 @@
       }
     },
     "common.delete" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwerfen"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Discard"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descartar"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Отклонить"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放弃"
           }
         }
       }
@@ -48453,7 +48735,39 @@
       }
     },
     "common.more" : {
-
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mehr"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ещё"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更多"
+          }
+        }
+      }
     },
     "converter.accessibility.add_currency" : {
       "extractionState" : "manual",
@@ -55168,19 +55482,19 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empfohlen: Menge eingeben (0 ist erlaubt)"
+            "value" : "Empfohlen: Menge angeben – oder 0 lassen, um nur den Kurs zu beobachten"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recommended: set quantity (0 is allowed)"
+            "value" : "Recommended: set a quantity — or leave 0 to just track the price"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recomendado: establece la cantidad (se permite 0)"
+            "value" : "Recomendado: indica una cantidad, o deja 0 para solo seguir el precio"
           }
         },
         "fr" : {
@@ -55192,7 +55506,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Рекомендуется ввести количество (можно 0)"
+            "value" : "Рекомендуется ввести количество — или оставьте 0, чтобы просто следить за ценой"
           }
         },
         "tr" : {
@@ -55204,7 +55518,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "建议填写数量（可填0）"
+            "value" : "建议填写数量——或保留 0，仅用于关注价格走势"
           }
         }
       }
@@ -69569,10 +69883,22 @@
       "comment" : "Label for the credit card bank/issuer picker",
       "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bank / Aussteller"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bank / issuer"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Banco / emisor"
           }
         },
         "ru" : {
@@ -110240,10 +110566,22 @@
     "credit_card.edit.grace_days_format" : {
       "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zahlungsziel: %lld Tage"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Grace period: %lld days"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Periodo de gracia: %lld días"
           }
         },
         "ru" : {
@@ -110263,10 +110601,22 @@
     "credit_card.edit.statement_day_format" : {
       "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrechnungstag: %lld"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Statement day: %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Día de cierre: %lld"
           }
         },
         "ru" : {
@@ -110286,10 +110636,22 @@
     "credit_card.edit.due_day_format" : {
       "extractionState" : "manual",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zahlungstag: %lld"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Payment day: %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Día de pago: %lld"
           }
         },
         "ru" : {

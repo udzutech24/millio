@@ -789,12 +789,247 @@ final class LocalizableXcstringsTests: XCTestCase {
             return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
         }
 
-        try assertLocalized(strings: strings, key: "cashflow.category.reorder.reset")
-        try assertLocalized(strings: strings, key: "cashflow.category.reorder.title.expense")
-        try assertLocalized(strings: strings, key: "cashflow.category.reorder.title.income")
+        // Раньше здесь была только проверка присутствия языка (assertLocalized), которая
+        // проходит и на "битом" каталоге, где ru-слот стоит в статусе "new" и дублирует
+        // английский текст. Docs: регрессия БАГ 7 ловится только строгой проверкой
+        // state == "translated" И ru != en — усиливаем по образцу testAuthErrorAndCommonDeleteAreTranslatedInENAndRU.
+        let strictKeys = [
+            "cashflow.category.reorder.reset",
+            "cashflow.category.reorder.title.expense",
+            "cashflow.category.reorder.title.income",
+            "finances.editor.card.bank_label",
+            "cashflow.category.undo.action"
+        ]
+        for key in strictKeys {
+            try assertLocalized(strings: strings, key: key, locales: ["en", "ru", "zh-Hans"])
+            let entryLocalizations = try localizations(for: key, in: strings)
+            let en = try stringUnit(locale: "en", localizations: entryLocalizations, key: key)
+            let ru = try stringUnit(locale: "ru", localizations: entryLocalizations, key: key)
 
-        try assertLocalized(strings: strings, key: "finances.editor.card.bank_label", locales: ["en", "ru", "zh-Hans"])
-        try assertLocalized(strings: strings, key: "cashflow.category.undo.action", locales: ["en", "ru", "zh-Hans"])
+            XCTAssertEqual(en.state, "translated", "`\(key)`: en должен быть в статусе translated.")
+            XCTAssertEqual(ru.state, "translated", "`\(key)`: ru должен быть в статусе translated, не new.")
+            XCTAssertFalse(ru.value.isEmpty, "`\(key)`: ru перевод не должен быть пустым.")
+            XCTAssertNotEqual(ru.value, en.value, "`\(key)`: ru не должен дублировать английский текст.")
+        }
+    }
+
+    /// Регрессия round 2 (N1): ключи, тронутые или добавленные веткой fix/release-2.0-blockers,
+    /// получили en/ru/zh-Hans, но de и es пропустили — немецкий и испанский пользователь видел
+    /// русский текст вместо перевода (String Catalog при отсутствии локали падает на sourceLanguage,
+    /// а не на en). Проверяем весь набор из N1 сразу, чтобы не потерять его при следующей правке.
+    func testKeysTouchedByFixReleaseBranchAreTranslatedInDEAndES() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard
+            let root = jsonObject as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        let keys = [
+            "auth.error.apple_credentials",
+            "auth.error.forbidden",
+            "auth.error.generic",
+            "auth.error.invalid_response",
+            "auth.error.network",
+            "auth.error.offline",
+            "auth.error.post_login_bootstrap",
+            "auth.error.rate_limited",
+            "auth.error.server",
+            "auth.error.session_expired",
+            "auth.error.tls",
+            "auth.error.token_persistence",
+            "auth.error.unavailable",
+            "auth.error.wrong_session_namespace",
+            "common.delete",
+            "cashflow.category.undo.action",
+            "finances.editor.card.bank_label",
+            "credit_card.edit.statement_day_format",
+            "credit_card.edit.due_day_format",
+            "credit_card.edit.grace_days_format"
+        ]
+
+        for key in keys {
+            try assertLocalized(strings: strings, key: key, locales: ["de", "es"])
+            let entryLocalizations = try localizations(for: key, in: strings)
+            let en = try stringUnit(locale: "en", localizations: entryLocalizations, key: key)
+
+            for locale in ["de", "es"] {
+                let translation = try stringUnit(locale: locale, localizations: entryLocalizations, key: key)
+                XCTAssertEqual(translation.state, "translated", "`\(key)`: \(locale) должен быть в статусе translated.")
+                XCTAssertFalse(translation.value.isEmpty, "`\(key)`: \(locale) перевод не должен быть пустым.")
+                XCTAssertNotEqual(translation.value, en.value, "`\(key)`: \(locale) не должен дублировать английский текст.")
+            }
+        }
+    }
+
+    /// Регрессия round 2 (N3): 14 auth.error.* и common.delete не имели zh-Hans вообще —
+    /// китайский пользователь видел ru-фолбэк на экране входа.
+    func testAuthErrorAndCommonDeleteAreTranslatedInZhHans() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard
+            let root = jsonObject as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        let keys = [
+            "auth.error.apple_credentials",
+            "auth.error.forbidden",
+            "auth.error.generic",
+            "auth.error.invalid_response",
+            "auth.error.network",
+            "auth.error.offline",
+            "auth.error.post_login_bootstrap",
+            "auth.error.rate_limited",
+            "auth.error.server",
+            "auth.error.session_expired",
+            "auth.error.tls",
+            "auth.error.token_persistence",
+            "auth.error.unavailable",
+            "auth.error.wrong_session_namespace",
+            "common.delete"
+        ]
+
+        for key in keys {
+            try assertLocalized(strings: strings, key: key, locales: ["zh-Hans"])
+            let entryLocalizations = try localizations(for: key, in: strings)
+            let en = try stringUnit(locale: "en", localizations: entryLocalizations, key: key)
+            let zhHans = try stringUnit(locale: "zh-Hans", localizations: entryLocalizations, key: key)
+
+            XCTAssertEqual(zhHans.state, "translated", "`\(key)`: zh-Hans должен быть в статусе translated.")
+            XCTAssertFalse(zhHans.value.isEmpty, "`\(key)`: zh-Hans перевод не должен быть пустым.")
+            XCTAssertNotEqual(zhHans.value, en.value, "`\(key)`: zh-Hans не должен дублировать английский текст.")
+        }
+    }
+
+    /// Регрессия round 2 (N2): у 29 ключей extractionState стоял "extracted_with_value" при
+    /// исходном языке каталога ru и английском defaultValue в коде — именно эта связка позволяет
+    /// Xcode на следующей синхронизации затереть ru обратно английским текстом (БАГ 7 повторится).
+    /// "manual" защищает от авто-синхронизации; см. сравнение с common.cancel/common.more, у которых
+    /// extractionState всегда был "manual" и регрессии не было.
+    func testExtractionStateIsManualForKeysPatchedThisBranch() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard
+            let root = jsonObject as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        let keys = [
+            "auth.error.apple_credentials", "auth.error.forbidden", "auth.error.generic",
+            "auth.error.invalid_response", "auth.error.network", "auth.error.offline",
+            "auth.error.post_login_bootstrap", "auth.error.rate_limited", "auth.error.server",
+            "auth.error.session_expired", "auth.error.tls", "auth.error.token_persistence",
+            "auth.error.unavailable", "auth.error.wrong_session_namespace",
+            "common.delete",
+            "cashflow.bulk_expense.error.card_not_found", "cashflow.bulk_expense.error.insufficient_funds",
+            "cashflow.bulk_expense.error.invalid_image", "cashflow.bulk_expense.error.no_rows",
+            "cashflow.bulk_expense.error.no_rows_to_save", "cashflow.bulk_expense.error.no_text",
+            "cashflow.editor.transfer.exchange_rate", "cashflow.editor.transfer.rate_custom_invalid",
+            "cashflow.editor.transfer.rate_loading", "cashflow.editor.transfer.rate_mode.current",
+            "cashflow.editor.transfer.rate_mode.custom", "cashflow.editor.transfer.rate_unavailable",
+            "cashflow.editor.transfer.received_amount", "cashflow.editor.transfer.your_rate"
+        ]
+        XCTAssertEqual(keys.count, 29, "Ожидается ровно 29 ключей — состав списка не должен молча меняться.")
+
+        for key in keys {
+            guard
+                let entry = strings[key] as? [String: Any],
+                let extractionState = entry["extractionState"] as? String
+            else {
+                return XCTFail("Missing `\(key)` or its extractionState in `millio/Localizable.xcstrings`.")
+            }
+            XCTAssertEqual(
+                extractionState,
+                "manual",
+                "`\(key)`: extractionState должен быть manual, иначе следующая Xcode-синхронизация может затереть ru английским текстом."
+            )
+        }
+    }
+
+    /// Регрессия round 2 (N5): экран перевода (Cashflow) и bulk-импорт расходов — эти 14 ключей
+    /// не были покрыты НИ ОДНИМ тестом, хотя на `develop` их ru-слот был в статусе "new" и
+    /// дублировал английский текст один в один (тот же паттерн БАГ 7, просто не задетектированный).
+    func testCashflowTransferAndBulkExpenseErrorsAreTranslatedInENAndRU() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard
+            let root = jsonObject as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        let keys = [
+            "cashflow.editor.transfer.exchange_rate",
+            "cashflow.editor.transfer.rate_custom_invalid",
+            "cashflow.editor.transfer.rate_loading",
+            "cashflow.editor.transfer.rate_mode.current",
+            "cashflow.editor.transfer.rate_mode.custom",
+            "cashflow.editor.transfer.rate_unavailable",
+            "cashflow.editor.transfer.received_amount",
+            "cashflow.editor.transfer.your_rate",
+            "cashflow.bulk_expense.error.card_not_found",
+            "cashflow.bulk_expense.error.insufficient_funds",
+            "cashflow.bulk_expense.error.invalid_image",
+            "cashflow.bulk_expense.error.no_rows",
+            "cashflow.bulk_expense.error.no_rows_to_save",
+            "cashflow.bulk_expense.error.no_text"
+        ]
+
+        for key in keys {
+            try assertLocalized(strings: strings, key: key)
+            let entryLocalizations = try localizations(for: key, in: strings)
+            let en = try stringUnit(locale: "en", localizations: entryLocalizations, key: key)
+            let ru = try stringUnit(locale: "ru", localizations: entryLocalizations, key: key)
+
+            XCTAssertEqual(en.state, "translated", "`\(key)`: en должен быть в статусе translated.")
+            XCTAssertEqual(ru.state, "translated", "`\(key)`: ru должен быть в статусе translated, не new.")
+            XCTAssertFalse(ru.value.isEmpty, "`\(key)`: ru перевод не должен быть пустым.")
+            XCTAssertNotEqual(ru.value, en.value, "`\(key)`: ru не должен дублировать английский текст.")
+        }
+    }
+
+    /// Регрессия round 2 (N4): common.more был пустым стабом ("localizations": {}) в каталоге —
+    /// VoiceOver на кнопке-многоточии (CashflowView) зачитывал сырой ключ "common.more" вместо
+    /// текста, потому что ни для одного языка не было значения.
+    func testCommonMoreIsLocalized() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard
+            let root = jsonObject as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        let key = "common.more"
+        try assertLocalized(strings: strings, key: key, locales: ["en", "ru", "zh-Hans", "de", "es"])
+        let entryLocalizations = try localizations(for: key, in: strings)
+        let en = try stringUnit(locale: "en", localizations: entryLocalizations, key: key)
+
+        for locale in ["ru", "zh-Hans", "de", "es"] {
+            let translation = try stringUnit(locale: locale, localizations: entryLocalizations, key: key)
+            XCTAssertEqual(translation.state, "translated", "`\(key)`: \(locale) должен быть в статусе translated.")
+            XCTAssertFalse(translation.value.isEmpty, "`\(key)`: \(locale) перевод не должен быть пустым.")
+            XCTAssertNotEqual(translation.value, en.value, "`\(key)`: \(locale) не должен дублировать английский текст.")
+        }
     }
 
     private static func localizableXcstringsURL() throws -> URL {

@@ -502,6 +502,7 @@ struct CashflowLocalizationRegressionTests {
         let operationSheetsSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowOperationSheets.swift"), encoding: .utf8)
         let scheduledTransactionsSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowScheduledTransactionsView.swift"), encoding: .utf8)
         let categorySettingsSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowCategorySettingsSheet.swift"), encoding: .utf8)
+        let undoBannerSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowCategoryUndoBanner.swift"), encoding: .utf8)
 
         #expect(!viewSource.contains("Text(\"cashflow."))
         #expect(!viewSource.contains(".navigationTitle(\"cashflow."))
@@ -542,6 +543,10 @@ struct CashflowLocalizationRegressionTests {
         // action) used raw `String(localized:defaultValue:)` and always rendered Russian text
         // regardless of the selected app language.
         #expect(!categorySettingsSource.contains("localized: \"cashflow."))
+        // Regression round 2: undo-баннер вызывал L("Undo") — английское слово использовалось
+        // как ключ каталога вместо "cashflow.category.undo.action", в каталоге такого ключа не
+        // было, поэтому NSLocalizedString возвращал сам ключ ("Undo") на ЛЮБОМ языке приложения.
+        #expect(!undoBannerSource.contains("L(\"Undo\")"))
     }
 
     private func sourceURL(_ relativePath: String) throws -> URL {
