@@ -9,14 +9,14 @@ import SwiftUI
 
 /// Транзиентный value-DTO формы «Карта/Счёт» — заменяет легаси-@Model-карту в биндингах формы (6b Ф5c.2).
 /// Форма только собирает поля; реальная запись идёт снаружи через `AccountsCoreService` (create-only —
-/// EDIT-путь и легаси-VM сняты в 6b Ф5c.3/5c.5b). Зеркалит raw/computed-пары легаси-модели
-/// (`cardTypeRaw`/`cardType`, `priorityRaw`/`priority`), чтобы тело формы не менялось.
+/// EDIT-путь и легаси-VM сняты в 6b Ф5c.3/5c.5b). Зеркалит raw/computed-пару легаси-модели
+/// (`cardTypeRaw`/`cardType`), чтобы тело формы не менялось. `priority` (решение владельца 10.09)
+/// удалён: у нового ядра нет поля для него в `AccountAppearance` и ни одного потребителя.
 struct InlineCardDraft {
     var name: String
     var cardNumber: String
     var bank: Bank
     var cardTypeRaw: String
-    var priorityRaw: String
     var currency: String
     var balance: Double
     var creditLimit: Double?
@@ -37,7 +37,6 @@ struct InlineCardDraft {
         cardNumber: String = "",
         bank: Bank = .other,
         cardType: CardType = .debit,
-        priority: CardPriority = .normal,
         currency: String,
         balance: Double = 0.0,
         creditLimit: Double? = nil,
@@ -57,7 +56,6 @@ struct InlineCardDraft {
         self.cardNumber = cardNumber
         self.bank = bank
         self.cardTypeRaw = cardType.rawValue
-        self.priorityRaw = priority.rawValue
         self.currency = currency
         self.balance = balance
         self.creditLimit = creditLimit
@@ -77,11 +75,6 @@ struct InlineCardDraft {
     var cardType: CardType {
         get { CardType(rawValue: cardTypeRaw) ?? .debit }
         set { cardTypeRaw = newValue.rawValue }
-    }
-
-    var priority: CardPriority {
-        get { CardPriority(rawValue: priorityRaw) ?? .normal }
-        set { priorityRaw = newValue.rawValue }
     }
 }
 
@@ -130,7 +123,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             cardNumber: "",
             bank: .other,
             cardType: .debit,
-            priority: .normal,
             currency: SettingsManager.shared.primaryCurrencyCode,
             balance: 0.0
         ))
@@ -220,7 +212,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
 
     private var preferencesObservedForm: some View {
         balanceObservedForm
-        .onChange(of: card.priority) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.isFavorite) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.includeInTotal) { _, _ in onCardDataChanged(currentCard) }
     }
@@ -522,27 +513,19 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         }
     }
     
+    // Решение владельца 10.09: тумблер «Приоритет» (Low/Normal/High) убран из ВСЕХ форм создания —
+    // для новых core-счетов он ничего не хранит (нет поля в `AccountAppearance`) и ни на что не
+    // влияет, декоративный переключатель обманывал пользователя. «Избранное» реально сохраняется
+    // (`AccountAppearancePersister`) — единственный тумблер секции. Заголовок секции («Приоритет»)
+    // не трогаем — тот же паттерн уже был в форме кредита (её `prioritySection` ниже) до этого
+    // фикса, теперь все три формы консистентны друг с другом.
     private var prioritySection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: L("finances.add_account.section.priority"))
             FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle(L("finances.add_account.favorite.single"), isOn: $card.isFavorite)
-                        .tint(AppColors.toggleOnGreen)
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    FinancesRowDivider(leadingPadding: 0)
-                    
-                    HStack(spacing: 12) {
-                        FinancesRadioOption(title: L("finances.priority.low"), isSelected: card.priority == .low) { card.priority = .low }
-                        FinancesRadioOption(title: L("finances.priority.normal"), isSelected: card.priority == .normal) { card.priority = .normal }
-                        FinancesRadioOption(title: L("finances.priority.high"), isSelected: card.priority == .high) { card.priority = .high }
-                    }
-                    
-                    Text(L("finances.add_account.priority.hint"))
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(AppColors.textPrimary.opacity(0.35))
-                }
+                Toggle(L("finances.add_account.favorite.single"), isOn: $card.isFavorite)
+                    .tint(AppColors.toggleOnGreen)
+                    .foregroundStyle(AppColors.textPrimary)
             }
         }
     }
@@ -983,14 +966,13 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @Environment(AppRouter.self) private var router
     @Binding var name: String
     @Binding var selectedCategory: InvestmentCategory
-    let onInvestmentDataChanged: ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void
+    let onInvestmentDataChanged: ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void
     let groupSection: GroupSection
     
     @State private var selectedInvestmentType: InvestmentType = .positive
     @State private var amountText: String = ""
     @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var includeInTotal: Bool = true
-    @State private var selectedPriority: InvestmentPriority = .normal
     @State private var isFavorite: Bool = false
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
@@ -1018,7 +1000,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     init(
         name: Binding<String>,
         selectedCategory: Binding<InvestmentCategory>,
-        onInvestmentDataChanged: @escaping ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void,
+        onInvestmentDataChanged: @escaping ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void,
         marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
@@ -1057,7 +1039,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         return !name.isEmpty
     }
     
-    func getInvestmentData() -> (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)? {
+    func getInvestmentData() -> (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)? {
         if isMarketCategory {
             guard let quantity = InvestmentMarketInputParser.quantity(from: marketQuantityText),
                   quantity >= 0 else {
@@ -1087,7 +1069,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                 effectiveAmount,
                 effectiveCurrency,
                 includeInTotal,
-                selectedPriority,
                 isFavorite,
                 marketData,
                 false
@@ -1106,7 +1087,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             amount,
             selectedCurrency,
             includeInTotal,
-            selectedPriority,
             isFavorite,
             nil,
             true
@@ -1152,7 +1132,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             }
             onInvestmentDataChanged(getInvestmentData())
         }
-        .onChange(of: selectedPriority) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: selectedInvestmentType) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: isFavorite) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: includeInTotal) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
@@ -1563,31 +1542,18 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         }
     }
     
+    // Решение владельца 10.09: см. комментарий у `prioritySection` `InlineCardCreateForm` — тот же фикс.
     private var prioritySection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: L("finances.add_account.section.priority"))
             FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
-                        .tint(AppColors.toggleOnGreen)
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    FinancesRowDivider(leadingPadding: 0)
-                    
-                    HStack(spacing: 12) {
-                        FinancesRadioOption(title: L("finances.priority.low"), isSelected: selectedPriority == .low) { selectedPriority = .low }
-                        FinancesRadioOption(title: L("finances.priority.normal"), isSelected: selectedPriority == .normal) { selectedPriority = .normal }
-                        FinancesRadioOption(title: L("finances.priority.high"), isSelected: selectedPriority == .high) { selectedPriority = .high }
-                    }
-                    
-                    Text(L("finances.add_account.priority.hint"))
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(AppColors.textPrimary.opacity(0.35))
-                }
+                Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
+                    .tint(AppColors.toggleOnGreen)
+                    .foregroundStyle(AppColors.textPrimary)
             }
         }
     }
-    
+
     private func loadAvailableCurrencies() {
         Task {
             isLoadingCurrencies = true
