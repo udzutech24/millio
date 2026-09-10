@@ -127,6 +127,31 @@ final class AIChatPayloadBuilderTests: XCTestCase {
         XCTAssertEqual(AIChatPayloadBuilder.normalizedQuestion(long).count, 1_000)
     }
 
+    /// 600 × 👍🏽 — это 600 `Character`, но 1200 кодпоинтов: раньше вопрос проходил обрезку и получал 400.
+    func testQuestionLimitCountsCodePointsAndKeepsEmojiWhole() {
+        let thumbs = "\u{1F44D}\u{1F3FD}"
+        let question = AIChatPayloadBuilder.normalizedQuestion(String(repeating: thumbs, count: 600))
+
+        XCTAssertLessThanOrEqual(question.unicodeScalars.count, AIChatPayloadBuilder.maxQuestionLength)
+        XCTAssertEqual(question.count, 500)
+        XCTAssertTrue(question.allSatisfy { $0 == Character(thumbs) }, "Эмодзи с модификатором разорван")
+
+        // ZWJ-семья — 7 кодпоинтов на графему: режем по границе графемы, а не ровно по 1000.
+        let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"
+        let familyQuestion = AIChatPayloadBuilder.normalizedQuestion(String(repeating: family, count: 200))
+        XCTAssertLessThanOrEqual(familyQuestion.unicodeScalars.count, AIChatPayloadBuilder.maxQuestionLength)
+        XCTAssertEqual(familyQuestion.count, 142)
+        XCTAssertTrue(familyQuestion.allSatisfy { $0 == Character(family) })
+    }
+
+    func testHistoryTurnLimitCountsCodePoints() {
+        let turn = AIChatMessage(role: .user, text: String(repeating: "\u{1F44D}\u{1F3FD}", count: 3_000))
+        let text = AIChatPayloadBuilder.trimmedHistory([turn]).first?.text ?? ""
+
+        XCTAssertLessThanOrEqual(text.unicodeScalars.count, AIChatPayloadBuilder.maxMessageLength)
+        XCTAssertEqual(text.count, 2_000)
+    }
+
     func testHistoryKeepsLast20TurnsAndCapsTurnText() {
         var messages: [AIChatMessage] = []
         for index in 0..<30 {

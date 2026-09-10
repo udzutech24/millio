@@ -28,14 +28,14 @@ enum AIChatPayloadBuilder {
 
     /// Границы бэкенда (`ChatRequestDto`): вопрос ≤1000, история ≤20 ходов, текст хода ≤4000.
     /// Режем на клиенте — иначе строгая валидация вернёт 400 вместо ответа.
+    /// ⚠️ Длина в кодпоинтах, а не в `Character`: validator.js на сервере считает кодпоинты,
+    /// и вопрос из 👍🏽 (одна графема, два кодпоинта) проходил клиентскую обрезку, но получал 400.
     static let maxQuestionLength = 1_000
     static let maxHistoryMessages = 20
     static let maxMessageLength = 4_000
 
     static func normalizedQuestion(_ raw: String) -> String {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count > maxQuestionLength else { return trimmed }
-        return String(trimmed.prefix(maxQuestionLength))
+        clipped(raw.trimmingCharacters(in: .whitespacesAndNewlines), maxScalars: maxQuestionLength)
     }
 
     /// Последние ходы диалога. Именно последние: обрезать начало дешевле для смысла, чем конец —
@@ -46,7 +46,7 @@ enum AIChatPayloadBuilder {
             .map {
                 AIChatRequest.Message(
                     role: $0.role.rawValue,
-                    text: String($0.text.prefix(maxMessageLength))
+                    text: clipped($0.text, maxScalars: maxMessageLength)
                 )
             }
     }
@@ -101,6 +101,17 @@ enum AIChatPayloadBuilder {
             locale: locale,
             calendar: calendar
         )
+    }
+
+    /// Самый длинный префикс не длиннее `maxScalars` кодпоинтов — целыми графемами, чтобы в конце
+    /// не осталась половина эмодзи.
+    private static func clipped(_ text: String, maxScalars: Int) -> String {
+        guard text.unicodeScalars.count > maxScalars else { return text }
+        var used = 0
+        return String(text.prefix { character in
+            used += character.unicodeScalars.count
+            return used <= maxScalars
+        })
     }
 
     /// Ключ поиска повтора: регистр и лишние пробелы не должны заставлять платить за тот же ответ.
