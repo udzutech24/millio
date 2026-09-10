@@ -714,8 +714,16 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         }
         .onChange(of: name) { _, _ in emitCreditDataChange() }
         .onChange(of: remainingAmountText) { _, newValue in
-            if RemainingAmountAutoSync.shouldStopSyncing(afterEditingTo: newValue, principalText: loanDraft.principalText) {
-                isRemainingAmountAutoSynced = false
+            let resolved = RemainingAmountAutoSync.resolvedText(
+                afterEditingTo: newValue,
+                principalText: loanDraft.principalText,
+                isCurrentlyAutoSynced: isRemainingAmountAutoSynced
+            )
+            isRemainingAmountAutoSynced = resolved.isAutoSynced
+            // Пишем себя же только если решение реально поменяло текст (снэп-бэк на уже известную
+            // сумму кредита) — иначе задели бы `remainingAmountText` на каждый ввод без нужды.
+            if resolved.text != newValue {
+                remainingAmountText = resolved.text
             }
             emitCreditDataChange()
         }

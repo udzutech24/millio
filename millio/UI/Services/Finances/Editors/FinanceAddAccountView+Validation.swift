@@ -49,7 +49,12 @@ extension FinanceAddAccountView {
             return cardData.balance != 0
         case .credit:
             guard let creditData else { return false }
-            return creditData.amount != 0
+            // Читаем `remainingAmount` — то же значение, что уходит в `openingBalance`
+            // (`AccountCreationCoordinator.finalizeObligationAccount`), а не отображаемую сумму
+            // кредита: до фикса подсказка «заполните сумму» могла молчать, хотя счёт создастся
+            // на 0 ₽ (Баг 1 — форма, а не эта подсказка, теперь гарантирует непустой remainingAmount,
+            // но подсказка обязана смотреть на то же поле).
+            return creditData.remainingAmount != 0
         case .investment:
             if selectedInvestmentPreset == .deposit {
                 return (depositData?.amount ?? 0) != 0
