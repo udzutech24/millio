@@ -54,12 +54,18 @@ struct LoanMissedPaymentsCatchUpTests {
             forKey: CashflowScheduledService.dueAutoApplyCheckpointKeyPrefix + scope
         )
 
+        // Снимок, как в приложении: `CashflowViewModel` передаёт `{ self?.state.transactions ?? [] }` —
+        // замороженный на время вызова массив, а не живой fetch. Раньше тест звал `context.fetch`
+        // заново на каждый вызов провайдера, что маскировало Баг 5: догонка внутри цикла обязана
+        // читать базу напрямую (см. фикс в `fetchDueTransactions()`), а не полагаться на провайдер.
+        let transactionsSnapshot = try context.fetch(FetchDescriptor<CashflowTransaction>())
+
         let service = CashflowScheduledService(
             modelContext: context,
             defaults: defaults,
             scopeIdentifier: scope,
             now: { referenceNow },
-            transactionsProvider: { try! context.fetch(FetchDescriptor<CashflowTransaction>()) },
+            transactionsProvider: { transactionsSnapshot },
             onTransactionsMutated: {},
             onResolveExchangeInfo: { _ in CashflowExchangeInfo(rate: nil, rateDate: nil, rateCurrency: nil) },
             onApplyRecurringToCard: { _ in },
@@ -77,5 +83,203 @@ struct LoanMissedPaymentsCatchUpTests {
         // навсегда (чекпойнт безусловно уходит на referenceNow). На старом коде здесь было бы
         // paymentsMade == 1.
         #expect(contract.paymentsMade == 3)
+    }
+
+    /// Решение владельца 10.09: кредитная plan-строка, застрявшая ЗА чекпойнтом из-за старого
+    /// Бага 5 (чекпойнт когда-то ушёл вперёд, а строку никто не применил), всё равно догоняется —
+    /// её нижняя граница окна не проверяется (только `hasAppliedBalanceEffect` и `<= referenceNow`).
+    @Test("Кредитный платёж, застрявший за чекпойнтом, применяется один раз — повтор ничего не меняет")
+    func stuckLoanPaymentCatchesUpAndStaysIdempotent() async throws {
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let context = container.mainContext
+
+        let account = try AccountsCoreService(modelContext: context).createAccount(
+            name: "Автокредит",
+            kind: .loan,
+            currency: "RUB",
+            openingBalance: 1_200_000,
+            date: day(2026, 3, 15)
+        )
+        let contract = try LoanContractStore(context: context).upsert(accountID: account.id) { contract in
+            contract.principal = 1_200_000
+            contract.annualRatePercent = 12
+            contract.termPeriods = 60
+            contract.firstPaymentDate = day(2026, 5, 5)
+            contract.scheduleType = .annuity
+            contract.frequency = .monthly
+        }
+        try context.save()
+
+        let suiteName = "tests.loan.stuck.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let scope = "millio_user_owner"
+        // Чекпойнт УЖЕ ушёл вперёд платёжной строки (05.05) — ровно та ситуация, в которой Баг 5
+        // оставлял платёж замороженным навсегда: без обхода нижней границы `date > previousCheckpoint`
+        // строка 05.05 никогда не попадёт в окно снова.
+        defaults.set(
+            day(2026, 5, 10),
+            forKey: CashflowScheduledService.dueAutoApplyCheckpointKeyPrefix + scope
+        )
+
+        func makeService(now referenceNow: @escaping () -> Date) -> CashflowScheduledService {
+            CashflowScheduledService(
+                modelContext: context,
+                defaults: defaults,
+                scopeIdentifier: scope,
+                now: referenceNow,
+                transactionsProvider: { try! context.fetch(FetchDescriptor<CashflowTransaction>()) },
+                onTransactionsMutated: {},
+                onResolveExchangeInfo: { _ in CashflowExchangeInfo(rate: nil, rateDate: nil, rateCurrency: nil) },
+                onApplyRecurringToCard: { _ in },
+                onApplyDuePlannedEffect: { _ in },
+                appliedNoticeStore: AppliedPlannedNoticeStore(defaults: defaults, scopeIdentifier: scope),
+                noticeAccountNameResolver: { _ in account.name },
+                noticeTitleResolver: { _ in account.name }
+            )
+        }
+
+        // Следующий период (05.06) строго позже referenceNow первого прогона — попадает в окно
+        // только застрявшая строка 05.05, прогресса от обычной догонки здесь нет.
+        let firstRun = day(2026, 5, 20)
+        let didApplyFirst = await makeService(now: { firstRun }).applyDuePlannedTransactionsIfNeeded(referenceNow: firstRun)
+
+        #expect(didApplyFirst)
+        #expect(contract.paymentsMade == 1)
+
+        // Второй прогон — новых due-строк нет (следующий платёж 05.06 ещё не наступил); повторного
+        // списания быть не должно.
+        let secondRun = day(2026, 5, 25)
+        let didApplySecond = await makeService(now: { secondRun }).applyDuePlannedTransactionsIfNeeded(referenceNow: secondRun)
+
+        #expect(!didApplySecond)
+        #expect(contract.paymentsMade == 1)
+    }
+
+    /// Контрольный кейс: L3 расширяет окно ТОЛЬКО для кредитных plan-строк
+    /// (`LoanPlannedPaymentScheduler.isPlannedRow`). Обычная некредитная строка, застрявшая за тем же
+    /// чекпойнтом, по-прежнему не подхватывается — нижнюю границу для неё никто не снимал.
+    @Test("Некредитная строка, застрявшая за чекпойнтом, не подхватывается")
+    func stuckNonLoanTransactionStaysExcluded() async throws {
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let context = container.mainContext
+
+        let stuck = CashflowTransaction(
+            transactionType: .expense,
+            amount: 500,
+            currency: "RUB",
+            transactionDate: day(2026, 5, 5),
+            expenseCategory: .other
+        )
+        context.insert(stuck)
+        try context.save()
+
+        let suiteName = "tests.loan.stuck.nonloan.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let scope = "millio_user_owner"
+        defaults.set(
+            day(2026, 5, 10),
+            forKey: CashflowScheduledService.dueAutoApplyCheckpointKeyPrefix + scope
+        )
+
+        var applyCallCount = 0
+        let referenceNow = day(2026, 5, 20)
+        let service = CashflowScheduledService(
+            modelContext: context,
+            defaults: defaults,
+            scopeIdentifier: scope,
+            now: { referenceNow },
+            transactionsProvider: { try! context.fetch(FetchDescriptor<CashflowTransaction>()) },
+            onTransactionsMutated: {},
+            onResolveExchangeInfo: { _ in CashflowExchangeInfo(rate: nil, rateDate: nil, rateCurrency: nil) },
+            onApplyRecurringToCard: { _ in },
+            onApplyDuePlannedEffect: { _ in applyCallCount += 1 },
+            appliedNoticeStore: AppliedPlannedNoticeStore(defaults: defaults, scopeIdentifier: scope),
+            noticeAccountNameResolver: { _ in "" },
+            noticeTitleResolver: { _ in "" }
+        )
+
+        let didApply = await service.applyDuePlannedTransactionsIfNeeded(referenceNow: referenceNow)
+
+        #expect(!didApply)
+        #expect(applyCallCount == 0)
+        #expect(!stuck.hasAppliedBalanceEffect)
+    }
+
+    /// L2: внутри одного вызова цикл ретраит упавшие некредитные строки, пока проходы дают прогресс
+    /// (прогресс здесь даёт кредитная догонка — 3 прохода на 3 пропущенных периода). Обычная строка,
+    /// применённая на первом проходе, не должна списываться повторно на втором и третьем.
+    @Test("Внутри одного вызова успешно применённая строка не применяется дважды")
+    func successfulRowIsNotReappliedWithinSingleCall() async throws {
+        let container = try AppMigrationPlan.makeInMemoryContainer()
+        let context = container.mainContext
+
+        let account = try AccountsCoreService(modelContext: context).createAccount(
+            name: "Автокредит",
+            kind: .loan,
+            currency: "RUB",
+            openingBalance: 1_200_000,
+            date: day(2026, 3, 15)
+        )
+        let contract = try LoanContractStore(context: context).upsert(accountID: account.id) { contract in
+            contract.principal = 1_200_000
+            contract.annualRatePercent = 12
+            contract.termPeriods = 60
+            // Три пропущенных периода — тот же расклад, что и в `threeMissedPeriodsCatchUpInOneCall`,
+            // но здесь важно, что цикл внутри вызова реально проходит НЕСКОЛЬКО раз.
+            contract.firstPaymentDate = day(2026, 5, 5)
+            contract.scheduleType = .annuity
+            contract.frequency = .monthly
+        }
+        // Обычная due-строка внутри того же окна — должна применяться только на первом проходе.
+        let ordinary = CashflowTransaction(
+            transactionType: .expense,
+            amount: 500,
+            currency: "RUB",
+            transactionDate: day(2026, 5, 10),
+            expenseCategory: .other
+        )
+        context.insert(ordinary)
+        try context.save()
+
+        let referenceNow = day(2026, 8, 1)
+        let suiteName = "tests.loan.noreapply.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let scope = "millio_user_owner"
+        defaults.set(
+            day(2026, 4, 1),
+            forKey: CashflowScheduledService.dueAutoApplyCheckpointKeyPrefix + scope
+        )
+
+        var ordinaryApplyCount = 0
+        let service = CashflowScheduledService(
+            modelContext: context,
+            defaults: defaults,
+            scopeIdentifier: scope,
+            now: { referenceNow },
+            transactionsProvider: { try! context.fetch(FetchDescriptor<CashflowTransaction>()) },
+            onTransactionsMutated: {},
+            onResolveExchangeInfo: { _ in CashflowExchangeInfo(rate: nil, rateDate: nil, rateCurrency: nil) },
+            onApplyRecurringToCard: { _ in },
+            onApplyDuePlannedEffect: { transaction in
+                if transaction.persistentModelID == ordinary.persistentModelID {
+                    ordinaryApplyCount += 1
+                }
+            },
+            appliedNoticeStore: AppliedPlannedNoticeStore(defaults: defaults, scopeIdentifier: scope),
+            noticeAccountNameResolver: { _ in account.name },
+            noticeTitleResolver: { _ in account.name }
+        )
+
+        let didApply = await service.applyDuePlannedTransactionsIfNeeded(referenceNow: referenceNow)
+
+        #expect(didApply)
+        #expect(contract.paymentsMade == 3)
+        // Ключевая проверка L2: несмотря на 3 прохода цикла (по одному на каждый пропущенный
+        // платёж), обычная строка применилась РОВНО один раз.
+        #expect(ordinaryApplyCount == 1)
+        #expect(ordinary.hasAppliedBalanceEffect)
     }
 }

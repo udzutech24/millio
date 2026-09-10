@@ -412,7 +412,14 @@ final class CashflowScheduledService {
         }
 
         func fetchDueTransactions() -> [CashflowTransaction] {
-            transactionsProvider()
+            // Прямой fetch, а не `transactionsProvider()`: провайдер в приложении отдаёт
+            // замороженный снимок `state.transactions`, обновляемый только после выхода из этой
+            // функции (см. `onTransactionsMutated`). Внутри цикла ниже `LoanPlannedPaymentScheduler
+            // .sync` успевает сохранить в базу новую plan-строку на следующий пропущенный платёж —
+            // снимок её не видит, и догонка останавливается после первого платежа. Тот же обход
+            // уже применён в `generateRecurringTransactionsIfNeeded()` выше.
+            let allTransactions = (try? modelContext.fetch(FetchDescriptor<CashflowTransaction>())) ?? []
+            return allTransactions
                 .filter { transaction in
                     guard transaction.transactionType == .income || transaction.transactionType == .expense else {
                         return false
@@ -426,8 +433,14 @@ final class CashflowScheduledService {
                     guard transaction.affectsCardBalance
                         || LoanPlannedPaymentScheduler.isPlannedRow(transaction) else { return false }
                     guard !transaction.hasAppliedBalanceEffect else { return false }
+                    guard transaction.transactionDate <= referenceNow else { return false }
+                    // Решение владельца 10.09: кредитная plan-строка, застрявшая ЗА чекпойнтом из-за
+                    // старого бага снимка (см. комментарий выше), всё равно догоняется — нижнюю
+                    // границу окна для неё не проверяем. Идемпотентность держится на
+                    // `hasAppliedBalanceEffect` двумя строками выше, а не на границе окна.
+                    // Некредитные строки эту нижнюю границу сохраняют как прежде.
+                    if LoanPlannedPaymentScheduler.isPlannedRow(transaction) { return true }
                     return transaction.transactionDate > previousCheckpoint
-                        && transaction.transactionDate <= referenceNow
                 }
                 .sorted { $0.transactionDate < $1.transactionDate }
         }
