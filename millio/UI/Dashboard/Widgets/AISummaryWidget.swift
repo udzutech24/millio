@@ -9,6 +9,7 @@ import SwiftUI
 /// считает и грузит текст `AIPeriodSummaryViewModel` на уровне таба.
 struct AISummaryCardModel: Equatable {
     var periodTitle: String = ""
+    /// Заголовок итогов, а без него — первая заметка (`AIPeriodSummaryText.leadLine`).
     var headline: String?
     var income: Double = 0
     var expense: Double = 0

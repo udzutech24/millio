@@ -141,6 +141,36 @@ final class AIPeriodSummaryViewModelTests: XCTestCase {
         XCTAssertEqual(client.callCount, 1)
     }
 
+    /// Бэкенд выбрасывает заголовок с непроверенным числом, но заметки оставляет:
+    /// `{"headline": null, "observations": [...]}` — это текст, а не «пока только цифры».
+    func testNullHeadlineWithObservationsIsShownAndCached() async throws {
+        let json = #"{"headline":null,"observations":[{"text":"Расходы на кафе выросли.","kind":"growth"}]}"#
+        let decoded = try JSONDecoder().decode(AIPeriodSummaryText.self, from: Data(json.utf8))
+        XCTAssertNil(decoded.headline)
+        XCTAssertFalse(decoded.isEmpty)
+        XCTAssertEqual(decoded.leadLine, "Расходы на кафе выросли.", "Карточка дашборда показывает заметку, а не заглушку")
+
+        let cache = makeCache()
+        let viewModel = makeViewModel(client: SpyClient(result: .success(decoded)), cache: cache)
+        viewModel.refresh()
+        await waitUntil { viewModel.text != nil }
+
+        XCTAssertEqual(viewModel.text?.observations.count, 1)
+        XCTAssertFalse(viewModel.isTextUnavailable)
+
+        // Заметки без заголовка — полноценный ответ: при следующем открытии они берутся из кэша.
+        let reopened = makeViewModel(client: SpyClient(result: .failure(AICopilotClientError.transport)), cache: cache)
+        reopened.refresh()
+        XCTAssertEqual(reopened.text, decoded)
+    }
+
+    func testLeadLinePrefersHeadlineAndIsNilOnlyWhenNothingToSay() {
+        let observation = AIPeriodObservation(text: "Доход ровный.", kind: .steady)
+        XCTAssertEqual(AIPeriodSummaryText(headline: "Месяц в плюсе", observations: [observation]).leadLine, "Месяц в плюсе")
+        XCTAssertEqual(AIPeriodSummaryText(headline: "", observations: [observation]).leadLine, "Доход ровный.")
+        XCTAssertNil(AIPeriodSummaryText(headline: nil, observations: []).leadLine)
+    }
+
     // MARK: - Кэш
 
     func testCacheHitShowsTextWithoutTouchingNetwork() async {

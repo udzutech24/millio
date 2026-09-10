@@ -149,6 +149,14 @@ struct AIPeriodSummaryText: Codable, Equatable, Sendable {
 
     var isEmpty: Bool { (headline?.isEmpty ?? true) && observations.isEmpty }
 
+    /// Строка карточки дашборда: заголовок, а без него — первая заметка. Бэкенд выбрасывает заголовок
+    /// с непроверенным числом, но заметки оставляет — заглушка «пока только цифры» при живых
+    /// заметках врала бы. `nil` — только когда нет ни того, ни другого.
+    var leadLine: String? {
+        if let headline, !headline.isEmpty { return headline }
+        return observations.first?.text
+    }
+
     init(headline: String?, observations: [AIPeriodObservation]) {
         self.headline = headline
         self.observations = observations

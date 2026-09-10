@@ -661,7 +661,7 @@ private struct DashboardTabHostView: View {
     private var aiSummaryCardModel: AISummaryCardModel {
         AISummaryCardModel(
             periodTitle: AIPeriodSummaryFormatting.periodTitle(for: aiSummaryViewModel.period),
-            headline: aiSummaryViewModel.text?.headline,
+            headline: aiSummaryViewModel.text?.leadLine,
             income: aiSummaryViewModel.figures.income,
             expense: aiSummaryViewModel.figures.expense,
             net: aiSummaryViewModel.figures.net,
