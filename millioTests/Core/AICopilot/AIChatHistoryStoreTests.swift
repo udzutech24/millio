@@ -58,6 +58,42 @@ final class AIChatHistoryStoreTests: XCTestCase {
         XCTAssertTrue(store.load().isEmpty)
     }
 
+    func testClearAllForgetsEveryScopeAndKeepsUnrelatedKeys() {
+        let defaults = makeDefaults()
+        let owner = AIChatHistoryStore(defaults: defaults, storageKey: AIChatHistoryStore.storageKey(forScopeKey: "millio_user_abc"))
+        let guest = AIChatHistoryStore(defaults: defaults, storageKey: AIChatHistoryStore.storageKey(forScopeKey: "millio_guest"))
+        owner.save([AIChatMessage(role: .user, text: "личное")])
+        guest.save([AIChatMessage(role: .user, text: "гостевое")])
+        defaults.set("keep", forKey: "unrelated.key")
+
+        AIChatHistoryStore.clearAll(defaults: defaults)
+
+        XCTAssertTrue(owner.load().isEmpty)
+        XCTAssertTrue(guest.load().isEmpty)
+        XCTAssertEqual(defaults.string(forKey: "unrelated.key"), "keep")
+    }
+
+    /// Ключ гостя общий для всех гостевых сессий устройства: без очистки на выходе следующий гость
+    /// открыл бы чат с перепиской предыдущего.
+    @MainActor
+    func testLeavingGuestModeForgetsGuestConversation() {
+        let settings = SettingsManager.shared
+        let originalGuestFlag = settings.isGuestModeEnabled
+        defer { settings.isGuestModeEnabled = originalGuestFlag }
+
+        let guest = AIChatHistoryStore(
+            storageKey: AIChatHistoryStore.storageKey(forScopeKey: DataScope.guest.storeConfigurationName)
+        )
+        let appState = AppState()
+        appState.isGuestModeEnabled = true
+        guest.save([AIChatMessage(role: .user, text: "вопрос первого гостя")])
+        XCTAssertFalse(guest.load().isEmpty)
+
+        appState.isGuestModeEnabled = false
+
+        XCTAssertTrue(guest.load().isEmpty)
+    }
+
     func testCorruptedPayloadLoadsAsEmpty() {
         let defaults = makeDefaults()
         defaults.set(Data("garbage".utf8), forKey: "k")

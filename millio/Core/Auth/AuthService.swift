@@ -1555,12 +1555,13 @@ final class AuthManager {
 
     /// Терминальный выход из сессии (явный logout ИЛИ 401, восстановление невозможно):
     /// сбрасывает auth-состояние, забывает user-скоуп в ScopeCache (иначе resilience-блок
-    /// synchronizeDataScope переоткроет user-стор) и триггерит ребинд данных на guest через
-    /// onSessionChanged. Транзиентные сетевые ошибки сюда НЕ попадают — они сохраняют сессию
-    /// (см. shouldKeepSessionOnRestoreFailure), скоуп не меняется (риск №4).
+    /// synchronizeDataScope переоткроет user-стор), забывает переписку с millio и триггерит ребинд
+    /// данных на guest через onSessionChanged. Транзиентные сетевые ошибки сюда НЕ попадают — они
+    /// сохраняют сессию (см. shouldKeepSessionOnRestoreFailure), скоуп не меняется (риск №4).
     private func finalizeSignOut() async {
         clearState()
         ScopeCache.clearUserID()
+        AIChatHistoryStore.clearAll()
         await onSessionChanged?(nil)
     }
 

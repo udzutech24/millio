@@ -87,6 +87,9 @@ final class AppState {
     var isGuestModeEnabled: Bool = false {
         didSet {
             SettingsManager.shared.isGuestModeEnabled = isGuestModeEnabled
+            // Конец гостевой сессии (выход из гостя или вход в аккаунт). Гостевой стор общий для
+            // всех гостей устройства — переписку с millio следующему гостю оставлять нельзя.
+            if oldValue, !isGuestModeEnabled { AIChatHistoryStore.clearAll() }
         }
     }
 

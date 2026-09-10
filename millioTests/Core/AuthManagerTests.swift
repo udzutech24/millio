@@ -226,6 +226,24 @@ struct AuthManagerTests {
         ScopeCache.clearUserID()
     }
 
+    // Переписка с millio пересказывает цифры владельца — после выхода на устройстве её быть не должно.
+    @Test("logout forgets millio chat history on the device")
+    func testLogoutForgetsAIChatHistory() async {
+        let service = LogoutTrackingAuthService()
+        let manager = AuthManager(service: service, toastCenter: ToastCenter())
+        let history = AIChatHistoryStore(
+            storageKey: AIChatHistoryStore.storageKey(forScopeKey: "millio_user_chat_logout")
+        )
+        history.save([AIChatMessage(role: .user, text: "личное")])
+        #expect(!history.load().isEmpty)
+        manager.status = .authenticated
+        manager.currentUser = .fixture
+
+        await manager.logout()
+
+        #expect(history.load().isEmpty)
+    }
+
     @Test("logout proceeds while busy if session is authenticated")
     func testLogoutProceedsWhenBusyAuthenticated() async {
         let service = LogoutTrackingAuthService()

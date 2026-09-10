@@ -55,6 +55,15 @@ final class AIChatHistoryStore {
         defaults.removeObject(forKey: storageKey)
     }
 
+    /// Забывает переписку всех scope устройства — на конце сессии (выход из аккаунта или из гостя).
+    /// Все ключи, а не активный: ключ гостя общий для всех гостей устройства, и без очистки следующий
+    /// гость прочитал бы чужой диалог — тот же класс утечки, что был с бэкапами в гостевом режиме.
+    static func clearAll(defaults: UserDefaults = .standard) {
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(defaultStorageKey) {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
     /// Оставляем последние ходы и срезаем «висящий» ответ в начале: вопрос к нему уже выпал,
     /// и модель получила бы реплику без контекста.
     private func trimmed(_ messages: [AIChatMessage]) -> [AIChatMessage] {
