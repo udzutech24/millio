@@ -4,6 +4,13 @@ import UniformTypeIdentifiers
 
 struct AccountStatementCreateDraft {
     let createTemplate: CreateProductCommand
+    // Баг 2, седьмой путь создания: этот онбординг — единственный путь создания счёта, который
+    // не проходит через `AccountCreationCoordinator` (у него свой `apply()` с импортом операций
+    // выпиской), поэтому оформление приходится нести отдельно и применять так же, как остальные
+    // 6 точек в `AccountCreationCoordinator.swift`.
+    var isFavorite: Bool = false
+    var iconName: String?
+    var tintHex: String?
 
     func command(openingBalance: Decimal, asOf: Date) -> CreateProductCommand {
         CreateProductCommand(
@@ -404,6 +411,17 @@ struct AccountStatementOnboardingFlow: View {
                 statementPeriodTo: to,
                 onboardingID: command.accountID.uuidString
             ))
+            // `apply()` строит счёт и импортированные операции в одном графе фабрики (см. её
+            // doc-комментарий: «committed exactly once») — если мы дошли сюда без throw, счёт уже
+            // закоммичен целиком, откатов на полпути нет. Тот же паттерн, что 6 остальных точек
+            // создания в `AccountCreationCoordinator.swift`.
+            AccountAppearancePersister.persistIfNeeded(
+                context: modelContext,
+                accountID: result.accountID,
+                isFavorite: draft.isFavorite,
+                iconName: draft.iconName,
+                tintHex: draft.tintHex
+            )
             controller.markCompleted(result: .init(
                 insertedFingerprints: result.insertedFingerprints,
                 skippedFingerprints: result.skippedFingerprints

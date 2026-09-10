@@ -16,6 +16,10 @@ extension CashflowViewModel {
     ) async -> [String: CashflowAccountPickerDetails] {
         let today = now()
         var result: [String: CashflowAccountPickerDetails] = [:]
+        // Один fetch на экран, не на строку — тот же паттерн, что `FinanceViewModel.accountAppearances`.
+        // Без него core-счета в пикере всегда рисовались вычисляемым дефолтом, даже если пользователь
+        // явно задал иконку/цвет в списке счетов.
+        let appearances = (try? AccountAppearanceStore(context: modelContext).loadSnapshots()) ?? [:]
 
         for (index, account) in accounts.enumerated() {
             if index > 0, index.isMultiple(of: 10) {
@@ -36,6 +40,7 @@ extension CashflowViewModel {
                     )
                     result[account.id] = CashflowAccountPickerDetailsFactory.details(
                         for: coreAccount,
+                        appearance: appearances[coreAccount.id],
                         balance: balance
                     )
                 }

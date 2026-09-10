@@ -48,7 +48,14 @@ extension FinanceAddAccountView {
         guard validateEntitlementsForSave(),
               let kind = newCoreMoneyKindForCurrentSelection,
               let command = try? moneyCreateCommand(kind: kind) else { return }
-        statementDraft = AccountStatementCreateDraft(createTemplate: command)
+        // Ф5 уже сбрасывает брошенную форму при смене типа (`onChange(of: selectedAccountType)`),
+        // так что `cardData?.x ?? investmentData?.x` здесь однозначен — та же пара, что в CoreCreate.
+        statementDraft = AccountStatementCreateDraft(
+            createTemplate: command,
+            isFavorite: cardData?.isFavorite ?? investmentData?.isFavorite ?? false,
+            iconName: draftIconName,
+            tintHex: draftIconColor
+        )
         showStatementOnboarding = true
     }
 

@@ -840,6 +840,10 @@ final class FinanceViewModel: ViewModelProtocol {
                 // Без этого снапшот держит: архивный счёт как ghost-строку, устаревший бакет
                 // группы после смены группы, ВИСЯЧУЮ ссылку на физически удалённый @Model.
                 self.loadCoreEntities()
+                // Баг 2: создание счёта коммитит `AccountAppearance` (см. `AccountAppearancePersister`),
+                // но этот канал EventBus обновлял только списки счетов/групп — свежая строка
+                // рисовалась дефолтным видом до следующего полного `loadGroups()` (смена вкладки).
+                self.loadAccountAppearances()
                 self.scheduleBackgroundTask { viewModel in
                     await viewModel.refreshGroupTotalsAndAmounts()
                 }

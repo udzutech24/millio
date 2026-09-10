@@ -607,4 +607,30 @@ struct FinanceViewModelCoreEntitiesTests {
         #expect(!vm.ungroupedAccounts().isEmpty)
         #expect(!vm.isUngroupedSectionRenderEmpty())
     }
+
+    // MARK: - Баг 2 (третий путь): оформление свежесозданного счёта видно в списке БЕЗ полного loadGroups()
+
+    /// `AccountCreationCoordinator` коммитит `AccountAppearance` синхронно с созданием счёта
+    /// (см. `AccountAppearancePersister`), но строки списка читают `viewModel.accountAppearances` —
+    /// КЭШ, который раньше обновлялся только в `loadGroups()`/`saveAppearance`. После создания счёта
+    /// срабатывает именно `investmentsUpdated` (не полный `loadGroups()`) — без явного
+    /// `loadAccountAppearances()` в его обработчике свежая звезда молчала до смены вкладки.
+    @Test("Баг 2: investmentsUpdated обновляет accountAppearances — оформление свежего счёта видно сразу")
+    func investmentsUpdatedEventRefreshesAppearanceCache() throws {
+        let ctx = try makeContext()
+        let coreService = AccountsCoreService(modelContext: ctx)
+        let account = try coreService.createAccount(name: "Со звездой", kind: .debitCard, currency: "RUB", openingBalance: 1_000, group: nil)
+        try ctx.save()
+
+        let vm = makeViewModel(ctx)
+        vm.handle(.loadGroups) // первичная загрузка — accountAppearances ещё пуст для этого счёта
+        #expect(vm.appearance(for: account) == nil)
+
+        // Как `AccountCreationCoordinator` для НОВОГО счёта — здесь просто эмулируем задержку
+        // между коммитом оформления и события, характерную для create-пути.
+        AccountAppearancePersister.persistIfNeeded(context: ctx, accountID: account.id, isFavorite: true, iconName: nil, tintHex: nil)
+        EventBus.shared.publish(FinanceEvent.investmentsUpdated) // как CoreCreate.swift после создания
+
+        #expect(vm.appearance(for: account)?.isFavorite == true)
+    }
 }

@@ -167,6 +167,27 @@ struct CashflowAccountPickerTests {
         #expect(details[phantom.id] == nil, "Нет данных — прочерк в UI, а не «0 ₽»")
     }
 
+    /// F6: `.coreAccount` ветка `accountPickerDetails` раньше всегда передавала `appearance: nil` —
+    /// пикер игнорировал явно заданную пользователем иконку/цвет из `AccountAppearance` и рисовал
+    /// вычисляемый дефолт (монограмму) даже при сохранённом оформлении.
+    @Test("Core-счёт с явным оформлением показывает его в пикере, а не дефолтную монограмму")
+    func coreAccountAppearanceIsUsedInPickerDetails() async throws {
+        let ctx = try makeContext()
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(name: "Оформленный", kind: .debitCard, currency: "RUB", openingBalance: 1_000)
+        try ctx.save()
+        try AccountAppearanceStore(context: ctx).setAppearance(accountID: account.id, iconName: "banknote", tintHex: "#00FF00")
+        try ctx.save()
+
+        let viewModel = makeViewModel(ctx)
+        let resolved = options(cards: [], coreAccounts: [account])
+        let details = await viewModel.accountPickerDetails(for: resolved)
+
+        let coreRow = try #require(details["core:\(account.id.uuidString)"])
+        #expect(coreRow.iconName == "banknote")
+        #expect(coreRow.iconColorHex == "#00FF00")
+    }
+
     @Test("Кредитка показывает доступный лимит, а не сумму долга")
     func creditCardShowsAvailableLimit() throws {
         let ctx = try makeContext()

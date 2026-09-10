@@ -29,6 +29,19 @@ enum AccountAppearancePersister {
                 $0.iconName = iconName
                 $0.tintHex = tintHex
             }
+            // `upsert` только вставляет в контекст, не коммитит — в отличие от соседних
+            // `FinanceViewModel.saveAppearance`/`toggleFavorite`, которые сами вызывают
+            // `modelContext.save()`. Без этого звезда/иконка молча не переживали relaunch,
+            // хотя счёт (сохранённый отдельным `save()` в `AccountProductFactory`) — переживал.
+            //
+            // Инвариант, на который это опирается: на момент вызова `persistIfNeeded` счёт из
+            // `command` УЖЕ закоммичен фабрикой (`AccountsCoreSaveBoundary` внутри `factory.create`),
+            // и между этим `create` и данным вызовом в `AccountCreationCoordinator` больше ничего
+            // в контекст не вставляется. `save()` здесь коммитит ВЕСЬ контекст, а не только эту
+            // строку — если когда-нибудь между `create` и `persistIfNeeded` появится ещё один
+            // insert (для другой фичи), этот `save()` зафиксирует его раньше, чем рассчитывал
+            // вызывающий код. Меняя это соседство — проверь этот комментарий.
+            try context.save()
         } catch {
             AppLogger.log(.error, category: "AccountsCore", "Не удалось сохранить оформление счёта нового ядра: \(error)")
         }
