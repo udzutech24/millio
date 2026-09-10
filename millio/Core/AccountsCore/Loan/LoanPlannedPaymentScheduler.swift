@@ -196,11 +196,16 @@ enum LoanPlannedPaymentScheduler {
         transaction.amount = NSDecimalNumber(decimal: next.principal + next.interest).doubleValue
 
         do {
+            // Событие ленты датируется не позже реального момента оплаты: `transactionDate` у
+            // досрочного платежа лежит в будущем, а `AccountBalanceEngine.balanceAt(on: Date())`
+            // (витрина, кламп досрочки) отбрасывает события с будущей датой — без `min` долг на
+            // экране не уменьшался бы сразу после списания. Для просроченных/автоприменённых
+            // платежей `transactionDate` уже в прошлом, `min` — no-op.
             try LoanPaymentRecorder(modelContext: context).recordScheduledPayment(
                 account: account,
                 principalPart: next.principal,
                 interestPart: next.interest,
-                date: transaction.transactionDate,
+                date: min(transaction.transactionDate, Date()),
                 cashflowReferenceKey: key
             )
         } catch {

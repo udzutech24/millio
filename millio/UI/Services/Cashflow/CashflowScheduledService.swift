@@ -411,28 +411,25 @@ final class CashflowScheduledService {
             defaults.set(previousCheckpoint, forKey: dueAutoApplyCheckpointKey)
         }
 
-        let dueTransactions = transactionsProvider()
-            .filter { transaction in
-                guard transaction.transactionType == .income || transaction.transactionType == .expense else {
-                    return false
+        func fetchDueTransactions() -> [CashflowTransaction] {
+            transactionsProvider()
+                .filter { transaction in
+                    guard transaction.transactionType == .income || transaction.transactionType == .expense else {
+                        return false
+                    }
+                    guard transaction.recurrenceRule == .none else { return false }
+                    // Плановый платёж по кредиту баланс счёта-источника не двигает
+                    // (`affectsCardBalance == false`: с какого счёта уйдут деньги, кредит не знает),
+                    // но применить его обязаны — долг уменьшает `LoanPaymentRecorder`, а не
+                    // balance-эффект. Фактические проводки платежа под этот признак не попадают:
+                    // у них другой префикс ключа.
+                    guard transaction.affectsCardBalance
+                        || LoanPlannedPaymentScheduler.isPlannedRow(transaction) else { return false }
+                    guard !transaction.hasAppliedBalanceEffect else { return false }
+                    return transaction.transactionDate > previousCheckpoint
+                        && transaction.transactionDate <= referenceNow
                 }
-                guard transaction.recurrenceRule == .none else { return false }
-                // Плановый платёж по кредиту баланс счёта-источника не двигает
-                // (`affectsCardBalance == false`: с какого счёта уйдут деньги, кредит не знает),
-                // но применить его обязаны — долг уменьшает `LoanPaymentRecorder`, а не
-                // balance-эффект. Фактические проводки платежа под этот признак не попадают:
-                // у них другой префикс ключа.
-                guard transaction.affectsCardBalance
-                    || LoanPlannedPaymentScheduler.isPlannedRow(transaction) else { return false }
-                guard !transaction.hasAppliedBalanceEffect else { return false }
-                return transaction.transactionDate > previousCheckpoint
-                    && transaction.transactionDate <= referenceNow
-            }
-            .sorted { $0.transactionDate < $1.transactionDate }
-
-        guard !dueTransactions.isEmpty else {
-            defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
-            return false
+                .sorted { $0.transactionDate < $1.transactionDate }
         }
 
         // Провал применения хотя бы одной операции запрещает двигать чекпойнт: иначе она уходит
@@ -440,63 +437,89 @@ final class CashflowScheduledService {
         // Пропуск по политике закрытого месяца — не провал: это осознанный отказ, и удержание
         // чекпойнта из-за него зациклило бы ретраи навсегда.
         var hasFailedApply = false
+        var foundAnyDue = false
 
-        // Буфер сводки согласован с логикой провалов: сюда попадают только операции, чей apply
-        // прошёл без ошибки. Провалившаяся остаётся внутри окна (чекпойнт не двигается) и попадёт
-        // в журнал тем прогоном, в котором реально применится; повтора по уже применённым не будет —
-        // их отсекает hasAppliedBalanceEffect. Пропуск по политике закрытого месяца в буфер не идёт.
-        var pendingNotices: [AppliedPlannedEntry] = []
+        // Плановый платёж по кредиту пересоздаёт РОВНО ОДНУ новую строку на следующий период
+        // (`LoanPlannedPaymentScheduler.sync`), и эта строка физически появляется в базе только
+        // ПОСЛЕ apply текущей — в уже собранный список `dueTransactions` она попасть не может.
+        // При пропуске 2+ периодов вторая и последующие missed-строки остаются с прошлой датой,
+        // а окно [previousCheckpoint, referenceNow] фиксировано — значит на них нужен ещё один
+        // проход с ТЕМ ЖЕ чекпойнтом. Цикл сходится: sync() даёт не больше одной новой строки на
+        // счёт за проход, а число пропущенных периодов конечно.
+        while true {
+            let dueTransactions = fetchDueTransactions()
+            guard !dueTransactions.isEmpty else { break }
+            foundAnyDue = true
 
-        for transaction in dueTransactions {
-            guard (try? CashflowMonthMutationPolicy(modelContext: modelContext).validate(
-                .scheduledApply,
-                date: transaction.transactionDate
-            )) != nil else {
-                continue
-            }
-            do {
-                if LoanPlannedPaymentScheduler.isPlannedRow(transaction) {
-                    // Кредит применяется своим путём: тело — в ленту счёта, проценты — в договор,
-                    // план сдвигается на следующий платёж. Общий balance-эффект списал бы расход,
-                    // не тронув долг.
-                    try LoanPlannedPaymentScheduler.applyPlannedPayment(transaction, context: modelContext)
-                } else {
-                    try await onApplyDuePlannedEffect(transaction)
+            // Буфер сводки согласован с логикой провалов: сюда попадают только операции, чей apply
+            // прошёл без ошибки. Провалившаяся остаётся внутри окна (чекпойнт не двигается) и попадёт
+            // в журнал тем прогоном, в котором реально применится; повтора по уже применённым не будет —
+            // их отсекает hasAppliedBalanceEffect. Пропуск по политике закрытого месяца в буфер не идёт.
+            var pendingNotices: [AppliedPlannedEntry] = []
+
+            for transaction in dueTransactions {
+                guard (try? CashflowMonthMutationPolicy(modelContext: modelContext).validate(
+                    .scheduledApply,
+                    date: transaction.transactionDate
+                )) != nil else {
+                    continue
                 }
-                transaction.hasAppliedBalanceEffect = true
-                transaction.updatedAt = referenceNow
-                pendingNotices.append(
-                    makeAppliedNotice(for: transaction, kind: .scheduled, appliedAt: referenceNow)
-                )
-            } catch {
-                hasFailedApply = true
-                AppLogger.log(
-                    .error,
-                    category: "Cashflow",
-                    "Failed to auto-apply due planned transaction: \(error.localizedDescription)"
-                )
+                do {
+                    if LoanPlannedPaymentScheduler.isPlannedRow(transaction) {
+                        // Кредит применяется своим путём: тело — в ленту счёта, проценты — в договор,
+                        // план сдвигается на следующий платёж. Общий balance-эффект списал бы расход,
+                        // не тронув долг.
+                        try LoanPlannedPaymentScheduler.applyPlannedPayment(transaction, context: modelContext)
+                    } else {
+                        try await onApplyDuePlannedEffect(transaction)
+                    }
+                    transaction.hasAppliedBalanceEffect = true
+                    transaction.updatedAt = referenceNow
+                    pendingNotices.append(
+                        makeAppliedNotice(for: transaction, kind: .scheduled, appliedAt: referenceNow)
+                    )
+                } catch {
+                    hasFailedApply = true
+                    AppLogger.log(
+                        .error,
+                        category: "Cashflow",
+                        "Failed to auto-apply due planned transaction: \(error.localizedDescription)"
+                    )
+                }
             }
+
+            do {
+                try modelContext.save()
+                commitAppliedNotices(pendingNotices)
+            } catch {
+                // Сохранение не прошло — буфер сводки выбрасывается целиком (см. комментарий выше).
+                AppLogger.log(.error, category: "Cashflow", "Failed to save due planned auto-apply: \(error.localizedDescription)")
+                return false
+            }
+
+            // За этот проход не применилось ничего нового (либо всё отбила политика закрытого
+            // месяца, либо всё упало) — новых строк ждать не от чего, следующий проход увидит тот
+            // же набор и зациклится. Выходим по отсутствию ПРОГРЕССА, а не по hasFailedApply:
+            // policy-skip не выставляет hasFailedApply, но и прогресса тоже не даёт.
+            if pendingNotices.isEmpty { break }
         }
 
-        do {
-            try modelContext.save()
-            commitAppliedNotices(pendingNotices)
-            // Повторный проход по успешно применённым безопасен — их отсекает hasAppliedBalanceEffect.
-            if hasFailedApply {
-                AppLogger.log(
-                    .warning,
-                    category: "Cashflow",
-                    "Due auto-apply checkpoint kept at previous value after failed apply"
-                )
-            } else {
-                defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
-            }
-            return true
-        } catch {
-            // Сохранение не прошло — буфер сводки выбрасывается целиком (см. комментарий выше).
-            AppLogger.log(.error, category: "Cashflow", "Failed to save due planned auto-apply: \(error.localizedDescription)")
+        guard foundAnyDue else {
+            defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
             return false
         }
+
+        // Повторный проход по успешно применённым безопасен — их отсекает hasAppliedBalanceEffect.
+        if hasFailedApply {
+            AppLogger.log(
+                .warning,
+                category: "Cashflow",
+                "Due auto-apply checkpoint kept at previous value after failed apply"
+            )
+        } else {
+            defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
+        }
+        return true
     }
 
     // MARK: - Private: Applied Notice Journal
