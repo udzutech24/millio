@@ -35,10 +35,9 @@ enum AuthErrorMapper {
         guard let authError = error as? AuthServiceError else {
             return AuthErrorPresentation(
                 category: .unknown,
-                message: String(
-                    localized: "auth.error.generic",
-                    defaultValue: "Could not complete sign in. Try again.",
-                    comment: "Fallback auth error toast"
+                message: L(
+                    "auth.error.generic",
+                    defaultValue: "Could not complete sign in. Try again."
                 ),
                 shouldPresentToast: true
             )
@@ -48,20 +47,18 @@ enum AuthErrorMapper {
         case .invalidConfiguration, .unconfigured:
             return .init(
                 category: .serviceUnavailable,
-                message: String(
-                    localized: "auth.error.unavailable",
-                    defaultValue: "Sign in is temporarily unavailable.",
-                    comment: "Auth service unavailable toast"
+                message: L(
+                    "auth.error.unavailable",
+                    defaultValue: "Sign in is temporarily unavailable."
                 ),
                 shouldPresentToast: true
             )
         case .invalidIdentityToken, .unexpectedAuthorizationCredential:
             return .init(
                 category: .appleCredentials,
-                message: String(
-                    localized: "auth.error.apple_credentials",
-                    defaultValue: "Could not verify your Apple account. Try again.",
-                    comment: "Invalid Apple credentials toast"
+                message: L(
+                    "auth.error.apple_credentials",
+                    defaultValue: "Could not verify your Apple account. Try again."
                 ),
                 shouldPresentToast: true
             )
@@ -69,20 +66,18 @@ enum AuthErrorMapper {
             if operation == .appleSignIn {
                 return .init(
                     category: .appleCredentials,
-                    message: String(
-                        localized: "auth.error.apple_credentials",
-                        defaultValue: "Could not verify your Apple account. Try again.",
-                        comment: "Invalid Apple credentials toast"
+                    message: L(
+                        "auth.error.apple_credentials",
+                        defaultValue: "Could not verify your Apple account. Try again."
                     ),
                     shouldPresentToast: true
                 )
             }
             return .init(
                 category: .unauthorized,
-                message: String(
-                    localized: "auth.error.session_expired",
-                    defaultValue: "Your session expired. Sign in again.",
-                    comment: "Expired auth session toast"
+                message: L(
+                    "auth.error.session_expired",
+                    defaultValue: "Your session expired. Sign in again."
                 ),
                 shouldPresentToast: true
             )
@@ -91,10 +86,9 @@ enum AuthErrorMapper {
                 category: .forbidden,
                 message: resolvedBusinessMessage(
                     message,
-                    fallback: String(
-                        localized: "auth.error.forbidden",
-                        defaultValue: "This account cannot sign in here.",
-                        comment: "Forbidden auth toast"
+                    fallback: L(
+                        "auth.error.forbidden",
+                        defaultValue: "This account cannot sign in here."
                     )
                 ),
                 shouldPresentToast: true
@@ -102,10 +96,9 @@ enum AuthErrorMapper {
         case .rateLimited:
             return .init(
                 category: .rateLimited,
-                message: String(
-                    localized: "auth.error.rate_limited",
-                    defaultValue: "Too many attempts. Please wait a bit and try again.",
-                    comment: "Rate limited auth toast"
+                message: L(
+                    "auth.error.rate_limited",
+                    defaultValue: "Too many attempts. Please wait a bit and try again."
                 ),
                 shouldPresentToast: true
             )
@@ -113,20 +106,18 @@ enum AuthErrorMapper {
             if operation == .appleSignIn, statusCode == 503 {
                 return .init(
                     category: .serverUnavailable,
-                    message: String(
-                        localized: "auth.error.apple_service_unavailable",
-                        defaultValue: "Apple sign-in service is temporarily unavailable. Try again later.",
-                        comment: "Apple auth service unavailable toast"
+                    message: L(
+                        "auth.error.apple_service_unavailable",
+                        defaultValue: "Apple sign-in service is temporarily unavailable. Try again later."
                     ),
                     shouldPresentToast: true
                 )
             }
             return .init(
                 category: .serverUnavailable,
-                message: String(
-                    localized: "auth.error.server",
-                    defaultValue: "Server error. Try again later.",
-                    comment: "Server auth toast"
+                message: L(
+                    "auth.error.server",
+                    defaultValue: "Server error. Try again later."
                 ),
                 shouldPresentToast: true
             )
@@ -135,10 +126,9 @@ enum AuthErrorMapper {
                 category: .business,
                 message: resolvedBusinessMessage(
                     message,
-                    fallback: String(
-                        localized: "auth.error.generic",
-                        defaultValue: "Could not complete sign in. Try again.",
-                        comment: "Fallback auth error toast"
+                    fallback: L(
+                        "auth.error.generic",
+                        defaultValue: "Could not complete sign in. Try again."
                     )
                 ),
                 shouldPresentToast: true
@@ -146,20 +136,18 @@ enum AuthErrorMapper {
         case .invalidResponse, .decodingFailed:
             return .init(
                 category: .invalidResponse,
-                message: String(
-                    localized: "auth.error.invalid_response",
-                    defaultValue: "Auth response parse failed. Try again.",
-                    comment: "Invalid auth response toast"
+                message: L(
+                    "auth.error.invalid_response",
+                    defaultValue: "Auth response parse failed. Try again."
                 ),
                 shouldPresentToast: true
             )
         case .tokenPersistenceFailed:
             return .init(
                 category: .tokenPersistence,
-                message: String(
-                    localized: "auth.error.token_persistence",
-                    defaultValue: "Token persistence failed. Signed in, but failed to save your session.",
-                    comment: "Token persistence failure toast"
+                message: L(
+                    "auth.error.token_persistence",
+                    defaultValue: "Token persistence failed. Signed in, but failed to save your session."
                 ),
                 shouldPresentToast: true
             )
@@ -177,10 +165,9 @@ enum AuthErrorMapper {
         case .noInternet, .timeout:
             return .init(
                 category: error == .timeout ? .timeout : .noInternet,
-                message: String(
-                    localized: "auth.error.offline",
-                    defaultValue: "No internet connection. Check your network and try again.",
-                    comment: "Offline auth toast"
+                message: L(
+                    "auth.error.offline",
+                    defaultValue: "No internet connection. Check your network and try again."
                 ),
                 shouldPresentToast: true
             )
@@ -189,20 +176,18 @@ enum AuthErrorMapper {
         case .tls:
             return .init(
                 category: .tls,
-                message: String(
-                    localized: "auth.error.tls",
-                    defaultValue: "Secure connection failed. Check your network and try again.",
-                    comment: "TLS auth toast"
+                message: L(
+                    "auth.error.tls",
+                    defaultValue: "Secure connection failed. Check your network and try again."
                 ),
                 shouldPresentToast: true
             )
         case .network:
             return .init(
                 category: .transport,
-                message: String(
-                    localized: "auth.error.network",
-                    defaultValue: "Network error. Try again.",
-                    comment: "Generic network auth toast"
+                message: L(
+                    "auth.error.network",
+                    defaultValue: "Network error. Try again."
                 ),
                 shouldPresentToast: true
             )
@@ -214,20 +199,18 @@ enum AuthErrorMapper {
         case .postLoginBootstrapFailed:
             return .init(
                 category: .postLoginBootstrap,
-                message: String(
-                    localized: "auth.error.post_login_bootstrap",
-                    defaultValue: "Post-login bootstrap failed. Your session is active.",
-                    comment: "Post-login bootstrap failure toast"
+                message: L(
+                    "auth.error.post_login_bootstrap",
+                    defaultValue: "Post-login bootstrap failed. Your session is active."
                 ),
                 shouldPresentToast: true
             )
         case .wrongSessionNamespace:
             return .init(
                 category: .wrongSessionNamespace,
-                message: String(
-                    localized: "auth.error.wrong_session_namespace",
-                    defaultValue: "Signed in, but the session belongs to a different backend or region.",
-                    comment: "Wrong backend/session namespace toast"
+                message: L(
+                    "auth.error.wrong_session_namespace",
+                    defaultValue: "Signed in, but the session belongs to a different backend or region."
                 ),
                 shouldPresentToast: true
             )

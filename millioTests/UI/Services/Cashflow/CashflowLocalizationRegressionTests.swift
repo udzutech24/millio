@@ -503,6 +503,9 @@ struct CashflowLocalizationRegressionTests {
         let scheduledTransactionsSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowScheduledTransactionsView.swift"), encoding: .utf8)
         let categorySettingsSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowCategorySettingsSheet.swift"), encoding: .utf8)
         let undoBannerSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowCategoryUndoBanner.swift"), encoding: .utf8)
+        let bulkExpenseModelsSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/CashflowBulkExpenseImportModels.swift"), encoding: .utf8)
+        let authErrorMapperSource = try String(contentsOf: sourceURL("millio/Core/Auth/AuthErrorMapper.swift"), encoding: .utf8)
+        let incomingStatementSource = try String(contentsOf: sourceURL("millio/UI/Services/Cashflow/StatementImport/IncomingStatementDestinationView.swift"), encoding: .utf8)
 
         #expect(!viewSource.contains("Text(\"cashflow."))
         #expect(!viewSource.contains(".navigationTitle(\"cashflow."))
@@ -517,6 +520,17 @@ struct CashflowLocalizationRegressionTests {
         #expect(!editorSource.contains("Text(\"cashflow."))
         #expect(!editorSource.contains(".navigationTitle(\"cashflow."))
         #expect(!editorSource.contains("TextField(\"cashflow."))
+        // Regression round 2 (главная дыра ревью): 8 ключей cashflow.editor.transfer.* брались
+        // через `String(localized: "cashflow.editor.transfer...", defaultValue:)` — этот
+        // инициализатор резолвится через StringCatalog runtime и обходит явный
+        // `bundle: LanguageManager.shared.currentBundle` (см. L10n.swift). При смене языка в
+        // приложении без перезапуска (AppState.languageRefreshToken) текст оставался на языке
+        // системы/каталога вместо выбранного. Единственный корректный путь — L(...).
+        // Сужено до `cashflow.editor.transfer.` намеренно: остальные `String(localized: "cashflow.`
+        // в этом файле (save_failed.*, cashflow.common.ok, recurrence.weekly.*) — уже существующая
+        // на develop проблема вне скоупа этого раунда, правка вслепую без отдельного ревью рискует
+        // сломать несвязанные экраны.
+        #expect(!editorSource.contains("localized: \"cashflow.editor.transfer."))
 
         #expect(!historySource.contains("Locale.autoupdatingCurrent"))
         #expect(!historySource.contains("Locale.current"))
@@ -547,6 +561,39 @@ struct CashflowLocalizationRegressionTests {
         // как ключ каталога вместо "cashflow.category.undo.action", в каталоге такого ключа не
         // было, поэтому NSLocalizedString возвращал сам ключ ("Undo") на ЛЮБОМ языке приложения.
         #expect(!undoBannerSource.contains("L(\"Undo\")"))
+
+        // Regression round 2: те же 6 cashflow.bulk_expense.error.* — модель ошибок брала
+        // текст через `String(localized:)` без явного bundle, что при смене языка в приложении
+        // без перезапуска оставляло старый (ru/en) текст вместо выбранного языка.
+        #expect(!bulkExpenseModelsSource.contains("localized: \"cashflow.bulk_expense.error."))
+        // Регрессия round 2: 14 auth.error.* на экране входа — тот же обход bundle.
+        #expect(!authErrorMapperSource.contains("localized: \"auth.error."))
+        // Регрессия round 2: кнопка "Discard" во входящей выписке (common.delete).
+        #expect(!incomingStatementSource.contains("localized: \"common.delete\""))
+    }
+
+    @Test("Auth и bulk-импорт ошибки резолвятся через выбранный в приложении язык, а не через каталог по умолчанию")
+    func authAndBulkExpenseErrorsFollowSelectedAppLanguage() {
+        // Регрессия round 2 (главная дыра ревью): до фикса эти вызовы шли через
+        // `String(localized:defaultValue:)` без bundle: — при выбранном в приложении немецком/
+        // испанском языке пользователь видел русский defaultValue-текст каталога (source language
+        // = ru), пока приложение не перезапускали. Проверяем реальный путь резолва (L() →
+        // LanguageManager.shared.currentBundle), а не только JSON каталога.
+        AppLanguageTestSupport.withLanguage(.german) {
+            let authMessage = AuthErrorMapper.presentation(for: AuthServiceError.unconfigured).message
+            #expect(authMessage == "Die Anmeldung ist vorübergehend nicht verfügbar.")
+            #expect(authMessage != "Вход временно недоступен.")
+
+            let bulkMessage = CashflowBulkExpenseImportError.cardNotFound.errorDescription
+            #expect(bulkMessage == "Wähle vor dem Speichern eine aktive Karte.")
+            #expect(bulkMessage != "Перед сохранением выбери активную карту.")
+        }
+
+        AppLanguageTestSupport.withLanguage(.spanish) {
+            let authMessage = AuthErrorMapper.presentation(for: AuthServiceError.unconfigured).message
+            #expect(authMessage != nil)
+            #expect(authMessage != "Вход временно недоступен.")
+        }
     }
 
     private func sourceURL(_ relativePath: String) throws -> URL {

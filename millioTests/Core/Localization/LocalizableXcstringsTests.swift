@@ -856,12 +856,16 @@ final class LocalizableXcstringsTests: XCTestCase {
             try assertLocalized(strings: strings, key: key, locales: ["de", "es"])
             let entryLocalizations = try localizations(for: key, in: strings)
             let en = try stringUnit(locale: "en", localizations: entryLocalizations, key: key)
+            let ru = try stringUnit(locale: "ru", localizations: entryLocalizations, key: key)
 
             for locale in ["de", "es"] {
                 let translation = try stringUnit(locale: locale, localizations: entryLocalizations, key: key)
                 XCTAssertEqual(translation.state, "translated", "`\(key)`: \(locale) должен быть в статусе translated.")
                 XCTAssertFalse(translation.value.isEmpty, "`\(key)`: \(locale) перевод не должен быть пустым.")
                 XCTAssertNotEqual(translation.value, en.value, "`\(key)`: \(locale) не должен дублировать английский текст.")
+                // Ревью round 2: != en не ловит скопированный ru-текст (source language каталога — ru,
+                // и de/es-слот, по ошибке заполненный русским, прошёл бы предыдущую проверку).
+                XCTAssertNotEqual(translation.value, ru.value, "`\(key)`: \(locale) не должен дублировать русский текст.")
             }
         }
     }

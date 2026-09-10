@@ -11328,7 +11328,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无法验证您的 Apple 账户，请重试。"
+            "value" : "无法验证你的 Apple 账户，请重试。"
           }
         }
       }
@@ -11639,7 +11639,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "登录后数据加载失败，但您的会话仍处于活动状态。"
+            "value" : "登录后数据加载失败，但你的会话仍处于活动状态。"
           }
         }
       }
@@ -55506,7 +55506,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Рекомендуется ввести количество — или оставьте 0, чтобы просто следить за ценой"
+            "value" : "Укажите количество или оставьте 0 — будем просто следить за ценой"
           }
         },
         "tr" : {
@@ -110569,7 +110569,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zahlungsziel: %lld Tage"
+            "value" : "Zinsfreier Zeitraum: %lld Tage"
           }
         },
         "en" : {
