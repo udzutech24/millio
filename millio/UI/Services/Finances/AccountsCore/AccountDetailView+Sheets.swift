@@ -509,26 +509,29 @@ extension AccountDetailView {
     /// Пункты «···» кредита. «Внести платёж» сюда не дублируем — кнопка уже на экране
     /// (`LoanDetailSection`), в меню только то, чего на экране нет.
     ///
-    /// «Условия» и «Реквизиты» видны только на редактируемом (не архивном/удалённом) кредите:
-    /// `LoanTermsEditSheet` пишет в `LoanContract` напрямую и заходит в `AccountsCoreService` для
-    /// `LoanPrincipalCorrection` — на архиве сервис откажет, но пункт меню не должен вести в тупик.
+    /// «Условия», «Реквизиты» и «Удалить» видны только на редактируемом (не архивном/удалённом)
+    /// кредите — весь пункт «···» скрыт целиком, тот же паттерн, что у generic/вклада/инвест-счёта
+    /// (`genericOverflowItems`, `depositActionSheetItems`, `overflowItems` для `.marketInvestment`).
+    /// «Удалить» раньше оставалось видимым и на архивном кредите (ревью round 2): пункт вёл в
+    /// `archiveAccount()` → `stageArchiveAccount`, который БЕЗ проверки «уже в архиве» сдвигал
+    /// `archivedAt` на сегодня — правильный путь для уже архивного счёта один: экран «Архив»
+    /// (`ArchivedAccountsView`, restore/softDelete), не повторная архивация отсюда.
     var loanActionSheetItems: [AccountActionItem] {
+        guard canEditAccountDetails else { return [] }
         var items: [AccountActionItem] = []
         // «Изменить баланс» кредиту намеренно не даём: поле суммы отбрасывает минус
         // (`AmountInputFormatter.sanitize`), и сохранение перевернуло бы знак долга — счёт-
         // обязательство ушёл бы в net worth активом. Ремонт остатка — отдельная задача.
-        if canEditAccountDetails {
-            items.append(.init(
-                title: L("accounts_core.detail.loan.action.terms"),
-                icon: "doc.text",
-                action: { sheet = .loanTerms }
-            ))
-            items.append(.init(
-                title: L("accounts_core.detail.action.edit_details"),
-                icon: "square.and.pencil",
-                action: { sheet = .editDetails }
-            ))
-        }
+        items.append(.init(
+            title: L("accounts_core.detail.loan.action.terms"),
+            icon: "doc.text",
+            action: { sheet = .loanTerms }
+        ))
+        items.append(.init(
+            title: L("accounts_core.detail.action.edit_details"),
+            icon: "square.and.pencil",
+            action: { sheet = .editDetails }
+        ))
         items.append(.init(
             title: L("accounts_core.detail.action.delete_account"),
             icon: "trash",
