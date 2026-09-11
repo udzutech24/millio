@@ -752,8 +752,11 @@ struct AccountsCoreServiceTests {
 
         // ГЛАВНАЯ ПРОВЕРКА: обе ноги остались — deleteEvent проверяет ВСЕ затронутые счета ДО
         // первого delete, не только новые концы правки.
+        // #Predicate не разворачивает вложенный keypath через member тюпла (legs.out.transferID) —
+        // выносим значение в локальную константу до макроса.
+        let outTransferID = legs.out.transferID
         let transferLegs = try ctx.fetch(FetchDescriptor<AccountEvent>(
-            predicate: #Predicate<AccountEvent> { $0.transferID == legs.out.transferID }
+            predicate: #Predicate<AccountEvent> { $0.transferID == outTransferID }
         ))
         #expect(transferLegs.count == 2, "Обе ноги перевода должны остаться нетронутыми при отказе")
     }
