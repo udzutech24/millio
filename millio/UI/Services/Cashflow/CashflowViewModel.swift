@@ -217,7 +217,8 @@ final class CashflowViewModel: ViewModelProtocol {
                 // ViewModel владеет modelContext — Trigger не имеет доступа к SwiftData.
                 let exportData = self.buildExportData()
                 Task { await trigger.notifyTransactionAdded(with: exportData) }
-            }
+            },
+            onSetSaveErrorMessage: { [weak self] msg in self?.state.saveBlockedErrorMessage = msg }
         )
     }()
 

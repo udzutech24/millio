@@ -191,6 +191,12 @@ struct CashflowState {
     /// Ошибка пересчета остатков при удалении операции.
     var deleteBalanceUpdateErrorMessage: String? = nil
 
+    /// Причина отказа сохранения транзакции в `CashflowTransactionEditorView`, известная точнее
+    /// generic-алерта (ревью round 2, A2): без неё правка на архивном счёте показывала одинаковое
+    /// «проверьте счёт/дату/баланс», хотя причина отказа известна сервису — `nil` для остальных
+    /// причин отказа (недостаточно средств и т.п.), там generic-текст остаётся верным как есть.
+    var saveBlockedErrorMessage: String? = nil
+
     /// Детализация доходов по категориям за период (по убыванию суммы)
     var incomeBreakdown: [CashflowCategoryBreakdownEntry] = []
 

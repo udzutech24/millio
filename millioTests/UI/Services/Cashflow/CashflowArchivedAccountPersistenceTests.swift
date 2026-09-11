@@ -82,5 +82,45 @@ struct CashflowArchivedAccountPersistenceTests {
         ))
         #expect(events.count == 1)
         #expect(events.first?.amount == 1_000, "Событие ядра не должно было отстать от отменённой правки ленты")
+
+        // Ревью round 2 (A2, «сигнал человеку не понятный»): редактор раньше показывал ОДИНАКОВЫЙ
+        // generic-алерт независимо от причины отказа — человек проверял бы баланс/дату впустую.
+        // `state.saveBlockedErrorMessage` — конкретный человекочитаемый текст для ИМЕННО этой причины.
+        #expect(
+            viewModel.state.saveBlockedErrorMessage == AccountsCoreServiceError.accountNotWritable.errorDescription,
+            "Причина отказа должна быть точно определена как «архивный/удалённый счёт», а не общей"
+        )
+    }
+
+    @Test("saveBlockedErrorMessage сбрасывается на успешном сохранении, не остаётся от прошлой ошибки")
+    func saveBlockedErrorMessageResetsAfterSuccessfulSave() async throws {
+        let ctx = try makeContext()
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(name: "Кошелёк", kind: .cash, currency: "RUB", openingBalance: 0)
+        try ctx.save()
+
+        let viewModel = makeViewModel(ctx)
+        let created = income(amount: 1_000, cardID: account.id.uuidString)
+        #expect(await viewModel.persistTransaction(created, dismissEditorOnSuccess: false))
+        let persisted = try #require(try ctx.fetch(FetchDescriptor<CashflowTransaction>()).first)
+
+        try service.archiveAccount(account)
+        _ = await viewModel.persistTransaction(
+            income(amount: 5_000, cardID: account.id.uuidString),
+            replacing: persisted,
+            dismissEditorOnSuccess: false
+        )
+        #expect(viewModel.state.saveBlockedErrorMessage != nil, "Предварительное условие: сообщение установлено")
+
+        // Восстанавливаем счёт и сохраняем снова — сообщение от ПРЕДЫДУЩЕЙ заблокированной попытки
+        // не должно остаться видимым для следующей, успешной.
+        try service.restoreAccount(account)
+        let succeeded = await viewModel.persistTransaction(
+            income(amount: 2_000, cardID: account.id.uuidString),
+            replacing: persisted,
+            dismissEditorOnSuccess: false
+        )
+        #expect(succeeded)
+        #expect(viewModel.state.saveBlockedErrorMessage == nil, "Сообщение об архиве не должно пережить успешное сохранение")
     }
 }

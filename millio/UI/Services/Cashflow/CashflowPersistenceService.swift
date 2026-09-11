@@ -45,6 +45,10 @@ final class CashflowPersistenceService {
     private let onCardsUpdated: () -> Void
     private let onInvestmentsUpdated: () -> Void
     private let onSetDeleteErrorMessage: (String?) -> Void
+    // Ревью round 2 (A2): editor показывал одинаковый generic-алерт независимо от причины отказа
+    // сохранения — человек, у которого правка заблокирована архивным счётом, проверял баланс/дату
+    // и не узнавал, в чём дело. По умолчанию no-op — тесты, не подключившие колбэк, ведут себя как раньше.
+    private let onSetSaveErrorMessage: (String?) -> Void
     private let onDismissEditor: () -> Void
     private let onEditorIsShowing: () -> Bool
     private let onEditingTransactionMatchesExplicit: (CashflowTransaction) -> Bool
@@ -72,7 +76,8 @@ final class CashflowPersistenceService {
         onDismissEditor: @escaping () -> Void,
         onEditorIsShowing: @escaping () -> Bool,
         onEditingTransactionMatchesExplicit: @escaping (CashflowTransaction) -> Bool,
-        onTransactionSaved: (() -> Void)? = nil
+        onTransactionSaved: (() -> Void)? = nil,
+        onSetSaveErrorMessage: @escaping (String?) -> Void = { _ in }
     ) {
         self.modelContext = modelContext
         self.now = now
@@ -93,6 +98,7 @@ final class CashflowPersistenceService {
         self.onEditorIsShowing = onEditorIsShowing
         self.onEditingTransactionMatchesExplicit = onEditingTransactionMatchesExplicit
         self.onTransactionSaved = onTransactionSaved
+        self.onSetSaveErrorMessage = onSetSaveErrorMessage
     }
 
     // MARK: - Public: Сохранение транзакции
@@ -155,6 +161,19 @@ final class CashflowPersistenceService {
                 do {
                     try accountsCoreCashflowBridge.deleteEvents(for: transactionToDelete)
                 } catch {
+                    // Ревью round 2 (продолжение A2): `deleteEvent` теперь тоже проверяет
+                    // writable ДО мутации (см. AccountsCoreService.deleteEvent) — но эта ветка
+                    // раньше ЛЮБУЮ ошибку только логировала и всё равно удаляла строку ленты
+                    // ниже. Без явного отказа тут строка исчезла бы из ленты, а AccountEvent
+                    // архивного счёта остался бы (обратное расхождение A2: не «сумма разошлась»,
+                    // а «строка пропала из ленты, история счёта цела»). МАЯЧОК: сопоставление
+                    // именно с этим case — см. тот же комментарий в updateTransactionAsync.
+                    if case AccountsCoreServiceError.accountNotWritable = error {
+                        modelContext.rollback()
+                        AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge delete failed: account archived")
+                        onSetDeleteErrorMessage(AccountsCoreServiceError.accountNotWritable.localizedDescription)
+                        return
+                    }
                     AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge delete failed")
                 }
                 modelContext.delete(transactionToDelete)
@@ -196,6 +215,13 @@ final class CashflowPersistenceService {
             do {
                 try accountsCoreCashflowBridge.deleteEvents(for: transaction)
             } catch {
+                // Ревью round 2 (продолжение A2) — тот же случай, что в deleteTransactionAsync выше.
+                if case AccountsCoreServiceError.accountNotWritable = error {
+                    modelContext.rollback()
+                    AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge delete failed: account archived")
+                    onSetDeleteErrorMessage(AccountsCoreServiceError.accountNotWritable.localizedDescription)
+                    return
+                }
                 AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge delete failed")
             }
             modelContext.delete(transaction)
@@ -307,6 +333,9 @@ final class CashflowPersistenceService {
         replacing explicitExistingTransaction: CashflowTransaction? = nil,
         dismissEditorOnSuccess: Bool = true
     ) async -> Bool {
+        // Сбрасываем в начале, а не только на успехе: иначе сообщение от ПРЕДЫДУЩЕЙ заблокированной
+        // попытки могло бы остаться видимым для текущей ошибки другой природы (offline/баланс).
+        onSetSaveErrorMessage(nil)
         let existingTransaction = explicitExistingTransaction ?? editingTransactionProvider()
         do {
             try monthMutationPolicy.validate(existingTransaction == nil ? .create : .edit, date: transaction.transactionDate)
@@ -455,6 +484,9 @@ final class CashflowPersistenceService {
             if case AccountsCoreServiceError.accountNotWritable = error {
                 modelContext.rollback()
                 AppLogger.log(.error, category: "Cashflow", "AccountsCore bridge sync failed: account archived")
+                // Ревью round 2 (A2): editor раньше показывал одинаковый generic-алерт «проверьте
+                // счёт/дату/баланс» и для этого случая — человек не узнавал, что дело в архиве.
+                onSetSaveErrorMessage(AccountsCoreServiceError.accountNotWritable.localizedDescription)
                 return false
             }
             // Не блокируем сохранение легаси-транзакции (источник истины ленты/бюджетов) —

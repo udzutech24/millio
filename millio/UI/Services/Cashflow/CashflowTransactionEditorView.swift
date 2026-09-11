@@ -292,8 +292,11 @@ struct CashflowTransactionEditorView: View {
                 role: .cancel
             ) {}
         } message: {
+            // Ревью round 2 (A2): если сервис знает точную причину отказа (например, архивный счёт —
+            // `state.saveBlockedErrorMessage`, см. `CashflowPersistenceService.onSetSaveErrorMessage`),
+            // показываем её вместо generic-текста — иначе человек проверял бы баланс/дату впустую.
             Text(
-                String(
+                viewModel.state.saveBlockedErrorMessage ?? String(
                     localized: "cashflow.editor.save_failed.message",
                     defaultValue: "The transaction was not saved. Check the selected account, date, and available balance, then try again.",
                     comment: "Message for failed cashflow transaction save alert"
