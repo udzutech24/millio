@@ -465,6 +465,13 @@ final class AccountsCoreService {
         let event: AccountEvent
         let earliestDate: Date
         if let existing {
+            // Ревью round 2: writable проверялся только у НОВОГО `account` выше — правка легаси-
+            // транзакции, переносящая её на другой счёт (смена карты в редакторе), проходила бы
+            // барьер молча, если старый `existing.account` был архивным: событие бы просто исчезало
+            // из истории архивного счёта. Тот же счёт — повторная проверка no-op, не архивный.
+            if let previousAccount = existing.account, previousAccount.id != account.id {
+                try requireWritable(previousAccount)
+            }
             earliestDate = min(existing.date, date)
             existing.account = account
             existing.typeRaw = type.rawValue
@@ -675,6 +682,16 @@ final class AccountsCoreService {
 
     /// Удаляет событие. Если у события есть `transferID` — удаляются ОБЕ ноги перевода: одну ногу
     /// отменить невозможно (иначе нарушается инвариант Σ переводов = 0, AC12).
+    ///
+    /// Check-before-mutate (ревью round 2, зона «Архивные счета»): все затронутые счета проверяются
+    /// `requireWritable` ДО первого `modelContext.delete`, единая read-only политика архива, что и у
+    /// правки. Без этого `deleteEvent` — единственная точка удаления `AccountEvent`, её вызывают и
+    /// удаление строки ленты (`CashflowPersistenceService.deleteTransactionAsync`/
+    /// `deleteTransactionWithoutRecalculation` → `bridge.deleteEvents`), и `syncTransfer` при
+    /// пересборке перевода (`deleteEvents` перед `transfer`) — молча переписывала историю архивного
+    /// счёта: удаляла его событие/ногу перевода, даже если новые концы правки были writable
+    /// (`syncTransfer`-guard проверяет только НОВЫЕ source/destination, не старые счета уже
+    /// существующих ног).
     func deleteEvent(_ event: AccountEvent) throws {
         var revisionAccounts: [Account] = []
         if let transferID = event.transferID {
@@ -689,6 +706,11 @@ final class AccountsCoreService {
                 if let account = leg.account, !touchedAccounts.contains(where: { $0.id == account.id }) {
                     touchedAccounts.append(account)
                 }
+            }
+            for account in touchedAccounts {
+                try requireWritable(account)
+            }
+            for leg in legs {
                 modelContext.delete(leg)
             }
             for account in touchedAccounts {
@@ -698,6 +720,9 @@ final class AccountsCoreService {
         } else {
             let account = event.account
             let date = event.date
+            if let account {
+                try requireWritable(account)
+            }
             modelContext.delete(event)
             if let account {
                 invalidateCache(for: account, from: date)
@@ -831,7 +856,16 @@ final class AccountsCoreService {
 
     /// Stages archive/cache invalidation without saving. Batch lifecycle operations own the one
     /// outer transaction and must call this instead of swallowing per-account save failures.
+    ///
+    /// Идемпотентно (ревью round 2, зона «Архивные счета»): повторная архивация уже архивного счёта
+    /// — no-op. Без этого guard'а `archiveAccount` через оставшийся вход «Удалить» на уже архивном
+    /// кредите (loanActionSheetItems до фикса UI-гейта, или любой будущий вызывающий код) сдвигал(а)
+    /// `archivedAt` на сегодняшнюю дату — `Account.participates(on:)` времязависим (Фаза 0), и долг
+    /// задним числом возвращался бы в историю капитала на весь промежуток [старый archivedAt, новый],
+    /// а кэш инвалидировался только от НОВОЙ даты вперёд, оставляя снапшоты за этот промежуток
+    /// устаревшими. Уже удалённый (`deletedAt`) счёт архивировать нельзя тем же путём.
     func stageArchiveAccount(_ account: Account, on date: Date = Date()) {
+        guard account.archivedAt == nil, account.deletedAt == nil else { return }
         account.archivedAt = date
         invalidateCache(for: account, from: date)
         HistoricalValuationRevisionTracker.bump([.accountSet, .events], on: account)

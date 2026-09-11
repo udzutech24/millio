@@ -110974,31 +110974,31 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Archivierte Konten können nicht bearbeitet werden. Stelle es zuerst aus dem Archiv wieder her."
+            "value" : "Dieses Konto ist archiviert oder gelöscht und kann nicht bearbeitet werden."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Archived accounts can't be edited. Restore it from the archive first."
+            "value" : "This account is archived or deleted and can't be edited."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pueden editar las cuentas archivadas. Restáurala primero desde el archivo."
+            "value" : "Esta cuenta está archivada o eliminada y no se puede editar."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Архивный счёт нельзя изменить. Сначала верните его из архива."
+            "value" : "Архивный или удалённый счёт нельзя изменить."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已归档的账户无法编辑。请先从归档中恢复。"
+            "value" : "该账户已归档或已删除，无法编辑。"
           }
         }
       }

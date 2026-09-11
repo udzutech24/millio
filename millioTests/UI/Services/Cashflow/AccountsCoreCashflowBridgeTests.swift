@@ -403,4 +403,59 @@ struct AccountsCoreCashflowBridgeTests {
         #expect(legsAfter.allSatisfy { $0.amount == 400 }) // старая сумма, правка не применилась
         #expect(Set(legsAfter.compactMap(\.transferID)).count == 1)
     }
+
+    // MARK: - Ревью round 2: остаточная дыра A1 — guard проверяет только НОВЫЕ концы правки
+
+    /// Guard в `syncTransfer` (`accountsCoreService.isWritable(source), isWritable(destination)`)
+    /// проверяет НОВЫЕ source/destination правки. Если сменить счёт-источник перевода с архивного X
+    /// на живой M (а не просто поправить сумму, как в тесте выше), новые концы (M, L) оба writable —
+    /// guard пропускал бы правку, а `deleteEvents` ниже удаляла бы старую ногу на X молча. Закрыто
+    /// на уровне `AccountsCoreService.deleteEvent` (проверяет ВСЕ затронутые счета, включая старые).
+    @Test
+    func editingTransferAccountAwayFromArchivedLegIsBlockedAndPreservesArchivedLeg() async throws {
+        let (container, ctx, service, bridge) = try makeContext()
+        _ = container
+        let archivedSide = try service.createAccount(name: "Архивная карта X", kind: .cash, currency: "RUB", openingBalance: 1000)
+        let liveSideL = try service.createAccount(name: "Живой счёт L", kind: .bankAccount, currency: "RUB", openingBalance: 0)
+        let liveSideM = try service.createAccount(name: "Живой счёт M", kind: .bankAccount, currency: "RUB", openingBalance: 0)
+
+        let tx = makeTransaction(
+            type: .transfer, amount: 400, cardID: archivedSide.id.uuidString, toCardID: liveSideL.id.uuidString
+        )
+        ctx.insert(tx)
+        try ctx.save()
+        let txID = tx.uniqueID
+
+        try await bridge.sync(for: tx)
+        let legsBefore = try ctx.fetch(FetchDescriptor<AccountEvent>(
+            predicate: #Predicate<AccountEvent> { $0.sourceTransactionID == txID }
+        ))
+        #expect(legsBefore.count == 2)
+
+        try service.archiveAccount(archivedSide)
+
+        // Правка: меняем источник перевода с архивного X на живой M — новые концы (M, L) оба
+        // writable, старая нога на X — нет.
+        tx.cardID = liveSideM.id.uuidString
+        var thrown: Error?
+        do {
+            try await bridge.sync(for: tx)
+        } catch {
+            thrown = error
+        }
+
+        guard case AccountsCoreServiceError.accountNotWritable = try #require(thrown) else {
+            Issue.record("Ожидали accountNotWritable, получили \(String(describing: thrown))")
+            return
+        }
+
+        // ГЛАВНАЯ ПРОВЕРКА: старая нога на архивном X не удалена, новая на M не создана.
+        let legsAfter = try ctx.fetch(FetchDescriptor<AccountEvent>(
+            predicate: #Predicate<AccountEvent> { $0.sourceTransactionID == txID }
+        ))
+        #expect(legsAfter.count == 2)
+        #expect(legsAfter.contains { $0.account?.id == archivedSide.id })
+        #expect(legsAfter.contains { $0.account?.id == liveSideL.id })
+        #expect(legsAfter.allSatisfy { $0.account?.id != liveSideM.id }, "Новая нога на M не должна была создаться — правка целиком отклонена")
+    }
 }
