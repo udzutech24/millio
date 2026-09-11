@@ -48,6 +48,16 @@ final class AccountsCoreCashflowBridge {
             .contains(where: DebitCardContract.products.contains)
     }
 
+    /// Писуем ли счёт-источник (`cardID`) транзакции в новом ядре — `true`, если это легаси-карта
+    /// (мост её не касается вовсе, свой более старый guard уже есть в
+    /// `CashflowPersistenceService.applyRecurringTransactionToCardBalance`). Используется генератором
+    /// повторяющихся операций (`CashflowScheduledService`), чтобы не вставлять новый инстанс в ленту
+    /// для шаблона, чей core-счёт архивирован/удалён (ревью round 2, «БАГ 6, автоповтор»).
+    func isSourceAccountWritable(for transaction: CashflowTransaction) -> Bool {
+        guard let account = resolveNewCoreAccount(id: transaction.cardID) else { return true }
+        return accountsCoreService.isWritable(account)
+    }
+
     // MARK: - Публичная точка входа
 
     /// Синхронизирует событие(я) нового ядра для сохранённой транзакции. Вызывается ПОСЛЕ того,

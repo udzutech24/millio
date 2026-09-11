@@ -155,6 +155,9 @@ final class CashflowViewModel: ViewModelProtocol {
             },
             noticeTitleResolver: { [weak self] transaction in
                 self?.plannedNoticeTitle(for: transaction) ?? ""
+            },
+            onIsSourceAccountWritable: { [weak self] transaction in
+                self?.accountsCoreCashflowBridge.isSourceAccountWritable(for: transaction) ?? true
             }
         )
     }()

@@ -38,6 +38,13 @@ final class CashflowScheduledService {
     /// Колбэк: применить изменение баланса карты для сгенерированной recurring-транзакции
     private let onApplyRecurringToCard: (CashflowTransaction) async -> Void
 
+    /// Колбэк: писуем ли счёт-источник шаблона (ревью round 2, зона «Архивные счета»). Барьер
+    /// `requireWritable` (БАГ 6) ловит ТОЛЬКО ручную правку — автогенератор до этой проверки не знал
+    /// об архивации вовсе и каждый месяц вставлял новый инстанс в ленту/бюджеты, `onApplyRecurringToCard`
+    /// молча глотал `accountNotWritable` (только лог). По умолчанию `true` — легаси-карта или ещё не
+    /// подключённый вызывающий (тесты) продолжают вести себя как раньше, проверка только для core-счетов.
+    private let onIsSourceAccountWritable: (CashflowTransaction) -> Bool
+
     /// Колбэк: применить balance-эффект для due-плановой транзакции
     private let onApplyDuePlannedEffect: (CashflowTransaction) async throws -> Void
 
@@ -83,7 +90,8 @@ final class CashflowScheduledService {
         onApplyDuePlannedEffect: @escaping (CashflowTransaction) async throws -> Void,
         appliedNoticeStore: AppliedPlannedNoticeStore,
         noticeAccountNameResolver: @escaping (CashflowTransaction) -> String,
-        noticeTitleResolver: @escaping (CashflowTransaction) -> String
+        noticeTitleResolver: @escaping (CashflowTransaction) -> String,
+        onIsSourceAccountWritable: @escaping (CashflowTransaction) -> Bool = { _ in true }
     ) {
         self.modelContext = modelContext
         self.defaults = defaults
@@ -97,6 +105,7 @@ final class CashflowScheduledService {
         self.appliedNoticeStore = appliedNoticeStore
         self.noticeAccountNameResolver = noticeAccountNameResolver
         self.noticeTitleResolver = noticeTitleResolver
+        self.onIsSourceAccountWritable = onIsSourceAccountWritable
     }
 
     // MARK: - Public: Queries
@@ -343,6 +352,14 @@ final class CashflowScheduledService {
                 }
 
                 if !existsInMonth {
+                    // Ревью round 2 (зона «Архивные счета»): счёт-источник шаблона архивирован/удалён —
+                    // не создаём новый инстанс вовсе. `occurrenceIndex` двигаем дальше, чтобы не
+                    // застрять на одной и той же дате — occurrence просто никогда не появится, пока
+                    // счёт не восстановят из архива.
+                    guard onIsSourceAccountWritable(template) else {
+                        occurrenceIndex += 1
+                        continue
+                    }
                     let generated = CashflowTransaction(
                         transactionType: template.transactionType,
                         amount: template.amount,
