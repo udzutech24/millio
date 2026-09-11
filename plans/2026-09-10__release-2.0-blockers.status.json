@@ -1,0 +1,20 @@
+{
+  "planFile": "2026-09-10__release-2.0-blockers.md",
+  "title": "Релиз 2.0 — 7 блокеров",
+  "updated": "2026-09-11T07:30:00+03:00",
+  "phases": [
+    { "name": "Блокер 1 — Кредит на 0₽", "status": "done", "note": "da638b3, 1bc4b02, 6433c48 — ⚠️ ревью нашло обходной путь (amount=0), не подтверждено" },
+    { "name": "Блокер 2 — Избранное/иконка/цвет теряются", "status": "done", "note": "e634171, 54589c3, 1492041" },
+    { "name": "Блокер 3 — Акции/крипта 0 штук", "status": "done", "note": "опровергнут как баг, 4ae8077 — только подсказка в форме" },
+    { "name": "Блокер 4 — Платёж раньше даты", "status": "done", "note": "0597091" },
+    { "name": "Блокер 5 — Пропущенные платежи не догоняются", "status": "done", "note": "0597091, a20805f, b93c588" },
+    { "name": "Блокер 6 — Архивные счета редактируются", "status": "done", "note": "74ee608, 3606e40, bd26627, 903ea36, 0fdb6b6, e08f791 — ⚠️ ревью нашло возможный silent-fail без отката, не подтверждено" },
+    { "name": "Блокер 7 — Английский текст", "status": "done", "note": "da71103, 4ae8077, 46bead7" },
+    { "name": "QA-гейт (xcodebuild test, сверка с develop)", "status": "in_progress", "note": "Денис" },
+    { "name": "Adversarial-ревью (verify 3 находок)", "status": "in_progress", "note": "code-review skill" },
+    { "name": "Device-проверка владельцем (7 зон)", "status": "pending" },
+    { "name": "Мерж в develop + пересборка 2.0(4)", "status": "pending", "note": "только по явному «да»" }
+  ],
+  "costUsd": null,
+  "etaMinutes": null
+}
