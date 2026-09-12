@@ -202,10 +202,7 @@ struct AccountDetailView: View {
                         )
                     }
                     if let depositPresentation {
-                        DepositDetailSection(
-                            presentation: depositPresentation,
-                            taxPresentation: depositTaxPresentation
-                        )
+                        DepositDetailSection(presentation: depositPresentation)
                     } else if let loanPresentation {
                         LoanDetailSection(
                             presentation: loanPresentation,
