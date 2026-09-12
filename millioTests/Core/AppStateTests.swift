@@ -371,8 +371,8 @@ struct AppLifecycleUseCaseTests {
         }
     }
 
-    @Test("initialize переводит в onboarding при непройденном онбординге")
-    func testInitializeSetsOnboardingWhenNotCompleted() async {
+    @Test("initialize ведёт первый запуск сразу на дашборд и фиксирует онбординг пройденным")
+    func testInitializeSkipsOnboardingOnFirstLaunch() async {
         let defaults = UserDefaults.standard
         let key = "hasCompletedOnboarding"
         let previous = defaults.object(forKey: key)
@@ -387,7 +387,12 @@ struct AppLifecycleUseCaseTests {
         let useCase = AppLifecycleUseCase(appState: appState, backupManager: FakeBackupManager())
         await useCase.initialize()
         
-        #expect(appState.lifecycle == .onboarding)
+        // Мастер выключен флагом: первый запуск открывает дашборд, а не «Шаг 1 из 4».
+        #expect(AppLifecycleUseCase.showsOnboardingOnFirstLaunch == false)
+        #expect(appState.lifecycle == .ready)
+        // Флаг обязан проставиться здесь же: на паре (false, .ready) LaunchRecoveryPolicy
+        // не предложила бы восстановление после переустановки.
+        #expect(defaults.bool(forKey: key) == true)
         #expect(appState.isICloudAvailable == false)
         #expect(appState.lastBackupDate == nil)
     }

@@ -19,6 +19,11 @@ protocol AppLifecycleUseCaseProtocol {
 final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "AppLifecycleUseCase")
     private static let defaultMinimumLaunchDurationSeconds: TimeInterval = 2.2
+    /// Решение владельца (12.09.2026): мастер онбординга при первом запуске не показываем —
+    /// знакомство берёт на себя чек-лист «изучи millio» на дашборде (`FirstStepsCard`).
+    /// Чтобы вернуть мастер — поставить `true`, остальной код онбординга на месте
+    /// (`OnboardingView`, ручной вход из Профиля работают независимо от флага).
+    static let showsOnboardingOnFirstLaunch = false
     private let appState: AppState
     private let backupManager: BackupManagerProtocol
     private let splashPreferences: LaunchSplashPreferences
@@ -59,9 +64,16 @@ final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
             lastSeenVersion: lastSeenVersion
         )
         SettingsManager.shared.lastSeenAppVersion = currentAppVersionString()
-        if !hasCompletedOnboarding {
+        if !hasCompletedOnboarding && Self.showsOnboardingOnFirstLaunch {
             nextLifecycle = .onboarding
         } else {
+            // Без мастера флаг некому проставить, а от него зависит LaunchRecoveryPolicy:
+            // она ждёт пару (флаг == false → lifecycle == .onboarding), иначе считает момент
+            // неподходящим и не предложит восстановление после переустановки. Поэтому первый
+            // запуск сразу фиксируется как пройденный — пара становится (true, .ready).
+            if !hasCompletedOnboarding {
+                completeOnboarding()
+            }
             // Не показываем экран восстановления автоматически
             // Пользователь может перейти к нему из настроек
             nextLifecycle = .ready
