@@ -123,16 +123,10 @@ struct FirstStepsCard: View {
     }
 
     private var doneCount: Int { FirstStep.doneCount(in: snapshot) }
-    private var isComplete: Bool { doneCount == FirstStep.all.count }
     private var firstPending: FirstStep? { FirstStep.all.first { !$0.isDone(snapshot) } }
 
     var body: some View {
         card
-            .onAppear {
-                // Чек-лист был пройден до появления виджета (разовая инъекция принесла его
-                // всем) — убираем молча, праздновать нечего.
-                if isComplete { onRemove() }
-            }
             .onChange(of: doneCount) { _, newValue in
                 guard newValue == FirstStep.all.count else { return }
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
