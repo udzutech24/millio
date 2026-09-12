@@ -67,7 +67,7 @@ Swift · SwiftUI · SwiftData · CloudKit · Swift Concurrency (async/await, Act
 - **Dark Mode only.**
 - **UI-токены обязательны:** шрифты — только через `Font` extension (`AppTypography.swift`), отступы — только через `AppSpacing`, анимации — только через `AppAnimation`. `Font.system(size:)` и числа-литералы в padding/spacing в новом коде **запрещены**. Файлы: `millio/UI/Design/`.
 - **Локализация:** все строки в `Localizable.xcstrings`. Подробности — [`docs/MULTILINGUAL_HARDENING_PLAN.md`](docs/MULTILINGUAL_HARDENING_PLAN.md).
-- **Симуляторы — только базовые.** Не устанавливай лишние симуляторы. Использовать 2–3 штуки: iPhone 16 Pro (основной), iPad (если нужен), и один из последних iPhone меньшего размера (напр. iPhone 16). Остальные — удалять.
+- **Симуляторы — только базовые.** Не устанавливай лишние симуляторы. Использовать 2–3 штуки: iPhone 16 Pro (основной), iPad (если нужен), и один из последних iPhone меньшего размера (напр. iPhone 16). Остальные — удалять. **Одновременно загруженных — не больше 3**: больше грузит машину Алексея. Перед `simctl boot` — `xcrun simctl list devices booted`, лишние гасить `xcrun simctl shutdown <udid>`; параллельные `xcodebuild test` ограничивать `-maximum-concurrent-test-simulator-destinations 2` и убирать клоны после прогона.
 
 Полный список правил — [`docs/CORE_RULES.md`](docs/CORE_RULES.md).
 
