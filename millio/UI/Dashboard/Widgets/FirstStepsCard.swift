@@ -83,30 +83,6 @@ extension FirstStep {
 
 // MARK: - Карточка
 
-/// Карточка первых шагов на дашборде. Живёт, пока не выполнены все шаги и пользователь
-/// её не скрыл; скрытие необратимо (решение по v1).
-struct FirstStepsCard: View {
-    static let dismissedKey = "firstSteps.dismissed"
-
-    var onAction: (FirstStep) -> Void
-
-    @AppStorage(FirstStepsCard.dismissedKey) private var isDismissed: Bool = false
-
-    var body: some View {
-        // Содержимое с @Query создаётся только пока карточка жива — у скрывшего её
-        // пользователя запросы к стору вообще не выполняются.
-        if !isDismissed {
-            FirstStepsCardContent(
-                onAction: onAction,
-                onDismiss: {
-                    withAnimation(AppAnimation.springGentle) { isDismissed = true }
-                }
-            )
-            .transition(.opacity.combined(with: .scale(scale: 0.96)))
-        }
-    }
-}
-
 private enum Metrics {
     static let cardRadius: CGFloat = 20
     static let iconSide: CGFloat = 30
@@ -118,9 +94,14 @@ private enum Metrics {
     static let checkboxStroke: CGFloat = 1.2
 }
 
-private struct FirstStepsCardContent: View {
+/// Виджет первых шагов. Удаляется штатно, как любой виджет дашборда: и крестиком,
+/// и завершением чек-листа — поэтому отдельного флага «скрыт» не нужно, а у прошедшего
+/// чек-лист пользователя виджета нет и его `@Query` не выполняются.
+struct FirstStepsCard: View {
     var onAction: (FirstStep) -> Void
-    var onDismiss: () -> Void
+    var onRemove: () -> Void
+
+    @AppStorage("firstSteps.collapsed") private var isCollapsed: Bool = false
 
     @Query private var categories: [CashflowCustomCategory]
     @Query private var accounts: [Account]
@@ -148,23 +129,25 @@ private struct FirstStepsCardContent: View {
     var body: some View {
         card
             .onAppear {
-                // Все шаги уже закрыты к первому показу (данные были до фичи) — убираем
-                // карточку молча, праздновать нечего.
-                if isComplete { onDismiss() }
+                // Чек-лист был пройден до появления виджета (разовая инъекция принесла его
+                // всем) — убираем молча, праздновать нечего.
+                if isComplete { onRemove() }
             }
             .onChange(of: doneCount) { _, newValue in
                 guard newValue == FirstStep.all.count else { return }
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
-                onDismiss()
+                onRemove()
             }
     }
 
     private var card: some View {
         VStack(alignment: .leading, spacing: AppSpacing.m) {
             header
-            VStack(alignment: .leading, spacing: AppSpacing.s) {
-                ForEach(FirstStep.all) { step in
-                    row(step)
+            if !isCollapsed {
+                VStack(alignment: .leading, spacing: AppSpacing.s) {
+                    ForEach(FirstStep.all) { step in
+                        row(step)
+                    }
                 }
             }
         }
@@ -186,8 +169,13 @@ private struct FirstStepsCardContent: View {
                 .font(.millioCaption)
                 .foregroundStyle(Color.white.opacity(0.45))
 
+            Image(systemName: "chevron.down")
+                .font(.millioCaption2)
+                .foregroundStyle(Color.white.opacity(0.45))
+                .rotationEffect(.degrees(isCollapsed ? 0 : 180))
+
             Button {
-                onDismiss()
+                onRemove()
             } label: {
                 Image(systemName: "xmark")
                     .font(.millioCaption2)
@@ -196,6 +184,10 @@ private struct FirstStepsCardContent: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L("first_steps.dismiss"))
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(AppAnimation.springGentle) { isCollapsed.toggle() }
         }
     }
 

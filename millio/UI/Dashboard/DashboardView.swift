@@ -41,10 +41,6 @@ struct DashboardView: View {
     @State private var showAddWidget = false
     @State private var appeared = false
 
-    /// Совпадает с горизонтальным отступом `widgetsSection` — карточка должна стоять
-    /// в одну линию с виджетами.
-    private static let contentHorizontalInset: CGFloat = 18
-
     private var inactiveWidgets: [DashboardWidgetID] {
         DashboardWidgetID.allCases.filter { !activeWidgets.contains($0) }
     }
@@ -100,10 +96,6 @@ struct DashboardView: View {
                 miniAppsSection
                     .padding(.top, 8)
                     .revealOnAppear(appeared: appeared, index: 1)
-
-                FirstStepsCard(onAction: onFirstStepAction)
-                    .padding(.horizontal, Self.contentHorizontalInset)
-                    .padding(.top, AppSpacing.l)
 
                 if activeWidgets.isEmpty {
                     emptyPlaceholder
@@ -166,6 +158,15 @@ struct DashboardView: View {
         }
     }
 
+    /// Тот же путь, что у удаления свайпом в режиме редактирования: массив минус виджет
+    /// плюс сохранение. Виджет удаляют крестик в шапке и выполнение последнего шага.
+    private func removeFirstStepsWidget() {
+        withAnimation(AppAnimation.springGentle) {
+            activeWidgets.removeAll { $0 == .firstSteps }
+        }
+        DashboardWidgetStorage.save(activeWidgets)
+    }
+
     // MARK: - Widgets Section
 
     private var widgetsSection: some View {
@@ -182,6 +183,11 @@ struct DashboardView: View {
     @ViewBuilder
     private func widgetView(_ widget: DashboardWidgetID) -> some View {
         switch widget {
+        case .firstSteps:
+            FirstStepsCard(
+                onAction: onFirstStepAction,
+                onRemove: removeFirstStepsWidget
+            )
         case .totalBalance:
             TotalBalanceWidget(
                 totalBalance: totalBalance,
