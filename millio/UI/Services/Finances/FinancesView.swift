@@ -597,7 +597,7 @@ struct FinancesMainTabView: View {
             .onChange(of: scenePhase) { _, newPhase in
                 guard newPhase == .active else { return }
                 let lastRefresh = viewModel.state.lastRefreshedAt ?? .distantPast
-                guard Date().timeIntervalSince(lastRefresh) > 15 * 60 else { return }
+                guard Date().timeIntervalSince(lastRefresh) > FinanceRecomputePolicy.foregroundStaleInterval else { return }
                 Task { await viewModel.refreshAll() }
             }
     }
@@ -1343,15 +1343,25 @@ struct FinancesMainTabView: View {
     }
 }
 
+/// Частота пересчёта финансовых агрегатов: считаем один раз при входе, дальше — только по
+/// изменению данных, pull-to-refresh или возврату из фона спустя этот интервал.
+enum FinanceRecomputePolicy {
+    static let foregroundStaleInterval: TimeInterval = 5 * 60
+}
+
 // MARK: - Finance Dynamics Tab View
 
 struct FinanceDynamicsTabView: View {
     @ObservedObject var financeViewModel: FinanceViewModel
-    
+
+    /// Вкладка «Динамика» сейчас выбрана. Пробрасывается до VM: невидимая вкладка не считает график.
+    var isScreenVisible: Bool = true
+
     var body: some View {
         FinanceDynamicsView(
             financeViewModel: financeViewModel,
-            wrapInNavigationStack: false
+            wrapInNavigationStack: false,
+            isScreenVisible: isScreenVisible
         )
     }
 }

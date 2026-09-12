@@ -103,6 +103,10 @@ struct FinanceDynamicsView: View {
     /// Нужно ли оборачивать в NavigationStack (для sheet'ов нужен, для navigationDestination - нет)
     var wrapInNavigationStack: Bool = true
 
+    /// Экран сейчас на экране. В `RootTabView` вкладки живут все сразу, поэтому невидимая
+    /// «Динамика» не должна пересчитывать свой график, пока пользователь работает на другой вкладке.
+    var isScreenVisible: Bool = true
+
     var body: some View {
         let content = Group {
             if let dynamicsViewModel = dynamicsViewModel {
@@ -152,6 +156,9 @@ struct FinanceDynamicsView: View {
         .onChange(of: appState.primaryCurrencyCode) { _, newValue in
             dynamicsViewModel?.handle(.setDisplayCurrency(newValue))
         }
+        .onChange(of: isScreenVisible) { _, isVisible in
+            dynamicsViewModel?.isScreenVisible = isVisible
+        }
 
         if wrapInNavigationStack {
             NavigationStack {
@@ -171,6 +178,7 @@ struct FinanceDynamicsView: View {
             initialAccountID: initialAccountID,
             initialAccountCurrency: initialAccountCurrency
         )
+        dynamicsViewModel?.isScreenVisible = isScreenVisible
         dynamicsViewModel?.handle(.loadData)
     }
 }

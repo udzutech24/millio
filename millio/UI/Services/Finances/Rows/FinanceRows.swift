@@ -502,6 +502,11 @@ private struct GroupRowModifiers: ViewModifier {
     func body(content: Content) -> some View {
         content
             .task {
+                // Тотал группы держит `refreshGroupTotalsAndAmounts` (данные/курсы/валюта шапки)
+                // и onChange ниже. Строка в LazyVStack пересчитывает его ТОЛЬКО когда значения
+                // ещё нет: иначе каждый заход строки в окно при скролле запускал полный
+                // `calculateGroupTotal` по всем счетам группы и забивал главный поток.
+                guard viewModel.state.groupTotals[groupID] == nil else { return }
                 await loadGroupTotal()
             }
             .onChange(of: isExpanded) { oldValue, newValue in

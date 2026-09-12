@@ -23,6 +23,20 @@ final class CashflowViewModel: ViewModelProtocol {
     /// двойном тапе CTA/гонке двух вызовов persist на MainActor.
     @Published private(set) var isPersistingTransaction: Bool = false
 
+    /// Экран с графиком сейчас на экране. `RootTabView` держит все вкладки живыми, поэтому без
+    /// этого флага график Кэшфлоу пересчитывался, пока пользователь скроллит «Счета».
+    /// Пересчёт невидимой вкладки откладывается и выполняется один раз при её показе.
+    var isScreenVisible: Bool = true {
+        didSet {
+            guard isScreenVisible, !oldValue, pendingChartRefresh else { return }
+            pendingChartRefresh = false
+            updateChartData()
+        }
+    }
+
+    /// Пока вкладка невидима, запрос на пересчёт графика копится сюда (без очереди — только факт).
+    var pendingChartRefresh: Bool = false
+
     /// Сообщение презентационному слою: цикл применения закончился и в журнале есть непоказанное.
     /// Решение «показывать или ждать» принимается не здесь — VM не видит ни блокировки экрана,
     /// ни смены scope, ни очереди листов.
