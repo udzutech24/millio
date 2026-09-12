@@ -316,6 +316,13 @@ struct RootTabView: View {
         case .openBackup:
             appState.pendingOpenProfileBackup = true
             showProfileSheet = true
+        case .openQuickSetup:
+            appState.pendingOpenProfileQuickSetup = true
+            showProfileSheet = true
+        case .openCategorySettings:
+            ensureCashflowViewModel()
+            appState.pendingOpenCategorySettings = true
+            showExpenseSheet = true
         case .none:
             break
         }

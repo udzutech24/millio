@@ -10,10 +10,12 @@ import UIKit
 // MARK: - Модель шага
 
 /// Куда карточка просит отвести пользователя по кнопке «Показать».
-enum FirstStepAction {
+enum FirstStepAction: Equatable {
     case addAccount
     case addExpense
     case openBackup
+    case openQuickSetup
+    case openCategorySettings
 }
 
 /// Срез данных, по которому считается выполненность шагов.
@@ -43,15 +45,15 @@ extension FirstStep {
             id: "currency",
             titleKey: "first_steps.step.currency",
             isDone: { $0.hasCurrency },
-            highlightID: nil,
-            action: nil
+            highlightID: "profile.quickSetupLink",
+            action: .openQuickSetup
         ),
         FirstStep(
             id: "categories",
             titleKey: "first_steps.step.categories",
             isDone: { $0.categoryCount > 0 },
             highlightID: nil,
-            action: nil
+            action: .openCategorySettings
         ),
         FirstStep(
             id: "account",
@@ -210,38 +212,26 @@ struct FirstStepsCard: View {
     private func row(_ step: FirstStep) -> some View {
         let done = step.isDone(snapshot)
 
-        HStack(spacing: AppSpacing.m) {
-            checkbox(done: done)
+        Button {
+            onAction(step)
+        } label: {
+            HStack(spacing: AppSpacing.m) {
+                checkbox(done: done)
 
-            Text(L(String.LocalizationValue(step.titleKey)))
-                .font(.millioCallout)
-                .foregroundStyle(Color.white.opacity(done ? 0.40 : 0.85))
-                .strikethrough(done, color: Color.white.opacity(0.40))
+                Text(L(String.LocalizationValue(step.titleKey)))
+                    .font(.millioCallout)
+                    .foregroundStyle(Color.white.opacity(done ? 0.40 : 0.85))
 
-            Spacer(minLength: AppSpacing.s)
+                Spacer(minLength: AppSpacing.s)
 
-            // «Показать» только у первого невыполненного шага — чтобы вести по одному
-            // действию за раз, а не предлагать пять входов сразу.
-            if step.action != nil, step.id == firstPending?.id {
-                Button {
-                    onAction(step)
-                } label: {
-                    Text(L("first_steps.show"))
-                        .font(.millioCaption)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, AppSpacing.m)
-                        .padding(.vertical, AppSpacing.xs)
-                        .background(
-                            Capsule()
-                                .fill(Color.white.opacity(0.05))
-                                .overlay(
-                                    Capsule().stroke(Color.white.opacity(0.12), lineWidth: Metrics.hairline)
-                                )
-                        )
-                }
-                .buttonStyle(.plain)
+                Image(systemName: "chevron.right")
+                    .font(.millioCaption)
+                    .foregroundStyle(Color.white.opacity(done ? 0.20 : 0.40))
             }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .disabled(step.action == nil)
     }
 
     private func checkbox(done: Bool) -> some View {

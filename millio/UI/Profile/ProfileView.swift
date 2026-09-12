@@ -79,6 +79,12 @@ struct ProfileView: View {
         )
     }
 
+    private func openQuickSetupIfPending() {
+        guard appState.pendingOpenProfileQuickSetup else { return }
+        appState.pendingOpenProfileQuickSetup = false
+        showQuickSetupSheet = true
+    }
+
     var body: some View {
         ZStack {
             GradientBackground()
@@ -128,6 +134,10 @@ struct ProfileView: View {
         .navigationDestination(isPresented: backupDestinationBinding) {
             BackupManagementView(router: router)
         }
+        // Аналогично backup: чек-лист первых шагов открывает быструю настройку языка/валюты
+        // сразу, минуя тап по строке в списке.
+        .onAppear { openQuickSetupIfPending() }
+        .onChange(of: appState.pendingOpenProfileQuickSetup) { _, _ in openQuickSetupIfPending() }
         .navigationTitle("profile.title")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -555,6 +565,7 @@ struct ProfileView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("profile.quickSetupLink")
+            .highlightTarget("profile.quickSetupLink")
 
         case .launchSplash:
             Menu {

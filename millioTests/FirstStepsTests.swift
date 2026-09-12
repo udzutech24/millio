@@ -42,4 +42,22 @@ final class FirstStepsTests: XCTestCase {
 
         XCTAssertEqual(FirstStep.doneCount(in: snapshot), FirstStep.all.count)
     }
+
+    /// Регрессия: у «currency» и «categories» `action` был `nil` — тап по строке ничего не
+    /// открывал. Каждый шаг чек-листа обязан вести куда-то.
+    func testEveryStepHasAnAction() {
+        for step in FirstStep.all {
+            XCTAssertNotNil(step.action, "У шага \(step.id) нет action — тап по нему ничего не сделает")
+        }
+    }
+
+    func testCurrencyStepOpensQuickSetup() {
+        let step = FirstStep.all.first { $0.id == "currency" }
+        XCTAssertEqual(step?.action, .openQuickSetup)
+    }
+
+    func testCategoriesStepOpensCategorySettings() {
+        let step = FirstStep.all.first { $0.id == "categories" }
+        XCTAssertEqual(step?.action, .openCategorySettings)
+    }
 }
