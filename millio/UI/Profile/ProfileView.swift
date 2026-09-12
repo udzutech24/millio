@@ -72,6 +72,13 @@ struct ProfileView: View {
         )
     }
     
+    private var backupDestinationBinding: Binding<Bool> {
+        Binding(
+            get: { appState.pendingOpenProfileBackup },
+            set: { appState.pendingOpenProfileBackup = $0 }
+        )
+    }
+
     var body: some View {
         ZStack {
             GradientBackground()
@@ -115,6 +122,11 @@ struct ProfileView: View {
                 }
                 .padding(.bottom, 40)
             }
+        }
+        // Экран резервной копии открывается и программно: карточка первых шагов ведёт
+        // прямо в него, а не просто в профиль. Флаг снимается сам при возврате назад.
+        .navigationDestination(isPresented: backupDestinationBinding) {
+            BackupManagementView(router: router)
         }
         .navigationTitle("profile.title")
         .navigationBarTitleDisplayMode(.inline)

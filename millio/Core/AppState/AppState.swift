@@ -114,6 +114,11 @@ final class AppState {
     var profileAvatarPath: String?
     /// One-shot deep-link trigger: open Finance add-product sheet (card by default).
     var pendingOpenFinanceAddCard: Bool = false
+    /// One-shot trigger: open backup screen inside profile.
+    var pendingOpenProfileBackup: Bool = false
+    /// Идентификатор элемента, который надо подсветить после перехода по «Показать»
+    /// в чек-листе первых шагов. Снимает сам `.highlightTarget(_:)` после затухания.
+    var highlightTarget: String?
     /// One-shot deep-link trigger from widget to quick expense sheet on Home.
     var pendingOpenMainExpenseSheet: Bool = false
     /// One-shot deep-link trigger from widget to quick income sheet on Home.

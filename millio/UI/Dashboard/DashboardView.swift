@@ -33,6 +33,7 @@ struct DashboardView: View {
     var onOpenHistory: () -> Void = {}
     var onShowProfile: () -> Void = {}
     var onDaysChipTap: (() -> Void)? = nil
+    var onFirstStepAction: (FirstStep) -> Void = { _ in }
 
     @AppStorage("finance_amount_hidden") private var isAmountHidden: Bool = false
     @State private var activeWidgets: [DashboardWidgetID] = DashboardWidgetStorage.load()
@@ -157,6 +158,15 @@ struct DashboardView: View {
         }
     }
 
+    /// Тот же путь, что у удаления свайпом в режиме редактирования: массив минус виджет
+    /// плюс сохранение. Виджет удаляют крестик в шапке и выполнение последнего шага.
+    private func removeFirstStepsWidget() {
+        withAnimation(AppAnimation.springGentle) {
+            activeWidgets.removeAll { $0 == .firstSteps }
+        }
+        DashboardWidgetStorage.save(activeWidgets)
+    }
+
     // MARK: - Widgets Section
 
     private var widgetsSection: some View {
@@ -173,6 +183,11 @@ struct DashboardView: View {
     @ViewBuilder
     private func widgetView(_ widget: DashboardWidgetID) -> some View {
         switch widget {
+        case .firstSteps:
+            FirstStepsCard(
+                onAction: onFirstStepAction,
+                onRemove: removeFirstStepsWidget
+            )
         case .totalBalance:
             TotalBalanceWidget(
                 totalBalance: totalBalance,
