@@ -297,6 +297,23 @@ struct RootTabView: View {
         router.showingSubscription = false
     }
 
+    /// Переходы карточки первых шагов. Идут через существующие `pendingOpen*`-флаги —
+    /// целевой экран сам их разбирает после навигации.
+    private func handleFirstStepAction(_ action: FirstStepAction) {
+        switch action {
+        case .addAccount:
+            appState.pendingOpenFinanceAddCard = true
+            router.selectedTab = .finances
+        case .addExpense:
+            ensureCashflowViewModel()
+            appState.pendingOpenMainExpenseSheet = true
+        case .openBackup:
+            // Программного входа в экран резервной копии пока нет — открываем профиль,
+            // точечный переход добавляется в Ф2.
+            showProfileSheet = true
+        }
+    }
+
     // MARK: - Dashboard Tab
 
     @ViewBuilder
@@ -314,7 +331,8 @@ struct RootTabView: View {
                 onOpenCashflow: { router.selectedTab = .cashflow },
                 onOpenHistory: { ensureCashflowViewModel(); appState.pendingOpenCashflowHistory = true },
                 onShowProfile: { showProfileSheet = true },
-                onDaysChipTap: { showDeltaPeriodPicker = true }
+                onDaysChipTap: { showDeltaPeriodPicker = true },
+                onFirstStepAction: handleFirstStepAction
             )
         } else {
             NavigationStack(path: $dashboardPath) {
@@ -504,6 +522,7 @@ private struct DashboardTabHostView: View {
     var onOpenHistory: () -> Void
     var onShowProfile: () -> Void
     var onDaysChipTap: () -> Void
+    var onFirstStepAction: (FirstStepAction) -> Void
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -532,7 +551,8 @@ private struct DashboardTabHostView: View {
                 cashflowPeriodLabel: cashflowViewModel.state.chartPeriod.displayName,
                 onOpenHistory: onOpenHistory,
                 onShowProfile: onShowProfile,
-                onDaysChipTap: onDaysChipTap
+                onDaysChipTap: onDaysChipTap,
+                onFirstStepAction: onFirstStepAction
             )
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: FinancesStackRoute.self) { route in

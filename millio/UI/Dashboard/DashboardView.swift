@@ -33,12 +33,17 @@ struct DashboardView: View {
     var onOpenHistory: () -> Void = {}
     var onShowProfile: () -> Void = {}
     var onDaysChipTap: (() -> Void)? = nil
+    var onFirstStepAction: (FirstStepAction) -> Void = { _ in }
 
     @AppStorage("finance_amount_hidden") private var isAmountHidden: Bool = false
     @State private var activeWidgets: [DashboardWidgetID] = DashboardWidgetStorage.load()
     @State private var isEditing = false
     @State private var showAddWidget = false
     @State private var appeared = false
+
+    /// Совпадает с горизонтальным отступом `widgetsSection` — карточка должна стоять
+    /// в одну линию с виджетами.
+    private static let contentHorizontalInset: CGFloat = 18
 
     private var inactiveWidgets: [DashboardWidgetID] {
         DashboardWidgetID.allCases.filter { !activeWidgets.contains($0) }
@@ -95,6 +100,10 @@ struct DashboardView: View {
                 miniAppsSection
                     .padding(.top, 8)
                     .revealOnAppear(appeared: appeared, index: 1)
+
+                FirstStepsCard(onAction: onFirstStepAction)
+                    .padding(.horizontal, Self.contentHorizontalInset)
+                    .padding(.top, AppSpacing.l)
 
                 if activeWidgets.isEmpty {
                     emptyPlaceholder

@@ -1,0 +1,22 @@
+{
+  "planFile": "2026-09-12__first-steps-card.md",
+  "title": "Первые шаги на дашборде",
+  "updated": "2026-09-12T12:00:00Z",
+  "phases": [
+    {
+      "name": "Ф1 карточка и шаги",
+      "status": "done",
+      "note": "сборка симулятора зелёная"
+    },
+    {
+      "name": "Ф2 подсветка и бэкап",
+      "status": "pending"
+    },
+    {
+      "name": "Ф3 тест и самоаудит",
+      "status": "pending"
+    }
+  ],
+  "costUsd": null,
+  "etaMinutes": 45
+}
