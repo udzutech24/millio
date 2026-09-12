@@ -33,7 +33,7 @@ struct DashboardView: View {
     var onOpenHistory: () -> Void = {}
     var onShowProfile: () -> Void = {}
     var onDaysChipTap: (() -> Void)? = nil
-    var onFirstStepAction: (FirstStepAction) -> Void = { _ in }
+    var onFirstStepAction: (FirstStep) -> Void = { _ in }
 
     @AppStorage("finance_amount_hidden") private var isAmountHidden: Bool = false
     @State private var activeWidgets: [DashboardWidgetID] = DashboardWidgetStorage.load()

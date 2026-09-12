@@ -71,7 +71,7 @@ extension FirstStep {
             id: "backup",
             titleKey: "first_steps.step.backup",
             isDone: { $0.backupEnabled },
-            highlightID: "profile.backupRow",
+            highlightID: nil,
             action: .openBackup
         )
     ]
@@ -88,7 +88,7 @@ extension FirstStep {
 struct FirstStepsCard: View {
     static let dismissedKey = "firstSteps.dismissed"
 
-    var onAction: (FirstStepAction) -> Void
+    var onAction: (FirstStep) -> Void
 
     @AppStorage(FirstStepsCard.dismissedKey) private var isDismissed: Bool = false
 
@@ -119,7 +119,7 @@ private enum Metrics {
 }
 
 private struct FirstStepsCardContent: View {
-    var onAction: (FirstStepAction) -> Void
+    var onAction: (FirstStep) -> Void
     var onDismiss: () -> Void
 
     @Query private var categories: [CashflowCustomCategory]
@@ -236,9 +236,9 @@ private struct FirstStepsCardContent: View {
 
             // «Показать» только у первого невыполненного шага — чтобы вести по одному
             // действию за раз, а не предлагать пять входов сразу.
-            if let action = step.action, step.id == firstPending?.id {
+            if step.action != nil, step.id == firstPending?.id {
                 Button {
-                    onAction(action)
+                    onAction(step)
                 } label: {
                     Text(L("first_steps.show"))
                         .font(.millioCaption)

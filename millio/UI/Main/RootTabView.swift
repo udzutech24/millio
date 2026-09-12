@@ -299,8 +299,11 @@ struct RootTabView: View {
 
     /// Переходы карточки первых шагов. Идут через существующие `pendingOpen*`-флаги —
     /// целевой экран сам их разбирает после навигации.
-    private func handleFirstStepAction(_ action: FirstStepAction) {
-        switch action {
+    private func handleFirstStepAction(_ step: FirstStep) {
+        // Что подсветить — знает сам шаг, RootTabView только передаёт это дальше.
+        appState.highlightTarget = step.highlightID
+
+        switch step.action {
         case .addAccount:
             appState.pendingOpenFinanceAddCard = true
             router.selectedTab = .finances
@@ -308,9 +311,10 @@ struct RootTabView: View {
             ensureCashflowViewModel()
             appState.pendingOpenMainExpenseSheet = true
         case .openBackup:
-            // Программного входа в экран резервной копии пока нет — открываем профиль,
-            // точечный переход добавляется в Ф2.
+            appState.pendingOpenProfileBackup = true
             showProfileSheet = true
+        case .none:
+            break
         }
     }
 
@@ -522,7 +526,7 @@ private struct DashboardTabHostView: View {
     var onOpenHistory: () -> Void
     var onShowProfile: () -> Void
     var onDaysChipTap: () -> Void
-    var onFirstStepAction: (FirstStepAction) -> Void
+    var onFirstStepAction: (FirstStep) -> Void
 
     var body: some View {
         NavigationStack(path: $path) {

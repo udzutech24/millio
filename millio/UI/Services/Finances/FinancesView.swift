@@ -1336,6 +1336,7 @@ struct FinancesMainTabView: View {
                         .shadow(color: AppColors.brandPrimary.opacity(0.14), radius: 16, y: 8)
                 }
                 .buttonStyle(.plain)
+                .highlightTarget("finances.addAccountButton")
                 .padding(.trailing, FinancesMainLayoutPolicy.fabTrailingPadding)
                 .padding(.bottom, FinancesMainLayoutPolicy.fabBottomPadding)
             }

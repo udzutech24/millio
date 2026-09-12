@@ -38,7 +38,7 @@
 9 ключей `first_steps.*` (ru/en/zh-Hans). Сборка симулятора зелёная. `openBackup`
 пока открывает профиль целиком — точечный вход в Ф2.
 
-## Ф2 — подсветка и экран бэкапа `[ ]`
+## Ф2 — подсветка и экран бэкапа `[x]`
 
 Файлы:
 - `millio/UI/Design/HighlightEffect.swift` (новый) — `.highlightTarget("id")`,
@@ -51,6 +51,14 @@
 
 Гейт: «Показать» у шагов 3 и 5 доводит до нужного экрана, подсветка гаснет сама
 и не остаётся при повторном заходе.
+
+**Сделано 12.09.2026:** `HighlightEffect.swift` (`.highlightTarget(_:)`, обводка
+brandPrimary + затухание за 2 с, сама снимает флаг), поля `highlightTarget` и
+`pendingOpenProfileBackup` в `AppState`, подсветка кнопки «+» в `FinancesView`,
+программный вход в `BackupManagementView` через
+`navigationDestination(isPresented:)` в `ProfileView`. Колбэк карточки отдаёт
+шаг целиком — `highlightID` берётся из массива шагов, не из `RootTabView`.
+Шаг «резервная копия» подсветки не имеет: переход ведёт прямо на экран.
 
 ## Ф3 — тест и самоаудит `[ ]`
 
