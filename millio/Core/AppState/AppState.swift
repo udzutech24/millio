@@ -116,8 +116,6 @@ final class AppState {
     var pendingOpenFinanceAddCard: Bool = false
     /// One-shot trigger: open backup screen inside profile.
     var pendingOpenProfileBackup: Bool = false
-    /// One-shot trigger: open quick-setup (язык и валюта) screen inside profile.
-    var pendingOpenProfileQuickSetup: Bool = false
     /// One-shot trigger: open category settings sheet inside the expense entry screen.
     var pendingOpenCategorySettings: Bool = false
     /// Идентификатор элемента, который надо подсветить после перехода по «Показать»

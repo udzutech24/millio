@@ -316,8 +316,9 @@ struct RootTabView: View {
         case .openBackup:
             appState.pendingOpenProfileBackup = true
             showProfileSheet = true
-        case .openQuickSetup:
-            appState.pendingOpenProfileQuickSetup = true
+        case .openPrimaryCurrency:
+            // Профиль открывается на корневом списке: подсветка (highlightTarget выше)
+            // сама показывает строки «Язык» и «Основная валюта».
             showProfileSheet = true
         case .openCategorySettings:
             ensureCashflowViewModel()

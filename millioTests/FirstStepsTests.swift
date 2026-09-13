@@ -51,9 +51,12 @@ final class FirstStepsTests: XCTestCase {
         }
     }
 
-    func testCurrencyStepOpensQuickSetup() {
+    /// Шаг «Язык и валюта» больше не открывает мастер быстрой настройки: строку из профиля
+    /// убрали, путь — профиль с подсветкой «Основной валюты».
+    func testCurrencyStepOpensProfilePrimaryCurrency() {
         let step = FirstStep.all.first { $0.id == "currency" }
-        XCTAssertEqual(step?.action, .openQuickSetup)
+        XCTAssertEqual(step?.action, .openPrimaryCurrency)
+        XCTAssertEqual(step?.highlightID, "profile.primaryCurrencyLink")
     }
 
     func testCategoriesStepOpensCategorySettings() {

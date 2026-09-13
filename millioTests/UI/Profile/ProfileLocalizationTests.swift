@@ -138,8 +138,6 @@ struct ProfileLocalizationTests {
         #expect(localizedString("profile.security", languageCode: "zh-Hans") == "应用安全")
         #expect(localizedString("profile.reminders", languageCode: "zh-Hans") == "提醒")
         #expect(localizedString("profile.status.disabled", languageCode: "zh-Hans") == "已关闭")
-        #expect(localizedString("profile.quick_setup", languageCode: "zh-Hans") == "快速设置")
-        #expect(localizedString("profile.status.not_completed", languageCode: "zh-Hans") == "未完成")
         #expect(localizedString("profile.section.general", languageCode: "zh-Hans") == "通用")
         #expect(localizedString("profile.section.settings", languageCode: "zh-Hans") == "设置")
         #expect(localizedString("profile.section.experience", languageCode: "zh-Hans") == "使用体验")

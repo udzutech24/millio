@@ -19,7 +19,6 @@ struct ProfileView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showNameEditSheet = false
     @State private var editedName = ""
-    @State private var showQuickSetupSheet = false
     @State private var showContactSheet = false
     @State private var showDebugUnlockSheet = false
     @State private var versionTapGate = MultiTapGate(
@@ -79,12 +78,6 @@ struct ProfileView: View {
         )
     }
 
-    private func openQuickSetupIfPending() {
-        guard appState.pendingOpenProfileQuickSetup else { return }
-        appState.pendingOpenProfileQuickSetup = false
-        showQuickSetupSheet = true
-    }
-
     var body: some View {
         ZStack {
             GradientBackground()
@@ -134,21 +127,11 @@ struct ProfileView: View {
         .navigationDestination(isPresented: backupDestinationBinding) {
             BackupManagementView(router: router)
         }
-        // Аналогично backup: чек-лист первых шагов открывает быструю настройку языка/валюты
-        // сразу, минуя тап по строке в списке.
-        .onAppear { openQuickSetupIfPending() }
-        .onChange(of: appState.pendingOpenProfileQuickSetup) { _, _ in openQuickSetupIfPending() }
         .navigationTitle("profile.title")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(isPresented: $showNameEditSheet) {
             nameEditSheet
-        }
-        .sheet(isPresented: $showQuickSetupSheet) {
-            QuickSetupView(
-                appState: appState,
-                mode: .settings
-            )
         }
         .sheet(isPresented: $showContactSheet) {
             SupportContactSheet()
@@ -404,12 +387,6 @@ struct ProfileView: View {
             : AppLocalization.string("profile.status.disabled", locale: profileLocale)
     }
 
-    private var quickSetupStatusText: String {
-        return SettingsManager.shared.isQuickSetupCompleted
-            ? AppLocalization.string("profile.status.completed", locale: profileLocale)
-            : AppLocalization.string("profile.status.not_completed", locale: profileLocale)
-    }
-
     private var remindersRowTitle: String {
         AppLocalization.string(
             "profile.reminders",
@@ -495,6 +472,9 @@ struct ProfileView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("profile.primaryCurrencyLink")
+            // Цель подсветки для шага «Язык и валюта» из чек-листа первых шагов:
+            // подсвечиваем денежную настройку, язык рядом в той же секции.
+            .highlightTarget("profile.primaryCurrencyLink")
 
         case .rateSource:
             NavigationLink {
@@ -553,19 +533,6 @@ struct ProfileView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("profile.dailyReminderLink")
-
-        case .quickSetup:
-            Button {
-                showQuickSetupSheet = true
-            } label: {
-                settingsRow(item: .quickSetup, title: "profile.quick_setup") {
-                    rowValueText(quickSetupStatusText, accent: true)
-                    chevron
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("profile.quickSetupLink")
-            .highlightTarget("profile.quickSetupLink")
 
         case .launchSplash:
             Menu {

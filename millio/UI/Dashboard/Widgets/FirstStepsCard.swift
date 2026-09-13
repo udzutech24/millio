@@ -14,7 +14,7 @@ enum FirstStepAction: Equatable {
     case addAccount
     case addExpense
     case openBackup
-    case openQuickSetup
+    case openPrimaryCurrency
     case openCategorySettings
 }
 
@@ -45,8 +45,8 @@ extension FirstStep {
             id: "currency",
             titleKey: "first_steps.step.currency",
             isDone: { $0.hasCurrency },
-            highlightID: "profile.quickSetupLink",
-            action: .openQuickSetup
+            highlightID: "profile.primaryCurrencyLink",
+            action: .openPrimaryCurrency
         ),
         FirstStep(
             id: "categories",
