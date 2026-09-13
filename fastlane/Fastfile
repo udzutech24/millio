@@ -195,6 +195,7 @@ platform :ios do
     upload_to_testflight(
       api_key: asc_api_key,
       app_identifier: "com.millio.app",
+      app_platform: "ios",
       distribute_only: true,
       build_number: build.to_s,
       app_version: version,
