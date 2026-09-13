@@ -48,7 +48,16 @@ extension FinanceAddAccountView {
         guard validateEntitlementsForSave(),
               let kind = newCoreMoneyKindForCurrentSelection,
               let command = try? moneyCreateCommand(kind: kind) else { return }
-        statementDraft = AccountStatementCreateDraft(createTemplate: command)
+        // Выбираем по `kind`, а не цепочкой `cardData?.x ?? investmentData?.x` — та цепочка брала
+        // избранное брошенной формы, если сброс `@State` при смене типа/пресета не успел
+        // отработать (тот же класс бага, что и в `AccountCreationCoordinator.finalizeMoneyAccount`).
+        let isFavorite = kind == .debitCard ? (cardData?.isFavorite ?? false) : (investmentData?.isFavorite ?? false)
+        statementDraft = AccountStatementCreateDraft(
+            createTemplate: command,
+            isFavorite: isFavorite,
+            iconName: draftIconName,
+            tintHex: draftIconColor
+        )
         showStatementOnboarding = true
     }
 

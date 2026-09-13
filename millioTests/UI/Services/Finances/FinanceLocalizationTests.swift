@@ -106,6 +106,7 @@ struct FinanceLocalizationTests {
         let marketDataPresentation = try String(contentsOf: sourceURL("millio/UI/Services/Investments/MarketData/MarketDataErrorPresentation.swift"), encoding: .utf8)
         let stockBulkImportSheet = try String(contentsOf: sourceURL("millio/UI/Services/Finances/Import/StockBulkImportSheet.swift"), encoding: .utf8)
         let financesSheets = try String(contentsOf: sourceURL("millio/UI/Services/Finances/Sheets/FinancesSheets.swift"), encoding: .utf8)
+        let inlineCreateForms = try String(contentsOf: sourceURL("millio/UI/Services/Finances/InlineForms/InlineCreateForms.swift"), encoding: .utf8)
 
         #expect(!financesView.contains("Text(\"finances."))
         #expect(!financesView.contains("String(localized:"))
@@ -120,6 +121,13 @@ struct FinanceLocalizationTests {
         #expect(!stockBulkImportSheet.contains("locale: .current"))
         #expect(!stockBulkImportSheet.contains("String(localized: \"finances.mass_import."))
         #expect(!financesSheets.contains("String(localized: \"finances.savings_goal."))
+        // Регрессия round 2 (N5): до фикса Picker/Stepper формы кредитки держали сырые
+        // английские литералы напрямую в коде — RU/DE/ES-пользователь видел "Bank / issuer" и
+        // т.п. вместо перевода. Теперь это L()-вызовы, литералы не должны вернуться.
+        #expect(!inlineCreateForms.contains("\"Bank / issuer\""))
+        #expect(!inlineCreateForms.contains("\"Statement day: "))
+        #expect(!inlineCreateForms.contains("\"Payment day: "))
+        #expect(!inlineCreateForms.contains("\"Grace period: "))
     }
 
     @Test("Compact overview не дублирует saldo, содержит donut и читает канонический snapshot")
@@ -338,6 +346,13 @@ struct FinanceLocalizationTests {
             key: "finances.settings.daily_audit.subtitle",
             locale: "zh-Hans",
             equals: "每日对账、调整与检查"
+        )
+        // Регрессия: ru-значение содержало опечатку "Ежедневенная" — проверялся только zh-Hans.
+        try assertLocalizedValue(
+            strings: strings,
+            key: "finances.settings.daily_audit.subtitle",
+            locale: "ru",
+            equals: "Ежедневная сверка, корректировка и контроль"
         )
         try assertLocalizedValue(
             strings: strings,
@@ -651,6 +666,33 @@ struct FinanceLocalizationTests {
             locale: "zh-Hans",
             equals: "%1$@ — %2$@"
         )
+    }
+
+    /// Регрессия round 2 (N7): подсказка "Recommended: set quantity (0 is allowed)" не объясняла
+    /// смысл нуля — владелец подтвердил, что 0 в акциях/крипте это режим наблюдения за ценой без
+    /// позиции, а не «забытое поле». Формулировка должна явно называть это, не быть калькой.
+    @Test("Подсказка о количестве в форме акций/крипты объясняет смысл нуля")
+    func recommendedQuantityHintExplainsWatchOnlyMode() throws {
+        let strings = try loadFinanceStrings()
+        let key = "finances.add_account.hint.recommended_quantity"
+
+        for locale in ["ru", "en", "de", "es", "zh-Hans"] {
+            let rawValue = try #require(strings[key] as? [String: Any], "Missing key: \(key)")
+            let localizations = try #require(rawValue["localizations"] as? [String: Any], "Missing localizations: \(key)")
+            let localeValue = try #require(localizations[locale] as? [String: Any], "Missing locale \(locale): \(key)")
+            let stringUnit = try #require(localeValue["stringUnit"] as? [String: Any], "Missing stringUnit: \(key)")
+            let value = try #require(stringUnit["value"] as? String, "Missing value: \(key)")
+
+            #expect(!value.isEmpty, "\(locale) перевод не должен быть пустым")
+            // Старая формулировка была буквальной калькой "Recommended: set X (0 is allowed)"
+            // на всех языках — новая должна отличаться хотя бы отсутствием этого шаблона в en.
+            if locale == "en" {
+                #expect(value != "Recommended: set quantity (0 is allowed)", "En-формулировка не должна откатиться к старой калькированной версии")
+            }
+            if locale == "ru" {
+                #expect(value != "Рекомендуется ввести количество (можно 0)", "Ru-формулировка не должна откатиться к старой версии без объяснения смысла нуля")
+            }
+        }
     }
 
     private func loadFinanceStrings() throws -> [String: Any] {

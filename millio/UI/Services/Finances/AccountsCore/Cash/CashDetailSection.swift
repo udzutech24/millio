@@ -5,6 +5,10 @@ import SwiftUI
 /// вынесены на экран, а не спрятаны в «···».
 struct CashDetailSection: View {
     let lastReconciliation: Date?
+    /// Архивный/удалённый счёт read-only (A3): кнопка сверки прячется, а не показывается
+    /// с системным «Операция не может быть завершена» после отказа `AccountsCoreService`.
+    /// История (дата последней сверки) остаётся видимой — не переоценка прошлого, а запрет правки.
+    let canReconcile: Bool
     let onReconcile: () -> Void
 
     var body: some View {
@@ -21,18 +25,20 @@ struct CashDetailSection: View {
 
             Spacer(minLength: AppSpacing.s)
 
-            Button(action: onReconcile) {
-                Text(L("accounts_core.detail.action.reconcile_cash"))
-                    .font(.millioCalloutSemibold)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.financesGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
+            if canReconcile {
+                Button(action: onReconcile) {
+                    Text(L("accounts_core.detail.action.reconcile_cash"))
+                        .font(.millioCalloutSemibold)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: AppColors.financesGradient,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
                         )
-                    )
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.m)

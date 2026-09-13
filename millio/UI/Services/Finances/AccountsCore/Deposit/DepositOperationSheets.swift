@@ -138,22 +138,12 @@ struct DepositBalanceAdjustmentSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section(L("accounts_core.detail.action.adjust_balance")) {
-                    AmountTextField(
-                        placeholder: L("accounts_core.detail.sheet.adjust.new_balance"),
-                        value: $amountText
-                    )
-                    Text(currency)
-                        .font(.millioCaptionRegular)
-                        .foregroundStyle(AppColors.textSecondary)
-                    DatePicker(
-                        L("accounts_core.detail.sheet.date_label"),
-                        selection: $date,
-                        displayedComponents: .date
-                    )
-                    TextField(L("accounts_core.detail.sheet.note_placeholder"), text: $note)
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppSpacing.l) {
+                    amountCard
+                    detailsCard
                 }
+                .padding(AppSpacing.l)
             }
             .navigationTitle(L("accounts_core.detail.action.adjust_balance"))
             .navigationBarTitleDisplayMode(.inline)
@@ -171,6 +161,67 @@ struct DepositBalanceAdjustmentSheet: View {
             }
         }
         .accountSheetChrome()
+    }
+
+    // MARK: - Секции
+    // Приём взят из DepositTermsInputCard: крупная сумма с валютой-суффиксом в одной строке
+    // на акцентной карточке, а не голым Form с дублирующим заголовком секции.
+
+    private var amountCard: some View {
+        FinancesGlassCard(
+            contentPadding: EdgeInsets(
+                top: AppSpacing.l, leading: AppSpacing.l,
+                bottom: AppSpacing.l, trailing: AppSpacing.l
+            )
+        ) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                fieldCaption(L("accounts_core.detail.sheet.adjust.new_balance"))
+                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.s) {
+                    AmountTextField(
+                        placeholder: "0",
+                        value: $amountText,
+                        font: MoneyFieldFontRamp.font(for:)
+                    )
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    currencyPill
+                }
+            }
+        }
+    }
+
+    private var currencyPill: some View {
+        Text(currency)
+            .font(.millioCalloutSemibold)
+            .foregroundStyle(AppColors.textSecondary)
+            .padding(.horizontal, AppSpacing.s)
+            .padding(.vertical, AppSpacing.xs)
+            .background(Capsule().fill(AppColors.iconBackground))
+    }
+
+    private var detailsCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.m) {
+            DatePicker(
+                L("accounts_core.detail.sheet.date_label"),
+                selection: $date,
+                displayedComponents: .date
+            )
+            .font(.millioBody)
+            Divider().overlay(AppColors.iconBackground)
+            TextField(L("accounts_core.detail.sheet.note_placeholder"), text: $note)
+                .font(.millioBody)
+                .foregroundStyle(AppColors.textPrimary)
+        }
+        .padding(AppSpacing.m)
+        .background(RoundedRectangle(cornerRadius: AppSpacing.m).fill(AppColors.iconBackground))
+    }
+
+    private func fieldCaption(_ text: String) -> some View {
+        Text(text)
+            .font(.millioCaption)
+            .textCase(.uppercase)
+            .foregroundStyle(AppColors.textTertiary)
     }
 }
 

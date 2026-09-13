@@ -45,7 +45,7 @@ struct FinanceAddAccountView: View {
     /// Условия договора кредита (Ф3) — отдельно от `creditData`: легаси-кортеж их не вмещает.
     @State var loanTermsDraft: LoanTermsDraft?
     @State var creditData: (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)?
-    @State var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?
+    @State var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?
     /// Данные формы «Вклад»/«Накопительный счёт» нового ядра (Фаза 3) — `nil` для остальных пресетов.
     @State var depositData: DepositFormData?
     @State var selectedArchivedAccountID: String? = nil
@@ -323,7 +323,30 @@ struct FinanceAddAccountView: View {
         let content = navigationContent
             .modifier(SelectedAccountTypeChangeHandler(selectedAccountType: $selectedAccountType, selectedArchivedAccountID: $selectedArchivedAccountID))
             .onChange(of: selectedAccountType) { _, _ in
+                // Баг 2 (второй экземпляр): SwiftUI сбрасывает `@State` ДОЧЕРНЕЙ формы при смене
+                // типа (structural identity — форма-класс в `switch` меняется), но РОДИТЕЛЬСКИЕ
+                // `@State` этого экрана (`cardData`/`investmentData`/…) остаются от брошенной формы.
+                // `cardData?.x ?? investmentData?.x` в `+CoreCreate.swift` тогда молча брал значение
+                // из формы, которую пользователь уже покинул (напр. избранное с формы «Карта» для
+                // только что выбранного «Счёта»). Без явного сброса здесь неоднозначность остаётся.
+                cardData = nil
+                investmentData = nil
+                creditData = nil
+                depositData = nil
                 focusNameFieldIfNeeded()
+            }
+            .onChange(of: selectedInvestmentPreset) { _, _ in
+                // Тот же Баг 2 внутри `.investment`: «Наличные»/«Счёт»/«Долг» (нужный `if/else` в
+                // `createFormSections` пересоздаёт форму) и «Вклад» (другой View-тип) — переключение
+                // между ними меняет `selectedInvestmentPreset`, а не `selectedAccountType`, так что
+                // сброс выше не срабатывал. Путь «Наличные → Вклад → Счёт» брал избранное и сумму
+                // «Наличных» для нового «Счёта» (ревью round 2). Смена ТОЛЬКО категории при том же
+                // пресете (напр. «Долг» ↔ «Недвижимость») этой правкой не покрыта — там форма та же
+                // самая, её решает уже сама форма, а не этот экран (отдельная задача).
+                cardData = nil
+                investmentData = nil
+                creditData = nil
+                depositData = nil
             }
             .onChange(of: selectedInvestmentCategory) { _, newValue in
                 if newValue == .stocks || newValue == .crypto {

@@ -32,6 +32,35 @@ struct AccountStatementOnboardingCommand {
     let statementPeriodFrom: Date
     let statementPeriodTo: Date
     let onboardingID: String
+    // Седьмой путь создания счёта (F4, ревью round 1/2): единственный, который не проходит через
+    // `AccountCreationCoordinator` — у него свой `apply()` с импортом операций выпиской, поэтому
+    // оформление несём отдельно и применяем тем же вызовом `AccountAppearancePersister`, что и
+    // остальные 6 точек. Дефолты — чтобы существующие вызовы команды (в т.ч. тесты) не ломались.
+    let isFavorite: Bool
+    let iconName: String?
+    let tintHex: String?
+
+    init(
+        create: CreateProductCommand,
+        operations: [CashflowApprovedStatementOperation],
+        balanceConfirmation: AccountStatementBalanceConfirmation,
+        statementPeriodFrom: Date,
+        statementPeriodTo: Date,
+        onboardingID: String,
+        isFavorite: Bool = false,
+        iconName: String? = nil,
+        tintHex: String? = nil
+    ) {
+        self.create = create
+        self.operations = operations
+        self.balanceConfirmation = balanceConfirmation
+        self.statementPeriodFrom = statementPeriodFrom
+        self.statementPeriodTo = statementPeriodTo
+        self.onboardingID = onboardingID
+        self.isFavorite = isFavorite
+        self.iconName = iconName
+        self.tintHex = tintHex
+    }
 }
 
 struct AccountStatementOnboardingResult: Equatable {
@@ -102,6 +131,12 @@ final class AccountStatementOnboardingCoordinator {
             payloadDigest: payloadDigest,
             command: command
         ) {
+            // Идемпотентный повтор — счёт уже существует, но оформление применяем так же: раньше
+            // вызывающая `View` делала это безусловно после ЛЮБОГО успешного `apply()`, в т.ч. retry.
+            AccountAppearancePersister.persistIfNeeded(
+                context: modelContext, accountID: existing.accountID,
+                isFavorite: command.isFavorite, iconName: command.iconName, tintHex: command.tintHex
+            )
             return existing
         }
 
@@ -126,6 +161,13 @@ final class AccountStatementOnboardingCoordinator {
             }
         }
 
+        // `factory.create` строит счёт и импортированные операции в одном графе («committed exactly
+        // once» — см. её doc-комментарий); если мы дошли сюда без throw, счёт уже закоммичен целиком.
+        // Тот же паттерн, что 6 остальных точек создания в `AccountCreationCoordinator.swift`.
+        AccountAppearancePersister.persistIfNeeded(
+            context: modelContext, accountID: accountID,
+            isFavorite: command.isFavorite, iconName: command.iconName, tintHex: command.tintHex
+        )
         return .init(
             accountID: accountID,
             insertedFingerprints: stagedResult.insertedFingerprints,

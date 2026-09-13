@@ -506,40 +506,41 @@ enum CashflowBulkExpenseImportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidImage:
-            return String(
-                localized: "cashflow.bulk_expense.error.invalid_image",
-                defaultValue: "The image could not be read.",
-                comment: "Bulk expense screenshot import invalid image error"
+            return L(
+                "cashflow.bulk_expense.error.invalid_image",
+                defaultValue: "The image could not be read."
             )
         case .noTextFound:
-            return String(
-                localized: "cashflow.bulk_expense.error.no_text",
-                defaultValue: "No text was found on the screenshot.",
-                comment: "Bulk expense screenshot import no text error"
+            return L(
+                "cashflow.bulk_expense.error.no_text",
+                defaultValue: "No text was found on the screenshot."
             )
         case .noExpenseRowsFound:
-            return String(
-                localized: "cashflow.bulk_expense.error.no_rows",
-                defaultValue: "No expense rows were recognized.",
-                comment: "Bulk expense screenshot import no rows error"
+            return L(
+                "cashflow.bulk_expense.error.no_rows",
+                defaultValue: "No expense rows were recognized."
             )
         case .noRowsToSave:
-            return String(
-                localized: "cashflow.bulk_expense.error.no_rows_to_save",
-                defaultValue: "Add at least one valid expense row.",
-                comment: "Bulk expense import save error without rows"
+            return L(
+                "cashflow.bulk_expense.error.no_rows_to_save",
+                defaultValue: "Add at least one valid expense row."
             )
         case .cardNotFound:
-            return String(
-                localized: "cashflow.bulk_expense.error.card_not_found",
-                defaultValue: "Select an active card before saving.",
-                comment: "Bulk expense import save error without card"
+            return L(
+                "cashflow.bulk_expense.error.card_not_found",
+                defaultValue: "Select an active card before saving."
             )
         case .insufficientFunds(let required, let available, let currency):
+            let template = L(
+                "cashflow.bulk_expense.error.insufficient_funds",
+                defaultValue: "Not enough funds: %1$@ %2$@ needed, %3$@ %4$@ available."
+            )
             return String(
-                localized: "cashflow.bulk_expense.error.insufficient_funds",
-                defaultValue: "Not enough funds: \(CashflowBulkExpenseRowDraft.formatAmount(required)) \(currency) needed, \(CashflowBulkExpenseRowDraft.formatAmount(available)) \(currency) available.",
-                comment: "Bulk expense import insufficient funds error"
+                format: template,
+                CashflowBulkExpenseRowDraft.formatAmount(required),
+                currency,
+                CashflowBulkExpenseRowDraft.formatAmount(available),
+                currency
             )
         }
     }

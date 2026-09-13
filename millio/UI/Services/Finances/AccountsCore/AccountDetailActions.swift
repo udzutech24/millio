@@ -113,6 +113,9 @@ extension AccountDetailView {
     var overflowItems: [AccountActionItem] {
         switch account.kind {
         case .marketInvestment:
+            // Архивный/удалённый инвест-счёт read-only: без этого guard'а «Комиссия»/«Редактировать»
+            // открывались бы на закрытом счёте (БАГ 6, тот же дефект что у generic-счетов ниже).
+            guard account.archivedAt == nil, account.deletedAt == nil else { return [] }
             return [
                 .init(title: L("accounts_core.detail.market.action.fee"), icon: "minus.circle") { sheet = .fee },
                 .init(title: L("accounts_core.detail.action.edit"), icon: "pencil") { sheet = .editDetails },
@@ -128,6 +131,11 @@ extension AccountDetailView {
     }
 
     var genericOverflowItems: [AccountActionItem] {
+        // БАГ 6: архивный/удалённый счёт открывался этим же листом («Редактировать»/«Изменить
+        // баланс»/«Удалить») через toolbar-фолбэк AccountDetailView — правки проходили на
+        // закрытом счёте, потому что здесь не было проверки archivedAt/deletedAt (образец
+        // такой проверки уже есть у вклада и кредита в этом же файле).
+        guard account.archivedAt == nil, account.deletedAt == nil else { return [] }
         var items: [AccountActionItem] = []
         if isDebitProduct {
             items.append(.init(title: L("debit_card.action.fee"), icon: "banknote") { sheet = .fee })

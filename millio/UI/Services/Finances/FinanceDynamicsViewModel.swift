@@ -391,6 +391,20 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
     }
 
+    /// Экран «Динамика» сейчас на экране. `RootTabView` держит все вкладки живыми, поэтому без
+    /// этого флага график Динамики пересчитывался, пока пользователь скроллит «Счета».
+    /// Пересчёт невидимой вкладки откладывается и выполняется один раз при её показе.
+    var isScreenVisible: Bool = true {
+        didSet {
+            guard isScreenVisible, !oldValue, pendingChartRefresh else { return }
+            pendingChartRefresh = false
+            updateChartData()
+        }
+    }
+
+    /// Пока вкладка невидима, запрос на пересчёт графика копится сюда (без очереди — только факт).
+    var pendingChartRefresh: Bool = false
+
     private func scheduleBackgroundTask(_ operation: @escaping @MainActor (FinanceDynamicsViewModel) async -> Void) {
         let taskID = UUID()
         backgroundTasks[taskID] = Task(priority: .userInitiated) { [weak self] in
@@ -776,9 +790,20 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     func updateChartData() {
+        // Невидимая вкладка не считает: запоминаем, что пересчёт нужен, и делаем его один раз
+        // при показе экрана. Срезы данных (`state.availableCards` и т.п.) уже обновлены.
+        guard isScreenVisible else {
+            pendingChartRefresh = true
+            return
+        }
         state.currencyConversionWarning = nil
         let revision = nextChartUpdateRevision()
         scheduleBackgroundTask { viewModel in
+            // Флаг мог погаснуть, пока таск ждал своей очереди на главном акторе.
+            guard viewModel.isScreenVisible else {
+                viewModel.pendingChartRefresh = true
+                return
+            }
             let prioritizeLiveSingleAccountState = viewModel.shouldPrioritizeLiveSingleAccountState
             if prioritizeLiveSingleAccountState {
                 guard viewModel.isCurrentChartUpdateRevision(revision) else { return }

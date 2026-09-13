@@ -30,7 +30,7 @@ struct BackendAvailabilityIndicator: View {
                         Image(systemName: "wifi.exclamationmark")
                             .font(.system(size: 36))
                             .foregroundStyle(.yellow)
-                        Text("Backend Millio недоступен")
+                        Text("Сервер Millio недоступен")
                             .font(.title2.bold())
                         Text("Локальные функции продолжают работать. Этот статус означает, что сервер Millio недоступен или ещё не подтвердил доступность — он не определяет наличие интернета на устройстве.")
                             .foregroundStyle(.secondary)

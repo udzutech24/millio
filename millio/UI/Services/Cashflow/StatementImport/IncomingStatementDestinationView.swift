@@ -97,7 +97,7 @@ struct IncomingStatementDestinationView: View {
                     Button(String(localized: "common.close", defaultValue: "Close")) { dismiss() }
                 }
                 ToolbarItem(placement: .destructiveAction) {
-                    Button(String(localized: "common.delete", defaultValue: "Discard"), role: .destructive) {
+                    Button(L("common.delete", defaultValue: "Discard"), role: .destructive) {
                         discard()
                         dismiss()
                     }

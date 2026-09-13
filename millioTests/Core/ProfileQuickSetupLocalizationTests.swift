@@ -2,8 +2,10 @@ import Foundation
 import Testing
 @testable import millio
 
-@Suite("Profile quick setup localization")
-struct ProfileQuickSetupLocalizationTests {
+/// Строку «Быстрая настройка» из профиля убрали — путь к языку и валюте теперь
+/// только через отдельные строки «Язык» и «Основная валюта».
+@Suite("Profile language and currency localization")
+struct ProfileLanguageCurrencyLocalizationTests {
     private func localizedString(_ key: String, languageCode: String) -> String {
         guard let path = Bundle.main.path(forResource: languageCode, ofType: "lproj"),
               let bundle = Bundle(path: path) else {
@@ -13,15 +15,19 @@ struct ProfileQuickSetupLocalizationTests {
         return bundle.localizedString(forKey: key, value: nil, table: nil)
     }
 
-    @Test("Quick setup strings are localized for English and Russian locales")
-    func testQuickSetupLocalization() {
-        #expect(localizedString("profile.quick_setup", languageCode: "en") == "Quick setup")
-        #expect(localizedString("profile.quick_setup", languageCode: "ru") == "Быстрая настройка")
+    @Test("Language and currency rows are localized for English and Russian locales")
+    func testLanguageAndCurrencyLocalization() {
+        #expect(localizedString("profile.language", languageCode: "en") == "Language")
+        #expect(localizedString("profile.language", languageCode: "ru") == "Язык")
 
-        #expect(localizedString("profile.status.completed", languageCode: "en") == "Completed")
-        #expect(localizedString("profile.status.completed", languageCode: "ru") == "Завершена")
+        #expect(localizedString("profile.currency", languageCode: "en") == "Currency")
+        #expect(localizedString("profile.currency", languageCode: "ru") == "Валюта")
+    }
 
-        #expect(localizedString("profile.status.not_completed", languageCode: "en") == "Not completed")
-        #expect(localizedString("profile.status.not_completed", languageCode: "ru") == "Не завершена")
+    /// Регрессия: ключ удалён вместе со строкой меню — если он вернётся, значит
+    /// вернулась и мёртвая строка профиля.
+    @Test("Quick setup profile row key is gone")
+    func testQuickSetupKeyRemoved() {
+        #expect(localizedString("profile.quick_setup", languageCode: "ru") == "profile.quick_setup")
     }
 }

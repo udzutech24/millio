@@ -20,16 +20,14 @@ enum CashflowTransferExchangeRateMode: String, CaseIterable {
     var title: String {
         switch self {
         case .current:
-            return String(
-                localized: "cashflow.editor.transfer.rate_mode.current",
-                defaultValue: "Current",
-                comment: "Transfer exchange rate mode title for current rate"
+            return L(
+                "cashflow.editor.transfer.rate_mode.current",
+                defaultValue: "Current"
             )
         case .custom:
-            return String(
-                localized: "cashflow.editor.transfer.rate_mode.custom",
-                defaultValue: "Custom",
-                comment: "Transfer exchange rate mode title for custom rate"
+            return L(
+                "cashflow.editor.transfer.rate_mode.custom",
+                defaultValue: "Custom"
             )
         }
     }
@@ -294,8 +292,11 @@ struct CashflowTransactionEditorView: View {
                 role: .cancel
             ) {}
         } message: {
+            // Ревью round 2 (A2): если сервис знает точную причину отказа (например, архивный счёт —
+            // `state.saveBlockedErrorMessage`, см. `CashflowPersistenceService.onSetSaveErrorMessage`),
+            // показываем её вместо generic-текста — иначе человек проверял бы баланс/дату впустую.
             Text(
-                String(
+                viewModel.state.saveBlockedErrorMessage ?? String(
                     localized: "cashflow.editor.save_failed.message",
                     defaultValue: "The transaction was not saved. Check the selected account, date, and available balance, then try again.",
                     comment: "Message for failed cashflow transaction save alert"
@@ -1059,11 +1060,11 @@ struct CashflowTransactionEditorView: View {
         let formattedAmount = formatNumberForDisplay(
             AmountInputFormatter.plainString(from: receivedAmount)
         )
-        return String(
-            localized: "cashflow.editor.transfer.received_amount",
-            defaultValue: "Will receive: \(formattedAmount) \(targetCurrency)",
-            comment: "Preview text for received amount in transfer destination currency"
+        let template = L(
+            "cashflow.editor.transfer.received_amount",
+            defaultValue: "Will receive: %1$@ %2$@"
         )
+        return String(format: template, formattedAmount, targetCurrency)
     }
 
     private var transferRateStatusText: String? {
@@ -1071,25 +1072,22 @@ struct CashflowTransactionEditorView: View {
 
         if transferExchangeRateMode == .current {
             if isLoadingSuggestedTransferRate {
-                return String(
-                    localized: "cashflow.editor.transfer.rate_loading",
-                    defaultValue: "Loading current rate…",
-                    comment: "Transfer exchange rate loading state"
+                return L(
+                    "cashflow.editor.transfer.rate_loading",
+                    defaultValue: "Loading current rate…"
                 )
             }
 
             if suggestedTransferRate == nil {
-                return String(
-                    localized: "cashflow.editor.transfer.rate_unavailable",
-                    defaultValue: "Current rate is unavailable. Enter your own rate to continue.",
-                    comment: "Transfer exchange rate unavailable state"
+                return L(
+                    "cashflow.editor.transfer.rate_unavailable",
+                    defaultValue: "Current rate is unavailable. Enter your own rate to continue."
                 )
             }
         } else if resolvedCustomExchangeRate == nil {
-            return String(
-                localized: "cashflow.editor.transfer.rate_custom_invalid",
-                defaultValue: "Enter a valid custom rate.",
-                comment: "Transfer custom exchange rate validation message"
+            return L(
+                "cashflow.editor.transfer.rate_custom_invalid",
+                defaultValue: "Enter a valid custom rate."
             )
         }
 
@@ -1167,20 +1165,18 @@ struct CashflowTransactionEditorView: View {
                 .padding(.top, 2)
 
             Text(
-                String(
-                    localized: "cashflow.editor.transfer.exchange_rate",
-                    defaultValue: "Exchange rate",
-                    comment: "Section title for transfer exchange rate"
+                L(
+                    "cashflow.editor.transfer.exchange_rate",
+                    defaultValue: "Exchange rate"
                 )
             )
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(AppColors.textPrimary)
 
             Picker(
-                String(
-                    localized: "cashflow.editor.transfer.exchange_rate",
-                    defaultValue: "Exchange rate",
-                    comment: "Transfer exchange rate picker title"
+                L(
+                    "cashflow.editor.transfer.exchange_rate",
+                    defaultValue: "Exchange rate"
                 ),
                 selection: $transferExchangeRateMode
             ) {
@@ -1193,10 +1189,9 @@ struct CashflowTransactionEditorView: View {
             if transferExchangeRateMode == .custom {
                 HStack(spacing: 12) {
                     Text(
-                        String(
-                            localized: "cashflow.editor.transfer.your_rate",
-                            defaultValue: "Your rate",
-                            comment: "Label for custom exchange rate input"
+                        L(
+                            "cashflow.editor.transfer.your_rate",
+                            defaultValue: "Your rate"
                         )
                     )
                     .font(.system(size: 14, weight: .medium))

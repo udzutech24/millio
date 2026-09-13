@@ -24,6 +24,11 @@ struct AppliedPlannedNoticeSheet: View {
             // деталей — это тысячи точек), и любой `.fraction` обрезал бы список.
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+            // Явный отказ от интерактивности фона: лист — чистое информирование, поэтому
+            // затемнение и блокировка дашборда позади должны быть полными, а не зависеть
+            // от системного `.automatic` (который в цепочке из девяти `.sheet` на одном View
+            // в RootTabView вёл себя непредсказуемо на скриншоте владельца).
+            .presentationBackgroundInteraction(.disabled)
     }
 }
 

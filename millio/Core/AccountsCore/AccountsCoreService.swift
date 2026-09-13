@@ -27,6 +27,9 @@ enum AccountsCoreServiceError: Error {
     /// (`DepositOperationCoordinator.adjustBalance` — operationID, идемпотентность, пересборка
     /// расписания начислений). Не переадресация: этих данных у сервиса нет.
     case unsupportedOperationForDeposit
+    /// Архивный/удалённый счёт (кроме кредитки — см. `archivedCreditCard`) read-only:
+    /// история остаётся читаемой, но новые события и правки карточки счёта запрещены.
+    case accountNotWritable
 }
 
 /// Единственная точка записи в новое ядро счетов (event-sourcing). Любое изменение баланса —
@@ -70,6 +73,22 @@ final class AccountsCoreService {
               ProductDefinitionCatalog.hasCapability(capability, for: productType) else {
             throw AccountsCoreServiceError.capabilityNotAllowed(account.productType, capability)
         }
+    }
+
+    /// Архив/удаление счёта = read-only (БАГ 6): история сохраняется, но сервис — «единственная
+    /// точка записи» — обязан отказывать в новых событиях и правках карточки сам, а не полагаться
+    /// на то, что каждый вызывающий код (UI, CSV-импорт, Cashflow-мост) сам об этом вспомнит.
+    /// Кредитка не сюда: у неё свой guard и своя ошибка `archivedCreditCard` в `recordCreditCardEvent`.
+    private func requireWritable(_ account: Account) throws {
+        guard account.archivedAt == nil, account.deletedAt == nil else {
+            throw AccountsCoreServiceError.accountNotWritable
+        }
+    }
+
+    /// Read-only обёртка над `requireWritable` для вызывающих, которым нужно проверить писуемость
+    /// ДО мутации (например, мост Cashflow — check-before-delete, а не check-after-delete).
+    func isWritable(_ account: Account) -> Bool {
+        (try? requireWritable(account)) != nil
     }
 
     // MARK: - Создание счёта
@@ -168,6 +187,7 @@ final class AccountsCoreService {
         guard type == .income || type == .expense || type == .adjustment else {
             throw AccountsCoreServiceError.unsupportedEventType(type)
         }
+        try requireWritable(account)
         try requireEventAllowed(type, for: account)
 
         let event = AccountEvent(
@@ -236,6 +256,7 @@ final class AccountsCoreService {
         // Но генерик-дельта считалась бы от СЫРОГО баланса, включая прогнозные начисления, и молча
         // разошлась бы с confirmed-контрактом вклада.
         guard account.kind != .deposit else { throw AccountsCoreServiceError.unsupportedOperationForDeposit }
+        try requireWritable(account)
         try requireEventAllowed(.adjustment, for: account)
         let current = AccountBalanceEngine.balanceAt(events: account.events ?? [], kind: account.kind, on: date)
         let delta = newValue - current
@@ -262,6 +283,7 @@ final class AccountsCoreService {
         note: String? = nil
     ) throws -> AccountEvent {
         guard account.kind == .marketInvestment else { throw AccountsCoreServiceError.unsupportedEventType(.buy) }
+        try requireWritable(account)
         try requireEventAllowed(.buy, for: account)
         let event = AccountEvent(
             account: nil,
@@ -294,6 +316,7 @@ final class AccountsCoreService {
         note: String? = nil
     ) throws -> AccountEvent {
         guard account.kind == .marketInvestment else { throw AccountsCoreServiceError.unsupportedEventType(.sell) }
+        try requireWritable(account)
         try requireEventAllowed(.sell, for: account)
         let event = AccountEvent(
             account: nil,
@@ -328,6 +351,7 @@ final class AccountsCoreService {
         guard account.kind == .marketInvestment, type == .dividend || type == .fee else {
             throw AccountsCoreServiceError.unsupportedEventType(type)
         }
+        try requireWritable(account)
         try requireEventAllowed(type, for: account)
         let event = AccountEvent(account: account, date: date, type: type, amount: amount, note: note)
         modelContext.insert(event)
@@ -354,6 +378,7 @@ final class AccountsCoreService {
         guard account.productType == .marketStock, account.kind == .marketInvestment else {
             throw AccountsCoreServiceError.unsupportedEventType(.adjustment)
         }
+        try requireWritable(account)
         try requireEventAllowed(.adjustment, for: account)
         guard targetQuantity >= 0 else { throw StockLotEngineError.invalidQuantity }
         if targetQuantity > 0 {
@@ -396,6 +421,7 @@ final class AccountsCoreService {
     @discardableResult
     func revalue(account: Account, newValue: Decimal, date: Date = Date(), note: String? = nil) throws -> AccountEvent {
         guard account.kind == .manualAsset else { throw AccountsCoreServiceError.unsupportedEventType(.revaluation) }
+        try requireWritable(account)
         try requireEventAllowed(.revaluation, for: account)
         let event = AccountEvent(account: account, date: date, type: .revaluation, amount: newValue, note: note)
         modelContext.insert(event)
@@ -428,6 +454,7 @@ final class AccountsCoreService {
         guard type == .income || type == .expense || type == .adjustment else {
             throw AccountsCoreServiceError.unsupportedEventType(type)
         }
+        try requireWritable(account)
         try requireEventAllowed(type, for: account)
 
         let descriptor = FetchDescriptor<AccountEvent>(
@@ -438,6 +465,13 @@ final class AccountsCoreService {
         let event: AccountEvent
         let earliestDate: Date
         if let existing {
+            // Ревью round 2: writable проверялся только у НОВОГО `account` выше — правка легаси-
+            // транзакции, переносящая её на другой счёт (смена карты в редакторе), проходила бы
+            // барьер молча, если старый `existing.account` был архивным: событие бы просто исчезало
+            // из истории архивного счёта. Тот же счёт — повторная проверка no-op, не архивный.
+            if let previousAccount = existing.account, previousAccount.id != account.id {
+                try requireWritable(previousAccount)
+            }
             earliestDate = min(existing.date, date)
             existing.account = account
             existing.typeRaw = type.rawValue
@@ -603,6 +637,8 @@ final class AccountsCoreService {
         guard source.id != destination.id else {
             throw AccountsCoreServiceError.sameAccountTransfer
         }
+        try requireWritable(source)
+        try requireWritable(destination)
         try requireCapability(.transfers, for: source)
         try requireCapability(.transfers, for: destination)
         try requireEventAllowed(.transferOut, for: source)
@@ -646,6 +682,16 @@ final class AccountsCoreService {
 
     /// Удаляет событие. Если у события есть `transferID` — удаляются ОБЕ ноги перевода: одну ногу
     /// отменить невозможно (иначе нарушается инвариант Σ переводов = 0, AC12).
+    ///
+    /// Check-before-mutate (ревью round 2, зона «Архивные счета»): все затронутые счета проверяются
+    /// `requireWritable` ДО первого `modelContext.delete`, единая read-only политика архива, что и у
+    /// правки. Без этого `deleteEvent` — единственная точка удаления `AccountEvent`, её вызывают и
+    /// удаление строки ленты (`CashflowPersistenceService.deleteTransactionAsync`/
+    /// `deleteTransactionWithoutRecalculation` → `bridge.deleteEvents`), и `syncTransfer` при
+    /// пересборке перевода (`deleteEvents` перед `transfer`) — молча переписывала историю архивного
+    /// счёта: удаляла его событие/ногу перевода, даже если новые концы правки были writable
+    /// (`syncTransfer`-guard проверяет только НОВЫЕ source/destination, не старые счета уже
+    /// существующих ног).
     func deleteEvent(_ event: AccountEvent) throws {
         var revisionAccounts: [Account] = []
         if let transferID = event.transferID {
@@ -660,6 +706,11 @@ final class AccountsCoreService {
                 if let account = leg.account, !touchedAccounts.contains(where: { $0.id == account.id }) {
                     touchedAccounts.append(account)
                 }
+            }
+            for account in touchedAccounts {
+                try requireWritable(account)
+            }
+            for leg in legs {
                 modelContext.delete(leg)
             }
             for account in touchedAccounts {
@@ -669,6 +720,9 @@ final class AccountsCoreService {
         } else {
             let account = event.account
             let date = event.date
+            if let account {
+                try requireWritable(account)
+            }
             modelContext.delete(event)
             if let account {
                 invalidateCache(for: account, from: date)
@@ -746,6 +800,7 @@ final class AccountsCoreService {
         guard !modelContext.hasChanges else {
             throw AccountsCoreServiceError.dirtyContext
         }
+        try requireWritable(account)
         guard let productType = account.productType else {
             throw AccountsCoreServiceError.missingProductIdentity
         }
@@ -801,7 +856,16 @@ final class AccountsCoreService {
 
     /// Stages archive/cache invalidation without saving. Batch lifecycle operations own the one
     /// outer transaction and must call this instead of swallowing per-account save failures.
+    ///
+    /// Идемпотентно (ревью round 2, зона «Архивные счета»): повторная архивация уже архивного счёта
+    /// — no-op. Без этого guard'а `archiveAccount` через оставшийся вход «Удалить» на уже архивном
+    /// кредите (loanActionSheetItems до фикса UI-гейта, или любой будущий вызывающий код) сдвигал(а)
+    /// `archivedAt` на сегодняшнюю дату — `Account.participates(on:)` времязависим (Фаза 0), и долг
+    /// задним числом возвращался бы в историю капитала на весь промежуток [старый archivedAt, новый],
+    /// а кэш инвалидировался только от НОВОЙ даты вперёд, оставляя снапшоты за этот промежуток
+    /// устаревшими. Уже удалённый (`deletedAt`) счёт архивировать нельзя тем же путём.
     func stageArchiveAccount(_ account: Account, on date: Date = Date()) {
+        guard account.archivedAt == nil, account.deletedAt == nil else { return }
         account.archivedAt = date
         invalidateCache(for: account, from: date)
         HistoricalValuationRevisionTracker.bump([.accountSet, .events], on: account)
@@ -946,6 +1010,34 @@ final class AccountsCoreService {
         guard let stale = try? modelContext.fetch(descriptor) else { return }
         for snapshot in stale {
             modelContext.delete(snapshot)
+        }
+    }
+}
+
+// MARK: - Человекочитаемые сообщения об ошибках (A3/A4)
+
+/// Только 6 case видны пользователю в обычном сценарии (архив, кредитка, вклад, перевод, курс) —
+/// у каждого свой текст. Остальные 7 case — внутренние инварианты движка (грязный контекст,
+/// нераспознанный тип события/продукта), которые не должны всплывать в UI в норме; вместо 13
+/// уникальных ключей ради галочки у них один общий fallback-текст.
+extension AccountsCoreServiceError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .accountNotWritable:
+            L("accounts_core.error.account_not_writable")
+        case .missingFxRate:
+            L("accounts_core.error.missing_fx_rate")
+        case .sameAccountTransfer:
+            L("accounts_core.error.same_account_transfer")
+        case .invalidCreditCardAmount:
+            L("accounts_core.error.invalid_credit_card_amount")
+        case .archivedCreditCard:
+            L("accounts_core.error.archived_credit_card")
+        case .unsupportedOperationForDeposit:
+            L("accounts_core.error.unsupported_operation_for_deposit")
+        case .dirtyContext, .unsupportedEventType, .eventWithoutAccount, .missingProductIdentity,
+             .unknownLegacySemanticMutation, .eventNotAllowed, .capabilityNotAllowed:
+            L("accounts_core.error.generic")
         }
     }
 }

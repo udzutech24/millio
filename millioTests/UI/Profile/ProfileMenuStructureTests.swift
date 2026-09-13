@@ -18,11 +18,10 @@ struct ProfileMenuStructureTests {
         let supportSection = try #require(ProfileMenuStructure.sections.first { $0.id == .support })
 
         #expect(!settingsSection.items.contains(.faq))
-        #expect(!settingsSection.items.contains(.quickSetup))
         #expect(!settingsSection.items.contains(.launchSplash))
         #expect(!settingsSection.items.contains(.smartDataReset))
 
-        #expect(experienceSection.items == [.quickSetup, .launchSplash])
+        #expect(experienceSection.items == [.launchSplash])
         #expect(supportSection.items == [.faq])
     }
 
@@ -51,7 +50,6 @@ struct ProfileMenuStructureTests {
         #expect(ProfileMenuItemID.primaryCurrency.iconTone == .green)
         #expect(ProfileMenuItemID.backup.iconTone == .cyan)
         #expect(ProfileMenuItemID.dailyReminders.iconTone == .orange)
-        #expect(ProfileMenuItemID.quickSetup.iconTone == .purple)
         #expect(ProfileMenuItemID.launchSplash.iconTone == .pink)
         #expect(ProfileMenuItemID.smartDataReset.iconTone == .red)
         #expect(ProfileMenuItemID.version.iconTone == .cyan)

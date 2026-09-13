@@ -9,14 +9,14 @@ import SwiftUI
 
 /// Транзиентный value-DTO формы «Карта/Счёт» — заменяет легаси-@Model-карту в биндингах формы (6b Ф5c.2).
 /// Форма только собирает поля; реальная запись идёт снаружи через `AccountsCoreService` (create-only —
-/// EDIT-путь и легаси-VM сняты в 6b Ф5c.3/5c.5b). Зеркалит raw/computed-пары легаси-модели
-/// (`cardTypeRaw`/`cardType`, `priorityRaw`/`priority`), чтобы тело формы не менялось.
+/// EDIT-путь и легаси-VM сняты в 6b Ф5c.3/5c.5b). Зеркалит raw/computed-пару легаси-модели
+/// (`cardTypeRaw`/`cardType`), чтобы тело формы не менялось. `priority` (решение владельца 10.09)
+/// удалён: у нового ядра нет поля для него в `AccountAppearance` и ни одного потребителя.
 struct InlineCardDraft {
     var name: String
     var cardNumber: String
     var bank: Bank
     var cardTypeRaw: String
-    var priorityRaw: String
     var currency: String
     var balance: Double
     var creditLimit: Double?
@@ -37,7 +37,6 @@ struct InlineCardDraft {
         cardNumber: String = "",
         bank: Bank = .other,
         cardType: CardType = .debit,
-        priority: CardPriority = .normal,
         currency: String,
         balance: Double = 0.0,
         creditLimit: Double? = nil,
@@ -57,7 +56,6 @@ struct InlineCardDraft {
         self.cardNumber = cardNumber
         self.bank = bank
         self.cardTypeRaw = cardType.rawValue
-        self.priorityRaw = priority.rawValue
         self.currency = currency
         self.balance = balance
         self.creditLimit = creditLimit
@@ -77,11 +75,6 @@ struct InlineCardDraft {
     var cardType: CardType {
         get { CardType(rawValue: cardTypeRaw) ?? .debit }
         set { cardTypeRaw = newValue.rawValue }
-    }
-
-    var priority: CardPriority {
-        get { CardPriority(rawValue: priorityRaw) ?? .normal }
-        set { priorityRaw = newValue.rawValue }
     }
 }
 
@@ -130,7 +123,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             cardNumber: "",
             bank: .other,
             cardType: .debit,
-            priority: .normal,
             currency: SettingsManager.shared.primaryCurrencyCode,
             balance: 0.0
         ))
@@ -220,7 +212,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
 
     private var preferencesObservedForm: some View {
         balanceObservedForm
-        .onChange(of: card.priority) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.isFavorite) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.includeInTotal) { _, _ in onCardDataChanged(currentCard) }
     }
@@ -368,7 +359,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                     }
                     if card.cardType == .credit {
                         FinancesRowDivider(leadingPadding: 16)
-                        Picker("Bank / issuer", selection: $card.bank) {
+                        Picker(L("finances.editor.card.bank_label", defaultValue: "Банк / эмитент"), selection: $card.bank) {
                             ForEach(Bank.allCases, id: \.self) { bank in Text(bank.displayName).tag(bank) }
                         }
                         .padding(.horizontal, 16)
@@ -522,28 +513,17 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         }
     }
     
+    // Решение владельца 10.09: тумблер «Приоритет» (Low/Normal/High) убран из ВСЕХ форм создания —
+    // для новых core-счетов он ничего не хранит (нет поля в `AccountAppearance`) и ни на что не
+    // влияет, декоративный переключатель обманывал пользователя. «Избранное» реально сохраняется
+    // (`AccountAppearancePersister`) — единственный тумблер секции. Заголовок «Приоритет» тоже убран
+    // (ревью round 2 — слово, которое решили убрать, оставалось над одним тумблером): у тумблера уже
+    // есть собственная подпись, отдельный заголовок секции не нужен.
     private var prioritySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: L("finances.add_account.section.priority"))
-            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle(L("finances.add_account.favorite.single"), isOn: $card.isFavorite)
-                        .tint(AppColors.toggleOnGreen)
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    FinancesRowDivider(leadingPadding: 0)
-                    
-                    HStack(spacing: 12) {
-                        FinancesRadioOption(title: L("finances.priority.low"), isSelected: card.priority == .low) { card.priority = .low }
-                        FinancesRadioOption(title: L("finances.priority.normal"), isSelected: card.priority == .normal) { card.priority = .normal }
-                        FinancesRadioOption(title: L("finances.priority.high"), isSelected: card.priority == .high) { card.priority = .high }
-                    }
-                    
-                    Text(L("finances.add_account.priority.hint"))
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(AppColors.textPrimary.opacity(0.35))
-                }
-            }
+        FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
+            Toggle(L("finances.add_account.favorite.single"), isOn: $card.isFavorite)
+                .tint(AppColors.toggleOnGreen)
+                .foregroundStyle(AppColors.textPrimary)
         }
     }
 
@@ -563,13 +543,13 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                     .buttonStyle(.plain)
                     if showsCreditCardTerms {
                         FinancesRowDivider(leadingPadding: 16)
-                        Stepper("Statement day: \(statementDay)", value: $statementDay, in: 1...31)
+                        Stepper(String(format: L("credit_card.edit.statement_day_format"), statementDay), value: $statementDay, in: 1...31)
                             .padding(16)
                         FinancesRowDivider(leadingPadding: 16)
-                        Stepper("Payment day: \(dueDay)", value: $dueDay, in: 1...31)
+                        Stepper(String(format: L("credit_card.edit.due_day_format"), dueDay), value: $dueDay, in: 1...31)
                             .padding(16)
                         FinancesRowDivider(leadingPadding: 16)
-                        Stepper("Grace period: \(graceDays)", value: $graceDays, in: 0...365)
+                        Stepper(String(format: L("credit_card.edit.grace_days_format"), graceDays), value: $graceDays, in: 0...365)
                             .padding(16)
                         FinancesRowDivider(leadingPadding: 16)
                         HStack {
@@ -623,6 +603,10 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         firstPaymentDate: Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
     )
     @State private var remainingAmountText: String = ""
+    /// Пока `true` — «Остаток долга» тянется за суммой кредита автоматически (Баг 1: до фикса
+    /// поле было независимым и на новом кредите оставалось пустым → `openingBalance = 0`).
+    /// Гасится первой ручной правкой остатка, отличной от текущей суммы кредита.
+    @State private var isRemainingAmountAutoSynced: Bool = true
     @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var isFavorite: Bool = false
     @State private var reminderEnabled: Bool = false
@@ -657,7 +641,10 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     func getCreditData() -> (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)? {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         let amount = loanDraft.principal.map { NSDecimalNumber(decimal: $0).doubleValue } ?? 0
-        let remainingAmount = parseNumber(remainingAmountText) ?? 0
+        // Пустой/нечитаемый остаток подставляет сумму кредита здесь, а не в самом поле — переписывать
+        // `remainingAmountText` посреди ввода на пустом символе воспроизводило Баг 1 повторно (см.
+        // `RemainingAmountAutoSync.shouldResumeSyncing`).
+        let remainingAmount = RemainingAmountAutoSync.resolvedRemainingAmount(text: remainingAmountText, principalAmount: amount)
         let monthlyPayment = loanPayment ?? (amount / 12.0)
         let endDate = loanTermEnd ?? (Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date())
         let dayOfMonth = Calendar.current.component(.day, from: loanDraft.firstPaymentDate)
@@ -709,12 +696,29 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
             loadAvailableCurrencies()
         }
         .onChange(of: name) { _, _ in emitCreditDataChange() }
-        .onChange(of: remainingAmountText) { _, _ in emitCreditDataChange() }
+        .onChange(of: remainingAmountText) { _, newValue in
+            // Только флаг синка — саму строку поля здесь НЕ переписываем (см. doc-комментарий
+            // `RemainingAmountAutoSync.shouldResumeSyncing`: переписать её тут — значит снова
+            // склеить старое значение с новыми цифрами на последнем стёртом символе).
+            if RemainingAmountAutoSync.shouldResumeSyncing(newText: newValue) {
+                isRemainingAmountAutoSynced = true
+            } else if RemainingAmountAutoSync.shouldStopSyncing(afterEditingTo: newValue, principalText: loanDraft.principalText) {
+                isRemainingAmountAutoSynced = false
+            }
+            emitCreditDataChange()
+        }
         .onChange(of: selectedCurrency) { _, _ in emitCreditDataChange() }
         .onChange(of: isFavorite) { _, _ in emitCreditDataChange() }
         // Наблюдаем черновик целиком, а не каждое условие по отдельности — иначе на восьмом
         // `.onChange` этот `body` перестаёт проверяться типами за разумное время.
-        .onChange(of: loanDraft) { _, _ in emitCreditDataChange() }
+        .onChange(of: loanDraft) { _, newValue in
+            // Остаток тянется за суммой, пока пользователь не тронул его вручную — новый кредит
+            // не должен создаваться с балансом 0 при непустой сумме (Баг 1).
+            if isRemainingAmountAutoSynced {
+                remainingAmountText = newValue.principalText
+            }
+            emitCreditDataChange()
+        }
         .onChange(of: reminderEnabled) { _, enabled in
             if !enabled {
                 reminderDaysBeforeText = ""
@@ -916,14 +920,13 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         }
     }
     
+    // Заголовок секции («Приоритет») убран (ревью round 2, см. комментарий у `prioritySection`
+    // `InlineCardCreateForm`) — у тумблера уже есть своя подпись.
     private var prioritySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: L("finances.add_account.section.priority"))
-            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
-                Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
-                    .tint(AppColors.toggleOnGreen)
-                    .foregroundStyle(AppColors.textPrimary)
-            }
+        FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
+            Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
+                .tint(AppColors.toggleOnGreen)
+                .foregroundStyle(AppColors.textPrimary)
         }
     }
 
@@ -959,14 +962,13 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @Environment(AppRouter.self) private var router
     @Binding var name: String
     @Binding var selectedCategory: InvestmentCategory
-    let onInvestmentDataChanged: ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void
+    let onInvestmentDataChanged: ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void
     let groupSection: GroupSection
     
     @State private var selectedInvestmentType: InvestmentType = .positive
     @State private var amountText: String = ""
     @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var includeInTotal: Bool = true
-    @State private var selectedPriority: InvestmentPriority = .normal
     @State private var isFavorite: Bool = false
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
@@ -994,7 +996,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     init(
         name: Binding<String>,
         selectedCategory: Binding<InvestmentCategory>,
-        onInvestmentDataChanged: @escaping ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void,
+        onInvestmentDataChanged: @escaping ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void,
         marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
@@ -1033,7 +1035,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         return !name.isEmpty
     }
     
-    func getInvestmentData() -> (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)? {
+    func getInvestmentData() -> (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)? {
         if isMarketCategory {
             guard let quantity = InvestmentMarketInputParser.quantity(from: marketQuantityText),
                   quantity >= 0 else {
@@ -1063,7 +1065,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                 effectiveAmount,
                 effectiveCurrency,
                 includeInTotal,
-                selectedPriority,
                 isFavorite,
                 marketData,
                 false
@@ -1082,7 +1083,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             amount,
             selectedCurrency,
             includeInTotal,
-            selectedPriority,
             isFavorite,
             nil,
             true
@@ -1128,7 +1128,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             }
             onInvestmentDataChanged(getInvestmentData())
         }
-        .onChange(of: selectedPriority) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: selectedInvestmentType) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: isFavorite) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: includeInTotal) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
@@ -1539,31 +1538,16 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         }
     }
     
+    // Заголовок секции («Приоритет») убран (ревью round 2, см. комментарий у `prioritySection`
+    // `InlineCardCreateForm`) — у тумблера уже есть своя подпись.
     private var prioritySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: L("finances.add_account.section.priority"))
-            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
-                        .tint(AppColors.toggleOnGreen)
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    FinancesRowDivider(leadingPadding: 0)
-                    
-                    HStack(spacing: 12) {
-                        FinancesRadioOption(title: L("finances.priority.low"), isSelected: selectedPriority == .low) { selectedPriority = .low }
-                        FinancesRadioOption(title: L("finances.priority.normal"), isSelected: selectedPriority == .normal) { selectedPriority = .normal }
-                        FinancesRadioOption(title: L("finances.priority.high"), isSelected: selectedPriority == .high) { selectedPriority = .high }
-                    }
-                    
-                    Text(L("finances.add_account.priority.hint"))
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(AppColors.textPrimary.opacity(0.35))
-                }
-            }
+        FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
+            Toggle(L("finances.add_account.favorite"), isOn: $isFavorite)
+                .tint(AppColors.toggleOnGreen)
+                .foregroundStyle(AppColors.textPrimary)
         }
     }
-    
+
     private func loadAvailableCurrencies() {
         Task {
             isLoadingCurrencies = true

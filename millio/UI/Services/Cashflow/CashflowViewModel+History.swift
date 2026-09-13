@@ -31,12 +31,23 @@ extension CashflowViewModel {
     }
 
     func updateChartData() {
+        // Невидимая вкладка не считает: запоминаем, что пересчёт нужен, и делаем его один раз
+        // при показе экрана. Сами данные (`state.transactions`) при этом уже обновлены.
+        guard isScreenVisible else {
+            pendingChartRefresh = true
+            return
+        }
         state.currencyConversionWarning = nil
         state.currencyConversionWarningDate = nil
         let revision = nextChartUpdateRevision()
         Task { @MainActor [weak self] in
             guard let self else { return }
             guard self.isCurrentChartUpdateRevision(revision) else { return }
+            // Флаг мог погаснуть, пока таск ждал своей очереди на главном акторе.
+            guard self.isScreenVisible else {
+                self.pendingChartRefresh = true
+                return
+            }
             await self.updateChartDataAsync(expectedRevision: revision)
         }
     }

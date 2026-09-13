@@ -83,26 +83,6 @@ extension AccountDetailView {
         return result.perAccount.first(where: { $0.accountID == account.id })
     }
 
-    var depositTaxPresentation: DepositTaxPresentation? {
-        guard account.kind == .deposit else { return nil }
-        let year = Calendar.current.component(.year, from: Date())
-        let deposits = (try? modelContext.fetch(FetchDescriptor<Account>(
-            predicate: #Predicate<Account> { $0.kindRaw == "deposit" }
-        ))) ?? []
-        let events = deposits.flatMap { deposit in
-            (deposit.events ?? []).compactMap { event -> DepositTaxEvent? in
-                guard event.type == .interest, event.date <= Date(),
-                      !DepositDetailPresentation.isGeneratedForecastEvent(event, accountID: deposit.id),
-                      let amount = event.amount else { return nil }
-                return .init(accountID: deposit.id, date: event.date, currency: deposit.currency, amount: amount)
-            }
-        }
-        return DepositTaxPresentationBuilder.make(
-            events: events, year: year, settings: SettingsManager.shared.depositTaxSettings,
-            historicalFX: [:], calendar: .current
-        )
-    }
-
     /// Эффективная ставка налога «чистыми» для ЭТОГО вклада за текущий год — доля, применяемая
     /// к ПРОГНОЗУ (месяц/срок ещё не наступили, точного расчёта для будущих сумм в этом году нет).
     var effectiveNetTaxRate: Decimal {

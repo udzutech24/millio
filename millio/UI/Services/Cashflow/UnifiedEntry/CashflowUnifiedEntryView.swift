@@ -17,6 +17,7 @@ struct CashflowCategoryTransactionSheet: View {
 
     @Environment(\.dismiss) var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(AppState.self) private var appState
 
     @State var selectedMonth: Date
     @State var selectedCategory: CashflowCategoryOption?
@@ -238,6 +239,10 @@ struct CashflowCategoryTransactionSheet: View {
                     showCategoryCapCoachMark = true
                     hasSeenCategoryCapCoachMark = true
                 }
+                openCategorySettingsIfPending()
+            }
+            .onChange(of: appState.pendingOpenCategorySettings) { _, _ in
+                openCategorySettingsIfPending()
             }
             .onChange(of: selectedMonth) { _, _ in
                 reloadMonthlyTotal()
@@ -307,6 +312,14 @@ struct CashflowCategoryTransactionSheet: View {
                 isSearchFieldFocused = true
             }
         }
+    }
+
+    /// Чек-лист первых шагов ведёт сразу в «Категории расходов» — открываем тот же лист
+    /// настроек, что и через ⋯ → «Настроить экран», только без лишнего тапа.
+    private func openCategorySettingsIfPending() {
+        guard appState.pendingOpenCategorySettings, kind.categoryKind == .expense else { return }
+        appState.pendingOpenCategorySettings = false
+        showSettingsSheet = true
     }
 
     private func performPendingMoreAction() {

@@ -118,7 +118,10 @@ struct RootTabView: View {
         .onChange(of: appState.pendingOpenCashflowIncome) { _, _ in consumePendingDeepLinks() }
         .onChange(of: appState.pendingOpenCashflowHistory) { _, _ in consumePendingDeepLinks() }
         .onChange(of: appState.primaryCurrencyCode) { _, _ in ensureViewModels() }
-        .onChange(of: router.selectedTab) { _, _ in
+        .onChange(of: router.selectedTab) { _, newTab in
+            // Вкладки живут все сразу (ZStack + opacity), поэтому «кто на экране» знает только
+            // роутер. Невидимая вкладка не пересчитывает свой график — см. isScreenVisible.
+            cashflowViewModel?.isScreenVisible = isCashflowVisible(for: newTab)
             guard showFABMenu else { return }
             withAnimation(.spring(response: 0.35, dampingFraction: 0.80)) {
                 showFABMenu = false
@@ -313,6 +316,14 @@ struct RootTabView: View {
         case .openBackup:
             appState.pendingOpenProfileBackup = true
             showProfileSheet = true
+        case .openPrimaryCurrency:
+            // Профиль открывается на корневом списке: подсветка (highlightTarget выше)
+            // сама показывает строки «Язык» и «Основная валюта».
+            showProfileSheet = true
+        case .openCategorySettings:
+            ensureCashflowViewModel()
+            appState.pendingOpenCategorySettings = true
+            showExpenseSheet = true
         case .none:
             break
         }
@@ -401,8 +412,11 @@ struct RootTabView: View {
             GradientBackground()
 
             if let vm = financeViewModel {
-                FinanceDynamicsTabView(financeViewModel: vm)
-                    .padding(.bottom, 72)
+                FinanceDynamicsTabView(
+                    financeViewModel: vm,
+                    isScreenVisible: router.selectedTab == .dynamics
+                )
+                .padding(.bottom, 72)
             } else {
                 ProgressView()
                     .tint(AppColors.textPrimary)
@@ -474,6 +488,12 @@ struct RootTabView: View {
 
     // MARK: - ViewModel Setup
 
+    /// Агрегаты Кэшфлоу рисует не только своя вкладка, но и Дашборд (доходы/расходы/бюджет) —
+    /// для него график тоже обязан быть свежим.
+    private func isCashflowVisible(for tab: RootTab) -> Bool {
+        tab == .cashflow || tab == .dashboard
+    }
+
     private func ensureViewModels() {
         ensureFinanceViewModel()
         ensureCashflowViewModel()
@@ -497,6 +517,7 @@ struct RootTabView: View {
             vm.onPlannedOperationsApplied = { [appState] in
                 appState.appliedPlannedNoticeRequestToken &+= 1
             }
+            vm.isScreenVisible = isCashflowVisible(for: router.selectedTab)
             vm.handle(.syncDisplayCurrencyWithPrimary(appState.primaryCurrencyCode))
             vm.handle(.loadCards)
             vm.handle(.loadTransactions)

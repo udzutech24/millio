@@ -3,9 +3,11 @@ import Testing
 @testable import millio
 
 /// Транзиентный value-DTO формы «Карта/Счёт» (6b Ф5c.2, замена легаси-@Model-карты в биндингах).
-/// Гарды на byte-for-byte-поведение: дефолты должны совпадать с легаси-`Card.init`, а computed-пары
-/// `cardType`/`cardTypeRaw` и `priority`/`priorityRaw` — зеркалить модель, иначе EDIT-путь
-/// (`FinanceAddAccountView.makeLegacyCard` → `CardViewModel.updateCard`) сохранит не то, что показала форма.
+/// Гарды на byte-for-byte-поведение: дефолты должны совпадать с легаси-`Card.init`, а computed-пара
+/// `cardType`/`cardTypeRaw` — зеркалить модель, иначе EDIT-путь (`FinanceAddAccountView.makeLegacyCard`
+/// → `CardViewModel.updateCard`) сохранит не то, что показала форма. `priority`/`priorityRaw`
+/// (решение владельца 10.09) удалены вместе с декоративным тумблером в форме — у нового ядра нет
+/// ни поля под него, ни потребителей.
 @Suite("InlineCardDraft (6b Ф5c.2)")
 struct InlineCardDraftTests {
 
@@ -16,7 +18,6 @@ struct InlineCardDraftTests {
         #expect(draft.cardNumber == "")
         #expect(draft.bank == .other)
         #expect(draft.cardType == .debit)
-        #expect(draft.priority == .normal)
         #expect(draft.balance == 0.0)
         #expect(draft.creditLimit == nil)
         #expect(draft.statementDay == nil)
@@ -44,27 +45,13 @@ struct InlineCardDraftTests {
         #expect(draft.cardType == .debit)
     }
 
-    @Test("priority-сеттер синхронизирует priorityRaw и наоборот")
-    func priorityMirrorsRaw() {
-        var draft = InlineCardDraft(name: "Card", currency: "RUB")
-
-        draft.priority = .high
-        #expect(draft.priorityRaw == CardPriority.high.rawValue)
-        #expect(draft.priority == .high)
-
-        draft.priorityRaw = CardPriority.low.rawValue
-        #expect(draft.priority == .low)
-    }
-
     @Test("Битый raw откатывается к дефолту, как в легаси-модели")
     func invalidRawFallsBackToDefault() {
         var draft = InlineCardDraft(name: "Card", currency: "RUB")
 
         draft.cardTypeRaw = "garbage"
-        draft.priorityRaw = "garbage"
 
         #expect(draft.cardType == .debit)
-        #expect(draft.priority == .normal)
     }
 
     @Test("Полный init переносит все поля без потерь")
@@ -74,7 +61,6 @@ struct InlineCardDraftTests {
             cardNumber: "4242",
             bank: .sberbank,
             cardType: .credit,
-            priority: .high,
             currency: "EUR",
             balance: 1500,
             creditLimit: 3000,
@@ -95,7 +81,6 @@ struct InlineCardDraftTests {
         #expect(draft.cardNumber == "4242")
         #expect(draft.bank == .sberbank)
         #expect(draft.cardType == .credit)
-        #expect(draft.priority == .high)
         #expect(draft.currency == "EUR")
         #expect(draft.balance == 1500)
         #expect(draft.creditLimit == 3000)

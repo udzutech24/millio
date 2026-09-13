@@ -48,6 +48,16 @@ final class AccountsCoreCashflowBridge {
             .contains(where: DebitCardContract.products.contains)
     }
 
+    /// Писуем ли счёт-источник (`cardID`) транзакции в новом ядре — `true`, если это легаси-карта
+    /// (мост её не касается вовсе, свой более старый guard уже есть в
+    /// `CashflowPersistenceService.applyRecurringTransactionToCardBalance`). Используется генератором
+    /// повторяющихся операций (`CashflowScheduledService`), чтобы не вставлять новый инстанс в ленту
+    /// для шаблона, чей core-счёт архивирован/удалён (ревью round 2, «БАГ 6, автоповтор»).
+    func isSourceAccountWritable(for transaction: CashflowTransaction) -> Bool {
+        guard let account = resolveNewCoreAccount(id: transaction.cardID) else { return true }
+        return accountsCoreService.isWritable(account)
+    }
+
     // MARK: - Публичная точка входа
 
     /// Синхронизирует событие(я) нового ядра для сохранённой транзакции. Вызывается ПОСЛЕ того,
@@ -163,6 +173,15 @@ final class AccountsCoreCashflowBridge {
                     sourceAmount: sourceAmount, destinationAmount: destinationAmount
                 )
                 return
+            }
+            // ПРОВЕРКА ДО МУТАЦИИ (A1, ревью round 1): `deleteEvents` ниже необратимо удаляет обе
+            // ноги старого перевода, а `accountsCoreService.transfer` вставляет новые ТОЛЬКО если
+            // оба счёта writable — если бы guard стоял после delete, правка перевода с архивной
+            // стороной удаляла бы обе ноги и падала на transfer, не восстанавливая их (регрессия
+            // потери данных). Порядок операций в этой ветке — инвариант, не трогать: между guard
+            // и deleteEvents НЕ должно быть await (иначе открывается окно гонки).
+            guard accountsCoreService.isWritable(source), accountsCoreService.isWritable(destination) else {
+                throw AccountsCoreServiceError.accountNotWritable
             }
             // Пересоздаём пару целиком (просто и корректно для правок задним числом — сумма/курс
             // всегда пересчитываются заново; стабильность transferID между правками не нужна).

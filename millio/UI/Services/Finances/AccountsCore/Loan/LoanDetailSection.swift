@@ -12,6 +12,9 @@ enum LoanDetailAction: Equatable {
 /// разбивка ближайшего платежа. Цифры приходят готовыми — секция ничего не считает.
 struct LoanDetailSection: View {
     let presentation: LoanDetailPresentation
+    /// Архивный/удалённый кредит read-only (A4): чипы условий не должны вести в тупиковый
+    /// экран, который сервис откажется сохранить.
+    let isEditable: Bool
     let onAction: (LoanDetailAction) -> Void
 
     var body: some View {
@@ -26,13 +29,15 @@ struct LoanDetailSection: View {
 
     /// Чипсы — тот же компонент, что в форме условий (`AccountSelectionChip`), в невыбранном
     /// состоянии: здесь они читаются как теги. Нажатие ведёт в «Условия кредита» — иначе это была
-    /// бы кнопка без действия.
+    /// бы кнопка без действия. `.disabled` (не `.allowsHitTesting`) — `Button` уважает environment
+    /// `isEnabled` на уровне жестов, поэтому блокирует и тач, и активацию VoiceOver/Switch Control.
     private var termsChips: some View {
         HStack(spacing: AppSpacing.s) {
             AccountSelectionChip(title: rateChip, isSelected: false) { onAction(.terms) }
             AccountSelectionChip(title: termChip, isSelected: false) { onAction(.terms) }
             AccountSelectionChip(title: scheduleTypeChip, isSelected: false) { onAction(.terms) }
         }
+        .disabled(!isEditable)
     }
 
     private var rateChip: String {

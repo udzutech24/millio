@@ -23,7 +23,7 @@ struct CashflowCategoryUndoBanner: View {
 
             Spacer(minLength: 8)
 
-            Button(L("Undo")) {
+            Button(L("cashflow.category.undo.action", defaultValue: "Отменить")) {
                 onUndo()
             }
             .font(.system(size: 14, weight: .bold))

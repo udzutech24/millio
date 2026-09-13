@@ -517,4 +517,304 @@ struct AccountsCoreServiceTests {
         let remainingEvents = try ctx.fetch(FetchDescriptor<AccountEvent>())
         #expect(remainingEvents.isEmpty) // каскад унёс события удалённого счёта
     }
+
+    // MARK: - БАГ 6: архивный/удалённый счёт read-only на уровне сервиса, не только UI
+
+    /// До фикса `recordEvent` молча писал `.income`/`.expense`/`.adjustment` на архивный счёт —
+    /// UI прятал панель действий, но toolbar-фолбэк («···») её всё равно открывал.
+    @Test
+    func recordEventRejectsArchivedAccount() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(name: "Карта", kind: .cash, currency: "RUB", openingBalance: 1000)
+        try service.archiveAccount(account)
+
+        var thrown: Error?
+        do {
+            _ = try service.recordEvent(account: account, type: .income, amount: 500)
+        } catch {
+            thrown = error
+        }
+
+        if case .accountNotWritable = try #require(thrown as? AccountsCoreServiceError) {} else {
+            Issue.record("Ожидали accountNotWritable, получили \(String(describing: thrown))")
+        }
+        #expect((account.events ?? []).allSatisfy { $0.type != .income })
+    }
+
+    /// Мягко удалённый (`deletedAt`) счёт — та же дыра, что и архивный: экран «Архив» открывает
+    /// его карточку, и без этой проверки правки проходили бы на счёте, которого уже нет в списках.
+    @Test
+    func recordEventRejectsDeletedAccount() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(name: "Карта", kind: .cash, currency: "RUB", openingBalance: 1000)
+        try service.softDelete(account)
+
+        var thrown: Error?
+        do {
+            _ = try service.recordEvent(account: account, type: .expense, amount: 200)
+        } catch {
+            thrown = error
+        }
+
+        if case .accountNotWritable = try #require(thrown as? AccountsCoreServiceError) {} else {
+            Issue.record("Ожидали accountNotWritable, получили \(String(describing: thrown))")
+        }
+    }
+
+    /// «Изменить баланс» в «···» — до фикса создавал adjustment-событие на закрытом счёте.
+    @Test
+    func adjustBalanceRejectsArchivedAccount() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(name: "Карта", kind: .debitCard, currency: "RUB", openingBalance: 1000)
+        try service.archiveAccount(account)
+
+        var thrown: Error?
+        do {
+            _ = try service.adjustBalance(account: account, to: 2000)
+        } catch {
+            thrown = error
+        }
+
+        if case .accountNotWritable = try #require(thrown as? AccountsCoreServiceError) {} else {
+            Issue.record("Ожидали accountNotWritable, получили \(String(describing: thrown))")
+        }
+        #expect((account.events ?? []).allSatisfy { $0.type != .adjustment })
+    }
+
+    /// «Редактировать» в «···» — до фикса переименовывал/менял группу закрытого счёта.
+    @Test
+    func updateAccountRejectsArchivedAccount() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(name: "Карта", kind: .debitCard, currency: "RUB", openingBalance: 1000)
+        try service.archiveAccount(account)
+
+        var thrown: Error?
+        do {
+            _ = try service.updateAccount(account, name: "Переименована после архивации", group: nil)
+        } catch {
+            thrown = error
+        }
+
+        if case .accountNotWritable = try #require(thrown as? AccountsCoreServiceError) {} else {
+            Issue.record("Ожидали accountNotWritable, получили \(String(describing: thrown))")
+        }
+        #expect(account.name == "Карта") // правка не применилась
+    }
+
+    /// Перевод и НА, и С архивного счёта запрещён — обе ноги одного вызова, каждая сторона своя проверка.
+    @Test
+    func transferRejectsArchivedSourceAndDestination() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let archivedSource = try service.createAccount(name: "Архивная карта", kind: .debitCard, currency: "RUB", openingBalance: 1000)
+        let activeDestination = try service.createAccount(name: "Активная карта", kind: .debitCard, currency: "RUB", openingBalance: 0)
+        try service.archiveAccount(archivedSource)
+
+        var thrownFromArchivedSource: Error?
+        do {
+            _ = try service.transfer(from: archivedSource, to: activeDestination, amountInSourceCurrency: 100)
+        } catch {
+            thrownFromArchivedSource = error
+        }
+        if case .accountNotWritable = try #require(thrownFromArchivedSource as? AccountsCoreServiceError) {} else {
+            Issue.record("Ожидали accountNotWritable для source, получили \(String(describing: thrownFromArchivedSource))")
+        }
+
+        let activeSource = try service.createAccount(name: "Активная карта 2", kind: .debitCard, currency: "RUB", openingBalance: 1000)
+        var thrownFromArchivedDestination: Error?
+        do {
+            _ = try service.transfer(from: activeSource, to: archivedSource, amountInSourceCurrency: 100)
+        } catch {
+            thrownFromArchivedDestination = error
+        }
+        if case .accountNotWritable = try #require(thrownFromArchivedDestination as? AccountsCoreServiceError) {} else {
+            Issue.record("Ожидали accountNotWritable для destination, получили \(String(describing: thrownFromArchivedDestination))")
+        }
+
+        // Ни одна нога не создалась ни на одном из счетов.
+        #expect((archivedSource.events ?? []).allSatisfy { $0.type != .transferOut && $0.type != .transferIn })
+        #expect((activeDestination.events ?? []).allSatisfy { $0.type != .transferIn })
+    }
+
+    /// Мост Cashflow (`AccountsCoreCashflowBridge.upsertEvent`) — та же дыра, что у `recordEvent`,
+    /// но незаметнее: сам мост ничем не фильтрует archivedAt/deletedAt перед вызовом (греп по
+    /// вызывающему коду это подтверждает), значит правка транзакции задним числом молча писала бы
+    /// на закрытый счёт в обход экрана «Счёт», где панель действий уже была бы скрыта.
+    @Test
+    func upsertEventRejectsArchivedAccount() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(name: "Карта", kind: .cash, currency: "RUB", openingBalance: 1000)
+        try service.archiveAccount(account)
+
+        var thrown: Error?
+        do {
+            _ = try service.upsertEvent(
+                sourceTransactionID: "cashflow-tx-1",
+                account: account,
+                type: .expense,
+                amount: 300,
+                date: Date()
+            )
+        } catch {
+            thrown = error
+        }
+
+        if case .accountNotWritable = try #require(thrown as? AccountsCoreServiceError) {} else {
+            Issue.record("Ожидали accountNotWritable, получили \(String(describing: thrown))")
+        }
+        #expect((account.events ?? []).allSatisfy { $0.sourceTransactionID != "cashflow-tx-1" })
+    }
+
+    // MARK: - Ревью round 1: isWritable + LocalizedError
+
+    /// `isWritable` — read-only обёртка для check-before-mutate у вызывающих (мост Cashflow,
+    /// A1): должна отражать ровно то же условие, что и `requireWritable`, без побочных эффектов.
+    @Test
+    func isWritableReflectsArchivedAndDeletedState() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let live = try service.createAccount(name: "Карта", kind: .cash, currency: "RUB", openingBalance: 0)
+        let archived = try service.createAccount(name: "Архив", kind: .cash, currency: "RUB", openingBalance: 0)
+        try service.archiveAccount(archived)
+
+        #expect(service.isWritable(live))
+        #expect(service.isWritable(archived) == false)
+    }
+
+    /// A3/A4: замена `error.localizedDescription` на человекочитаемый текст не должна тихо родить
+    /// case без текста — иначе UI откатится к тому же системному «Операция не может быть завершена».
+    @Test
+    func everyErrorCaseHasNonEmptyLocalizedDescription() {
+        let cases: [AccountsCoreServiceError] = [
+            .dirtyContext,
+            .unsupportedEventType(.income),
+            .sameAccountTransfer,
+            .missingFxRate,
+            .eventWithoutAccount,
+            .missingProductIdentity,
+            .unknownLegacySemanticMutation,
+            .eventNotAllowed(.cash, .income),
+            .capabilityNotAllowed(.cash, .transfers),
+            .invalidCreditCardAmount,
+            .archivedCreditCard,
+            .unsupportedOperationForDeposit,
+            .accountNotWritable,
+        ]
+        for error in cases {
+            let description = error.errorDescription
+            #expect(description != nil, "\(error) должен иметь errorDescription")
+            #expect(description?.isEmpty == false, "\(error) не должен иметь пустой errorDescription")
+        }
+    }
+
+    // MARK: - Ревью round 2: deleteEvent/upsertEvent check-before-mutate, stageArchiveAccount идемпотентен
+
+    /// A1 (остаточная дыра, ревью round 2): guard в `AccountsCoreCashflowBridge.syncTransfer`
+    /// проверяет только НОВЫЕ source/destination правки — старые ноги существующего перевода не
+    /// проверялись вовсе. `deleteEvents(bySourceTransactionID:)` (вызывается и мостом при пересборке
+    /// перевода, и удалением строки ленты) до фикса удаляла обе ноги БЕЗ проверки писуемости счетов,
+    /// которых касается. Тест — на уровне сервиса, без моста: прямой вызов `deleteEvents` после
+    /// архивации ОДНОЙ стороны уже созданного перевода.
+    @Test
+    func deleteEventsBlocksTransferLegDeletionWhenOneLegAccountArchived() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let source = try service.createAccount(name: "Карта X", kind: .cash, currency: "RUB", openingBalance: 1000)
+        let destination = try service.createAccount(name: "Карта L", kind: .cash, currency: "RUB", openingBalance: 0)
+
+        let legs = try service.transfer(
+            from: source, to: destination, amountInSourceCurrency: 300, sourceTransactionID: "cashflow-transfer-1"
+        )
+        try service.archiveAccount(source)
+
+        var thrown: Error?
+        do {
+            try service.deleteEvents(bySourceTransactionID: "cashflow-transfer-1")
+        } catch {
+            thrown = error
+        }
+        if case .accountNotWritable = try #require(thrown as? AccountsCoreServiceError) {} else {
+            Issue.record("Ожидали accountNotWritable, получили \(String(describing: thrown))")
+        }
+
+        // ГЛАВНАЯ ПРОВЕРКА: обе ноги остались — deleteEvent проверяет ВСЕ затронутые счета ДО
+        // первого delete, не только новые концы правки.
+        // #Predicate не разворачивает вложенный keypath через member тюпла (legs.out.transferID) —
+        // выносим значение в локальную константу до макроса.
+        let outTransferID = legs.out.transferID
+        let transferLegs = try ctx.fetch(FetchDescriptor<AccountEvent>(
+            predicate: #Predicate<AccountEvent> { $0.transferID == outTransferID }
+        ))
+        #expect(transferLegs.count == 2, "Обе ноги перевода должны остаться нетронутыми при отказе")
+    }
+
+    /// Ревью round 2 («Проверка писуемости смотрит только на новые концы операции»): `upsertEvent`
+    /// проверял только НОВЫЙ `account`, а `existing.account = account` переносил событие с архивного
+    /// счёта молча — правка суммы блокировалась, а смена счёта (перенос транзакции с архивного X на
+    /// живой Y) проходила. Единая политика «блокировать» требует проверки СТАРОГО счёта тоже.
+    @Test
+    func upsertEventBlocksReassignmentAwayFromArchivedAccount() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let source = try service.createAccount(name: "Кошелёк", kind: .cash, currency: "RUB", openingBalance: 0)
+        let destination = try service.createAccount(name: "Другой кошелёк", kind: .cash, currency: "RUB", openingBalance: 0)
+
+        _ = try service.upsertEvent(
+            sourceTransactionID: "cashflow-tx-move", account: source, type: .expense, amount: 200, date: Date()
+        )
+        try service.archiveAccount(source)
+
+        var thrown: Error?
+        do {
+            _ = try service.upsertEvent(
+                sourceTransactionID: "cashflow-tx-move", account: destination, type: .expense, amount: 200, date: Date()
+            )
+        } catch {
+            thrown = error
+        }
+        if case .accountNotWritable = try #require(thrown as? AccountsCoreServiceError) {} else {
+            Issue.record("Ожидали accountNotWritable при переносе события с архивного счёта, получили \(String(describing: thrown))")
+        }
+
+        // Главная проверка: событие осталось на архивном source, а не переехало на destination молча.
+        let events = try ctx.fetch(FetchDescriptor<AccountEvent>(
+            predicate: #Predicate<AccountEvent> { $0.sourceTransactionID == "cashflow-tx-move" }
+        ))
+        #expect(events.count == 1)
+        #expect(events.first?.account?.id == source.id, "Событие не должно молча переехать на живой destination-счёт с архивного source")
+    }
+
+    /// Ревью round 2 (БАГ «Удалить» архивного кредита): «Удалить» на уже архивном кредите вело в
+    /// `archiveAccount()` → `stageArchiveAccount`, которая БЕЗ проверки «уже в архиве» сдвигала
+    /// `archivedAt` на сегодня — `Account.participates(on:)` времязависим, долг задним числом
+    /// возвращался бы в историю net worth за весь промежуток [старый archivedAt, новый].
+    @Test
+    func archiveAccountDoesNotMoveArchivedAtForwardWhenAlreadyArchived() throws {
+        let (container, ctx) = try makeContext()
+        _ = container
+        let service = AccountsCoreService(modelContext: ctx)
+        let account = try service.createAccount(name: "Автокредит", kind: .loan, currency: "RUB", openingBalance: 100_000)
+        let originalArchiveDate = try #require(Calendar.current.date(byAdding: .day, value: -30, to: Date()))
+        try service.archiveAccount(account, on: originalArchiveDate)
+        #expect(account.archivedAt == originalArchiveDate)
+
+        // Повторная архивация (напр. повторный «Удалить» на уже архивном счёте) не должна сдвигать
+        // archivedAt вперёд.
+        try service.archiveAccount(account)
+        #expect(account.archivedAt == originalArchiveDate, "Повторная архивация не должна сдвигать archivedAt вперёд")
+    }
 }

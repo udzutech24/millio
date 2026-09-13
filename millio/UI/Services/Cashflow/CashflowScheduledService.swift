@@ -38,6 +38,13 @@ final class CashflowScheduledService {
     /// Колбэк: применить изменение баланса карты для сгенерированной recurring-транзакции
     private let onApplyRecurringToCard: (CashflowTransaction) async -> Void
 
+    /// Колбэк: писуем ли счёт-источник шаблона (ревью round 2, зона «Архивные счета»). Барьер
+    /// `requireWritable` (БАГ 6) ловит ТОЛЬКО ручную правку — автогенератор до этой проверки не знал
+    /// об архивации вовсе и каждый месяц вставлял новый инстанс в ленту/бюджеты, `onApplyRecurringToCard`
+    /// молча глотал `accountNotWritable` (только лог). По умолчанию `true` — легаси-карта или ещё не
+    /// подключённый вызывающий (тесты) продолжают вести себя как раньше, проверка только для core-счетов.
+    private let onIsSourceAccountWritable: (CashflowTransaction) -> Bool
+
     /// Колбэк: применить balance-эффект для due-плановой транзакции
     private let onApplyDuePlannedEffect: (CashflowTransaction) async throws -> Void
 
@@ -83,7 +90,8 @@ final class CashflowScheduledService {
         onApplyDuePlannedEffect: @escaping (CashflowTransaction) async throws -> Void,
         appliedNoticeStore: AppliedPlannedNoticeStore,
         noticeAccountNameResolver: @escaping (CashflowTransaction) -> String,
-        noticeTitleResolver: @escaping (CashflowTransaction) -> String
+        noticeTitleResolver: @escaping (CashflowTransaction) -> String,
+        onIsSourceAccountWritable: @escaping (CashflowTransaction) -> Bool = { _ in true }
     ) {
         self.modelContext = modelContext
         self.defaults = defaults
@@ -97,6 +105,7 @@ final class CashflowScheduledService {
         self.appliedNoticeStore = appliedNoticeStore
         self.noticeAccountNameResolver = noticeAccountNameResolver
         self.noticeTitleResolver = noticeTitleResolver
+        self.onIsSourceAccountWritable = onIsSourceAccountWritable
     }
 
     // MARK: - Public: Queries
@@ -343,6 +352,14 @@ final class CashflowScheduledService {
                 }
 
                 if !existsInMonth {
+                    // Ревью round 2 (зона «Архивные счета»): счёт-источник шаблона архивирован/удалён —
+                    // не создаём новый инстанс вовсе. `occurrenceIndex` двигаем дальше, чтобы не
+                    // застрять на одной и той же дате — occurrence просто никогда не появится, пока
+                    // счёт не восстановят из архива.
+                    guard onIsSourceAccountWritable(template) else {
+                        occurrenceIndex += 1
+                        continue
+                    }
                     let generated = CashflowTransaction(
                         transactionType: template.transactionType,
                         amount: template.amount,
@@ -411,28 +428,49 @@ final class CashflowScheduledService {
             defaults.set(previousCheckpoint, forKey: dueAutoApplyCheckpointKey)
         }
 
-        let dueTransactions = transactionsProvider()
-            .filter { transaction in
-                guard transaction.transactionType == .income || transaction.transactionType == .expense else {
-                    return false
+        // Прямой fetch на проходах 2+ видит не только новую plan-строку кредита (ожидаемо), но и
+        // ЛЮБУЮ другую незавершённую строку, вставленную параллельной MainActor-задачей генерации
+        // повторяющихся операций (`scheduleRecurringGeneration`, тот же тик `loadTransactions()`):
+        // она делает `insert()` СРАЗУ, а `hasAppliedBalanceEffect` выставляет только после `await`
+        // конвертации валюты. Если задачи на MainActor чередуются между этими точками, догонка
+        // подхватила бы чужую строку и применила бы её ещё раз здесь. Единственная строка, которая
+        // ЗАКОНОМЕРНО появляется в базе между проходами этого цикла — новая plan-строка кредита от
+        // `LoanPlannedPaymentScheduler.sync`. Поэтому начиная со второго прохода фильтр допускает
+        // только её; всё остальное новое — чужая гонка, её применит следующий отдельный вызов.
+        func fetchDueTransactions(onlyLoanPlanRows: Bool) -> [CashflowTransaction] {
+            // Прямой fetch, а не `transactionsProvider()`: провайдер в приложении отдаёт
+            // замороженный снимок `state.transactions`, обновляемый только после выхода из этой
+            // функции (см. `onTransactionsMutated`). Внутри цикла ниже `LoanPlannedPaymentScheduler
+            // .sync` успевает сохранить в базу новую plan-строку на следующий пропущенный платёж —
+            // снимок её не видит, и догонка останавливается после первого платежа. Тот же обход
+            // уже применён в `generateRecurringTransactionsIfNeeded()` выше.
+            let allTransactions = (try? modelContext.fetch(FetchDescriptor<CashflowTransaction>())) ?? []
+            return allTransactions
+                .filter { transaction in
+                    guard transaction.transactionType == .income || transaction.transactionType == .expense else {
+                        return false
+                    }
+                    guard transaction.recurrenceRule == .none else { return false }
+                    // Плановый платёж по кредиту баланс счёта-источника не двигает
+                    // (`affectsCardBalance == false`: с какого счёта уйдут деньги, кредит не знает),
+                    // но применить его обязаны — долг уменьшает `LoanPaymentRecorder`, а не
+                    // balance-эффект. Фактические проводки платежа под этот признак не попадают:
+                    // у них другой префикс ключа.
+                    guard transaction.affectsCardBalance
+                        || LoanPlannedPaymentScheduler.isPlannedRow(transaction) else { return false }
+                    guard !transaction.hasAppliedBalanceEffect else { return false }
+                    guard transaction.transactionDate <= referenceNow else { return false }
+                    let isLoanPlanRow = LoanPlannedPaymentScheduler.isPlannedRow(transaction)
+                    guard !onlyLoanPlanRows || isLoanPlanRow else { return false }
+                    // Решение владельца 10.09: кредитная plan-строка, застрявшая ЗА чекпойнтом из-за
+                    // старого бага снимка (см. комментарий выше), всё равно догоняется — нижнюю
+                    // границу окна для неё не проверяем. Идемпотентность держится на
+                    // `hasAppliedBalanceEffect` двумя строками выше, а не на границе окна.
+                    // Некредитные строки эту нижнюю границу сохраняют как прежде.
+                    if isLoanPlanRow { return true }
+                    return transaction.transactionDate > previousCheckpoint
                 }
-                guard transaction.recurrenceRule == .none else { return false }
-                // Плановый платёж по кредиту баланс счёта-источника не двигает
-                // (`affectsCardBalance == false`: с какого счёта уйдут деньги, кредит не знает),
-                // но применить его обязаны — долг уменьшает `LoanPaymentRecorder`, а не
-                // balance-эффект. Фактические проводки платежа под этот признак не попадают:
-                // у них другой префикс ключа.
-                guard transaction.affectsCardBalance
-                    || LoanPlannedPaymentScheduler.isPlannedRow(transaction) else { return false }
-                guard !transaction.hasAppliedBalanceEffect else { return false }
-                return transaction.transactionDate > previousCheckpoint
-                    && transaction.transactionDate <= referenceNow
-            }
-            .sorted { $0.transactionDate < $1.transactionDate }
-
-        guard !dueTransactions.isEmpty else {
-            defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
-            return false
+                .sorted { $0.transactionDate < $1.transactionDate }
         }
 
         // Провал применения хотя бы одной операции запрещает двигать чекпойнт: иначе она уходит
@@ -440,63 +478,91 @@ final class CashflowScheduledService {
         // Пропуск по политике закрытого месяца — не провал: это осознанный отказ, и удержание
         // чекпойнта из-за него зациклило бы ретраи навсегда.
         var hasFailedApply = false
+        var foundAnyDue = false
 
-        // Буфер сводки согласован с логикой провалов: сюда попадают только операции, чей apply
-        // прошёл без ошибки. Провалившаяся остаётся внутри окна (чекпойнт не двигается) и попадёт
-        // в журнал тем прогоном, в котором реально применится; повтора по уже применённым не будет —
-        // их отсекает hasAppliedBalanceEffect. Пропуск по политике закрытого месяца в буфер не идёт.
-        var pendingNotices: [AppliedPlannedEntry] = []
+        // Плановый платёж по кредиту пересоздаёт РОВНО ОДНУ новую строку на следующий период
+        // (`LoanPlannedPaymentScheduler.sync`), и эта строка физически появляется в базе только
+        // ПОСЛЕ apply текущей — в уже собранный список `dueTransactions` она попасть не может.
+        // При пропуске 2+ периодов вторая и последующие missed-строки остаются с прошлой датой,
+        // а окно [previousCheckpoint, referenceNow] фиксировано — значит на них нужен ещё один
+        // проход с ТЕМ ЖЕ чекпойнтом. Цикл сходится: sync() даёт не больше одной новой строки на
+        // счёт за проход, а число пропущенных периодов конечно.
+        var isFirstPass = true
+        while true {
+            let dueTransactions = fetchDueTransactions(onlyLoanPlanRows: !isFirstPass)
+            guard !dueTransactions.isEmpty else { break }
+            isFirstPass = false
+            foundAnyDue = true
 
-        for transaction in dueTransactions {
-            guard (try? CashflowMonthMutationPolicy(modelContext: modelContext).validate(
-                .scheduledApply,
-                date: transaction.transactionDate
-            )) != nil else {
-                continue
-            }
-            do {
-                if LoanPlannedPaymentScheduler.isPlannedRow(transaction) {
-                    // Кредит применяется своим путём: тело — в ленту счёта, проценты — в договор,
-                    // план сдвигается на следующий платёж. Общий balance-эффект списал бы расход,
-                    // не тронув долг.
-                    try LoanPlannedPaymentScheduler.applyPlannedPayment(transaction, context: modelContext)
-                } else {
-                    try await onApplyDuePlannedEffect(transaction)
+            // Буфер сводки согласован с логикой провалов: сюда попадают только операции, чей apply
+            // прошёл без ошибки. Провалившаяся остаётся внутри окна (чекпойнт не двигается) и попадёт
+            // в журнал тем прогоном, в котором реально применится; повтора по уже применённым не будет —
+            // их отсекает hasAppliedBalanceEffect. Пропуск по политике закрытого месяца в буфер не идёт.
+            var pendingNotices: [AppliedPlannedEntry] = []
+
+            for transaction in dueTransactions {
+                guard (try? CashflowMonthMutationPolicy(modelContext: modelContext).validate(
+                    .scheduledApply,
+                    date: transaction.transactionDate
+                )) != nil else {
+                    continue
                 }
-                transaction.hasAppliedBalanceEffect = true
-                transaction.updatedAt = referenceNow
-                pendingNotices.append(
-                    makeAppliedNotice(for: transaction, kind: .scheduled, appliedAt: referenceNow)
-                )
-            } catch {
-                hasFailedApply = true
-                AppLogger.log(
-                    .error,
-                    category: "Cashflow",
-                    "Failed to auto-apply due planned transaction: \(error.localizedDescription)"
-                )
+                do {
+                    if LoanPlannedPaymentScheduler.isPlannedRow(transaction) {
+                        // Кредит применяется своим путём: тело — в ленту счёта, проценты — в договор,
+                        // план сдвигается на следующий платёж. Общий balance-эффект списал бы расход,
+                        // не тронув долг.
+                        try LoanPlannedPaymentScheduler.applyPlannedPayment(transaction, context: modelContext)
+                    } else {
+                        try await onApplyDuePlannedEffect(transaction)
+                    }
+                    transaction.hasAppliedBalanceEffect = true
+                    transaction.updatedAt = referenceNow
+                    pendingNotices.append(
+                        makeAppliedNotice(for: transaction, kind: .scheduled, appliedAt: referenceNow)
+                    )
+                } catch {
+                    hasFailedApply = true
+                    AppLogger.log(
+                        .error,
+                        category: "Cashflow",
+                        "Failed to auto-apply due planned transaction: \(error.localizedDescription)"
+                    )
+                }
             }
+
+            do {
+                try modelContext.save()
+                commitAppliedNotices(pendingNotices)
+            } catch {
+                // Сохранение не прошло — буфер сводки выбрасывается целиком (см. комментарий выше).
+                AppLogger.log(.error, category: "Cashflow", "Failed to save due planned auto-apply: \(error.localizedDescription)")
+                return false
+            }
+
+            // За этот проход не применилось ничего нового (либо всё отбила политика закрытого
+            // месяца, либо всё упало) — новых строк ждать не от чего, следующий проход увидит тот
+            // же набор и зациклится. Выходим по отсутствию ПРОГРЕССА, а не по hasFailedApply:
+            // policy-skip не выставляет hasFailedApply, но и прогресса тоже не даёт.
+            if pendingNotices.isEmpty { break }
         }
 
-        do {
-            try modelContext.save()
-            commitAppliedNotices(pendingNotices)
-            // Повторный проход по успешно применённым безопасен — их отсекает hasAppliedBalanceEffect.
-            if hasFailedApply {
-                AppLogger.log(
-                    .warning,
-                    category: "Cashflow",
-                    "Due auto-apply checkpoint kept at previous value after failed apply"
-                )
-            } else {
-                defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
-            }
-            return true
-        } catch {
-            // Сохранение не прошло — буфер сводки выбрасывается целиком (см. комментарий выше).
-            AppLogger.log(.error, category: "Cashflow", "Failed to save due planned auto-apply: \(error.localizedDescription)")
+        guard foundAnyDue else {
+            defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
             return false
         }
+
+        // Повторный проход по успешно применённым безопасен — их отсекает hasAppliedBalanceEffect.
+        if hasFailedApply {
+            AppLogger.log(
+                .warning,
+                category: "Cashflow",
+                "Due auto-apply checkpoint kept at previous value after failed apply"
+            )
+        } else {
+            defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
+        }
+        return true
     }
 
     // MARK: - Private: Applied Notice Journal

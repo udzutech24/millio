@@ -81,7 +81,6 @@ enum ProfileMenuItemID: String, Identifiable {
     case googleSheets
     case security
     case dailyReminders
-    case quickSetup
     case launchSplash
     case faq
     case smartDataReset
@@ -115,8 +114,6 @@ enum ProfileMenuItemID: String, Identifiable {
             return "lock.shield"
         case .dailyReminders:
             return "bell"
-        case .quickSetup:
-            return "sparkles.rectangle.stack"
         case .launchSplash:
             return "sparkles.tv"
         case .faq:
@@ -162,8 +159,6 @@ enum ProfileMenuItemID: String, Identifiable {
             return .green
         case .dailyReminders:
             return .orange
-        case .quickSetup:
-            return .purple
         case .launchSplash:
             return .pink
         case .faq:
@@ -236,7 +231,6 @@ enum ProfileMenuStructure {
             ProfileMenuSection(
                 id: .experience,
                 items: [
-                    .quickSetup,
                     .launchSplash
                 ]
             ),
