@@ -1,7 +1,5 @@
-1.9 sürümündeki yenilikler:
-
-• Gayrimenkul ve banka kartları — net değerinizin tam resmini gösteren yeni hesap türleri
-• Yenilenen Hesaplar ekranı — varlıklar ve yükümlülükler ayrı, bakiye dağılımı, esnek gruplama
-• Kredi kartları — tam işlem ve ödeme desteği
-• Nakit akışında "Yaklaşan" bölümü — ödemeleri ve gelirleri önceden görün
-• Birleşik tutar girişi ve onlarca kararlılık iyileştirmesi
+— Hesap ekranları yeniden tasarlandı: mevduat, yatırım, kredi kartı ve nakit için ayrı kartlar
+— Yeni hesap türü "Kredi": ödeme planı, erken kapama, Nakit akışı'nda planlı ödeme
+— Mevduat: faiz kapitalizasyonu ve tüm koşullar tek kartta
+— Ana ekranda ilk adımlarınız için "millio'yu keşfet" kontrol listesi
+— Daha hızlı kaydırma ve ekran geçişleri

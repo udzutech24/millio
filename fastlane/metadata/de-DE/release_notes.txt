@@ -1,7 +1,5 @@
-Neu in Version 1.9:
-
-• Immobilien und Debitkarten — neue Kontotypen für den vollständigen Überblick über Ihr Vermögen
-• Neu gestalteter Konten-Bildschirm — Vermögen und Verbindlichkeiten getrennt, Saldenaufschlüsselung, flexible Gruppierung
-• Kreditkarten — vollständige Transaktionen und Zahlungen
-• Neuer Bereich „Anstehend" im Cashflow — Zahlungen und Einnahmen im Voraus sehen
-• Einheitliche Betragseingabe und zahlreiche Stabilitätsverbesserungen
+— Kontobildschirme neu gestaltet: Einlagen, Investments, Kreditkarten und Bargeld haben jetzt eigene Karten
+— Neuer Kontotyp „Kredit": Zahlungsplan, Sondertilgung, geplante Zahlung im Cashflow
+— Einlage: Zinseszins und alle Konditionen auf einer Karte
+— Checkliste „Lerne millio kennen" auf dem Home-Bildschirm für die ersten Schritte
+— Schnelleres Scrollen und Bildschirmwechsel

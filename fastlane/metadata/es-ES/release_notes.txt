@@ -1,7 +1,5 @@
-Novedades en la versión 1.9:
-
-• Bienes raíces y tarjetas de débito — nuevos tipos de cuenta para una visión completa de tu patrimonio
-• Pantalla de Cuentas rediseñada — activos y pasivos separados, desglose del saldo, agrupación flexible
-• Tarjetas de crédito — operaciones y pagos completos
-• Nueva sección "Próximos" en el flujo de caja — ve pagos e ingresos con antelación
-• Entrada de importes unificada y decenas de mejoras de estabilidad
+— Pantallas de cuentas rediseñadas: depósitos, inversiones, tarjetas de crédito y efectivo tienen su propia tarjeta
+— Nuevo tipo de cuenta "Préstamo": calendario de pagos, amortización anticipada, pago programado en Flujo de caja
+— Depósito: capitalización de intereses y todas las condiciones en una sola tarjeta
+— Lista de verificación "Descubre millio" en la pantalla de inicio para tus primeros pasos
+— Desplazamiento y transiciones entre pantallas más rápidos

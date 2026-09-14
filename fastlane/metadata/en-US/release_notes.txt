@@ -1,6 +1,5 @@
-What's new in 2.0:
-
-• Cash — a new account type in the Accounts section
-• Loan — early repayment with a choice of scenario (shorten term or reduce payment)
-• Scheduled loan payments now appear as planned operations in Cashflow
-• Stability fixes
+— Account screens redesigned: deposits, investments, credit cards, and cash each have their own card
+— New account type "Loan": payment schedule, early repayment, scheduled payment in Cashflow
+— Deposit: interest capitalization and all terms on one card
+— A "Learn millio" checklist on the Home screen for your first steps
+— Faster scrolling and screen transitions

@@ -1,7 +1,5 @@
-Nouveautés de la version 1.9 :
-
-• Immobilier et cartes de débit — nouveaux types de comptes pour une vue complète de votre patrimoine
-• Écran Comptes repensé — actifs et passifs séparés, répartition du solde, regroupement flexible
-• Cartes de crédit — opérations et paiements complets
-• Nouvelle section « À venir » dans le flux de trésorerie — voyez vos paiements et revenus à l'avance
-• Saisie de montant unifiée et dizaines de corrections de stabilité
+— Écrans de comptes repensés : dépôts, investissements, cartes de crédit et espèces ont chacun leur propre fiche
+— Nouveau type de compte « Crédit » : échéancier de paiement, remboursement anticipé, paiement planifié dans Flux de trésorerie
+— Dépôt : capitalisation des intérêts et toutes les conditions sur une seule fiche
+— Une liste « Découvre millio » sur l'écran d'accueil pour vos premiers pas
+— Défilement et transitions entre écrans plus rapides
