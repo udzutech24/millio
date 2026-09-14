@@ -1,4 +1,4 @@
-Behalte den Überblick über dein Geld. Kein Account. Keine Cloud-Pflicht.
+Behalte den Überblick über dein Geld. Kein Account nötig.
 
 millio vereint Konten, Cashflow, Cashback, Investments und Währungsrechner in einer App — offline-first, kein Account erforderlich, deine Daten bleiben auf deinem Gerät.
 
@@ -21,7 +21,7 @@ WÄHRUNGSRECHNER
 170+ Währungen inkl. Krypto. Live-Kurse, keine Werbung, keine externen Apps.
 
 DEINE DATEN. DEIN GERÄT.
-Kein Account, keine Pflicht-Cloud. Alle Daten bleiben lokal auf deinem iPhone. Optionales iCloud-Backup mit Ende-zu-Ende-Verschlüsselung — du entscheidest Zeitpunkt und Passwort: Geräteschlüssel (automatisch) oder eigene Passphrase (auf anderen Geräten nutzbar).
+Kein Account nötig. Alle Daten bleiben lokal auf deinem iPhone. Optionales iCloud-Backup mit Ende-zu-Ende-Verschlüsselung — du entscheidest Zeitpunkt und Passwort: Geräteschlüssel (automatisch) oder eigene Passphrase (auf anderen Geräten nutzbar).
 
 WAS KOSTENLOS ENTHALTEN IST
 Konten, Cashflow-Tracking, Cashback (10 Kategorien/Monat), Währungsrechner, Dashboard, verschlüsseltes Backup.
@@ -29,11 +29,10 @@ Konten, Cashflow-Tracking, Cashback (10 Kategorien/Monat), Währungsrechner, Das
 WAS PRO FREISCHALTET
 • Unbegrenzte Konten, Karten und Investments
 • Finanz-Analyse-Charts und Dynamiken
-• KI-Screenshot-Erkennung — fotografiere einen Kontoauszug, millio extrahiert Transaktionen automatisch
 • Unbegrenzte Cashback-Kategorien
 • Frühzeitiger Zugang zu neuen Funktionen
 
-Kostenlos starten — kein Account, keine Registrierung, keine Pflicht-Cloud.
+Kostenlos starten — kein Account, keine Registrierung.
 
 —
 millio. Dein Geld. Deine Regeln.
