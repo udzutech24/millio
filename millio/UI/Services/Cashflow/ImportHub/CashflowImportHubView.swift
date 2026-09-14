@@ -61,13 +61,15 @@ struct CashflowImportHubView: View {
                     }
                     .accessibilityHint(CashflowMonthWorkspaceLocalization.manualBulk)
 
-                    Button {
-                        statementController.beginSelection()
-                        showFileImporter = true
-                    } label: {
-                        Label(CashflowMonthWorkspaceLocalization.statement, systemImage: "doc.text.magnifyingglass")
+                    if StatementImportFeatureFlag.bankStatementImportEnabled {
+                        Button {
+                            statementController.beginSelection()
+                            showFileImporter = true
+                        } label: {
+                            Label(CashflowMonthWorkspaceLocalization.statement, systemImage: "doc.text.magnifyingglass")
+                        }
+                        .accessibilityHint(CashflowMonthWorkspaceLocalization.statement)
                     }
-                    .accessibilityHint(CashflowMonthWorkspaceLocalization.statement)
                 }
 
                 statementStatusSection

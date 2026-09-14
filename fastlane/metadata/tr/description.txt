@@ -1,4 +1,4 @@
-Paranın nereye gittiğini tam olarak bilin. Hesap açmadan. Bulut zorunlu değil.
+Paranın nereye gittiğini tam olarak bilin. Hesap açmadan.
 
 millio; hesaplar, nakit akışı, cashback, yatırımlar ve döviz çeviricisini tek bir uygulamada bir araya getirir — çevrimdışı çalışır, hesap gerekmez, verileriniz cihazınızda kalır.
 
@@ -29,11 +29,10 @@ Hesaplar, nakit akışı takibi, cashback (ayda 10 kategori), döviz çeviricisi
 PRO NELER AÇAR
 • Sınırsız hesap, kart ve yatırım
 • Finansal dinamik grafikleri ve derin analitik
-• AI ekran görüntüsü okuyucu — banka ekstrenizi fotoğraflayın, millio işlemleri otomatik çıkarsın
 • Sınırsız cashback kategorileri
 • Yeni özelliklere erken erişim
 
-Ücretsiz başlayın — hesap, kayıt veya zorunlu bulut gerekmez.
+Ücretsiz başlayın — hesap veya kayıt gerekmez.
 
 —
 millio. Paranız. Kurallarınız.

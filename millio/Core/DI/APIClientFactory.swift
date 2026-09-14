@@ -50,7 +50,10 @@ struct APIClientFactory {
         authService: any AuthServiceProtocol,
         session: URLSession = .shared
     ) -> any CashflowStatementImportClient {
-        BackendCashflowStatementImportClient(
+        guard StatementImportFeatureFlag.bankStatementImportEnabled else {
+            return UnavailableCashflowStatementImportClient()
+        }
+        return BackendCashflowStatementImportClient(
             authService: authService,
             configurationProvider: authConfigurationProvider(),
             session: session
