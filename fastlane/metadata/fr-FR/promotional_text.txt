@@ -1,1 +1,1 @@
-Nouveau en 1.9 : immobilier et cartes de débit, écran Comptes repensé (actifs/passifs), cartes de crédit avec paiements. Vos données restent sur votre appareil.
+millio 2.0 : crédits avec échéancier, comptes épargne avec intérêts, nouvel écran Comptes pour actifs et passifs. Sauvegarde iCloud, sans compte requis.

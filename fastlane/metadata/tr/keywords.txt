@@ -1,1 +1,1 @@
-kişisel finans,bütçe,harcama,yatırım,kripto,cüzdan,nakit akışı,cashback,döviz,tasarruf,net değer
+kişisel finans,harcama,yatırım,kripto,cüzdan,nakit akışı,cashback,döviz,borç,kredi kartı,faiz,takip

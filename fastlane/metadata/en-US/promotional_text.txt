@@ -1,1 +1,1 @@
-New in 1.9: real estate and debit cards as accounts, redesigned Accounts screen with assets vs liabilities, credit cards with payments. Your data stays on your device.
+millio 2.0: loans with payment schedules, savings accounts with interest, redesigned Accounts screen for assets vs liabilities. iCloud backup, no account required.

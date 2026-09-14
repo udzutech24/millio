@@ -1,1 +1,1 @@
-Nuevo en 1.9: bienes raíces y tarjetas de débito, pantalla de Cuentas rediseñada con activos y pasivos, tarjetas de crédito con pagos. Datos solo en tu dispositivo.
+millio 2.0: préstamos con calendario de pagos, cuentas de ahorro con interés, nueva pantalla de Cuentas para activos y pasivos. Backup en iCloud, sin cuenta.

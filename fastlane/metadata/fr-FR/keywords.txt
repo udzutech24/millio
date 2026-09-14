@@ -1,1 +1,1 @@
-finances personnelles,budget,dépenses,cashback,investissements,crypto,portefeuille,économies,revenus
+finances,dépenses,cashback,investissements,crypto,portefeuille,revenus,prêt,dette,carte credit,suivi

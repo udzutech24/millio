@@ -1,1 +1,1 @@
-1.9 yenilik: gayrimenkul ve banka kartları hesap olarak, varlık/yükümlülük ayrımlı yeni Hesaplar ekranı, ödeme destekli kredi kartları. Veriler cihazınızda kalır.
+millio 2.0: ödeme planlı krediler, faizli tasarruf hesapları, varlık ve yükümlülükler için yeni Hesaplar ekranı. iCloud yedeği, hesap gerekmez.
