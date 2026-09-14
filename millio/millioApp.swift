@@ -229,7 +229,8 @@ struct millioApp: App {
                 .onOpenURL { url in
                     if BackupFileFormat.isBackupFile(url) {
                         appState.pendingIncomingBackupURL = url
-                    } else if IncomingStatementFileKind.allCases.map(\.filenameExtension).contains(url.pathExtension.lowercased()) {
+                    } else if StatementImportFeatureFlag.bankStatementImportEnabled,
+                              IncomingStatementFileKind.allCases.map(\.filenameExtension).contains(url.pathExtension.lowercased()) {
                         handleIncomingStatementURL(url)
                     } else {
                         AppWidgetDeepLinkHandler.handle(url: url, appState: appState)
@@ -290,6 +291,7 @@ struct millioApp: App {
 
     @MainActor
     private func presentNextIncomingStatementIfReady() {
+        guard StatementImportFeatureFlag.bankStatementImportEnabled else { return }
         guard appState.pendingIncomingStatementItem == nil else { return }
         do {
             let coordinator = try resolvedIncomingStatementCoordinator()

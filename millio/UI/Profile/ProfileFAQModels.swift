@@ -110,7 +110,7 @@ enum ProfileFAQContent {
                     id: "what-is-pro",
                     question: "What is included in PRO?",
                     answerParagraphs: [
-                        "PRO includes: AI import from bank screenshots, Finance & Dynamics charts, unlimited cashback categories, and unlimited financial products.",
+                        "PRO includes: OCR import from bank screenshots, Finance & Dynamics charts, unlimited cashback categories, and unlimited financial products.",
                         "To subscribe or check your plan status, open Profile and tap the PRO card."
                     ],
                     note: nil
@@ -197,7 +197,7 @@ enum ProfileFAQContent {
                     id: "what-is-pro",
                     question: "Что входит в PRO?",
                     answerParagraphs: [
-                        "PRO включает: AI-импорт транзакций из скриншотов банка, графики Finances и Dynamics, неограниченные категории кэшбэка и финансовые продукты.",
+                        "PRO включает: OCR-импорт транзакций из скриншотов банка, графики Finances и Dynamics, неограниченные категории кэшбэка и финансовые продукты.",
                         "Чтобы оформить подписку или проверить статус, откройте Профиль и нажмите карточку PRO."
                     ],
                     note: nil
@@ -458,7 +458,7 @@ enum ProfileFAQContent {
                     id: "what-is-pro",
                     question: "PRO 包含什么内容？",
                     answerParagraphs: [
-                        "PRO 包含：AI 银行截图导入、Finances 与 Dynamics 图表、无限返现类别及无限金融产品。",
+                        "PRO 包含：OCR 银行截图导入、Finances 与 Dynamics 图表、无限返现类别及无限金融产品。",
                         "如需订阅或查看计划状态，打开「个人资料」并点击 PRO 卡片。"
                     ],
                     note: nil

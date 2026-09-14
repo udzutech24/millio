@@ -1,5 +1,13 @@
 import Foundation
 
+/// Решение владельца (14.09.2026): релиз 2.0 выходит без импорта банковских выписок —
+/// бэкенд-ветка `agent/bank-statement-import` не влита в master и не задеплоена.
+/// Флаг прячет все входные точки (кнопка импорта, онбординг при создании счёта, приём
+/// файла выписки через Share Extension/deep link), код и таргет остаются на месте.
+enum StatementImportFeatureFlag {
+    static let bankStatementImportEnabled = false
+}
+
 enum CashflowStatementImportAvailability: Equatable {
     case available
     case unavailable(reason: String)

@@ -5,13 +5,22 @@ import Testing
 @Suite("Account statement create-flow policy")
 @MainActor
 struct AccountStatementOnboardingFlowTests {
-    @Test("Statement CTA is limited to debit cards and bank accounts")
+    @Test("Statement CTA is limited to debit cards and bank accounts when the feature is on")
     func eligibility() {
-        #expect(AccountStatementOnboardingPresentationPolicy.isEligible(option: .card, cardType: .debit))
-        #expect(AccountStatementOnboardingPresentationPolicy.isEligible(option: .account, cardType: nil))
-        #expect(!AccountStatementOnboardingPresentationPolicy.isEligible(option: .card, cardType: .credit))
-        #expect(!AccountStatementOnboardingPresentationPolicy.isEligible(option: .deposit, cardType: nil))
-        #expect(!AccountStatementOnboardingPresentationPolicy.isEligible(option: .investment, cardType: nil))
+        #expect(AccountStatementOnboardingPresentationPolicy.isEligible(option: .card, cardType: .debit, featureEnabled: true))
+        #expect(AccountStatementOnboardingPresentationPolicy.isEligible(option: .account, cardType: nil, featureEnabled: true))
+        #expect(!AccountStatementOnboardingPresentationPolicy.isEligible(option: .card, cardType: .credit, featureEnabled: true))
+        #expect(!AccountStatementOnboardingPresentationPolicy.isEligible(option: .deposit, cardType: nil, featureEnabled: true))
+        #expect(!AccountStatementOnboardingPresentationPolicy.isEligible(option: .investment, cardType: nil, featureEnabled: true))
+    }
+
+    // Решение владельца (14.09.2026): релиз 2.0 без импорта выписок — флаг выключен,
+    // онбординг не должен предлагаться независимо от типа продукта.
+    @Test("Statement CTA is hidden entirely in release 2.0 (feature flag off)")
+    func eligibilityWhenFeatureDisabled() {
+        #expect(!StatementImportFeatureFlag.bankStatementImportEnabled)
+        #expect(!AccountStatementOnboardingPresentationPolicy.isEligible(option: .card, cardType: .debit))
+        #expect(!AccountStatementOnboardingPresentationPolicy.isEligible(option: .account, cardType: nil))
     }
 
     @Test("Bank-declared closing balance wins with explicit provenance and date")

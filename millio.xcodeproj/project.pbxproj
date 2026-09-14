@@ -53,7 +53,6 @@
 			dstSubfolderSpec = 13;
 			files = (
 				78A100022F50000200A10001 /* millioCurrencyWidgetExtension.appex in Embed Foundation Extensions */,
-				78B200022F60000200B20001 /* millioStatementShareExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -236,7 +235,6 @@
 			);
 			dependencies = (
 				78A1000F2F50000F00A10001 /* PBXTargetDependency */,
-				78B2000F2F60000F00B20001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				772BE51F2F12DBED00193DE9 /* millio */,
@@ -523,11 +521,6 @@
 			isa = PBXTargetDependency;
 			target = 78A100092F50000900A10001 /* millioCurrencyWidgetExtension */;
 			targetProxy = 78A1000E2F50000E00A10001 /* PBXContainerItemProxy */;
-		};
-		78B2000F2F60000F00B20001 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 78B200092F60000900B20001 /* millioStatementShareExtension */;
-			targetProxy = 78B2000E2F60000E00B20001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 

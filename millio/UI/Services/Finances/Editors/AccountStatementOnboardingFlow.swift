@@ -32,8 +32,13 @@ struct AccountStatementCreateDraft {
 }
 
 enum AccountStatementOnboardingPresentationPolicy {
-    static func isEligible(option: FinanceAddAccountProductOption, cardType: CardType?) -> Bool {
-        option == .account || (option == .card && cardType == .debit)
+    static func isEligible(
+        option: FinanceAddAccountProductOption,
+        cardType: CardType?,
+        featureEnabled: Bool = StatementImportFeatureFlag.bankStatementImportEnabled
+    ) -> Bool {
+        guard featureEnabled else { return false }
+        return option == .account || (option == .card && cardType == .debit)
     }
 }
 
