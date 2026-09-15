@@ -13,7 +13,9 @@ DerivedData/
 # Swift Package Manager
 .build/
 Packages/
+# Package.resolved для .xcodeproj (приложение, не библиотека) — коммитим для воспроизводимых сборок
 Package.resolved
+!millio.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # CocoaPods
 Pods/
