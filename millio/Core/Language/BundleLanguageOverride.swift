@@ -17,7 +17,12 @@ enum BundleLanguageOverride {
             diagLogger.debug("[BundleOverride] locale is nil (system) — clearing bundle override")
         }
 
+        // Системные фреймворки (AuthenticationServices, UIKit и т.п.) живут вне нашего
+        // app bundle и обязаны показывать локализацию системы, а не нашего языка —
+        // иначе кнопка Sign in with Apple рисует сырой ключ вместо системного текста
+        // (система ищет строку в нашем override-бандле, где её просто нет).
         let bundles = Set([Bundle.main] + Bundle.allBundles + Bundle.allFrameworks)
+            .filter(isOwnedBundle)
         diagLogger.debug("[BundleOverride] total bundles to process: \(bundles.count)")
 
         for bundle in bundles {
@@ -42,6 +47,17 @@ enum BundleLanguageOverride {
             )
         }
         diagLogger.debug("[BundleOverride] apply complete for language: \(language.rawValue)")
+    }
+
+    /// Бандл принадлежит нам (лежит внутри app bundle: основной таргет,
+    /// наши extensions, наши SPM-ресурсные бандлы), а не системный фреймворк.
+    private static func isOwnedBundle(_ bundle: Bundle) -> Bool {
+        if bundle === Bundle.main { return true }
+        let path = bundle.bundlePath
+        if path.hasPrefix("/System/") || path.hasPrefix("/usr/") { return false }
+        // Симулятор хранит системные рантайм-фреймворки под .../RuntimeRoot/System/…
+        if path.contains("/RuntimeRoot/System/") || path.contains(".sdk/System/") { return false }
+        return path.hasPrefix(Bundle.main.bundlePath)
     }
 
     private static func installOverrideIfNeeded(on bundle: Bundle) {
