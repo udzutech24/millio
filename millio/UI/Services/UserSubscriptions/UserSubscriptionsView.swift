@@ -163,6 +163,7 @@ struct UserSubscriptionsView: View {
                             Text(next, style: .date)
                                 .font(.system(size: 13))
                                 .foregroundStyle(dueDateColor(for: next))
+                                .environment(\.locale, AppLocalization.currentAppLocale)
                         }
                     }
                 }

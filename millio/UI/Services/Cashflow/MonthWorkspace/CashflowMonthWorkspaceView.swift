@@ -252,6 +252,7 @@ struct CashflowMonthWorkspaceView: View {
                 Text(transaction.transactionDate, style: .date)
                     .font(.caption)
                     .foregroundStyle(CashflowSurfaceStyle.secondaryText)
+                    .environment(\.locale, AppLocalization.currentAppLocale)
             }
             Spacer(minLength: 8)
             Text("\(cashflowAmountText(transaction.amount)) \(cashflowCurrencyCodeLabel(transaction.currency))")

@@ -132,6 +132,7 @@ struct RateSourcePickerView: View {
                     .font(Font.millioMicro)
                     .foregroundStyle(AppColors.textSecondary)
                     .lineLimit(1)
+                    .environment(\.locale, AppLocalization.currentAppLocale)
             }
             ZStack {
                 Circle()

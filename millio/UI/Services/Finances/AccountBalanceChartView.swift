@@ -276,7 +276,7 @@ struct AccountBalanceChartView: View {
         }
         .chartXAxis {
             AxisMarks(values: .stride(by: .month)) { _ in
-                AxisValueLabel(format: .dateTime.month(.abbreviated))
+                AxisValueLabel(format: .dateTime.month(.abbreviated).locale(AppLocalization.currentAppLocale))
                     .font(.millioMicro)
                     .foregroundStyle(AppColors.textSecondary)
             }
@@ -397,6 +397,7 @@ struct AccountBalanceChartView: View {
 
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
+        formatter.locale = AppLocalization.currentAppLocale
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         return formatter.string(from: date)
