@@ -72,7 +72,7 @@ struct CashflowUnifiedEntryHistorySection: View {
                                     .foregroundStyle(AppColors.textSecondary)
                             }
                             Spacer()
-                            Text(cashflowHistoryAmountText(row.transaction.amount))
+                            Text(cashflowHistoryAmountText(row.transaction.amount, currencyCode: row.transaction.currency))
                                 .font(.millioCalloutSemibold)
                                 .foregroundStyle(row.status == .paid ? AppColors.textPrimary : AppColors.textSecondary)
                         }
