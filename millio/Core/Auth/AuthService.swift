@@ -659,6 +659,13 @@ struct AuthAPIClient: AuthAPIClientProtocol {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
 
+        // Logout — локальная сессия уже гасится синхронно в finalizeSignOut, серверный
+        // вызов лишь best-effort инвалидация refresh-токена. Без короткого таймаута
+        // кнопка «Выйти» висит до дефолтных 60с при недоступном бэкенде.
+        if operation == .logout {
+            request.timeoutInterval = 8
+        }
+
         return request
     }
 
