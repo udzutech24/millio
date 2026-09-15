@@ -48,7 +48,9 @@ platform :ios do
       include_bitcode: false,
       output_directory: "build/testflight",
       output_name: "millio.ipa",
-      derived_data_path: "/tmp/millio-derived-data"
+      derived_data_path: "/tmp/millio-derived-data",
+      cloned_source_packages_path: options[:spm_cache_path],
+      skip_package_dependencies_resolution: !options[:spm_cache_path].nil?
     )
 
     upload_to_testflight(
