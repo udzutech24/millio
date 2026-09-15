@@ -162,12 +162,25 @@ enum AuthErrorMapper {
 
     private static func presentation(for error: AuthTransportError) -> AuthErrorPresentation {
         switch error {
-        case .noInternet, .timeout:
+        case .noInternet:
             return .init(
-                category: error == .timeout ? .timeout : .noInternet,
+                category: .noInternet,
                 message: L(
                     "auth.error.offline",
                     defaultValue: "No internet connection. Check your network and try again."
+                ),
+                shouldPresentToast: true
+            )
+        case .timeout:
+            // Устройство онлайн, но запрос не достучался до бэкенда (timedOut/
+            // cannotConnectToHost/cannotFindHost/dnsLookupFailed) — это не «нет
+            // интернета», а недоступность сервера millio. Разные тексты, чтобы
+            // пользователь не проверял Wi-Fi там, где проблема не в нём.
+            return .init(
+                category: .timeout,
+                message: L(
+                    "auth.error.server_timeout",
+                    defaultValue: "millio server is unavailable right now. Try again later."
                 ),
                 shouldPresentToast: true
             )
