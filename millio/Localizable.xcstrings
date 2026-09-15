@@ -12281,43 +12281,43 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         }
       }
