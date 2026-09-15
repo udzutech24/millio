@@ -1231,7 +1231,9 @@ private struct FinanceDynamicsContentView: View {
             // Период
             let (startDate, endDate) = displayedPeriodDates
             let sameYear = Calendar.current.component(.year, from: startDate) == Calendar.current.component(.year, from: endDate)
-            let startFormat: Date.FormatStyle = (sameYear ? .dateTime.day().month(.abbreviated) : .dateTime.day().month(.abbreviated).year())
+            let startFormat: Date.FormatStyle = (sameYear
+                ? Date.FormatStyle.dateTime.day().month(.abbreviated)
+                : Date.FormatStyle.dateTime.day().month(.abbreviated).year())
                 .locale(AppLocalization.currentAppLocale)
             let endFormat: Date.FormatStyle = .dateTime.day().month(.abbreviated).year().locale(AppLocalization.currentAppLocale)
             Text(
