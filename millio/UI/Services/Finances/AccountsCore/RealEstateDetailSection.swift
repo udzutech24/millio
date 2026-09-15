@@ -53,7 +53,7 @@ struct RealEstateDetailSection: View {
         return value - abs(debt)
     }
     private var presentation: RealEstateDetailPresentation {
-        RealEstateDetailPresentation.make(summary: summary, currency: account.currency, equity: equity)
+        RealEstateDetailPresentation.make(summary: summary, currency: account.currency, equity: equity, locale: AppLocalization.currentAppLocale)
     }
 
     var body: some View {

@@ -664,6 +664,7 @@ struct CashflowTransactionEditorView: View {
                             Text(transactionDate, style: .date)
                                 .font(.system(size: 15))
                                 .foregroundStyle(AppColors.textTertiary)
+                                .environment(\.locale, AppLocalization.currentAppLocale)
                         }
                     }
                     .padding(.vertical, 8)

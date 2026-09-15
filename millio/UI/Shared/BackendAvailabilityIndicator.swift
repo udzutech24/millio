@@ -21,9 +21,12 @@ struct BackendAvailabilityIndicator: View {
             .accessibilityLabel("Сервер Millio недоступен или не подтверждён")
             .accessibilityHint("Открывает описание состояния и повторную проверку")
             .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            .padding(.top, 10)
-            .padding(.trailing, 16)
+            // .topTrailing (padding trailing 16) совпадал с кнопкой профиля/иконкой
+            // «глаз» в шапке Дашборда и с кнопкой входа на экране Welcome — оверлей
+            // перекрывал интерактивный элемент насмерть (тап проходил мимо).
+            // Верх-центр под safe area свободен на обеих шапках.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, 4)
             .sheet(isPresented: $isExplanationPresented) {
                 NavigationStack {
                     VStack(alignment: .leading, spacing: 18) {

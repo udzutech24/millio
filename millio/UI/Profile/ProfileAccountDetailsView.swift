@@ -119,9 +119,18 @@ struct ProfileAccountDetailsView: View {
                 }
             }
 
-            Button(logoutTitle) {
+            Button {
                 ScopeCache.clearUserID()
                 Task { await authManager.logout() }
+            } label: {
+                // Выход может ждать сетевой logout-запрос — без индикатора кнопка
+                // выглядит зависшей до 60с при недоступном сервере (см. п.2 фикса).
+                if authManager.isLogoutInProgress {
+                    ProgressView()
+                        .tint(Color.red.opacity(0.9))
+                } else {
+                    Text(logoutTitle)
+                }
             }
             .font(.system(size: 17, weight: .semibold))
             .frame(maxWidth: .infinity)

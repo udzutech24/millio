@@ -58,22 +58,24 @@ extension CashflowCategoryTransactionSheet {
     }
 
     /// Последняя плитка сетки: создание категории прямо из сетки, пунктирная рамка
-    /// отличает её от обычных категорий.
+    /// отличает её от обычных категорий. Компактная (иконка + подпись в строку) —
+    /// полная высота обычной карточки категории ей не нужна, LazyVGrid сама
+    /// растягивает её до высоты строки, если рядом стоит обычная карточка.
     private var newCategoryTile: some View {
         Button {
             showCreateCategorySheet = true
         } label: {
-            VStack(alignment: .leading, spacing: AppSpacing.s) {
+            HStack(spacing: AppSpacing.s) {
                 ZStack {
                     Circle().stroke(
                         AppColors.textSecondary.opacity(0.5),
                         style: StrokeStyle(lineWidth: 1, dash: [3, 3])
                     )
                     Image(systemName: "plus")
-                        .font(.millioSubheadline)
+                        .font(.millioCallout)
                         .foregroundStyle(AppColors.textSecondary)
                 }
-                .frame(width: 40, height: 40)
+                .frame(width: 24, height: 24)
 
                 Text(L("cashflow.entry.category.new_short", defaultValue: "New"))
                     .font(.millioCalloutSemibold)
@@ -81,8 +83,8 @@ extension CashflowCategoryTransactionSheet {
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
             }
-            .frame(maxWidth: .infinity, minHeight: CashflowCategoryGridLayout.unifiedCardMinHeight, alignment: .topLeading)
-            .padding(AppSpacing.s)
+            .frame(maxWidth: .infinity, minHeight: CashflowCategoryGridLayout.newTileMinHeight, alignment: .leading)
+            .padding(.horizontal, AppSpacing.s)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .strokeBorder(

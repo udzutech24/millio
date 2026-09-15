@@ -133,7 +133,10 @@ struct CashflowTransactionsHistoryViewTests {
 
         #expect(cashflowHistoryTimeToken(for: nil) == "0")
         #expect(cashflowHistoryTimeToken(for: Date(timeIntervalSince1970: 1_710_000_000)) == "1710000000")
-        #expect(cashflowHistoryFormattedNumberText(15.125, maxFractionDigits: 4) == "15,125")
+        // Явная ru_RU-локаль — эта ветка теста проверяет формат чисел как таковой,
+        // не привязку к языку приложения (та отдельно покрыта
+        // CashflowHistoryAmountFormattingTests после фикса п.7 2.0(6)).
+        #expect(cashflowHistoryFormattedNumberText(15.125, maxFractionDigits: 4, locale: Locale(identifier: "ru_RU")) == "15,125")
     }
 
     @Test("История изменения актива показывает было и стало для акций")

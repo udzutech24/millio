@@ -337,7 +337,7 @@ private struct CashflowStatementConfirmationView: View {
         NavigationStack {
             List {
                 Section(CashflowStatementReviewLocalization.month) {
-                    Label(month.formatted(.dateTime.month(.wide).year()), systemImage: "calendar")
+                    Label(month.formatted(.dateTime.month(.wide).year().locale(AppLocalization.currentAppLocale)), systemImage: "calendar")
                 }
                 Section(CashflowStatementReviewLocalization.proposedImport) {
                     LabeledContent(CashflowStatementReviewLocalization.importedCount, value: "\(summary.includedCount)")

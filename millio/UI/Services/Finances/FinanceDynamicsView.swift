@@ -1231,8 +1231,11 @@ private struct FinanceDynamicsContentView: View {
             // Период
             let (startDate, endDate) = displayedPeriodDates
             let sameYear = Calendar.current.component(.year, from: startDate) == Calendar.current.component(.year, from: endDate)
-            let startFormat: Date.FormatStyle = sameYear ? .dateTime.day().month(.abbreviated) : .dateTime.day().month(.abbreviated).year()
-            let endFormat: Date.FormatStyle = .dateTime.day().month(.abbreviated).year()
+            let startFormat: Date.FormatStyle = (sameYear
+                ? Date.FormatStyle.dateTime.day().month(.abbreviated)
+                : Date.FormatStyle.dateTime.day().month(.abbreviated).year())
+                .locale(AppLocalization.currentAppLocale)
+            let endFormat: Date.FormatStyle = .dateTime.day().month(.abbreviated).year().locale(AppLocalization.currentAppLocale)
             Text(
                 FinancesL10n.format(
                     "finances.dynamics.period.range",
@@ -1556,6 +1559,7 @@ private struct FinanceDynamicsContentView: View {
                     Text(end, style: .date)
                         .font(.system(size: 13))
                         .foregroundStyle(AppColors.textSecondary)
+                        .environment(\.locale, AppLocalization.currentAppLocale)
                 }
 
                 Spacer()
@@ -3287,6 +3291,7 @@ private struct DepositForecastView: View {
                             Text(nextPaymentDate(), style: .date)
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
+                                .environment(\.locale, AppLocalization.currentAppLocale)
                         }
                         .padding(.vertical, 10)
                         .padding(.horizontal, 16)

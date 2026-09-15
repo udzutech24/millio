@@ -23,6 +23,9 @@ struct CashflowCategoryGridLayout {
     static let unifiedCardMinHeight: CGFloat = 100
     static let unifiedTopRowMinHeight: CGFloat = 24
     static let unifiedFooterMinHeight: CGFloat = 18
+    /// Плитка «Новая категория» — иконка + подпись в одну строку, полная высота
+    /// обычной карточки (иконка/имя/сумма/прогресс) ей не нужна.
+    static let newTileMinHeight: CGFloat = 56
 
     static func columnCount(
         for kind: CashflowCategoryTransactionSheetKind,

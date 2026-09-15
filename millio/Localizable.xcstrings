@@ -11794,6 +11794,54 @@
         }
       }
     },
+    "auth.error.server_timeout" : {
+      "comment" : "Server unreachable/timeout auth toast — distinct from noInternet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der millio-Server ist derzeit nicht erreichbar. Bitte versuche es später erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "millio server is unavailable right now. Try again later."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El servidor de millio no está disponible ahora mismo. Inténtalo de nuevo más tarde."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le serveur millio est actuellement indisponible. Réessayez plus tard."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сервер millio сейчас недоступен. Попробуйте позже."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "millio sunucusuna şu anda ulaşılamıyor. Daha sonra tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "millio 服务器当前不可用，请稍后重试。"
+          }
+        }
+      }
+    },
     "auth.error.post_login_bootstrap" : {
       "comment" : "Post-login bootstrap failure toast",
       "extractionState" : "manual",
@@ -12233,43 +12281,43 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio"
+            "value" : "millio"
           }
         }
       }

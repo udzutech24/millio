@@ -33,36 +33,42 @@ private func cashflowHistoryTr(_ key: String, fallback: String? = nil) -> String
     AppLocalization.string(key, locale: AppLocalization.currentAppLocale, fallback: fallback)
 }
 
-func cashflowHistoryAmountText(_ amount: Double) -> String {
+// Раньше формат числа был жёстко зашит на ru_RU (пробел-разделитель тысяч, запятая
+// дробная) вне зависимости от языка приложения — на English UI суммы выглядели по-русски.
+// Локаль теперь берётся из AppLocalization.currentAppLocale (та же точка входа, что и
+// formattedAmount в CashflowUnifiedEntryView), разделители — естественные для неё.
+func cashflowHistoryAmountText(
+    _ amount: Double,
+    currencyCode: String? = nil,
+    locale: Locale = AppLocalization.currentAppLocale
+) -> String {
     let formatter = NumberFormatter()
     formatter.numberStyle = .decimal
-    formatter.locale = Locale(identifier: "ru_RU")
-    formatter.decimalSeparator = ","
-    formatter.groupingSeparator = " "
+    formatter.locale = locale
     formatter.usesGroupingSeparator = true
-    formatter.groupingSize = 3
-    formatter.secondaryGroupingSize = 3
     formatter.minimumFractionDigits = 0
     formatter.maximumFractionDigits = 2
-    return formatter.string(from: NSNumber(value: amount)) ?? "0"
+    let numberText = formatter.string(from: NSNumber(value: amount)) ?? "0"
+
+    guard let currencyCode, let symbol = MonetaCurrency(rawValue: currencyCode)?.symbol else {
+        return numberText
+    }
+    return "\(numberText) \(symbol)"
 }
 
-func cashflowHistoryWholeAmountText(_ amount: Double) -> String {
-    cashflowHistoryFormattedNumberText(amount, maxFractionDigits: 0)
+func cashflowHistoryWholeAmountText(_ amount: Double, locale: Locale = AppLocalization.currentAppLocale) -> String {
+    cashflowHistoryFormattedNumberText(amount, maxFractionDigits: 0, locale: locale)
 }
 
 func cashflowHistoryFormattedNumberText(
     _ amount: Double,
-    maxFractionDigits: Int
+    maxFractionDigits: Int,
+    locale: Locale = AppLocalization.currentAppLocale
 ) -> String {
     let formatter = NumberFormatter()
     formatter.numberStyle = .decimal
-    formatter.locale = Locale(identifier: "ru_RU")
-    formatter.decimalSeparator = ","
-    formatter.groupingSeparator = " "
+    formatter.locale = locale
     formatter.usesGroupingSeparator = true
-    formatter.groupingSize = 3
-    formatter.secondaryGroupingSize = 3
     formatter.minimumFractionDigits = 0
     formatter.maximumFractionDigits = max(0, maxFractionDigits)
     return formatter.string(from: NSNumber(value: amount)) ?? "0"
