@@ -101,6 +101,9 @@ struct CashflowUnifiedEntryHistorySection: View {
         let raw = kind == .income
             ? (transaction.incomeCategoryRaw ?? IncomeCategory.other.rawValue)
             : (transaction.expenseCategoryRaw ?? ExpenseCategory.other.rawValue)
-        return viewModel.categoryOptions(for: kind.categoryKind).first { $0.rawValue == raw }?.icon ?? "circle"
+        // "circle" не входит в CashflowCustomCategory.allowedSFSymbolIcons — CashflowCategoryIconView
+        // не распознаёт его как SF Symbol и рисует буквально слово "circle" текстом. Дефолт — тот же
+        // эмодзи-фолбэк, что и у прочих неизвестных категорий.
+        return viewModel.categoryOptions(for: kind.categoryKind).first { $0.rawValue == raw }?.icon ?? CashflowCustomCategory.defaultIcon
     }
 }
